@@ -194,12 +194,32 @@ ParserCombinator /: (pc : ParserCombinator[_, _, _])[input_List] :=
     Parse[pc, input]
 
 
-(* === top-level Parse / ParsePartial === *)
+(* === top-level Parse / ParsePartial ===
+   $RecursionLimit is capped at a deliberately modest value: the
+   recursive-descent interpreter nests several frames per grammar
+   level, so input nested hundreds of levels deep can exhaust the
+   stack. We bound it well below the segfault threshold and convert
+   any overflow (TerminatedEvaluation) into a clean
+   "too deeply nested" ParseError. The parser must always return a
+   value - never a raw TerminatedEvaluation, never a crash. *)
 
+$maxParseRecursion = 12000
+
+(* The Block wraps ONLY the interpret call - we inspect the result
+   OUTSIDE the raised-limit scope, where the limit is back to default
+   and there's stack headroom to build the ParseError. (Doing the
+   inspection inside the Block re-trips the limit before the
+   conversion can run.) *)
 Parse[pc_ParserCombinator, input_String] :=
-    Block[{r, len = StringLength[input]},
-        r = interpret[pc, input, 1];
+    Module[{r, len = StringLength[input]},
+        r = Block[{$RecursionLimit = $maxParseRecursion}, interpret[pc, input, 1]];
         Which[
+            MatchQ[r, _TerminatedEvaluation],
+                ParseError[<|
+                    "Position" -> 1, "Expected" -> "<input within nesting limit>",
+                    "Found" -> "<input nested too deeply>"
+                |>]
+            ,
             MatchQ[r, _parseErr],
                 errToParseError[r]
             ,
@@ -216,10 +236,18 @@ Parse[pc_ParserCombinator, input_String] :=
     ]
 
 ParsePartial[pc_ParserCombinator, input_String] :=
-    Block[{r = interpret[pc, input, 1]},
-        If[ MatchQ[r, _parseErr],
-            errToParseError[r],
-            {r[[1]], StringDrop[input, r[[2]] - 1]}
+    Module[{r},
+        r = Block[{$RecursionLimit = $maxParseRecursion}, interpret[pc, input, 1]];
+        Which[
+            MatchQ[r, _TerminatedEvaluation],
+                ParseError[<|
+                    "Position" -> 1, "Expected" -> "<input within nesting limit>",
+                    "Found" -> "<input nested too deeply>"
+                |>],
+            MatchQ[r, _parseErr],
+                errToParseError[r],
+            True,
+                {r[[1]], StringDrop[input, r[[2]] - 1]}
         ]
     ]
 
@@ -247,13 +275,34 @@ safeChar[input_, pos_] :=
    The internal contract: interpret[pc, input, pos] returns either
        parseOk[result, newPos]    - success
        parseErr[pos, expected, found] - failure
-   parseOk / parseErr are private internal heads. *)
+   parseOk / parseErr are private internal heads.
+
+   interpret itself is a thin depth-guarding wrapper around the
+   per-combinator interpretDispatch clauses. The guard is a parser-
+   level recursion bound: it counts nesting (every interpret call bumps
+   the dynamically-scoped $parseDepth) and bails with a clean parseErr
+   when the input is nested past $maxParseDepth. This is what keeps the
+   parser from ever exhausting the WL stack on pathological input - a
+   controlled return, not a $RecursionLimit trip (which unwinds past
+   any catch and would leak a raw TerminatedEvaluation). *)
+
+$maxParseDepth = 800
+
+interpret[pc_, input_, pos_] :=
+    Block[{$parseDepth = $parseDepth + 1},
+        If[ $parseDepth > $maxParseDepth,
+            parseErr[pos, "<input within nesting limit>", safeChar[input, pos]],
+            interpretDispatch[pc, input, pos]
+        ]
+    ]
+
+$parseDepth = 0
 
 (* compiled dispatch: if the options carry "Code", call it. *)
-interpret[ParserCombinator[_, _, opts_Association], input_, pos_] /;
+interpretDispatch[ParserCombinator[_, _, opts_Association], input_, pos_] /;
     KeyExistsQ[opts, "Code"] := opts["Code"][input, pos]
 
-interpret[ParserCombinator["Literal", s_String, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["Literal", s_String, _], input_, pos_] :=
     Block[{len = StringLength[s]},
         If[ pos + len - 1 > StringLength[input],
             parseErr[pos, s, "<end of input>"],
@@ -264,24 +313,36 @@ interpret[ParserCombinator["Literal", s_String, _], input_, pos_] :=
         ]
     ]
 
-interpret[ParserCombinator["Character", pat_, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["Character", pat_, _], input_, pos_] :=
     If[ pos > StringLength[input],
         parseErr[pos, charPatName[pat], "<end of input>"],
         Block[{ch = StringTake[input, {pos, pos}]},
-            If[ StringMatchQ[ch, pat],
+            If[ charMatchesQ[ch, pat],
                 parseOk[ch, pos + 1],
                 parseErr[pos, charPatName[pat], ch]
             ]
         ]
     ]
 
-interpret[ParserCombinator["Succeed", val_, _], _, pos_] :=
+(* Match a single character against a class. Literal-string classes
+   compare by equality (NOT StringMatchQ - that treats "*", "@", "\\"
+   as wildcards / metacharacters, so e.g. ParseCharacter["*"] would
+   match any character). Alternatives recurse so a mixed class like
+   LetterCharacter | "*" works correctly. Named classes
+   (LetterCharacter, DigitCharacter, CharacterRange, ...) fall through
+   to StringMatchQ, which is correct for them. *)
+charMatchesQ[ch_String, s_String] := ch === s
+charMatchesQ[ch_String, Verbatim[Alternatives][pats__]] :=
+    AnyTrue[{pats}, charMatchesQ[ch, #] &]
+charMatchesQ[ch_String, pat_] := StringMatchQ[ch, pat]
+
+interpretDispatch[ParserCombinator["Succeed", val_, _], _, pos_] :=
     parseOk[val, pos]
 
-interpret[ParserCombinator["Fail", msg_, _], _, pos_] :=
+interpretDispatch[ParserCombinator["Fail", msg_, _], _, pos_] :=
     parseErr[pos, msg, ""]
 
-interpret[ParserCombinator["Sequence", pcs_List, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["Sequence", pcs_List, _], input_, pos_] :=
     Catch[
         Block[{final},
             final = Fold[
@@ -298,7 +359,7 @@ interpret[ParserCombinator["Sequence", pcs_List, _], input_, pos_] :=
         ]
     ]
 
-interpret[ParserCombinator["Choice", pcs_List, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["Choice", pcs_List, _], input_, pos_] :=
     Catch[
         Block[{errs, maxPos, atMax},
             errs = Map[
@@ -319,7 +380,7 @@ interpret[ParserCombinator["Choice", pcs_List, _], input_, pos_] :=
         ]
     ]
 
-interpret[ParserCombinator["Many", p_, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["Many", p_, _], input_, pos_] :=
     Block[{cur = pos, lastSawn, results},
         lastSawn = pos - 1;
         results = Last @ Reap[
@@ -335,7 +396,7 @@ interpret[ParserCombinator["Many", p_, _], input_, pos_] :=
         parseOk[If[results === {}, {}, results[[1]]], cur]
     ]
 
-interpret[ParserCombinator["Some", p_, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["Some", p_, _], input_, pos_] :=
     Block[{first = interpret[p, input, pos]},
         If[ MatchQ[first, _parseErr],
             first,
@@ -358,12 +419,12 @@ interpret[ParserCombinator["Some", p_, _], input_, pos_] :=
         ]
     ]
 
-interpret[ParserCombinator["Optional", p_, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["Optional", p_, _], input_, pos_] :=
     Block[{r = interpret[p, input, pos]},
         If[ MatchQ[r, _parseOk], r, parseOk[Missing["NoMatch"], pos] ]
     ]
 
-interpret[ParserCombinator["Between", {open_, p_, close_}, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["Between", {open_, p_, close_}, _], input_, pos_] :=
     Catch[
         Block[{r1, r2, r3},
             r1 = interpret[open, input, pos];
@@ -376,7 +437,7 @@ interpret[ParserCombinator["Between", {open_, p_, close_}, _], input_, pos_] :=
         ]
     ]
 
-interpret[ParserCombinator["Action", {p_, f_}, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["Action", {p_, f_}, _], input_, pos_] :=
     Block[{r = interpret[p, input, pos]},
         If[ MatchQ[r, _parseErr],
             r,
@@ -387,7 +448,7 @@ interpret[ParserCombinator["Action", {p_, f_}, _], input_, pos_] :=
 (* SepBy / SepBy1: zero/one or more of p separated by sep. Same loop
    shape as Many / Some, but each iteration eats a sep before the
    next p. *)
-interpret[ParserCombinator["SepBy", {p_, sep_}, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["SepBy", {p_, sep_}, _], input_, pos_] :=
     Block[{first = interpret[p, input, pos], cur, lastSawn, rest},
         If[ MatchQ[first, _parseErr],
             parseOk[{}, pos],
@@ -412,7 +473,7 @@ interpret[ParserCombinator["SepBy", {p_, sep_}, _], input_, pos_] :=
         ]
     ]
 
-interpret[ParserCombinator["SepBy1", {p_, sep_}, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["SepBy1", {p_, sep_}, _], input_, pos_] :=
     Block[{r = interpret[ParserCombinator["SepBy", {p, sep}, <||>], input, pos]},
         If[ MatchQ[r, _parseOk] && r[[1]] === {},
             parseErr[pos, "at least one occurrence", safeChar[input, pos]],
@@ -424,7 +485,7 @@ interpret[ParserCombinator["SepBy1", {p_, sep_}, _], input_, pos_] :=
    leftward as `op(prev, next)`; ChainRight folds rightward. The op
    parser is expected to return a 2-arg-binary head (a function or
    symbol) which is applied to the operands. *)
-interpret[ParserCombinator["ChainLeft", {p_, op_}, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["ChainLeft", {p_, op_}, _], input_, pos_] :=
     Block[{first = interpret[p, input, pos], cur, acc, rOp, rNext},
         If[ MatchQ[first, _parseErr], Return[first, Block] ];
         acc = first[[1]];
@@ -438,7 +499,7 @@ interpret[ParserCombinator["ChainLeft", {p_, op_}, _], input_, pos_] :=
         parseOk[acc, cur]
     ]
 
-interpret[ParserCombinator["ChainRight", {p_, op_}, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["ChainRight", {p_, op_}, _], input_, pos_] :=
     Block[{first = interpret[p, input, pos], cur, ops = {}, vals, rOp, rNext},
         If[ MatchQ[first, _parseErr], Return[first, Block] ];
         vals = {first[[1]]};
@@ -461,13 +522,13 @@ interpret[ParserCombinator["ChainRight", {p_, op_}, _], input_, pos_] :=
     ]
 
 (* Lookahead: succeed iff p matches, but reset position. *)
-interpret[ParserCombinator["Lookahead", p_, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["Lookahead", p_, _], input_, pos_] :=
     Block[{r = interpret[p, input, pos]},
         If[ MatchQ[r, _parseOk], parseOk[Null, pos], r ]
     ]
 
 (* NotFollowedBy: succeed iff p does NOT match. *)
-interpret[ParserCombinator["NotFollowedBy", p_, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["NotFollowedBy", p_, _], input_, pos_] :=
     Block[{r = interpret[p, input, pos]},
         If[ MatchQ[r, _parseOk],
             parseErr[pos, "<not followed by parser>", safeChar[input, pos]],
@@ -482,11 +543,11 @@ interpret[ParserCombinator["NotFollowedBy", p_, _], input_, pos_] :=
    stays the same as in a backtracking-by-default parser library, and
    so the FunctionCompile lowering can give it different semantics if
    needed. *)
-interpret[ParserCombinator["Try", p_, _], input_, pos_] :=
+interpretDispatch[ParserCombinator["Try", p_, _], input_, pos_] :=
     interpret[p, input, pos]
 
 (* Recursive: look up the held symbol's current value and interpret it. *)
-interpret[ParserCombinator["Recursive", Hold[s_Symbol], _], input_, pos_] :=
+interpretDispatch[ParserCombinator["Recursive", Hold[s_Symbol], _], input_, pos_] :=
     interpret[s, input, pos]
 
 
@@ -672,10 +733,20 @@ ParserCompile[pc_ParserCombinator, OptionsPattern[]] :=
         ]
     ]
 
-(* Predicate: can this combinator tree be lowered to a single
-   FunctionCompile-built function? Action / Capture etc. need
-   user-supplied Wolfram callbacks, which we don't yet ship through
-   the compiler. *)
+(* Predicate: is this combinator tree in the *recognition* subset that
+   the current string-codegen lowers to a position-advancing
+   CompiledCodeFunction? This is the v0.3 fast path: terminals,
+   sequence, choice, repetition, between - all of whose results are
+   substrings of the input.
+
+   Action / Capture are NOT in this set yet, but NOT because the
+   compiler can't run their callbacks: a Wolfram action *can* go
+   through FunctionCompile via Typed[KernelFunction[f], {types} -> ret]
+   (see Tests/compile-feasibility, which compiles ParseAction end to
+   end). Threading those callback results requires every parser to
+   return an "InertExpression" value rather than a bare position - a
+   uniform-result-type redesign of the codegen that is the v0.4 work.
+   Until then, Action-bearing grammars run interpretively. *)
 compilableQ[ParserCombinator["Literal", _String, _]] := True
 compilableQ[ParserCombinator["Character", pat_, _]] := compilableCharPatQ[pat]
 compilableQ[ParserCombinator["Sequence", pcs_List, _]] := AllTrue[pcs, compilableQ]

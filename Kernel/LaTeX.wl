@@ -103,13 +103,60 @@ exprRef = ParseRecursive[expr]
 
 (* Argument forms: optional [arg], then any number of {arg}s. Drop the
    trailing whitespace's value with #1, #2, #3 (skipping the 4th). *)
+(* commandAtom must not swallow \begin / \end - those are environment
+   delimiters handled by environmentAtom. The leading NotFollowedBy
+   guard returns Null (consumes nothing), so the dispatch args shift to
+   #2 / #3 / #4. *)
 commandAtom = ParseAction[
-    commandName ~~ Optional[bracketedArgRef] ~~ ParseMany[bracedArgRef] ~~ ws,
-    dispatchCommand[#1, #2, #3] &
+    ParseNotFollowedBy[ParseLiteral["\\begin"] | ParseLiteral["\\end"]] ~~
+        commandName ~~ Optional[bracketedArgRef] ~~ ParseMany[bracedArgRef] ~~ ws,
+    dispatchCommand[#2, #3, #4] &
 ]
 
 bracedArg = ParseBetween[literal["{"], exprRef, literal["}"]]
 bracketedArg = ParseBetween[literal["["], exprRef, literal["]"]]
+
+
+(* === environments: \begin{name} cells \end{name} ===
+   Rows are separated by \\, columns by &; each cell is a mathRow.
+   Renders as a GridBox wrapped in the delimiters the environment name
+   implies (pmatrix -> (), bmatrix -> [], vmatrix -> | |, cases -> {,
+   plain matrix / align / aligned / array -> bare grid). The optional
+   {colspec} after \begin{array}{cc} is consumed and ignored. *)
+
+envName = ParseAction[
+    literal["{"] ~~ ParseSome[ParseCharacter[LetterCharacter | "*"]] ~~ literal["}"],
+    StringJoin[#2] &
+]
+
+rowSep = ParseAction[literal["\\\\"], Null &]
+colSep = ParseAction[literal["&"], Null &]
+
+matrixCell = ParseChoice[ParseRecursive[mathRow], ParseSucceed[""]]
+matrixRow  = ParseSepBy[matrixCell, colSep]
+matrixBody = ParseSepBy[matrixRow, rowSep]
+
+environmentAtom = ParseAction[
+    ParseLiteral["\\begin"] ~~ envName ~~ ws ~~ Optional[bracedArgRef] ~~
+        matrixBody ~~ ParseLiteral["\\end"] ~~ envName,
+    buildEnv[#2, #5] &
+]
+
+buildEnv[name_String, rows_List] :=
+    Module[{width, padded, grid},
+        width = Max[Length /@ rows, 1];
+        padded = Map[PadRight[#, width, ""] &, rows];
+        grid = GridBox[padded];
+        Switch[name,
+            "pmatrix", RowBox[{"(", grid, ")"}],
+            "bmatrix", RowBox[{"[", grid, "]"}],
+            "Bmatrix", RowBox[{"{", grid, "}"}],
+            "vmatrix", RowBox[{"|", grid, "|"}],
+            "Vmatrix", RowBox[{"\[DoubleVerticalBar]", grid, "\[DoubleVerticalBar]"}],
+            "cases" | "dcases", RowBox[{"{", GridBox[padded, ColumnAlignments -> Left]}],
+            _, grid
+        ]
+    ]
 
 
 (* === command dispatch table ===
@@ -461,7 +508,7 @@ absAtom = ParseAction[
 ]
 
 atom = ParseChoice[
-    numberAtom, commandAtom, parenAtom, bracketAtom, absAtom,
+    numberAtom, environmentAtom, commandAtom, parenAtom, bracketAtom, absAtom,
     bracedArgRef, identAtom
 ]
 

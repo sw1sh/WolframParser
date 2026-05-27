@@ -483,14 +483,14 @@ VerificationTest[
 ]
 
 VerificationTest[
-    (* the row-break \\ inside an array is unsupported; the parser must
-       fail cleanly rather than recurse / segfault *)
+    (* a genuinely unsupported macro mid-expression must fail cleanly,
+       not recurse / segfault *)
     MatchQ[
-        TimeConstrained[LaTeXMathParse["1\\begin{array}{c}2\\\\3\\end{array}4"], 5, $TimedOut],
+        TimeConstrained[LaTeXMathParse["a \\smash{b} \\notarealmacro{"], 5, $TimedOut],
         _ParseError
     ],
     True,
-    TestID -> "Robustness: unsupported environment returns ParseError (no recursion)"
+    TestID -> "Robustness: malformed / unsupported input returns ParseError (no recursion)"
 ]
 
 
@@ -516,4 +516,66 @@ VerificationTest[
     ],
     19,
     TestID -> "KaTeX corpus: the 19 common-subset inline cases parse clean"
+]
+
+
+(* === environments / matrices === *)
+
+VerificationTest[
+    LaTeXMathParse["\\begin{matrix} a & b \\\\ c & d \\end{matrix}"],
+    GridBox[{
+        {StyleBox["a", "TI"], StyleBox["b", "TI"]},
+        {StyleBox["c", "TI"], StyleBox["d", "TI"]}
+    }],
+    TestID -> "Env: matrix -> bare GridBox"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}"],
+    RowBox[{"(", GridBox[{{"1", "2"}, {"3", "4"}}], ")"}],
+    TestID -> "Env: pmatrix -> parenthesised GridBox"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\begin{bmatrix} x \\\\ y \\end{bmatrix}"],
+    RowBox[{"[", GridBox[{{StyleBox["x", "TI"]}, {StyleBox["y", "TI"]}}], "]"}],
+    TestID -> "Env: bmatrix -> bracketed GridBox"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}"],
+    RowBox[{"|", GridBox[{{StyleBox["a", "TI"], StyleBox["b", "TI"]}, {StyleBox["c", "TI"], StyleBox["d", "TI"]}}], "|"}],
+    TestID -> "Env: vmatrix -> bar-delimited GridBox"
+]
+
+VerificationTest[
+    ! MatchQ[LaTeXMathParse["\\begin{cases} 1 & x > 0 \\\\ 0 & x \\le 0 \\end{cases}"], _ParseError],
+    True,
+    TestID -> "Env: cases parses"
+]
+
+VerificationTest[
+    (* ragged rows pad to a rectangle *)
+    LaTeXMathParse["\\begin{matrix} a & b \\\\ c \\end{matrix}"],
+    GridBox[{{StyleBox["a", "TI"], StyleBox["b", "TI"]}, {StyleBox["c", "TI"], ""}}],
+    TestID -> "Env: ragged rows padded to rectangle"
+]
+
+VerificationTest[
+    (* \begin{array}{cc} - the column spec is consumed and ignored *)
+    ! MatchQ[LaTeXMathParse["\\begin{array}{cc} a & b \\\\ c & d \\end{array}"], _ParseError],
+    True,
+    TestID -> "Env: array column spec consumed"
+]
+
+
+(* === wildcard-bug regression (StringMatchQ metacharacters) === *)
+
+VerificationTest[
+    {
+        MatchQ[Parse[ParseCharacter["*"], "x"], _ParseError],
+        Parse[ParseCharacter["*"], "*"]
+    },
+    {True, "*"},
+    TestID -> "Regression: ParseCharacter[\"*\"] matches literal * only (not wildcard)"
 ]
