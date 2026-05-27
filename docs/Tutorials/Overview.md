@@ -30,14 +30,25 @@ Keywords: [parser, parsing, grammar, combinator, GrammarRules, FunctionCompile]
 - [ParseSequence](paclet:Wolfram/WolframParser/ref/ParseSequence)
 - [ParseChoice](paclet:Wolfram/WolframParser/ref/ParseChoice)
 - [ParseBetween](paclet:Wolfram/WolframParser/ref/ParseBetween)
+- `ParseSepBy`, `ParseSepBy1`
+- `ParseChainLeft`, `ParseChainRight`
 
 ### Repetition
 - [ParseMany](paclet:Wolfram/WolframParser/ref/ParseMany)
 - [ParseSome](paclet:Wolfram/WolframParser/ref/ParseSome)
 - [ParseOptional](paclet:Wolfram/WolframParser/ref/ParseOptional)
 
-### Action
+### Lookahead, backtracking, recursion
+- `ParseLookahead`, `ParseNotFollowedBy`
+- `ParseTry`
+- `ParseRecursive` - lazy symbol-ref for cyclic / mutually-recursive grammars
+
+### Action and declarative grammars
 - [ParseAction](paclet:Wolfram/WolframParser/ref/ParseAction)
+- `Parse[GrammarRules[{...}], input]` - the [GrammarRules]() declarative DSL is accepted as input and lowered locally (no [CloudDeploy]() round-trip)
+
+### LaTeX math (`` Wolfram`Parser`LaTeX` ``)
+- `LaTeXMathParse[texSource]` - parse LaTeX math notation to a box expression suitable for an `InlineFormula` cell. Handles font-style commands (`\mathbb`, `\mathcal`, `\mathfrak`), fractions, roots, sub/superscripts, big operators, Greek letters, parens, and a long list of named symbols (`\leq`, `\in`, `\cup`, `\to`, ...)
 
 ## Tutorials
 

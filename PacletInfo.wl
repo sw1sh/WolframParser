@@ -6,7 +6,7 @@ PacletObject[<|
     "Creator" -> "Nikolay Murzin, Claude (Anthropic)",
     "PublisherID" -> "Wolfram",
     "License" -> "MIT",
-    "Version" -> "0.1.0",
+    "Version" -> "0.2.0",
     "WolframVersion" -> "14.0+",
     "PrimaryContext" -> "Wolfram`Parser`",
     "Extensions" -> {
@@ -31,7 +31,24 @@ PacletObject[<|
                 "Wolfram`Parser`ParseSome",
                 "Wolfram`Parser`ParseOptional",
                 "Wolfram`Parser`ParseBetween",
+                "Wolfram`Parser`ParseSepBy",
+                "Wolfram`Parser`ParseSepBy1",
+                "Wolfram`Parser`ParseChainLeft",
+                "Wolfram`Parser`ParseChainRight",
+                "Wolfram`Parser`ParseLookahead",
+                "Wolfram`Parser`ParseNotFollowedBy",
+                "Wolfram`Parser`ParseTry",
+                "Wolfram`Parser`ParseRecursive",
                 "Wolfram`Parser`ParseAction"
+            }
+        },
+        {
+            "Kernel",
+            "Root" -> "Kernel",
+            "Context" -> "Wolfram`Parser`LaTeX`",
+            "Symbols" -> {
+                "Wolfram`Parser`LaTeX`LaTeXMathParse",
+                "Wolfram`Parser`LaTeX`LaTeXMathParser"
             }
         },
         {

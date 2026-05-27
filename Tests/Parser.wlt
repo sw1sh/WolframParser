@@ -427,3 +427,183 @@ VerificationTest[
     {"1", "2", "3"},
     TestID -> "End-to-end: bracketed comma-separated list"
 ]
+
+
+(* === ParseSepBy / ParseSepBy1 === *)
+
+VerificationTest[
+    Parse[ParseSepBy[ParseCharacter[DigitCharacter], ParseLiteral[","]], "1,2,3,4"],
+    {"1", "2", "3", "4"},
+    TestID -> "ParseSepBy: comma-separated digits"
+]
+
+VerificationTest[
+    Parse[ParseSepBy[ParseCharacter[DigitCharacter], ParseLiteral[","]], ""],
+    {},
+    TestID -> "ParseSepBy: empty input succeeds with {}"
+]
+
+VerificationTest[
+    Parse[ParseSepBy[ParseCharacter[DigitCharacter], ParseLiteral[","]], "5"],
+    {"5"},
+    TestID -> "ParseSepBy: single element"
+]
+
+VerificationTest[
+    MatchQ[Parse[ParseSepBy1[ParseCharacter[DigitCharacter], ParseLiteral[","]], ""], _ParseError],
+    True,
+    TestID -> "ParseSepBy1: empty input fails"
+]
+
+VerificationTest[
+    Parse[ParseSepBy1[ParseCharacter[DigitCharacter], ParseLiteral[","]], "1,2"],
+    {"1", "2"},
+    TestID -> "ParseSepBy1: non-empty succeeds"
+]
+
+
+(* === ParseChainLeft / ParseChainRight === *)
+
+VerificationTest[
+    Parse[
+        ParseChainLeft[
+            ParseAction[ParseSome[ParseCharacter[DigitCharacter]], ToExpression @ StringJoin[{##}] &],
+            ParseAction[ParseLiteral["+"], Plus &]
+        ],
+        "1+2+3+4"
+    ],
+    10,
+    TestID -> "ParseChainLeft: left-associative sum"
+]
+
+VerificationTest[
+    Parse[
+        ParseChainLeft[
+            ParseAction[ParseSome[ParseCharacter[DigitCharacter]], ToExpression @ StringJoin[{##}] &],
+            ParseAction[ParseLiteral["-"], Subtract &]
+        ],
+        "10-3-2"
+    ],
+    5,
+    TestID -> "ParseChainLeft: left-associative subtraction (10-3-2 = 5)"
+]
+
+VerificationTest[
+    Parse[
+        ParseChainRight[
+            ParseAction[ParseSome[ParseCharacter[DigitCharacter]], ToExpression @ StringJoin[{##}] &],
+            ParseAction[ParseLiteral["-"], Subtract &]
+        ],
+        "10-3-2"
+    ],
+    9,
+    TestID -> "ParseChainRight: right-associative subtraction (10-(3-2) = 9)"
+]
+
+
+(* === ParseLookahead / ParseNotFollowedBy / ParseTry === *)
+
+VerificationTest[
+    Parse[ParseLookahead[ParseLiteral["foo"]] ~~ ParseLiteral["foo"], "foo"],
+    {Null, "foo"},
+    TestID -> "ParseLookahead: consumes nothing on match"
+]
+
+VerificationTest[
+    MatchQ[Parse[ParseLookahead[ParseLiteral["foo"]] ~~ ParseLiteral["foo"], "bar"], _ParseError],
+    True,
+    TestID -> "ParseLookahead: propagates failure"
+]
+
+VerificationTest[
+    Parse[ParseLiteral["foo"] ~~ ParseNotFollowedBy[ParseLiteral["bar"]], "foo"],
+    {"foo", Null},
+    TestID -> "ParseNotFollowedBy: succeeds when next thing absent"
+]
+
+VerificationTest[
+    MatchQ[Parse[ParseLiteral["foo"] ~~ ParseNotFollowedBy[ParseLiteral["bar"]] ~~ ParseLiteral["bar"], "foobar"], _ParseError],
+    True,
+    TestID -> "ParseNotFollowedBy: fails when next thing present"
+]
+
+VerificationTest[
+    Parse[ParseTry[ParseLiteral["foo"]] | ParseLiteral["fo"], "fo"],
+    "fo",
+    TestID -> "ParseTry: backtracks on inner failure"
+]
+
+
+(* === ParseRecursive === *)
+
+VerificationTest[
+    Module[{nest},
+        nest = ParseAction[
+            ParseBetween[ParseLiteral["("], Optional[ParseRecursive[nest]], ParseLiteral[")"]],
+            "(" <> ToString[#] <> ")" &
+        ];
+        Parse[nest, "((()))"]
+    ],
+    "(((Missing[NoMatch])))",
+    TestID -> "ParseRecursive: nested parens"
+]
+
+VerificationTest[
+    Module[{nest},
+        nest = ParseBetween[ParseLiteral["["], Optional[ParseRecursive[nest]], ParseLiteral["]"]];
+        Parse[nest, "[[[]]]"]
+    ],
+    Missing["NoMatch"],
+    TestID -> "ParseRecursive: inner of deepest nest is empty"
+]
+
+
+(* === GrammarRules lowering === *)
+
+VerificationTest[
+    Parse[
+        GrammarRules[{"the weather in <city>" -> city}],
+        "the weather in NYC"
+    ],
+    "NYC",
+    TestID -> "GrammarRules: bare slot captures word"
+]
+
+VerificationTest[
+    Parse[
+        GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}],
+        "add 3 and 5"
+    ],
+    8,
+    TestID -> "GrammarRules: Number slots + RuleDelayed action"
+]
+
+VerificationTest[
+    Parse[
+        GrammarRules[{"hello" -> "greeting", "bye" -> "farewell"}],
+        "bye"
+    ],
+    "farewell",
+    TestID -> "GrammarRules: multi-rule choice"
+]
+
+VerificationTest[
+    MatchQ[
+        Parse[
+            GrammarRules[{"hello" -> "greeting"}],
+            "xyz"
+        ],
+        _ParseError
+    ],
+    True,
+    TestID -> "GrammarRules: no matching rule returns ParseError"
+]
+
+VerificationTest[
+    Parse[
+        GrammarRules[{"<verb:Word> <obj:Word>" :> kind -> obj}],
+        "eat sushi"
+    ],
+    kind -> "sushi",
+    TestID -> "GrammarRules: multi-slot template"
+]

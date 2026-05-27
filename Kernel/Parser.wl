@@ -60,7 +60,25 @@ ParseOptional::usage = "ParseOptional[p] matches zero or one p; returns p's resu
 
 ParseBetween::usage = "ParseBetween[open, p, close] matches open, then p, then close; result is p's."
 
+ParseSepBy::usage = "ParseSepBy[p, sep] matches zero or more p separated by sep; result is the list of p's results."
+
+ParseSepBy1::usage = "ParseSepBy1[p, sep] matches one or more p separated by sep."
+
+ParseChainLeft::usage = "ParseChainLeft[p, op] parses a left-associative chain: p, op, p, op, p, ..., folding op(prev, next) leftward."
+
+ParseChainRight::usage = "ParseChainRight[p, op] parses a right-associative chain."
+
+ParseLookahead::usage = "ParseLookahead[p] succeeds iff p would match at the current position, consuming nothing."
+
+ParseNotFollowedBy::usage = "ParseNotFollowedBy[p] succeeds iff p would NOT match at the current position, consuming nothing."
+
+ParseTry::usage = "ParseTry[p] runs p; on failure, the input position is restored to where ParseTry started (no commitment to partial consumption). Use to opt back into full-backtracking semantics when PEG-ordered choice is too eager."
+
+ParseRecursive::usage = "ParseRecursive[symbol] is a lazy reference to a parser bound to symbol; the symbol is looked up at parse time so cyclic / mutually-recursive grammars can be written without pre-declaring every node."
+
 ParseAction::usage = "ParseAction[p, f] runs p and applies f to its result; f is splatted across the elements when p's result is a list."
+
+GrammarRules::usage = "GrammarRules is the built-in declarative grammar head. Parse[GrammarRules[{...}], input] lowers each rule to a ParserCombinator and runs it locally (no CloudDeploy)."
 
 
 Begin["`Private`"]
@@ -113,6 +131,34 @@ ParseOptional[pc_ParserCombinator] := ParserCombinator["Optional", pc, <||>]
 
 ParseBetween[open_ParserCombinator, p_ParserCombinator, close_ParserCombinator] :=
     ParserCombinator["Between", {open, p, close}, <||>]
+
+ParseSepBy[p_ParserCombinator, sep_ParserCombinator] :=
+    ParserCombinator["SepBy", {p, sep}, <||>]
+
+ParseSepBy1[p_ParserCombinator, sep_ParserCombinator] :=
+    ParserCombinator["SepBy1", {p, sep}, <||>]
+
+ParseChainLeft[p_ParserCombinator, op_ParserCombinator] :=
+    ParserCombinator["ChainLeft", {p, op}, <||>]
+
+ParseChainRight[p_ParserCombinator, op_ParserCombinator] :=
+    ParserCombinator["ChainRight", {p, op}, <||>]
+
+ParseLookahead[p_ParserCombinator] :=
+    ParserCombinator["Lookahead", p, <||>]
+
+ParseNotFollowedBy[p_ParserCombinator] :=
+    ParserCombinator["NotFollowedBy", p, <||>]
+
+ParseTry[p_ParserCombinator] :=
+    ParserCombinator["Try", p, <||>]
+
+(* Recursive reference: hold the symbol so the user can write
+   `expr = ParseLiteral["x"] | ParseLiteral["("] ~~ ParseRecursive[expr] ~~ ParseLiteral[")"]`
+   without expr being evaluated (it's unbound at that moment). The symbol
+   is looked up at parse time. *)
+SetAttributes[ParseRecursive, HoldFirst]
+ParseRecursive[s_Symbol] := ParserCombinator["Recursive", Hold[s], <||>]
 
 ParseAction[pc_ParserCombinator, f_] :=
     ParserCombinator["Action", {pc, f}, <||>]
@@ -176,6 +222,16 @@ ParsePartial[pc_ParserCombinator, input_String] :=
             {r[[1]], StringDrop[input, r[[2]] - 1]}
         ]
     ]
+
+(* Accept GrammarRules as an input grammar: lower to ParserCombinator. *)
+Parse[g : HoldPattern[GrammarRules[_List, ___]], input_String] :=
+    Parse[lowerGrammarRules[g], input]
+
+ParsePartial[g : HoldPattern[GrammarRules[_List, ___]], input_String] :=
+    ParsePartial[lowerGrammarRules[g], input]
+
+ParserCompile[g : HoldPattern[GrammarRules[_List, ___]], opts___] :=
+    ParserCompile[lowerGrammarRules[g], opts]
 
 errToParseError[parseErr[pos_, expected_, found_]] :=
     ParseError[<|"Position" -> pos, "Expected" -> expected, "Found" -> found|>]
@@ -325,6 +381,246 @@ interpret[ParserCombinator["Action", {p_, f_}, _], input_, pos_] :=
         If[ MatchQ[r, _parseErr],
             r,
             parseOk[If[ListQ[r[[1]]], f @@ r[[1]], f[r[[1]]]], r[[2]]]
+        ]
+    ]
+
+(* SepBy / SepBy1: zero/one or more of p separated by sep. Same loop
+   shape as Many / Some, but each iteration eats a sep before the
+   next p. *)
+interpret[ParserCombinator["SepBy", {p_, sep_}, _], input_, pos_] :=
+    Block[{first = interpret[p, input, pos], cur, lastSawn, rest},
+        If[ MatchQ[first, _parseErr],
+            parseOk[{}, pos],
+            cur = first[[2]];
+            lastSawn = pos;
+            rest = Last @ Reap[
+                While[
+                    Block[{rSep = interpret[sep, input, cur]},
+                        If[ MatchQ[rSep, _parseOk],
+                            Block[{rP = interpret[p, input, rSep[[2]]]},
+                                If[ MatchQ[rP, _parseOk] && rP[[2]] > lastSawn,
+                                    Sow[rP[[1]]]; lastSawn = cur; cur = rP[[2]]; True,
+                                    False
+                                ]
+                            ],
+                            False
+                        ]
+                    ]
+                ]
+            ];
+            parseOk[Prepend[If[rest === {}, {}, rest[[1]]], first[[1]]], cur]
+        ]
+    ]
+
+interpret[ParserCombinator["SepBy1", {p_, sep_}, _], input_, pos_] :=
+    Block[{r = interpret[ParserCombinator["SepBy", {p, sep}, <||>], input, pos]},
+        If[ MatchQ[r, _parseOk] && r[[1]] === {},
+            parseErr[pos, "at least one occurrence", safeChar[input, pos]],
+            r
+        ]
+    ]
+
+(* ChainLeft / ChainRight: operator-precedence helpers. ChainLeft folds
+   leftward as `op(prev, next)`; ChainRight folds rightward. The op
+   parser is expected to return a 2-arg-binary head (a function or
+   symbol) which is applied to the operands. *)
+interpret[ParserCombinator["ChainLeft", {p_, op_}, _], input_, pos_] :=
+    Block[{first = interpret[p, input, pos], cur, acc, rOp, rNext},
+        If[ MatchQ[first, _parseErr], Return[first, Block] ];
+        acc = first[[1]];
+        cur = first[[2]];
+        While[
+            rOp = interpret[op, input, cur];
+            MatchQ[rOp, _parseOk] && (rNext = interpret[p, input, rOp[[2]]]; MatchQ[rNext, _parseOk]),
+            acc = rOp[[1]][acc, rNext[[1]]];
+            cur = rNext[[2]]
+        ];
+        parseOk[acc, cur]
+    ]
+
+interpret[ParserCombinator["ChainRight", {p_, op_}, _], input_, pos_] :=
+    Block[{first = interpret[p, input, pos], cur, ops = {}, vals, rOp, rNext},
+        If[ MatchQ[first, _parseErr], Return[first, Block] ];
+        vals = {first[[1]]};
+        cur = first[[2]];
+        While[
+            rOp = interpret[op, input, cur];
+            MatchQ[rOp, _parseOk] && (rNext = interpret[p, input, rOp[[2]]]; MatchQ[rNext, _parseOk]),
+            AppendTo[ops, rOp[[1]]];
+            AppendTo[vals, rNext[[1]]];
+            cur = rNext[[2]]
+        ];
+        parseOk[
+            Fold[
+                Function[{acc, idx}, ops[[idx]][vals[[idx]], acc]],
+                Last[vals],
+                Reverse @ Range[Length[ops]]
+            ],
+            cur
+        ]
+    ]
+
+(* Lookahead: succeed iff p matches, but reset position. *)
+interpret[ParserCombinator["Lookahead", p_, _], input_, pos_] :=
+    Block[{r = interpret[p, input, pos]},
+        If[ MatchQ[r, _parseOk], parseOk[Null, pos], r ]
+    ]
+
+(* NotFollowedBy: succeed iff p does NOT match. *)
+interpret[ParserCombinator["NotFollowedBy", p_, _], input_, pos_] :=
+    Block[{r = interpret[p, input, pos]},
+        If[ MatchQ[r, _parseOk],
+            parseErr[pos, "<not followed by parser>", safeChar[input, pos]],
+            parseOk[Null, pos]
+        ]
+    ]
+
+(* Try: identical to interpret[p, ...] in the interpretive path -
+   there is no committed-input distinction to roll back, since the
+   interpretive engine doesn't commit until Sequence has accumulated
+   the result. Kept as an explicit combinator so the grammar shape
+   stays the same as in a backtracking-by-default parser library, and
+   so the FunctionCompile lowering can give it different semantics if
+   needed. *)
+interpret[ParserCombinator["Try", p_, _], input_, pos_] :=
+    interpret[p, input, pos]
+
+(* Recursive: look up the held symbol's current value and interpret it. *)
+interpret[ParserCombinator["Recursive", Hold[s_Symbol], _], input_, pos_] :=
+    interpret[s, input, pos]
+
+
+(* === GrammarRules lowering ===
+   The built-in GrammarRules is just inert data:
+       GrammarRules[{template -> action, template :> action, ...}]
+   Each template is a string with optional <name> or <name:Type> slots.
+   We split each template into literal segments and slot specs, build a
+   ParseSequence of literal-parsers and slot-parsers, then wrap with a
+   ParseAction that binds the captured slot values to the slot names in
+   the action body. *)
+
+lowerGrammarRules[HoldPattern[GrammarRules[rules_List, ___]]] :=
+    Block[{ps = lowerGrammarRule /@ rules},
+        Switch[Length[ps],
+            0, ParseFail["empty grammar"],
+            1, First[ps],
+            _, ParseChoice @@ ps
+        ]
+    ]
+
+lowerGrammarRule[(Rule | RuleDelayed)[template_String, body_]] :=
+    lowerGrammarRule[template, HoldComplete[body]]
+
+(* second form: take template and held body together.
+   With[{...}] is what gives the Function closure access to the local
+   slotNames / slotPositions values at parse time (Block-local symbols
+   would otherwise be out of scope by then). *)
+lowerGrammarRule[template_String, held : HoldComplete[_]] :=
+    Block[{segments, slotNames, segParsers, slotPositions},
+        segments = parseGrammarTemplate[template];
+        slotNames = Cases[segments, grammarSlot[name_, _] :> name];
+        segParsers = lowerSegment /@ segments;
+        slotPositions = Flatten @ Position[
+            segments, grammarSlot[_, _], {1}, Heads -> False
+        ];
+        Switch[Length[segParsers],
+            0,
+                With[{n = slotNames},
+                    ParseAction[ParseSucceed[Null], evalBoundBody[held, n, {}] &]
+                ],
+            1,
+                If[ slotPositions === {1},
+                    With[{n = slotNames},
+                        ParseAction[First[segParsers], evalBoundBody[held, n, {#}] &]
+                    ],
+                    With[{n = slotNames},
+                        ParseAction[First[segParsers], evalBoundBody[held, n, {}] &]
+                    ]
+                ],
+            _,
+                With[{n = slotNames, p = slotPositions},
+                    ParseAction[
+                        ParseSequence @@ segParsers,
+                        evalBoundBody[held, n, {##}[[p]]] &
+                    ]
+                ]
+        ]
+    ]
+
+(* Splits a template string into a flat list of grammarLit[s] and
+   grammarSlot[name, type] segments. The slot syntax accepted is
+       <name>           (bare; type Automatic)
+       <name:Type>      (e.g. Number, Word, Integer)
+   Type is read as a single bareword - more elaborate Restricted[...]
+   etc. forms will lower to v0.3+ Interpreter-backed parsers. *)
+parseGrammarTemplate[s_String] :=
+    Block[{lits, rest},
+        lits = StringSplit[s,
+            RegularExpression["<([A-Za-z][A-Za-z0-9_]*)(?::([^>]+))?>"]
+                :> Function[Null, grammarSlot["$1", "$2"], HoldFirst]
+        ];
+        (* StringSplit gives interleaved {literal, capture, literal, ...} *)
+        Map[
+            Switch[#,
+                "" | _String, grammarLit[#],
+                _, #
+            ] &,
+            DeleteCases[lits, ""]
+        ]
+    ]
+
+(* StringSplit's :> Function form is fiddly; do it iteratively instead. *)
+parseGrammarTemplate[s_String] :=
+    Block[{result = {}, rest = s, m},
+        While[
+            m = StringCases[rest,
+                RegularExpression["<([A-Za-z][A-Za-z0-9_]*)(?::([^>]+))?>"] :>
+                    {"$1", "$2", "$0"},
+                1
+            ];
+            m =!= {},
+            Block[{name = m[[1, 1]], typ = m[[1, 2]], whole = m[[1, 3]],
+                   idx = StringPosition[rest, m[[1, 3]], 1][[1, 1]]
+            },
+                If[idx > 1, AppendTo[result, grammarLit[StringTake[rest, idx - 1]]]];
+                AppendTo[result, grammarSlot[name, If[typ === "", Automatic, typ]]];
+                rest = StringDrop[rest, idx - 1 + StringLength[whole]]
+            ]
+        ];
+        If[rest =!= "", AppendTo[result, grammarLit[rest]]];
+        result
+    ]
+
+lowerSegment[grammarLit[s_String]] := ParseLiteral[s]
+lowerSegment[grammarSlot[_, type_]] := slotParser[type]
+
+(* Default slot parser: a maximal run of word characters, joined. *)
+slotParser[Automatic] :=
+    ParseAction[ParseSome[ParseCharacter[WordCharacter]], StringJoin]
+
+slotParser["Word"] :=
+    ParseAction[ParseSome[ParseCharacter[LetterCharacter]], StringJoin]
+
+slotParser["Number"] :=
+    ParseAction[
+        ParseSome[ParseCharacter[DigitCharacter]],
+        FromDigits @ StringJoin[{##}] &
+    ]
+
+slotParser["Integer"] := slotParser["Number"]
+
+slotParser[other_] :=
+    ParseFail[
+        "Slot type " <> ToString[other, InputForm] <> " not supported in v0.2.5 (only Word, Number / Integer, and the default any-word slot)"
+    ]
+
+(* Build the binding { slotName -> value, ... } and substitute into the
+   held body, then release. Uses ReplaceAll on the bare symbols, scoped
+   by the slot name list. *)
+evalBoundBody[HoldComplete[body_], slotNames_List, values_List] :=
+    ReleaseHold[
+        HoldComplete[body] /. Thread[
+            (Symbol /@ slotNames) -> values
         ]
     ]
 

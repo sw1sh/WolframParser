@@ -8,7 +8,7 @@ dir = DirectoryName[$InputFileName]
 PacletDirectoryLoad[dir]
 Needs["Wolfram`Parser`"]
 
-report = TestReport[FileNameJoin[{dir, "tests.wlt"}]]
+report = TestReport @ FileNames["*.wlt", FileNameJoin[{dir, "Tests"}]]
 
 passed = Length @ report["TestsSucceededIndices"]
 failed = Length @ report["TestsFailedIndices"]
