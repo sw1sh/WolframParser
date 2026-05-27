@@ -1,7 +1,7 @@
 ---
 Template: Symbol
 Name: LaTeXMathParse
-Context: Wolfram`Parser`LaTeX`
+Context: Wolfram`Parser`
 Paclet: Wolfram/WolframParser
 URI: Wolfram/WolframParser/ref/LaTeXMathParse
 Keywords: [LaTeX, math, parser, KaTeX, FractionBox, SubsuperscriptBox, GridBox, RowBox, StyleBox, MathML]

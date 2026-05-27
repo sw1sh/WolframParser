@@ -6,7 +6,6 @@
     TimeConstrained guard; a $TimedOut result fails the test. *)
 
 Needs["Wolfram`Parser`"]
-Needs["Wolfram`Parser`LaTeX`"]
 
 terminates[expr_] := TimeConstrained[expr; True, 15, False]
 

@@ -39,25 +39,11 @@ PacletObject[<|
                 "Wolfram`Parser`ParseNotFollowedBy",
                 "Wolfram`Parser`ParseTry",
                 "Wolfram`Parser`ParseRecursive",
-                "Wolfram`Parser`ParseAction"
-            }
-        },
-        {
-            "Kernel",
-            "Root" -> "Kernel",
-            "Context" -> "Wolfram`Parser`LaTeX`",
-            "Symbols" -> {
-                "Wolfram`Parser`LaTeX`LaTeXMathParse",
-                "Wolfram`Parser`LaTeX`LaTeXMathParser"
-            }
-        },
-        {
-            "Kernel",
-            "Root" -> "Kernel",
-            "Context" -> "Wolfram`Parser`EBNF`",
-            "Symbols" -> {
-                "Wolfram`Parser`EBNF`EBNFParse",
-                "Wolfram`Parser`EBNF`EBNFRules"
+                "Wolfram`Parser`ParseAction",
+                "Wolfram`Parser`LaTeXMathParse",
+                "Wolfram`Parser`LaTeXMathParser",
+                "Wolfram`Parser`EBNFParse",
+                "Wolfram`Parser`EBNFRules"
             }
         },
         {

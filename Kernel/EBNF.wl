@@ -1,4 +1,4 @@
-(* :Package: Wolfram`Parser`EBNF`
+(* :Package: Wolfram`Parser`
    :Title:   Read a BNF / EBNF grammar file using the Wolfram`Parser` core
 
    The input is a grammar in the style the TPTP project publishes
@@ -21,7 +21,7 @@
    `:::` regex-style char class, or `::-` token construction) by
    passing `"PrimitiveOverrides" -> <|name -> ParserCombinator|>`. *)
 
-BeginPackage["Wolfram`Parser`EBNF`", {"Wolfram`Parser`"}]
+BeginPackage["Wolfram`Parser`"]
 
 EBNFParse::usage =
     "EBNFParse[source] reads a BNF grammar from a string and returns " <>
@@ -34,7 +34,7 @@ EBNFRules::usage =
     "ParserCombinators. Useful for inspecting the parsed grammar shape. " <>
     "EBNFRules[File[path]] reads from a file.";
 
-Begin["`Private`"]
+Begin["`EBNFPrivate`"]
 
 
 (* ===== the BNF grammar, expressed in our own combinators ===== *)
@@ -172,8 +172,29 @@ lowerElt[NonTerm[name_String], symMap_, overrides_] :=
             ParseFail["No parser bound for non-terminal: " <> name]
     ]
 
+(* Each iteration of a ParseMany has to consume any whitespace that
+   sits between the previous match and this one - the lowering of an
+   alternative sequence inserts ws BETWEEN elements but not at the
+   start, so a bare ParseMany would stop at the first ws of the
+   continuation. Prepend a ws-consumer per iteration. *)
 lowerElt[Rep["Many", inner_], symMap_, overrides_] :=
-    ParseMany[lowerElt[inner, symMap, overrides]]
+    ParseMany[
+        ParseAction[
+            ws$lowered ~~ lowerElt[inner, symMap, overrides],
+            #2 &
+        ]
+    ]
+
+(* ManyAlts holds a list-of-alt-bodies (each alt body is a list of
+   elements). Emitted by the left-recursion-elimination rewrite for
+   the repeating tail of an originally-left-recursive rule. *)
+lowerElt[Rep["ManyAlts", altsList_List], symMap_, overrides_] :=
+    ParseMany[
+        ParseAction[
+            ws$lowered ~~ lowerBody[altsList, symMap, overrides],
+            #2 &
+        ]
+    ]
 
 (* Lower one alternative sequence - lowered elements separated by an
    optional-whitespace parser, then drop the whitespace pieces from the
@@ -202,6 +223,59 @@ lowerBody[alts_List, symMap_, overrides_] :=
     ]
 
 
+(* ===== Left-recursion elimination =====
+
+   A directly left-recursive rule
+
+       A ::= A r1 | A r2 | ... | b1 | b2 | ...
+
+   is rewritten before lowering to the PEG-friendly equivalent
+
+       A ::= b1 (r1 | r2 | ...)* | b2 (r1 | r2 | ...)* | ...
+
+   The right-tail (r_i) of every recursive alt becomes the repeated
+   body of a ParseMany. The non-recursive alts (b_j) stay as the
+   leftmost prefix; each b_j gets a copy of the tail-repetition
+   appended.
+
+   This handles the eleven directly-left-recursive rules in TPTP's
+   SyntaxBNF (cnf_disjunction, fof_or_formula, fof_and_formula, the
+   thf_* and tff_* connective and xprod_type rules). Indirect /
+   mutually-left-recursive grammars need Paull's algorithm, which is
+   not (yet) applied here. *)
+
+rewriteLeftRecursive[name_String, alts_List] :=
+    Block[{recursive, nonRecursive},
+        recursive = Cases[alts, {NonTerm[name], rest___} :> {rest}];
+        nonRecursive = Cases[alts, {first_, ___} /; first =!= NonTerm[name]];
+        Which[
+            Length[recursive] === 0,
+                alts,
+            Length[nonRecursive] === 0,
+                (* Pure left recursion with no base case - emit a fail. *)
+                {{Lit["<unreachable left recursion: " <> name <> ">"]}},
+            True,
+                Append[#, Rep["ManyAlts", recursive]] & /@ nonRecursive
+        ]
+    ]
+
+
+(* ===== Longest-alternative-first reordering =====
+
+   PEG `ParseChoice` commits to the first alternative that matches, so
+   given two alts that share a common prefix - e.g.
+
+       <fof_plain_term> ::= <constant> | <functor>(<fof_arguments>)
+
+   the shorter alt (`<constant>`, which also matches just `p`) would
+   always win and the function-application form would never be reached.
+   Sorting alts longest-first is a left-factoring approximation: the
+   longer match is tried first; if it fails to commit (e.g. no `(`
+   after the functor), PEG backtracks to the shorter alt. *)
+
+sortAltsLongestFirst[alts_List] := SortBy[alts, -Length[#] &]
+
+
 (* ===== Public entry points ===== *)
 
 (* Parse the BNF source via the combinator grammar above and return the
@@ -223,6 +297,17 @@ EBNFParse[source_String, OptionsPattern[]] :=
         gram = Association @ Cases[rules,
             EBNFRule[name_, "::=" | ":==", body_] :> (name -> body)
         ];
+        (* Apply direct-left-recursion elimination before lowering, so the
+           PEG ordering of the lowered ParseChoice doesn't commit to a
+           non-recursive alt and miss the recursive form. *)
+        gram = AssociationMap[
+            Function[name, rewriteLeftRecursive[name, gram[name]]],
+            Keys[gram]
+        ];
+        (* Then sort each rule's alts longest-first so a shared-prefix
+           alt pair like `<constant> | <functor>(<fof_arguments>)` tries
+           the longer (and more specific) form before the bare prefix. *)
+        gram = sortAltsLongestFirst /@ gram;
         symMap = AssociationMap[Function[Unique["ebnfRule$"]], Keys[gram]];
         parsers = Association @ KeyValueMap[
             Function[{name, body},

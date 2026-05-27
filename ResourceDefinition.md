@@ -21,34 +21,13 @@ RelatedResources: [Wolfram/MarkdownToNotebook]
 
 - The library reuses the [GrammarRules]() declarative slot-syntax DSL, but compiles each grammar to a local parser via [FunctionCompile]() instead of round-tripping through [CloudDeploy](). The supported subset of `GrammarRules` is mapped in the [Parsing GrammarRules Locally](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules) tech note.
 - A Parsec-style combinator core (`Parse*` constructors) covers grammars that don't fit the declarative shape: LaTeX math, custom DSLs with backtracking / lookahead, recursive descent over [CodeParser]() ASTs.
-- A sub-context `Wolfram\`Parser\`LaTeX\`` ships `LaTeXMathParse[s]`, a working LaTeX math-mode parser at 126 / 126 coverage of [KaTeX's own screenshotter test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml). Output is a tree of Wolfram boxes (`FractionBox`, `SubsuperscriptBox`, `RadicalBox`, `GridBox`, ...) ready to drop into a notebook cell or wrap with [DisplayForm](paclet:ref/DisplayForm) for kernel-side rendering.
+- [LaTeXMathParse]() is a working LaTeX math-mode parser at 126 / 126 coverage of [KaTeX's own screenshotter test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml). Output is a tree of Wolfram boxes ([FractionBox](), [SubsuperscriptBox](), [RadicalBox](), [GridBox](), ...) ready to drop into a notebook cell or wrap with [DisplayForm](paclet:ref/DisplayForm) for kernel-side rendering.
 - Operates uniformly on strings, on lists of tagged tokens, and on lists of Wolfram expressions (so the same combinators that lex a string can walk a [CodeParser]() AST).
 - The kernel is dependency-free and has no C library; performance comes from [FunctionCompile]()'s LLVM backend.
 
 ## Usage
 
-```
-PacletInstall["Wolfram/WolframParser"];
-Needs["Wolfram`Parser`"];
-
-(* a literal-string parser *)
-Parse[ParseLiteral["foo"], "foo"]
-(* "foo" *)
-
-(* a one-or-more digit parser, with an action that converts to Integer *)
-digits = ParseAction[ParseSome[ParseCharacter[DigitCharacter]], FromDigits @ StringJoin[{##}] &];
-Parse[digits, "12345"]
-(* 12345 *)
-
-(* a GrammarRules-flavoured slot template, parsed locally *)
-Parse[GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}], "add 3 and 5"]
-(* 8 *)
-
-(* a LaTeX math expression *)
-Needs["Wolfram`Parser`LaTeX`"];
-LaTeXMathParse["\\frac{x^2}{y^2} = z^2"]
-(* RowBox[{FractionBox[SuperscriptBox["x", "2"], SuperscriptBox["y", "2"]], "=", SuperscriptBox["z", "2"]}] *)
-```
+The package provides [Parse]() and [ParserCompile]() as the entry points, [ParserCombinator]() as the single computable head every constructor returns, and the `Parse*` family of constructors - [ParseLiteral](), [ParseCharacter](), [ParseSequence](), [ParseChoice](), [ParseMany](), [ParseSome](), [ParseOptional](), [ParseBetween](), [ParseAction](), [ParseRecursive](), [ParseLookahead](), [ParseNotFollowedBy](), [ParseTry](). [GrammarRules]() is accepted as input to `Parse` and lowered locally. [LaTeXMathParse]() parses LaTeX math-mode source to a tree of Wolfram boxes.
 
 ## Hero Image
 

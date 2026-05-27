@@ -14,7 +14,7 @@ Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_co
 
 ## Abstract
 
-`Wolfram`Parser`` is a Parsec-style parser combinator library: every parser is a [ParserCombinator]() value built from `Parse*` constructors, runnable directly via [Parse]() or compiled with [ParserCompile](). [GrammarRules]() declarations are lowered to the same combinators (no [CloudDeploy]() round-trip). The [`Wolfram`Parser`LaTeX``](paclet:Wolfram/WolframParser/ref/LaTeXMathParse) sub-context ships a working LaTeX-math parser; the [`Wolfram`Parser`EBNF``](paclet:Wolfram/WolframParser/ref/EBNFParse) sub-context reads a BNF grammar file into a parser map.
+`Wolfram`Parser`` is a Parsec-style parser combinator library: every parser is a [ParserCombinator]() value built from `Parse*` constructors, runnable directly via [Parse]() or compiled with [ParserCompile](). [GrammarRules]() declarations are lowered to the same combinators (no [CloudDeploy]() round-trip). [LaTeXMathParse]() is a working LaTeX-math parser built on the combinator core; [EBNFParse]() reads a BNF grammar file into a parser map.
 
 ## Functions
 
@@ -67,11 +67,11 @@ Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_co
 
 - [ParseError]() structured failure with `"Position"`, `"Expected"`, `"Found"` keys
 
-### LaTeX math (`Wolfram`Parser`LaTeX``)
+### LaTeX math
 
-- [LaTeXMathParse]() parse LaTeX math source into a Wolfram boxes tree
+- [LaTeXMathParse]() parse LaTeX math source into a tree of Wolfram boxes
 
-### BNF grammars (`Wolfram`Parser`EBNF``)
+### BNF grammars
 
 - [EBNFParse]() read a BNF grammar (a string or `File[path]`) and return an `Association[name -> ParserCombinator]`
 - [EBNFRules]() return the unlowered list of `EBNFRule[name, kind, body]` records

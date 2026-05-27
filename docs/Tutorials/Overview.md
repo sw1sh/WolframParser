@@ -47,7 +47,7 @@ Keywords: [parser, parsing, grammar, combinator, GrammarRules, FunctionCompile]
 - [ParseAction](paclet:Wolfram/WolframParser/ref/ParseAction)
 - `Parse[GrammarRules[{...}], input]` - the [GrammarRules]() declarative DSL is accepted as input and lowered locally (no [CloudDeploy]() round-trip)
 
-### LaTeX math (`` Wolfram`Parser`LaTeX` ``)
+### LaTeX math
 - `LaTeXMathParse[texSource]` - parse LaTeX math notation to a box expression suitable for an `InlineFormula` cell. Handles font-style commands (`\mathbb`, `\mathcal`, `\mathfrak`), fractions, roots, sub/superscripts, big operators, Greek letters, parens, and a long list of named symbols (`\leq`, `\in`, `\cup`, `\to`, ...)
 
 ## Tutorials

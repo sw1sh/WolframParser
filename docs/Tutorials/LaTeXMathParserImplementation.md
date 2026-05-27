@@ -2,7 +2,7 @@
 Template: TechNote
 Name: LaTeXMathParserImplementation
 Title: Implementing the LaTeX Math Parser
-Context: Wolfram`Parser`LaTeX`
+Context: Wolfram`Parser`
 Paclet: Wolfram/WolframParser
 URI: Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation
 Keywords: [LaTeX, math, parser, KaTeX, ParserCombinator, MathML, FractionBox, GridBox, environments, delimiters]
@@ -12,7 +12,7 @@ RelatedTutorials: [DesignAndCompilationStrategy, ParserLandscape]
 
 ## What this note covers
 
-[Wolfram\`Parser\`LaTeX\`](paclet:Wolfram/WolframParser/guide/WolframParser) is a working LaTeX math-mode parser built on top of the [ParserCombinator]() core. It parses 126 / 126 of the inline cases from KaTeX's own [screenshot test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml) - the same shapes a production JS-side math renderer is expected to handle. This note is the second half of the [`DesignAndCompilationStrategy`](paclet:Wolfram/WolframParser/tutorial/DesignAndCompilationStrategy) story: that one explained the combinator core; this one walks through what it takes to point those primitives at real-world TeX and not flinch.
+[LaTeXMathParse]() is a working LaTeX math-mode parser built on top of the [ParserCombinator]() core. It parses 126 / 126 of the inline cases from KaTeX's own [screenshot test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml) - the same shapes a production JS-side math renderer is expected to handle. This note is the second half of the [`DesignAndCompilationStrategy`](paclet:Wolfram/WolframParser/tutorial/DesignAndCompilationStrategy) story: that one explained the combinator core; this one walks through what it takes to point those primitives at real-world TeX and not flinch.
 
 The interesting part of writing a LaTeX parser is not the grammar - LaTeX math has no grammar in any formal sense. The interesting part is *tolerance*: real TeX users mix balanced and unbalanced constructs, single-character and multi-character delimiters, math-mode and text-mode, optional and required brace arguments, and macros that were defined in someone's `.sty` file 15 years ago and never documented. A parser that demands well-formedness rejects most of the corpus on the first line. A parser that's pure regex-fallback renders the corpus as gibberish.
 

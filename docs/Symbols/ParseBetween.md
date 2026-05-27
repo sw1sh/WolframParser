@@ -81,7 +81,7 @@ Parse[group, "((a)(b))"]
 (* {{"a"}, {"b"}} *)
 ```
 
-The same technique drives the recursive cross-references inside `Wolfram\`Parser\`LaTeX\``'s grammar (factor refers to atom which refers to bracedArg which refers back to atom, ...).
+The same technique drives the recursive cross-references inside [LaTeXMathParse]()'s grammar (factor refers to atom which refers to bracedArg which refers back to atom, ...).
 
 The `ParseAction[Sequence, #2 &]` derivation matches the convenience helper:
 

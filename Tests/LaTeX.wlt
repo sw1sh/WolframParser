@@ -1,8 +1,7 @@
 (* :Title: tests-latex.wlt - LaTeX math parser test suite *)
-(* :Context: Wolfram`Parser`LaTeX` *)
+(* :Context: Wolfram`Parser` *)
 
 Needs["Wolfram`Parser`"]
-Needs["Wolfram`Parser`LaTeX`"]
 
 
 (* === atoms === *)

@@ -2,7 +2,7 @@
 Template: TechNote
 Name: ParsingBNFGrammars
 Title: Parsing BNF Grammars (and bootstrapping a TPTP parser)
-Context: Wolfram`Parser`EBNF`
+Context: Wolfram`Parser`
 Paclet: Wolfram/WolframParser
 URI: Wolfram/WolframParser/tutorial/ParsingBNFGrammars
 Keywords: [BNF, EBNF, grammar, meta-grammar, bootstrap, TPTP, ATP, SyntaxBNF, GrammarApply, parser combinator, ParseRecursive]
@@ -47,8 +47,6 @@ Without the `ParseNotFollowedBy[nonTerm]`, a punctuation run is greedy and would
 **(b) The lowering: rule list -> `Association[name -> parser]`.** Each rule is walked: literals become `ParseLiteral`, non-terminals become `ParseRecursive[symbol]` where each rule has an allocated `Unique` symbol holding its lowered parser. The fresh-symbol indirection is what lets the lowering build the parser map *in any order* - mutual recursion among rules ties through the symbols, looked up at parse time. Once every rule is lowered, each rule's parser is bound to its symbol; the `ParseRecursive` references resolve and the whole grammar wakes up.
 
 ```wl
-Needs["Wolfram`Parser`EBNF`"]
-
 g = EBNFParse["
     <digit>  ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
     <number> ::= <digit><digit>*
@@ -162,7 +160,6 @@ The tests in `Tests/EBNF.wlt` cover the unit cases above. The vendored grammar l
 
 ```wl
 Needs["Wolfram`Parser`"]
-Needs["Wolfram`Parser`EBNF`"]
 
 source = "<S> ::= a <S> b | epsilon
           <epsilon> ::=";

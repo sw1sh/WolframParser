@@ -1083,3 +1083,9 @@ ParserCombinator /: MakeBoxes[
 End[]
 
 EndPackage[]
+
+(* LaTeX and EBNF sub-modules both BeginPackage["Wolfram`Parser`"] and
+   add LaTeXMathParse / LaTeXMathParser / EBNFParse / EBNFRules to the
+   root context, so a single Needs["Wolfram`Parser`"] loads everything. *)
+Get[FileNameJoin[{DirectoryName[$InputFileName], "LaTeX.wl"}]];
+Get[FileNameJoin[{DirectoryName[$InputFileName], "EBNF.wl"}]];

@@ -1,5 +1,5 @@
 (* :Title: LaTeX/Math.wl - a LaTeX math parser built on Wolfram`Parser` *)
-(* :Context: Wolfram`Parser`LaTeX` *)
+(* :Context: Wolfram`Parser` *)
 (* :Summary:
     A first cut of a LaTeX math-mode parser. Two purposes:
 
@@ -27,14 +27,14 @@
     matter of adding productions.
 *)
 
-BeginPackage["Wolfram`Parser`LaTeX`", {"Wolfram`Parser`"}]
+BeginPackage["Wolfram`Parser`"]
 
 LaTeXMathParse::usage = "LaTeXMathParse[texSource] parses LaTeX math notation and returns a box expression. Returns a ParseError on failure."
 
 LaTeXMathParser::usage = "LaTeXMathParser is the underlying ParserCombinator. Use it via Parse[LaTeXMathParser, source] when you want the same parser applied to many inputs."
 
 
-Begin["`Private`"]
+Begin["`LaTeXPrivate`"]
 
 
 (* === lexical ===
