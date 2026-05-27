@@ -15,6 +15,23 @@ PacletObject[<|
             "Root" -> "Kernel",
             "Context" -> "Wolfram`Parser`",
             "Symbols" -> {
+                "Wolfram`Parser`Parse",
+                "Wolfram`Parser`ParsePartial",
+                "Wolfram`Parser`ParserCompile",
+                "Wolfram`Parser`ParserCombinator",
+                "Wolfram`Parser`ParserCombinatorQ",
+                "Wolfram`Parser`ParseError",
+                "Wolfram`Parser`ParseLiteral",
+                "Wolfram`Parser`ParseCharacter",
+                "Wolfram`Parser`ParseSucceed",
+                "Wolfram`Parser`ParseFail",
+                "Wolfram`Parser`ParseSequence",
+                "Wolfram`Parser`ParseChoice",
+                "Wolfram`Parser`ParseMany",
+                "Wolfram`Parser`ParseSome",
+                "Wolfram`Parser`ParseOptional",
+                "Wolfram`Parser`ParseBetween",
+                "Wolfram`Parser`ParseAction"
             }
         },
         {

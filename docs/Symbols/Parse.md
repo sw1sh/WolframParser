@@ -11,15 +11,15 @@ RelatedGuides: [WolframParser]
 
 ## Usage
 
-<code>[Parse]()[$parser$, $input$]</code> runs a $parser$ (a [ParserCombinator]() or a [GrammarRules]() declaration) against an $input$ (a [String](), a [List]() of tokens, or a [List]() of Wolfram expressions). Returns the parse result on success, or a [ParseError]() object on failure.
+<code>[Parse]()[parser, input]</code> runs a parser (a [ParserCombinator]() or a [GrammarRules]() declaration) against an input (a [String](), a [List]() of tokens, or a [List]() of Wolfram expressions). Returns the parse result on success, or a [ParseError]() object on failure.
 
 ## Details & Options
 
 - `Parse` requires the parser to consume the *entire* input. To accept a partial parse and get back the leftover, use [ParsePartial]().
 - A `GrammarRules` declaration is lowered to a `ParserCombinator` (and JIT-compiled the first time it is seen) before being run; the lowering result is cached so a second `Parse[grammar, ...]` call against the same grammar reuses the work.
+- For a `ParserCombinator` *without* a `"Code"` entry in its options, `Parse` runs the **interpretive** path. For a parser already passed through [ParserCompile](), `Parse` invokes the compiled function directly. Either way, `parser[input]` and `Parse[parser, input]` are equivalent ([ParserCombinator]() carries a SubValue rule that routes one to the other).
 - On success the return value is the structured result the combinator built - usually a string, a list of children, or an action's return value.
 - On failure the return value is a `ParseError[<|"Position" -> _, "Expected" -> _, "Found" -> _, ...|>]` association carrying the position of the furthest-advanced failure, the set of expected tokens at that position, and what was found instead.
-- `Parse` is a wrapper over `ParserCompile[parser][input]`; it exists as a single ergonomic entry point so users don't have to compile-then-apply explicitly.
 
 ## Basic Examples
 
@@ -39,10 +39,18 @@ Parse[ParseCharacter[DigitCharacter], "5"]
 
 <!-- => "5" -->
 
-A sequence built with the `**` operator:
+A sequence built with the `~~` operator:
 
 ```wl
-Parse[ParseLiteral["foo"] ** ParseLiteral["bar"], "foobar"]
+Parse[ParseLiteral["foo"] ~~ ParseLiteral["bar"], "foobar"]
+```
+
+<!-- => {"foo", "bar"} -->
+
+The same via the SubValue (`parser[input]` is `Parse[parser, input]`):
+
+```wl
+(ParseLiteral["foo"] ~~ ParseLiteral["bar"])["foobar"]
 ```
 
 <!-- => {"foo", "bar"} -->
@@ -120,8 +128,8 @@ A floating-point parser, end-to-end:
 ```wl
 Parse[
     ParseAction[
-        ParseCharacter[DigitCharacter].. ** Optional[
-            ParseLiteral["."] ** ParseCharacter[DigitCharacter]..
+        ParseCharacter[DigitCharacter].. ~~ Optional[
+            ParseLiteral["."] ~~ ParseCharacter[DigitCharacter]..
         ],
         ToExpression @ StringJoin @ Flatten[{##}] &
     ],

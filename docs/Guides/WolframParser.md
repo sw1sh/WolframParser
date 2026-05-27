@@ -15,10 +15,10 @@ Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_co
 
 The Wolfram Language has rich *piecewise* support for parsing: [StringExpression]() and [RegularExpression]() for regex-style patterns, [Interpreter]() for type-driven extraction from text, [CodeParser]() for parsing Wolfram code itself, and [GrammarRules]() for higher-level rule-based grammars (cloud-only). What it does not have is a single, general, *local* parser library that lets you compose your own grammar at any scale - the niche occupied by Parsec in Haskell, nom in Rust, or pyparsing in Python.
 
-This paclet (context `` Wolfram`Parser` ``) fills that niche. The strategy is twofold:
+This paclet (context `Wolfram`Parser` `) fills that niche. The strategy is twofold:
 
-- **Reuse the [GrammarRules]() declarative DSL.** The same `"the weather in <city>" -> city` slot syntax that compiles to a [CloudDeploy]() round-trip in the built-in path compiles to a local parser here, via [FunctionCompile]().
-- **Expose a `Parse*` combinator core** for grammars that don't fit the declarative shape, all funneling into a single computable `ParserCombinator` head with [UpValues]() for the natural WL operator overloads.
+- **Reuse the [GrammarRules]() declarative DSL.** The same `"the weather in <city>" -> city` slot syntax that the built-in path ships to [CloudDeploy]() is compiled here to a local parser via [FunctionCompile](). Same declaration, different deployment.
+- **Expose a `Parse*` combinator core** for grammars that don't fit the declarative shape, all funneling into a single computable [ParserCombinator]() head with [UpValues]() for the natural WL operator overloads and a [SubValues]() rule that makes `parser[input]` work directly.
 
 The v0.1 release is *design + scaffold*: two tech notes carry the design, the library code lands incrementally against them.
 
@@ -30,22 +30,23 @@ The v0.1 release is *design + scaffold*: two tech notes carry the design, the li
 ## Functions (intended shape)
 
 ### Run a parser
-- `Parse[parser, input]` apply a parser to an input (JIT compile + memoise)
-- `ParserCompile[parser]` materialise the compiled form (local analogue of [CloudDeploy](`)[`[GrammarRules](`)[...`]`]`)
+- `Parse[parser, input]` apply a parser to an input (interpretive for an uncompiled `ParserCombinator`, the cached compiled function for a compiled one)
+- `parser[input]` equivalent SubValue form - the wrapper carries the rule
+- `ParserCompile[parser]` materialise the compiled form: attaches a `CompiledCodeFunction` under the `"Code"` key of the wrapper's options
 
 ### The wrapper
-- `ParserCombinator[type, args, opts]` the single computable head every constructor returns; opaque to user code, formats as a summary box, carries the operator UpValues
+- `ParserCombinator[type, args, opts]` the single computable head every constructor returns; opaque to user code, formats as a summary box, carries the operator UpValues and the call-as-function SubValue
 
-### `Parse*` constructors (Anton-style naming, each returns a `ParserCombinator`)
+### Parse* constructors (Anton-style naming, each returns a `ParserCombinator`)
 
-**Terminals**
+#### Terminals
 - `ParseLiteral[s]` match an exact string / token
 - `ParseCharacter[pat]` match a single character against a character-class atom ([LetterCharacter](), [DigitCharacter](), [WordCharacter](), [WhitespaceCharacter](), ...), a [CharacterRange]()`[a, b]`, an [Alternatives]() of these, or a literal one-character [String]()
 - `ParseToken[type]` match a tagged `Token[type, _, _]`
 - `ParseSucceed[val]` always succeed with `val` (consume nothing)
 - `ParseFail[msg]` always fail with `msg`
 
-**Composition**
+#### Composition
 - `ParseSequence[p1, p2, ...]` each in order
 - `ParseChoice[p1, p2, ...]` first that matches (PEG-ordered)
 - `ParseBetween[open, p, close]` open, then p, then close; result is p's
@@ -54,21 +55,21 @@ The v0.1 release is *design + scaffold*: two tech notes carry the design, the li
 - `ParseChainLeft[p, op]` left-associative operator chain
 - `ParseChainRight[p, op]` right-associative operator chain
 
-**Repetition**
+#### Repetition
 - `ParseMany[p]` zero or more
 - `ParseSome[p]` one or more
 - `ParseOptional[p]` zero or one
 
-**Lookahead / backtracking**
-- `ParseLookahead[p]` succeed iff p would match, consume nothing
-- `ParseNotFollowedBy[p]` succeed iff p would not match, consume nothing
+#### Lookahead / backtracking
+- `ParseLookahead[p]` succeed iff `p` would match, consume nothing
+- `ParseNotFollowedBy[p]` succeed iff `p` would not match, consume nothing
 - `ParseTry[p]` backtrack on failure even after consuming
 
-**Capture / action**
-- `ParseCapture[name, p]` tag p's result with name (for slot lowering)
-- `ParseAction[p, f]` apply f to p's result
+#### Capture / action
+- `ParseCapture[name, p]` tag `p`'s result with `name` (for slot lowering)
+- `ParseAction[p, f]` apply `f` to `p`'s result
 
-**Recursion**
+#### Recursion
 - `ParseRecursive[name, body]` a named recursive parser body
 
 ### Operator overloads on `ParserCombinator`
@@ -76,12 +77,12 @@ The v0.1 release is *design + scaffold*: two tech notes carry the design, the li
 | Syntax        | Lowers to                       | Combinator       |
 |---------------|---------------------------------|------------------|
 | `p1 \| p2`    | `Alternatives[p1, p2]`          | `ParseChoice`    |
-| `p1 ** p2`    | `NonCommutativeMultiply[p1, p2]` | `ParseSequence` |
+| `p1 ~~ p2`    | `StringExpression[p1, p2]`      | `ParseSequence`  |
 | `p..`         | `Repeated[p]`                   | `ParseSome`      |
 | `p...`        | `RepeatedNull[p]`               | `ParseMany`      |
 | `Optional[p]` | `Optional[p]`                   | `ParseOptional`  |
 
-`~~` is *not* overloaded - it stays as [StringExpression](). `~` is *not* overloaded - it stays as WL's infix function notation `a~f~b == f[a, b]`.
+The `~~` UpValue *only* fires when both sides are `ParserCombinator` instances; plain `"foo" ~~ "bar"` between strings keeps its built-in [StringExpression]() meaning. `~` is *not* overloaded - it stays as WL's infix function notation `a~f~b == f[a, b]`.
 
 ### Diagnostics
 - `ParseError` structured error with position, rule, expected tokens

@@ -66,10 +66,10 @@ Parse[ParseLiteral["the weather"], "the weather"]
 
 ## Properties and Relations
 
-`ParseLiteral` is the building block for any parser that matches fixed text. Combined with `**` to sequence with other combinators:
+`ParseLiteral` is the building block for any parser that matches fixed text. Combined with `~~` to sequence with other combinators:
 
 ```wl
-Parse[ParseLiteral["hello "] ** ParseLiteral["world"], "hello world"]
+Parse[ParseLiteral["hello "] ~~ ParseLiteral["world"], "hello world"]
 ```
 
 <!-- => {"hello ", "world"} -->
@@ -79,7 +79,7 @@ Parse[ParseLiteral["hello "] ** ParseLiteral["world"], "hello world"]
 `ParseLiteral` does *not* automatically skip whitespace. For grammars where whitespace is insignificant, wrap with a `ParseToken[...]` form that strips spaces, or run a tokeniser pass first.
 
 ```wl
-Parse[ParseLiteral["foo"] ** ParseLiteral["bar"], "foo bar"]
+Parse[ParseLiteral["foo"] ~~ ParseLiteral["bar"], "foo bar"]
 ```
 
 <!-- => ParseError[<|"Position" -> 4, "Expected" -> "bar", "Found" -> " "|>] -->

@@ -16,7 +16,7 @@ RelatedGuides: [WolframParser]
 ## Details & Options
 
 - "One or more" - the parser requires at least one match.
-- The operator overload `$p$..` lowers to `ParseSome[$p$]` via [Repeated]().
+- The operator overload `p..` lowers to `ParseSome[p]` via [Repeated]().
 - Greedy by default.
 - Result type: [List]() of $p$'s result type (always non-empty).
 
@@ -58,7 +58,7 @@ Parse[ParseSome[ParseCharacter[DigitCharacter]], "5"]
 
 ## Properties and Relations
 
-`ParseSome[$p$]` and `ParseMany[$p$]` differ only at the empty match:
+`ParseSome[p]` and `ParseMany[p]` differ only at the empty match:
 
 ```wl
 {Parse[ParseSome[ParseLiteral["x"]], "xxx"], Parse[ParseMany[ParseLiteral["x"]], "xxx"]}
@@ -66,7 +66,7 @@ Parse[ParseSome[ParseCharacter[DigitCharacter]], "5"]
 
 <!-- => {{"x", "x", "x"}, {"x", "x", "x"}} -->
 
-`ParseSome[$p$]` is `$p$ ** ParseMany[$p$]` reshaped to a flat list:
+`ParseSome[p]` is `p ~~ ParseMany[p]` reshaped to a flat list:
 
 ```wl
 Parse[ParseSome[ParseCharacter[DigitCharacter]], "42"]
@@ -76,10 +76,10 @@ Parse[ParseSome[ParseCharacter[DigitCharacter]], "42"]
 
 ## Possible Issues
 
-The `..` postfix binds tighter than `**`, so `p1 ** p2..` is `ParseSequence[p1, ParseSome[p2]]` - the `..` only applies to `p2`. Use parentheses to repeat a sequence: `(p1 ** p2)..`.
+The `..` postfix binds tighter than `~~`, so `p1 ~~ p2..` is `ParseSequence[p1, ParseSome[p2]]` - the `..` only applies to `p2`. Use parentheses to repeat a sequence: `(p1 ~~ p2)..`.
 
 ```wl
-Parse[ParseLiteral["a"] ** ParseLiteral["b"]..., "abbb"]
+Parse[ParseLiteral["a"] ~~ ParseLiteral["b"]..., "abbb"]
 ```
 
 <!-- => {"a", {"b", "b", "b"}} -->

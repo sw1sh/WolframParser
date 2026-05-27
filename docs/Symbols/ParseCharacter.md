@@ -111,7 +111,7 @@ An identifier - letter followed by any number of letters or digits:
 ```wl
 Parse[
     ParseAction[
-        ParseCharacter[LetterCharacter] **
+        ParseCharacter[LetterCharacter] ~~
             (ParseCharacter[LetterCharacter] | ParseCharacter[DigitCharacter])...,
         StringJoin @ Flatten[{##}] &
     ],

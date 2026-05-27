@@ -43,7 +43,7 @@ Optional in the middle of a sequence:
 
 ```wl
 Parse[
-    ParseLiteral["a"] ** ParseOptional[ParseLiteral["b"]] ** ParseLiteral["c"],
+    ParseLiteral["a"] ~~ ParseOptional[ParseLiteral["b"]] ~~ ParseLiteral["c"],
     "abc"
 ]
 ```
@@ -54,7 +54,7 @@ The absent case still succeeds:
 
 ```wl
 Parse[
-    ParseLiteral["a"] ** ParseOptional[ParseLiteral["b"]] ** ParseLiteral["c"],
+    ParseLiteral["a"] ~~ ParseOptional[ParseLiteral["b"]] ~~ ParseLiteral["c"],
     "ac"
 ]
 ```
@@ -100,7 +100,7 @@ An optional sign in a numeric literal:
 ```wl
 Parse[
     ParseAction[
-        ParseOptional[ParseLiteral["-"]] ** ParseCharacter[DigitCharacter]..,
+        ParseOptional[ParseLiteral["-"]] ~~ ParseCharacter[DigitCharacter]..,
         Function[{sign, digits},
             If[MissingQ[sign], 1, -1] * FromDigits @ StringJoin[digits]]
     ],

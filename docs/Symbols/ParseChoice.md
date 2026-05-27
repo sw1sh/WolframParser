@@ -16,7 +16,7 @@ RelatedGuides: [WolframParser]
 ## Details & Options
 
 - *PEG-ordered*: once a branch matches, the rest are not tried, even if a *later* production in the surrounding grammar later fails. To get full backtracking, wrap with [ParseTry]() on the branches that need it.
-- The operator overload `$p_1$ | $p_2$` lowers to `ParseChoice[$p_1$, $p_2$]` via [Alternatives](). Chains flatten - `$p_1$ | $p_2$ | $p_3$` is one `ParseChoice` of three children.
+- The operator overload `p1 | p2` lowers to `ParseChoice[p1, p2]` via [Alternatives](). Chains flatten - `p1 | p2 | p3` is one `ParseChoice` of three children.
 - On failure, the reported error is the *furthest-advanced* failure across all tried branches; the `Expected` set is the *union* of the per-branch expected sets at that position.
 - Result type: whatever the matched branch returned.
 

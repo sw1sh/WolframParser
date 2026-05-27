@@ -12,7 +12,7 @@ RelatedTutorials: [ParserLandscape]
 
 ## What this note covers
 
-The [ParserLandscape](paclet:Wolfram/WolframParser/tutorial/ParserLandscape) survey lays out *what's already there*; this note lays out *what we are building*. The plan in one sentence: **reuse the [GrammarRules]() declarative DSL, but compile the rules to a local parser via [FunctionCompile]() instead of round-tripping through [CloudDeploy](), and pair that with an Anton-style `Parse*` combinator core that all funnels into a single computable `ParserCombinator[]` head.**
+The [ParserLandscape](paclet:Wolfram/WolframParser/tutorial/ParserLandscape) survey lays out *what's already there*; this note lays out *what we are building*. The plan in one sentence: **reuse the [GrammarRules]() declarative DSL, but compile the rules to a local parser via [FunctionCompile]() instead of round-tripping through [CloudDeploy](), and pair that with an Anton-style `Parse*` combinator core that all funnels into a single computable `ParserCombinator` head.**
 
 The note has six parts:
 
@@ -38,41 +38,42 @@ The head is *opaque* to user code: you never write `ParserCombinator[...]` by ha
 
 **(1) Composition via UpValues.** Because every parser is a `ParserCombinator`, we can attach [UpValues]() to that head and overload the WL operators that actually parse:
 
-| WL syntax       | Lowers to                               | Combinator   |
-|-----------------|-----------------------------------------|--------------|
-| `p1 \| p2`      | `Alternatives[p1, p2]`                  | `ParseChoice` |
-| `p1 ** p2`      | `NonCommutativeMultiply[p1, p2]`        | `ParseSequence` |
+| WL syntax       | Lowers to                               | Combinator                |
+|-----------------|-----------------------------------------|---------------------------|
+| `p1 \| p2`      | `Alternatives[p1, p2]`                  | `ParseChoice`             |
+| `p1 ~~ p2`      | `StringExpression[p1, p2]`              | `ParseSequence`           |
 | `p..`           | `Repeated[p]`                           | `ParseSome` (one or more) |
-| `p...`          | `RepeatedNull[p]`                       | `ParseMany` (zero or more) |
-| `Optional[p]`   | `Optional[p]`                           | `ParseOptional` |
+| `p...`          | `RepeatedNull[p]`                       | `ParseMany` (zero or more)|
+| `Optional[p]`   | `Optional[p]`                           | `ParseOptional`           |
 
 Why these and not others:
 
-- **`|`** is `Alternatives` - the semantic match to choice is exact, and the operator is the same one PEG / regex / EBNF use.
-- **`**`** is [NonCommutativeMultiply](), which has no fixed built-in meaning and is rarely used in user code. Parser sequencing is non-commutative (`p1 ** p2` is not the same as `p2 ** p1`), so the name fits.
-- **`..`** / **`...`** are [Repeated]() / [RepeatedNull](), which already mean "one or more" / "zero or more" in pattern context. Reusing them for parser repetition is the obvious mapping.
-- **`~~`** is *not* overloaded - it is [StringExpression](), the inline string-pattern composer. Overloading it would silently rewrite plain-string patterns inside a parser definition.
-- **`~`** is *not* overloaded - `a ~ f ~ b` is WL's infix function notation `f[a, b]`, not a binary operator.
+- `|` is `Alternatives` - the semantic match to choice is exact, and the operator is the same one PEG / regex / EBNF use.
+- `~~` is [StringExpression](). The UpValue *only* fires when both sides are `ParserCombinator` instances - plain string sequences (`"foo" ~~ "bar"`) keep their built-in meaning. This dual interpretation is the point: a parser library that overloads `~~` reads naturally to a user who already thinks of string sequences in those terms.
+- `..` / `...` are [Repeated]() / [RepeatedNull](), which already mean "one or more" / "zero or more" in pattern context. Reusing them for parser repetition is the obvious mapping.
+- `~` is *not* overloaded - `a~f~b` is WL's infix function notation `f[a, b]`, not a binary operator.
+
+**(2) SubValue: call a parser as a function.** Every `ParserCombinator` also carries a SubValues rule: `pc[input]` evaluates to `Parse[pc, input]`. So a constructed parser is *directly callable*, the same way a `CompiledCodeFunction` or an `InterpolatingFunction` is. For an uncompiled parser the SubValue routes to the interpreter; for one passed through `ParserCompile` it routes to the cached compiled function.
 
 A sample composition:
 
 ```wl
 (* match one or more digits, followed optionally by a dot-and-fraction *)
-number = ParseCharacter[DigitCharacter].. ** Optional[ParseLiteral["."] ** ParseCharacter[DigitCharacter]...];
+number = ParseCharacter[DigitCharacter].. ~~ Optional[ParseLiteral["."] ~~ ParseCharacter[DigitCharacter]...];
 ```
 
 UpValues mean each operator picks the right combinator without the user ever typing `ParserCombinator[...]`.
 
-**(2) A canonical, inspectable representation.** Every parser is a tree of `ParserCombinator` nodes, so the compiler, the pretty-printer, and the diagnostic machinery all walk *one* expression shape. There is no separate "compiled form" data type at the user-visible level - `ParserCompile[p]` mutates the *options* (`"Compiled" -> True`, attaches a `CompiledCodeFunction`) but keeps the same head, so a compiled parser still looks like a parser in `InputForm`.
+**(3) A canonical, inspectable representation.** Every parser is a tree of `ParserCombinator` nodes, so the compiler, the pretty-printer, and the diagnostic machinery all walk *one* expression shape. There is no separate "compiled form" data type at the user-visible level - `ParserCompile[p]` adds a `"Code" -> CompiledCodeFunction[...]` entry to the wrapper's options and otherwise leaves the tree alone. The presence of `"Code"` is the canonical "is this compiled?" marker; no separate `"Compiled" -> True` flag is needed.
 
-**(3) A nice summary box.** `ParserCombinator` carries a [BoxForm`ArrangeSummaryBox]() formatter modelled on `FiniteFieldElement` / `PAdicNumber` / `Quantity`. Always-visible: combinator type, child count, compile status. Expanded: the structural sketch, the option association, an icon hinting at the combinator family (a sequence of glyphs for `Sequence`, a fork for `Choice`, a star for `Many`, a brace for `Between`, *etc.*). Concretely:
+**(4) A nice summary box.** `ParserCombinator` carries a [BoxForm`ArrangeSummaryBox]() formatter modelled on `FiniteFieldElement` / `PAdicNumber` / `Quantity`. Always-visible: combinator type, arity, compile status. Expanded: the structural sketch, the option association, an icon hinting at the combinator family (a sequence of glyphs for `Sequence`, a fork for `Choice`, a star for `Many`, a brace for `Between`, *etc.*). Concretely:
 
 ```
 ParserCombinator
   ── Type: Sequence
   ── Arity: 3
   ── Compiled: False
-  ── Structure: Literal["the weather in "] ** Capture["city", Restricted["City", "USA"]] ** Literal["."]
+  ── Structure: Literal["the weather in "] ~~ Capture["city", Restricted["City", "USA"]] ~~ Literal["."]
   ── Options: <|"Memoize" -> False, "TrackPosition" -> True|>
 ```
 
@@ -116,7 +117,7 @@ The same number-parser, three equivalent ways:
 
 ```wl
 (* operator form - shortest, idiomatic for new code *)
-number = ParseCharacter[DigitCharacter].. ** Optional[ParseLiteral["."] ** ParseCharacter[DigitCharacter]...];
+number = ParseCharacter[DigitCharacter].. ~~ Optional[ParseLiteral["."] ~~ ParseCharacter[DigitCharacter]...];
 
 (* explicit constructor form - what the UpValues lower to *)
 number = ParseSequence[
@@ -130,7 +131,7 @@ number = ParseSequence[
 (* mixed - drop into the operator form wherever readable, fall back to explicit calls when it helps *)
 number = ParseSequence[
     ParseCharacter[DigitCharacter]..,
-    ParseOptional[ParseLiteral["."] ** ParseCharacter[DigitCharacter]...]
+    ParseOptional[ParseLiteral["."] ~~ ParseCharacter[DigitCharacter]...]
 ];
 ```
 
@@ -163,7 +164,7 @@ parser = ParserCompile[grammar];
 parser["the weather in NYC"]
 ```
 
-The compile step is the local analogue of [CloudDeploy](): it materialises a callable parser. The cloud path returns a `CloudObject`; the local path returns a `ParserCombinator` with `"Compiled" -> True` and a `CompiledCodeFunction` in its options.
+The compile step is the local analogue of [CloudDeploy](): it materialises a callable parser. The cloud path returns a `CloudObject`; the local path returns a `ParserCombinator` with a `"Code" -> CompiledCodeFunction[...]` entry added to its options. The presence of `"Code"` is what marks the parser as compiled - both `Parse` and the SubValues route compiled parsers through that function.
 
 The slot vocabulary is identical to the built-in one - `<name>`, `<name:Type>`, `<name:Restricted[Type, constraints]>` - and [GrammarToken]() is honoured. The differences are confined to *where* compilation happens, not *what* a grammar means.
 
@@ -188,7 +189,7 @@ ParserCombinator[Action,
     <||>]
        │  ParserCompile
        ▼
-ParserCombinator[Action, {...}, <|"Compiled" -> True, "Code" -> CompiledCodeFunction[...]|>]
+ParserCombinator[Action, {...}, <|"Code" -> CompiledCodeFunction[...]|>]
 ```
 
 Adding to either tier benefits the other: a new combinator becomes available as a lowering target for new slot syntaxes; a new slot syntax just extends the lowering.
@@ -346,12 +347,12 @@ A `WolframParser` LaTeX math grammar (sketched at the combinator level):
 math = expr;
 
 expr = ParseAction[
-    term ** (ParseChoice[ParseLiteral["+"], ParseLiteral["-"]] ** term)...,
+    term ~~ (ParseChoice[ParseLiteral["+"], ParseLiteral["-"]] ~~ term)...,
     Function[{first, rest}, FoldOperator[first, rest]]
 ];
 
 term = ParseAction[
-    factor ** (ParseChoice[ParseLiteral["*"], ParseLiteral["/"]] ** factor)...,
+    factor ~~ (ParseChoice[ParseLiteral["*"], ParseLiteral["/"]] ~~ factor)...,
     FoldOperator
 ];
 
@@ -360,8 +361,8 @@ factor = group | command | atom;
 group = ParseBetween[ParseLiteral["{"], expr, ParseLiteral["}"]];
 
 command = ParseAction[
-    ParseLiteral["\\"] ** ParseSome[ParseCharacter[LetterCharacter]] **
-        Optional[bracketedArg] ** ParseMany[bracedArg],
+    ParseLiteral["\\"] ~~ ParseSome[ParseCharacter[LetterCharacter]] ~~
+        Optional[bracketedArg] ~~ ParseMany[bracedArg],
     buildCommand
 ];
 
@@ -371,8 +372,8 @@ bracketedArg = ParseBetween[ParseLiteral["["], expr, ParseLiteral["]"]];
 atom = number | identifier | bigOperator;
 
 bigOperator = ParseAction[
-    (ParseLiteral["\\sum"] | ParseLiteral["\\int"] | ParseLiteral["\\prod"]) **
-        Optional[ParseLiteral["_"] ** group] ** Optional[ParseLiteral["^"] ** group],
+    (ParseLiteral["\\sum"] | ParseLiteral["\\int"] | ParseLiteral["\\prod"]) ~~
+        Optional[ParseLiteral["_"] ~~ group] ~~ Optional[ParseLiteral["^"] ~~ group],
     buildBigOperator
 ];
 ```
@@ -410,22 +411,22 @@ A skeleton:
 ```wl
 tptpFile = formula...;
 
-formula = (ParseLiteral["fof"] | ParseLiteral["cnf"] | ParseLiteral["tff"] | ParseLiteral["thf"]) **
-          ParseBetween[ParseLiteral["("], formulaBody, ParseLiteral[")"]] **
+formula = (ParseLiteral["fof"] | ParseLiteral["cnf"] | ParseLiteral["tff"] | ParseLiteral["thf"]) ~~
+          ParseBetween[ParseLiteral["("], formulaBody, ParseLiteral[")"]] ~~
           ParseLiteral["."];
 
-formulaBody = name ** ParseLiteral[","] ** role ** ParseLiteral[","] ** logicFormula;
+formulaBody = name ~~ ParseLiteral[","] ~~ role ~~ ParseLiteral[","] ~~ logicFormula;
 
 logicFormula = quantified | binary | unit;
 
-quantified = (ParseLiteral["!"] | ParseLiteral["?"]) ** varList ** ParseLiteral[":"] ** logicFormula;
+quantified = (ParseLiteral["!"] | ParseLiteral["?"]) ~~ varList ~~ ParseLiteral[":"] ~~ logicFormula;
 
-binary = unit ** (ParseLiteral["&"] | ParseLiteral["|"] |
-                  ParseLiteral["=>"] | ParseLiteral["<=>"]) ** logicFormula;
+binary = unit ~~ (ParseLiteral["&"] | ParseLiteral["|"] |
+                  ParseLiteral["=>"] | ParseLiteral["<=>"]) ~~ logicFormula;
 
-unit = atom | ParseBetween[ParseLiteral["("], logicFormula, ParseLiteral[")"]] | ParseLiteral["~"] ** unit;
+unit = atom | ParseBetween[ParseLiteral["("], logicFormula, ParseLiteral[")"]] | ParseLiteral["~"] ~~ unit;
 
-atom = predicate ** Optional[ParseBetween[ParseLiteral["("], ParseSepBy[term, ParseLiteral[","]], ParseLiteral[")"]]];
+atom = predicate ~~ Optional[ParseBetween[ParseLiteral["("], ParseSepBy[term, ParseLiteral[","]], ParseLiteral[")"]]];
 
 term = variable | functionApp | constant;
 ```
@@ -462,7 +463,7 @@ Each of these will be answered by implementation experience against the targets 
 
 What lands next (v0.2):
 
-- `ParserCombinator[...]` head, its [SummaryBox]() formatter, and its [UpValues]() for `Alternatives` / `NonCommutativeMultiply` / `Repeated` / `RepeatedNull` / `Optional`.
+- `ParserCombinator[...]` head, its [SummaryBox]() formatter, its [SubValues]() rule (`pc[input]` -> `Parse[pc, input]`), and its [UpValues]() for `Alternatives` / `StringExpression` / `Repeated` / `RepeatedNull` / `Optional`.
 - The primitive `Parse*` constructors (`ParseLiteral`, `ParseCharacter`, `ParseSequence`, `ParseChoice`, `ParseMany`, `ParseSome`, `ParseOptional`, `ParseBetween`, `ParseLookahead`, `ParseNotFollowedBy`, `ParseTry`).
 - An interpretive `Parse[parser, input]` that runs the combinators directly.
 - A first pass at the `GrammarRules` → `ParserCombinator` lowering.

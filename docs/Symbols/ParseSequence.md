@@ -4,8 +4,8 @@ Name: ParseSequence
 Context: Wolfram`Parser`
 Paclet: Wolfram/WolframParser
 URI: Wolfram/WolframParser/ref/ParseSequence
-Keywords: [parser, sequence, composition, NonCommutativeMultiply]
-SeeAlso: [ParseChoice, ParseBetween, ParseMany, ParserCombinator, NonCommutativeMultiply]
+Keywords: [parser, sequence, composition, StringExpression]
+SeeAlso: [ParseChoice, ParseBetween, ParseMany, ParserCombinator, StringExpression]
 RelatedGuides: [WolframParser]
 ---
 
@@ -16,7 +16,7 @@ RelatedGuides: [WolframParser]
 ## Details & Options
 
 - Failure of any $p_i$ aborts the sequence; the failure is reported at the *furthest-advanced* position reached.
-- The operator overload `$p_1$ ** $p_2$` lowers to `ParseSequence[$p_1$, $p_2$]` via [NonCommutativeMultiply](). Chains flatten: `$p_1$ ** $p_2$ ** $p_3$` is one `ParseSequence` of three children, not nested pairs.
+- The operator overload `p1 ~~ p2` lowers to `ParseSequence[p1, p2]` via [StringExpression](). The UpValue *only* fires when both sides are `ParserCombinator` instances - plain string sequences are unaffected. Chains flatten: `p1 ~~ p2 ~~ p3` is one `ParseSequence` of three children, not nested pairs.
 - Result type: [List](). Use [ParseAction]() to reshape it.
 
 ## Basic Examples
@@ -29,10 +29,10 @@ Parse[ParseSequence[ParseLiteral["foo"], ParseLiteral["bar"]], "foobar"]
 
 <!-- => {"foo", "bar"} -->
 
-The same via the `**` operator:
+The same via the `~~` operator:
 
 ```wl
-Parse[ParseLiteral["foo"] ** ParseLiteral["bar"], "foobar"]
+Parse[ParseLiteral["foo"] ~~ ParseLiteral["bar"], "foobar"]
 ```
 
 <!-- => {"foo", "bar"} -->
@@ -42,7 +42,7 @@ Parse[ParseLiteral["foo"] ** ParseLiteral["bar"], "foobar"]
 Three-element sequence flattens:
 
 ```wl
-ParseLiteral["a"] ** ParseLiteral["b"] ** ParseLiteral["c"]
+ParseLiteral["a"] ~~ ParseLiteral["b"] ~~ ParseLiteral["c"]
 ```
 
 <!-- => ParserCombinator[Sequence, {ParserCombinator[Literal, "a", <||>], ParserCombinator[Literal, "b", <||>], ParserCombinator[Literal, "c", <||>]}, <||>] -->
@@ -51,7 +51,7 @@ Mixed with a character class:
 
 ```wl
 Parse[
-    ParseLiteral["v"] ** ParseCharacter[DigitCharacter] ** ParseCharacter[DigitCharacter],
+    ParseLiteral["v"] ~~ ParseCharacter[DigitCharacter] ~~ ParseCharacter[DigitCharacter],
     "v42"
 ]
 ```
@@ -89,8 +89,8 @@ A partial-match failure on $p_2$ does *not* backtrack what $p_1$ already consume
 ```wl
 Parse[
     ParseChoice[
-        ParseTry[ParseLiteral["fo"] ** ParseLiteral["x"]],
-        ParseLiteral["fo"] ** ParseLiteral["o"]
+        ParseTry[ParseLiteral["fo"] ~~ ParseLiteral["x"]],
+        ParseLiteral["fo"] ~~ ParseLiteral["o"]
     ],
     "foo"
 ]
@@ -105,8 +105,8 @@ A key-value parser - identifier, equals, value:
 ```wl
 Parse[
     ParseAction[
-        ParseCharacter[LetterCharacter].. **
-            ParseLiteral["="] **
+        ParseCharacter[LetterCharacter].. ~~
+            ParseLiteral["="] ~~
             ParseCharacter[DigitCharacter]..,
         Function[{lhs, _, rhs}, StringJoin[lhs] -> FromDigits @ StringJoin[rhs]]
     ],

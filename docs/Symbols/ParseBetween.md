@@ -15,7 +15,7 @@ RelatedGuides: [WolframParser]
 
 ## Details & Options
 
-- Equivalent to `ParseAction[ParseSequence[$open$, $p$, $close$], #2 &]` - i.e. it strips the delimiters from the result.
+- Equivalent to <code>[ParseAction]()[[ParseSequence]()[$open$, $p$, $close$], #2 &]</code> - i.e. it strips the delimiters from the result.
 - Both $open$ and $close$ may be any combinators, not just literals - e.g. `ParseBetween[ParseLiteral["("], expr, ParseLiteral[")"]]` matches parenthesised expressions.
 - Result type: $p$'s result type.
 
@@ -69,14 +69,16 @@ Parse[
 
 ## Properties and Relations
 
-`ParseBetween` makes recursive nested-bracket grammars natural:
+`ParseBetween` makes recursive nested-bracket grammars natural - the inner argument can be the parser itself, via the `ParseRecursive` tie (v0.3+ - recursive ties are not implemented in v0.2). When that lands, the call shape will be:
 
-```wl
-group = ParseBetween[ParseLiteral["("], ParseChoice[ParseCharacter[LetterCharacter], ParseRecursive[group]]..., ParseLiteral[")"]];
-Parse[group, "((a)(b))"]
 ```
-
-<!-- => {{"a"}, {"b"}} -->
+group = ParseBetween[
+    ParseLiteral["("],
+    (ParseCharacter[LetterCharacter] | ParseRecursive["group"])...,
+    ParseLiteral[")"]
+];
+Parse[group, "((a)(b))"]    (* => {{"a"}, {"b"}} *)
+```
 
 The `ParseAction[Sequence, #2 &]` derivation matches the convenience helper:
 

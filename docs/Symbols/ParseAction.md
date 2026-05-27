@@ -15,18 +15,29 @@ RelatedGuides: [WolframParser]
 
 ## Details & Options
 
-- If $p$'s result is a [List]() of $n$ elements, `$f$` is called as `$f$[el_1, …, el_n]` (i.e. the list is splatted). For a scalar result, $f$ is called as `$f$[el]`.
+- If `p`'s result is a [List]() of `n` elements, `f` is called as `f[el1, ..., eln]` (i.e. the list is splatted). For a scalar result, `f` is called as `f[el]`.
 - Use [ParseCapture]() with a name if you want $f$ to look up arguments by name instead of position.
 - $f$ is invoked at parse time, *not* compile time - so closures and ordinary WL evaluation work.
 - The combinator type is `Action`.
 
 ## Basic Examples
 
-Convert a digit-list to an integer:
+Convert a digit-list to an integer. `StringJoin` is variadic, so it can be passed directly as the action:
 
 ```wl
 Parse[
-    ParseAction[ParseCharacter[DigitCharacter].., FromDigits @ StringJoin[#] &],
+    ParseAction[ParseCharacter[DigitCharacter].., StringJoin],
+    "42"
+]
+```
+
+<!-- => "42" -->
+
+To get the parsed integer instead of the digit string, compose with `FromDigits @ StringJoin[{##}]`:
+
+```wl
+Parse[
+    ParseAction[ParseCharacter[DigitCharacter].., FromDigits @ StringJoin[{##}] &],
     "42"
 ]
 ```
@@ -38,7 +49,7 @@ A two-piece sequence with a binary action:
 ```wl
 Parse[
     ParseAction[
-        ParseLiteral["a"] ** ParseLiteral["b"],
+        ParseLiteral["a"] ~~ ParseLiteral["b"],
         Function[{l, r}, {right -> r, left -> l}]
     ],
     "ab"
@@ -54,7 +65,7 @@ Parse[
 ```wl
 Parse[
     ParseAction[
-        ParseAction[ParseCharacter[DigitCharacter].., FromDigits @ StringJoin[#] &],
+        ParseAction[ParseCharacter[DigitCharacter].., FromDigits @ StringJoin[{##}] &],
         # + 1 &
     ],
     "9"
@@ -63,19 +74,23 @@ Parse[
 
 <!-- => 10 -->
 
-The action can rebuild a structured AST:
+The action can rebuild a structured AST. Function parameters must all be named symbols - bind the bits you don't care about and ignore them in the body. Use [With]() to fold the StringJoin work *before* wrapping in [Hold]():
 
 ```wl
 Parse[
     ParseAction[
-        ParseLiteral["if "] ** ParseCharacter[LetterCharacter].. ** ParseLiteral[" then "] ** ParseCharacter[LetterCharacter]..,
-        Function[{_, cond, _, body}, Hold[If[cond, body]]]
+        ParseLiteral["if "] ~~ ParseCharacter[LetterCharacter].. ~~ ParseLiteral[" then "] ~~ ParseCharacter[LetterCharacter]..,
+        Function[{kw1, cond, kw2, body},
+            With[{c = StringJoin[cond], b = StringJoin[body]},
+                Hold[If[c, b]]
+            ]
+        ]
     ],
     "if x then y"
 ]
 ```
 
-<!-- => Hold[If[{"x"}, {"y"}]] -->
+<!-- => Hold[If["x", "y"]] -->
 
 ## Properties and Relations
 
@@ -90,32 +105,41 @@ Parse[
 
 <!-- => {"foo", "foo"} -->
 
-`ParseAction` is what powers the `:>` slot bodies in a [GrammarRules]() declaration:
+`ParseAction` is what powers the `:>` slot bodies in a [GrammarRules]() declaration (v0.3+ - GrammarRules lowering is not yet implemented in v0.2). When that lands, the call shape will be:
 
-```wl
-Parse[
-    GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}],
-    "add 3 and 5"
-]
 ```
-
-<!-- => 8 -->
+Parse[GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}], "add 3 and 5"]   (* => 8 *)
+```
 
 ## Possible Issues
 
-The function arity must match the parse-result shape. A length-3 sequence with a length-2 action fails at runtime, not parse time:
+The function arity should match the parse-result shape. A length-3 sequence applied through a length-2 [Function]() silently drops the third arg - keep the parameter count in sync with the sequence length:
 
 ```wl
 Parse[
     ParseAction[
-        ParseLiteral["a"] ** ParseLiteral["b"] ** ParseLiteral["c"],
+        ParseLiteral["a"] ~~ ParseLiteral["b"] ~~ ParseLiteral["c"],
         Function[{l, r}, {l, r}]
     ],
     "abc"
 ]
 ```
 
-<!-- => Function::flpar error + the raw {"a", "b", "c"} -->
+<!-- => {"a", "b"} -->
+
+Use a variadic action (`##` / `{##}`) when you don't want to commit to a fixed arity:
+
+```wl
+Parse[
+    ParseAction[
+        ParseLiteral["a"] ~~ ParseLiteral["b"] ~~ ParseLiteral["c"],
+        {##} &
+    ],
+    "abc"
+]
+```
+
+<!-- => {"a", "b", "c"} -->
 
 ## Neat Examples
 
@@ -124,9 +148,9 @@ A signed decimal:
 ```wl
 Parse[
     ParseAction[
-        ParseOptional[ParseLiteral["-"]] **
-            ParseCharacter[DigitCharacter].. **
-            ParseOptional[ParseLiteral["."] ** ParseCharacter[DigitCharacter]..],
+        ParseOptional[ParseLiteral["-"]] ~~
+            ParseCharacter[DigitCharacter].. ~~
+            ParseOptional[ParseLiteral["."] ~~ ParseCharacter[DigitCharacter]..],
         Function[{sign, intPart, fracPart},
             (If[MissingQ[sign], 1, -1]) *
                 ToExpression @ StringJoin[

@@ -16,7 +16,7 @@ RelatedGuides: [WolframParser]
 ## Details & Options
 
 - "Zero or more" - the parser always succeeds; the empty match returns `{}`.
-- The operator overload `$p$...` lowers to `ParseMany[$p$]` via [RepeatedNull]().
+- The operator overload `p...` lowers to `ParseMany[p]` via [RepeatedNull]().
 - `ParseMany` is *greedy*: it consumes as much as it can. Use [ParseSepBy]() or an explicit terminator if you need to stop earlier.
 - Result type: [List]() of $p$'s result type.
 

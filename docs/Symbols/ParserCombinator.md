@@ -4,31 +4,33 @@ Name: ParserCombinator
 Context: Wolfram`Parser`
 Paclet: Wolfram/WolframParser
 URI: Wolfram/WolframParser/ref/ParserCombinator
-Keywords: [parser, combinator, wrapper, summary box, UpValues]
+Keywords: [parser, combinator, wrapper, summary box, UpValues, SubValues]
 SeeAlso: [Parse, ParserCompile, ParseLiteral, ParseSequence, ParseChoice, ParseMany]
 RelatedGuides: [WolframParser]
 ---
 
 ## Usage
 
-<code>[ParserCombinator]()[$type$, $args$, $opts$]</code> is the single computable wrapper every parser in the library is represented as. The head is *opaque* to user code: build a `ParserCombinator` by calling one of the [Parse*](paclet:Wolfram/WolframParser/guide/WolframParser) constructors ([ParseLiteral](), [ParseSequence](), [ParseChoice](), ...), never by hand.
+<code>[ParserCombinator]()[type, args, opts]</code> is the single computable wrapper every parser in the library is represented as. The head is *opaque* to user code: build a `ParserCombinator` by calling one of the [Parse*](paclet:Wolfram/WolframParser/guide/WolframParser) constructors ([ParseLiteral](), [ParseSequence](), [ParseChoice](), ...), never by hand.
 
 ## Details & Options
 
-- `$type$` is a [Symbol]() naming the combinator shape (`Literal`, `Character`, `Sequence`, `Choice`, `Many`, `Some`, `Optional`, `Between`, `Lookahead`, `NotFollowedBy`, `Try`, `Action`, `Capture`, `Recursive`, ...).
-- `$args$` is the combinator's children: other `ParserCombinator` instances, terminal data (a string for `Literal`, a character class for `Character`), or a function (for `Action`).
-- `$opts$` is an [Association]() of compile-time / runtime options - `<|"Compiled" -> True, "Code" -> CompiledCodeFunction[...]|>` after [ParserCompile](), `<|"Memoize" -> True|>` for packrat memoisation, *etc*.
+- `type` is a [Symbol]() naming the combinator shape (`Literal`, `Character`, `Sequence`, `Choice`, `Many`, `Some`, `Optional`, `Between`, `Lookahead`, `NotFollowedBy`, `Try`, `Action`, `Capture`, `Recursive`, ...).
+- `args` are the combinator's children: other `ParserCombinator` instances, terminal data (a string for `Literal`, a character class for `Character`), or a function (for `Action`).
+- `opts` is an [Association]() of compile-time / runtime options. After [ParserCompile]() the options carry a `"Code" -> CompiledCodeFunction[...]` entry; absence of `"Code"` is what makes the parser uncompiled (no extra `"Compiled"` flag is needed).
+- A `ParserCombinator` is **callable as a function** via a [SubValues]() rule: `pc[input]` is equivalent to `Parse[pc, input]`. If `"Code"` is present in `opts`, the compiled function is invoked; otherwise the *interpretive* path runs.
 - `ParserCombinator` carries [UpValues]() for the WL operators that overload to combinator composition:
 
-| WL syntax        | UpValue                          | Combinator         |
-|------------------|----------------------------------|--------------------|
-| `$p_1$ \| $p_2$` | [Alternatives]()                 | [ParseChoice]()    |
-| `$p_1$ ** $p_2$` | [NonCommutativeMultiply]()       | [ParseSequence]()  |
-| `$p$..`          | [Repeated]()                     | [ParseSome]()      |
-| `$p$...`         | [RepeatedNull]()                 | [ParseMany]()      |
-| `Optional[$p$]`  | [Optional]()                     | [ParseOptional]()  |
+| WL syntax    | UpValue                      | Combinator         |
+|--------------|------------------------------|--------------------|
+| `p1 \| p2`   | [Alternatives]()             | [ParseChoice]()    |
+| `p1 ~~ p2`   | [StringExpression]()         | [ParseSequence]()  |
+| `p..`        | [Repeated]()                 | [ParseSome]()      |
+| `p...`       | [RepeatedNull]()             | [ParseMany]()      |
+| `Optional[p]`| [Optional]()                 | [ParseOptional]()  |
 
-- `~~` is *not* overloaded (it stays as [StringExpression]()). `~` is *not* overloaded (it stays as WL's infix function notation `$a$~$f$~$b$` = $f$[$a$, $b$]).
+- `~~` is overloaded *only* when **both** sides are `ParserCombinator` instances. Plain `"foo" ~~ "bar"` between strings keeps its built-in [StringExpression]() meaning.
+- `~` is *not* overloaded - it stays as WL's infix function notation `a~f~b == f[a, b]`.
 - A `ParserCombinator` formats as a Wolfram-style [SummaryBox]() showing the combinator type, arity, compile status, a structural sketch of the tree, and the options.
 
 ## Basic Examples
@@ -41,10 +43,10 @@ ParseLiteral["foo"]
 
 <!-- => ParserCombinator[Literal, "foo", <||>] -->
 
-A sequence built with the `**` operator is the same expression you'd get from [ParseSequence]() directly:
+A sequence built with the `~~` operator is the same expression you'd get from [ParseSequence]() directly:
 
 ```wl
-ParseLiteral["foo"] ** ParseLiteral["bar"]
+ParseLiteral["foo"] ~~ ParseLiteral["bar"]
 ```
 
 <!-- => ParserCombinator[Sequence, {ParserCombinator[Literal, "foo", <||>], ParserCombinator[Literal, "bar", <||>]}, <||>] -->
@@ -83,43 +85,57 @@ ParseLiteral["x"]...
 
 <!-- => ParserCombinator[Many, ParserCombinator[Literal, "x", <||>], <||>] -->
 
-## Properties and Relations
-
-[ParserCompile]() returns a `ParserCombinator` with the same head, mutated options (`"Compiled" -> True`), and a `CompiledCodeFunction` in `$opts$`:
+Subvalue: a `ParserCombinator` is callable directly:
 
 ```wl
-With[{compiled = ParserCompile[ParseLiteral["foo"]]},
-    {Head[compiled], Lookup[compiled[[3]], "Compiled"]}]
-```
-
-<!-- => {ParserCombinator, True} -->
-
-A `ParserCombinator` is *inert* - it does not run until passed to [Parse]() or applied as a function:
-
-```wl
-parser = ParseLiteral["foo"];
-Parse[parser, "foo"]
+ParseLiteral["foo"]["foo"]
 ```
 
 <!-- => "foo" -->
 
-## Possible Issues
+(equivalent to `Parse[ParseLiteral["foo"], "foo"]`.)
 
-The head is opaque. Building one by hand without a constructor is unsupported - the structural invariants the lowering relies on (canonical type names, normalised options, etc.) are only guaranteed when you go through the `Parse*` API:
+## Properties and Relations
+
+[ParserCompile]() returns a `ParserCombinator` with the same head and a `CompiledCodeFunction` added to its options under the `"Code"` key:
 
 ```wl
-(* don't do this *)
-ParserCombinator[MyType, {"foo"}, <||>]
+With[{compiled = ParserCompile[ParseLiteral["foo"]]},
+    {Head[compiled], KeyExistsQ[compiled[[3]], "Code"]}]
 ```
 
-<!-- => ParserCombinator[MyType, {"foo"}, <||>] (no validation - the compiler will reject MyType at lowering time) -->
+<!-- => {ParserCombinator, True} -->
+
+A `ParserCombinator` is *inert* until applied - it does not run when first constructed:
+
+```wl
+parser = ParseLiteral["foo"];
+{Head[parser], Parse[parser, "foo"]}
+```
+
+<!-- => {ParserCombinator, "foo"} -->
+
+The `~~` overload only fires when both sides are `ParserCombinator` instances, so plain string sequences are unaffected:
+
+```wl
+{
+    "foo" ~~ "bar",                                 (* a built-in StringExpression *)
+    ParseLiteral["foo"] ~~ ParseLiteral["bar"]      (* a ParserCombinator *)
+}
+```
+
+<!-- => {"foo" ~~ "bar", ParserCombinator[Sequence, {ParserCombinator[Literal, "foo", <||>], ParserCombinator[Literal, "bar", <||>]}, <||>]} -->
+
+## Possible Issues
+
+The head is opaque. Building one by hand without a constructor is unsupported - the structural invariants the lowering relies on (canonical type names, normalised options, *etc.*) are only guaranteed when you go through the `Parse*` API.
 
 ## Neat Examples
 
 The operator overloads compose without ever spelling `ParserCombinator` by hand. A floating-point number:
 
 ```wl
-ParseCharacter[DigitCharacter].. ** Optional[ParseLiteral["."] ** ParseCharacter[DigitCharacter]...]
+ParseCharacter[DigitCharacter].. ~~ Optional[ParseLiteral["."] ~~ ParseCharacter[DigitCharacter]...]
 ```
 
 <!-- => a Sequence ParserCombinator with one Some and one Optional child, whose body is itself a Sequence of a Literal and a Many -->
