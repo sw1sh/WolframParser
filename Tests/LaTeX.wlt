@@ -495,27 +495,27 @@ VerificationTest[
 
 
 (* === KaTeX screenshotter corpus coverage ===
-   The inline cases from KaTeX's own screenshot test data
-   (test/screenshotter/ss_data.yaml). We don't render every LaTeX
-   corner (environments, \mathop, \middle, \smash, text-mode sublexing
-   are out of scope), but the common doc-math subset should parse
-   without error. This asserts a coverage floor so regressions surface. *)
+   The full inline corpus from KaTeX's own screenshot test data, vendored
+   verbatim as Tests/katex-cases.json (test/screenshotter/ss_data.yaml,
+   with each entry's TeX extracted). We don't render every LaTeX corner -
+   text-mode sublexing (\verb, smart quotes, accented \i), \mathop /
+   \mathrel / \limits, \big delimiter sizing, \smash, \kern, htmlId /
+   includegraphics, and the more exotic environments (CD, subarray,
+   substack) are genuinely out of scope for a doc-math parser. The
+   floor below asserts the count of cases that DO parse without error,
+   so a regression here is loud. Raising it is welcome - just bump the
+   number once you've made more pass. *)
 
 VerificationTest[
     With[{
-        clean = {
-            "\\vec{A}\\vec{x}", "a+b-c\\cdot d/e", "a",
-            "\\dbinom{a}{b}", "a^{a^a_a}_{a^a_a}",
-            "\\sin\\cos\\tan\\ln\\log", "\\alpha\\beta\\gamma\\omega",
-            "\\frac{a}{b}", "\\mathbb{R}", "\\mathbf{A}", "\\mathcal{C}",
-            "\\mathfrak{g}", "\\mathit{x}", "\\mathrm{d}", "\\mathsf{X}",
-            "\\mathtt{x}", "f'+g'", "x'^2", "\\hat{x}\\vec{y}\\bar{z}"
-        }
+        cases = Association @ Import[
+            FileNameJoin[{DirectoryName[$TestFileName], "katex-cases.json"}]
+        ]
     },
-        Count[clean, _?(! MatchQ[LaTeXMathParse[#], _ParseError] &)]
+        Count[Values[cases], _?(! MatchQ[LaTeXMathParse[#], _ParseError] &)]
     ],
-    19,
-    TestID -> "KaTeX corpus: the 19 common-subset inline cases parse clean"
+    91,
+    TestID -> "KaTeX corpus: at least 91 of the 126 inline cases parse clean"
 ]
 
 

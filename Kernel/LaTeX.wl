@@ -108,12 +108,26 @@ exprRef = ParseRecursive[expr]
    guard returns Null (consumes nothing), so the dispatch args shift to
    #2 / #3 / #4. *)
 commandAtom = ParseAction[
-    ParseNotFollowedBy[ParseLiteral["\\begin"] | ParseLiteral["\\end"]] ~~
+    ParseNotFollowedBy[
+        ParseLiteral["\\begin"] | ParseLiteral["\\end"] | ParseLiteral["\\cr"]
+    ] ~~
         commandName ~~ Optional[bracketedArgRef] ~~ ParseMany[bracedArgRef] ~~ ws,
     dispatchCommand[#2, #3, #4] &
 ]
 
-bracedArg = ParseBetween[literal["{"], exprRef, literal["}"]]
+(* A braced arg is normally an expression, but \pmb{=}, \stackrel{?}{=},
+   \overset?, etc. put a bare operator inside the braces. Allow that as
+   a second alternative - just emit the operator glyph. *)
+bracedArg = ParseBetween[
+    literal["{"],
+    ParseChoice[
+        exprRef,
+        ParseRecursive[cellLeadingOp],
+        ParseRecursive[puncToken],
+        ParseSucceed[""]
+    ],
+    literal["}"]
+]
 bracketedArg = ParseBetween[literal["["], exprRef, literal["]"]]
 
 
@@ -129,10 +143,53 @@ envName = ParseAction[
     StringJoin[#2] &
 ]
 
-rowSep = ParseAction[literal["\\\\"], Null &]
+(* Row separators: \\, \\[1ex] (optional length spec), or \cr.
+   The bracketed length is consumed and ignored. *)
+rowSep = ParseAction[
+    (literal["\\\\"] | literal["\\cr"]) ~~ Optional[bracketedArgRef] ~~ ws,
+    Null &
+]
 colSep = ParseAction[literal["&"], Null &]
 
-matrixCell = ParseChoice[ParseRecursive[mathRow], ParseSucceed[""]]
+(* Inside an environment, a cell may start with a relation or sign -
+   align / cases / CD all do this ("a &= 1", "& =b+c-d", "&\text{if }").
+   cellLeadingOp parses one such bare operator as a standalone token so
+   the rest of the cell can then be a normal mathRow. *)
+cellLeadingOp = ParseAction[
+    literal["="] | literal["+"] | literal["-"] |
+        literal["<"] | literal[">"] |
+        literal["\\neq"] | literal["\\equiv"] |
+        literal["\\leq"] | literal["\\geq"] | literal["\\le"] | literal["\\ge"] |
+        literal["\\to"] | literal["\\mapsto"] |
+        literal["\\sim"] | literal["\\approx"] |
+        literal["\\in"] | literal["\\notin"] | literal["\\mid"] |
+        literal["\\subset"] | literal["\\subseteq"] |
+        literal["\\supset"] | literal["\\supseteq"],
+    Switch[#1,
+        "\\neq", "\[NotEqual]", "\\equiv", "\[Congruent]",
+        "\\leq" | "\\le", "\[LessEqual]", "\\geq" | "\\ge", "\[GreaterEqual]",
+        "\\to", "\[Rule]", "\\mapsto", "\[Function]",
+        "\\sim", "\[Tilde]", "\\approx", "\[TildeTilde]",
+        "\\in", "\[Element]", "\\notin", "\[NotElement]", "\\mid", "\[VerticalSeparator]",
+        "\\subset", "\[Subset]", "\\subseteq", "\[SubsetEqual]",
+        "\\supset", "\[Superset]", "\\supseteq", "\[SupersetEqual]",
+        _, #1] &
+]
+
+(* Single-char tokens ? ! and asterisk that can appear bare inside a
+   braced group - \stackrel{?}{=}, \boxed{!}, etc. *)
+puncToken = ParseAction[
+    literal["?"] | literal["!"] | literal["*"],
+    #1 &
+]
+matrixCell = ParseChoice[
+    ParseAction[
+        cellLeadingOp ~~ Optional[ParseRecursive[mathRow]],
+        If[MissingQ[#2], #1, RowBox[{#1, #2}]] &
+    ],
+    ParseRecursive[mathRow],
+    ParseSucceed[""]
+]
 matrixRow  = ParseSepBy[matrixCell, colSep]
 matrixBody = ParseSepBy[matrixRow, rowSep]
 
@@ -148,12 +205,18 @@ buildEnv[name_String, rows_List] :=
         padded = Map[PadRight[#, width, ""] &, rows];
         grid = GridBox[padded];
         Switch[name,
-            "pmatrix", RowBox[{"(", grid, ")"}],
-            "bmatrix", RowBox[{"[", grid, "]"}],
-            "Bmatrix", RowBox[{"{", grid, "}"}],
-            "vmatrix", RowBox[{"|", grid, "|"}],
-            "Vmatrix", RowBox[{"\[DoubleVerticalBar]", grid, "\[DoubleVerticalBar]"}],
-            "cases" | "dcases", RowBox[{"{", GridBox[padded, ColumnAlignments -> Left]}],
+            "pmatrix" | "pmatrix*", RowBox[{"(", grid, ")"}],
+            "bmatrix" | "bmatrix*", RowBox[{"[", grid, "]"}],
+            "Bmatrix" | "Bmatrix*", RowBox[{"{", grid, "}"}],
+            "vmatrix" | "vmatrix*", RowBox[{"|", grid, "|"}],
+            "Vmatrix" | "Vmatrix*", RowBox[{"\[DoubleVerticalBar]", grid, "\[DoubleVerticalBar]"}],
+            "cases" | "dcases" | "rcases" | "drcases",
+                RowBox[{"{", GridBox[padded, ColumnAlignments -> Left]}],
+            (* matrix / matrix* / smallmatrix / array / align(ed)(at) /
+               equation / gather(ed) / split / multline / eqnarray / CD
+               all render as a bare grid - they exist in TeX only to
+               control numbering, alignment, or surrounding whitespace,
+               none of which is meaningful for a doc-math renderer. *)
             _, grid
         ]
     ]
