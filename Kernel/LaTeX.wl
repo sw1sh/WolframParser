@@ -181,6 +181,7 @@ commandHandlers["\\mathscr"]  = styleHandler[scriptCapitalChars, FontVariations 
 commandHandlers["\\mathfrak"] = styleHandler[gothicCapitalChars, FontVariations -> {}]
 commandHandlers["\\mathbf"]   = Function[{opt, req}, StyleBox[First[req, ""], FontWeight -> "Bold"]]
 commandHandlers["\\boldsymbol"] = commandHandlers["\\mathbf"]
+commandHandlers["\\pmb"]      = commandHandlers["\\mathbf"]
 commandHandlers["\\mathrm"]   = Function[{opt, req}, StyleBox[First[req, ""], FontSlant -> "Plain"]]
 commandHandlers["\\mathit"]   = Function[{opt, req}, StyleBox[First[req, ""], FontSlant -> "Italic"]]
 commandHandlers["\\mathsf"]   = Function[{opt, req}, StyleBox[First[req, ""], FontFamily -> "SansSerif"]]
@@ -238,6 +239,15 @@ commandHandlers["\\frac"]  = fracHandler
 commandHandlers["\\tfrac"] = fracHandler
 commandHandlers["\\dfrac"] = fracHandler
 commandHandlers["\\cfrac"] = fracHandler
+
+(* \stackrel{top}{rel}: render `top` set above `rel`. *)
+commandHandlers["\\stackrel"] = Function[{opt, req},
+    If[ Length[req] >= 2, OverscriptBox[req[[2]], req[[1]]], "\\stackrel" ]
+]
+commandHandlers["\\overset"]  = commandHandlers["\\stackrel"]
+commandHandlers["\\underset"] = Function[{opt, req},
+    If[ Length[req] >= 2, UnderscriptBox[req[[2]], req[[1]]], "\\underset" ]
+]
 
 commandHandlers["\\binom"] = Function[{opt, req},
     If[ Length[req] >= 2,
@@ -455,17 +465,37 @@ atom = ParseChoice[
     bracedArgRef, identAtom
 ]
 
-subscript = ParseAction[literal["_"] ~~ (bracedArgRef | atom), #2 &]
-superscript = ParseAction[literal["^"] ~~ (bracedArgRef | atom), #2 &]
+(* A postfix is _x, ^y, or a run of primes - each tagged so factor can
+   accept them in any order and any number (`x_i^2`, `x^2_i`, `f'`,
+   `x'^2_3`, `f_2'` all occur in real LaTeX). primes fold into the
+   superscript. *)
+postfix = ParseChoice[
+    ParseAction[literal["_"] ~~ (bracedArgRef | atom), {"sub", #2} &],
+    ParseAction[literal["^"] ~~ (bracedArgRef | atom), {"sup", #2} &],
+    ParseAction[
+        ParseSome[literal["'"]],
+        {"sup", StringJoin[ConstantArray["\[Prime]", Length[{##}]]]} &
+    ]
+]
 
 factor = ParseAction[
-    atom ~~ Optional[subscript] ~~ Optional[superscript],
-    Function[{base, sub, sup},
-        Which[
-            ! MissingQ[sub] && ! MissingQ[sup], SubsuperscriptBox[base, sub, sup],
-            ! MissingQ[sub],                    SubscriptBox[base, sub],
-            ! MissingQ[sup],                    SuperscriptBox[base, sup],
-            True,                                base
+    atom ~~ ParseMany[postfix],
+    Function[{base, posts},
+        Module[{sub, sups},
+            sub = FirstCase[posts, {"sub", v_} :> v, Missing[]];
+            sups = Cases[posts, {"sup", v_} :> v];
+            With[{sup = Which[
+                    Length[sups] === 0, Missing[],
+                    Length[sups] === 1, First[sups],
+                    True, RowBox[sups]
+            ]},
+                Which[
+                    ! MissingQ[sub] && ! MissingQ[sup], SubsuperscriptBox[base, sub, sup],
+                    ! MissingQ[sub],                    SubscriptBox[base, sub],
+                    ! MissingQ[sup],                    SuperscriptBox[base, sup],
+                    True,                                base
+                ]
+            ]
         ]
     ]
 ]

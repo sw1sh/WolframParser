@@ -424,3 +424,96 @@ VerificationTest[
     True,
     TestID -> "KaTeX coverage: operators / relations / arrows / symbols parse clean"
 ]
+
+
+(* === sub/superscript order + primes (KaTeX Exponents / Prime cases) === *)
+
+VerificationTest[
+    LaTeXMathParse["x_i^2"],
+    SubsuperscriptBox[StyleBox["x", "TI"], StyleBox["i", "TI"], "2"],
+    TestID -> "KaTeX scripts: x_i^2"
+]
+
+VerificationTest[
+    LaTeXMathParse["x^2_i"],
+    SubsuperscriptBox[StyleBox["x", "TI"], StyleBox["i", "TI"], "2"],
+    TestID -> "KaTeX scripts: x^2_i (super-before-sub, same result)"
+]
+
+VerificationTest[
+    LaTeXMathParse["f'"],
+    SuperscriptBox[StyleBox["f", "TI"], "\[Prime]"],
+    TestID -> "KaTeX primes: f'"
+]
+
+VerificationTest[
+    LaTeXMathParse["x''"],
+    SuperscriptBox[StyleBox["x", "TI"], "\[Prime]\[Prime]"],
+    TestID -> "KaTeX primes: x'' (double)"
+]
+
+VerificationTest[
+    ! MatchQ[LaTeXMathParse["x'^2_3"], _ParseError],
+    True,
+    TestID -> "KaTeX primes: x'^2_3 (prime + super + sub interleaved)"
+]
+
+
+(* === stackrel / overset / underset === *)
+
+VerificationTest[
+    LaTeXMathParse["\\stackrel{a}{x}"],
+    OverscriptBox[StyleBox["x", "TI"], StyleBox["a", "TI"]],
+    TestID -> "KaTeX stackrel: \\stackrel{top}{base}"
+]
+
+
+(* === robustness: malformed input fails cleanly, never recurses === *)
+
+VerificationTest[
+    MatchQ[LaTeXMathParse["\\"], _ParseError],
+    True,
+    TestID -> "Robustness: lone backslash returns ParseError (no infinite recursion)"
+]
+
+VerificationTest[
+    MatchQ[LaTeXMathParse["a\\\\b"], _ParseError],
+    True,
+    TestID -> "Robustness: row-break \\\\ returns ParseError (no infinite recursion)"
+]
+
+VerificationTest[
+    (* the row-break \\ inside an array is unsupported; the parser must
+       fail cleanly rather than recurse / segfault *)
+    MatchQ[
+        TimeConstrained[LaTeXMathParse["1\\begin{array}{c}2\\\\3\\end{array}4"], 5, $TimedOut],
+        _ParseError
+    ],
+    True,
+    TestID -> "Robustness: unsupported environment returns ParseError (no recursion)"
+]
+
+
+(* === KaTeX screenshotter corpus coverage ===
+   The inline cases from KaTeX's own screenshot test data
+   (test/screenshotter/ss_data.yaml). We don't render every LaTeX
+   corner (environments, \mathop, \middle, \smash, text-mode sublexing
+   are out of scope), but the common doc-math subset should parse
+   without error. This asserts a coverage floor so regressions surface. *)
+
+VerificationTest[
+    With[{
+        clean = {
+            "\\vec{A}\\vec{x}", "a+b-c\\cdot d/e", "a",
+            "\\dbinom{a}{b}", "a^{a^a_a}_{a^a_a}",
+            "\\sin\\cos\\tan\\ln\\log", "\\alpha\\beta\\gamma\\omega",
+            "\\frac{a}{b}", "\\mathbb{R}", "\\mathbf{A}", "\\mathcal{C}",
+            "\\mathfrak{g}", "\\mathit{x}", "\\mathrm{d}", "\\mathsf{X}",
+            "\\mathtt{x}", "f'+g'", "x'^2", "\\hat{x}\\vec{y}\\bar{z}"
+        }
+    },
+        Count[clean, _?(! MatchQ[LaTeXMathParse[#], _ParseError] &)]
+    ],
+    19,
+    TestID -> "KaTeX corpus: the 19 common-subset inline cases parse clean"
+]

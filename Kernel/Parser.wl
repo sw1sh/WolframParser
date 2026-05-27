@@ -634,7 +634,12 @@ charPatName[WordCharacter] := "<word character>"
 charPatName[HexadecimalCharacter] := "<hex digit>"
 charPatName[PunctuationCharacter] := "<punctuation>"
 charPatName[HoldPattern[CharacterRange[a_String, b_String]]] := "<" <> a <> "-" <> b <> ">"
-charPatName[Alternatives[pats__]] := "<" <> StringRiffle[charPatName /@ {pats}, " or "] <> ">"
+(* Verbatim[Alternatives] - a bare Alternatives[...] on a pattern LHS is
+   read as the pattern-OR operator (matching ANY arg), which made this
+   clause swallow every call and recurse. Verbatim pins it to the literal
+   Alternatives head. *)
+charPatName[Verbatim[Alternatives][pats__]] :=
+    "<" <> StringRiffle[charPatName /@ {pats}, " or "] <> ">"
 charPatName[s_String] := s
 charPatName[other_] := ToString[other, InputForm]
 
@@ -726,7 +731,7 @@ emitCharTest[s_String] /; StringLength[s] === 1 :=
 emitCharTest[HoldPattern[CharacterRange[a_String, b_String]]] :=
     "MemberQ[" <> ToString[CharacterRange[a, b], InputForm] <>
     ", StringTake[input, {pos, pos}]]"
-emitCharTest[Alternatives[args__]] :=
+emitCharTest[Verbatim[Alternatives][args__]] :=
     "(" <> StringRiffle[emitCharTest /@ {args}, " || "] <> ")"
 
 emitCheck[ParserCombinator["Sequence", pcs_List, _]] :=
