@@ -11,12 +11,12 @@ RelatedGuides: [WolframParser]
 
 ## Usage
 
-<code>[LaTeXMathParse]()[$s$]</code> parses a LaTeX math-mode source string $s$ into a Wolfram boxes expression (a tree of [FractionBox](), [SubsuperscriptBox](), [RadicalBox](), [GridBox](), [RowBox](), and [StyleBox]() pieces). Returns a [ParseError]() if the input is not parseable.
+<code>[LaTeXMathParse]()[$s$]</code> parses a LaTeX math-mode source string $s$ into a tree of Wolfram boxes ([FractionBox](), [SubsuperscriptBox](), [RadicalBox](), [GridBox](), [RowBox](), [StyleBox]()). Returns a [ParseError]() if the input is not parseable.
 
 ## Details & Options
 
 - The parser handles the inline-math subset of LaTeX commonly written inside `$...$` or `\(...\)` (no preamble, no `\documentclass`).
-- Output is a Wolfram boxes tree, ready to drop into a notebook cell or wrap in [DisplayForm]() / [RawBoxes]() for rendering.
+- Output is a tree of Wolfram boxes, ready to drop into a notebook cell or wrap in [DisplayForm]() / [RawBoxes]() for rendering.
 - 126 / 126 cases from [KaTeX's screenshotter test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml) parse cleanly. See [Implementing the LaTeX Math Parser](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation) for the design and the corpus.
 - The parser is tolerant: macros it doesn't know are emitted as their literal `\name` followed by their `{arg}` payload, so an unknown command doesn't abort the whole expression.
 
