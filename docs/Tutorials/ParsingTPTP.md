@@ -35,47 +35,18 @@ tptpBnf = Import[
 ];
 
 primitiveOverrides = <|
-    "lower_word" -> ParseAction[
-        ParseCharacter[CharacterRange["a", "z"]] ~~ ParseMany[
-            ParseCharacter[CharacterRange["a", "z"] | CharacterRange["A", "Z"] |
-                           DigitCharacter | "_"]],
-        StringJoin[#1, StringJoin @ #2] &
-    ],
-    "upper_word" -> ParseAction[
-        ParseCharacter[CharacterRange["A", "Z"]] ~~ ParseMany[
-            ParseCharacter[CharacterRange["a", "z"] | CharacterRange["A", "Z"] |
-                           DigitCharacter | "_"]],
-        StringJoin[#1, StringJoin @ #2] &
-    ],
-    "integer" -> ParseAction[
-        ParseSome[ParseCharacter[DigitCharacter]],
-        StringJoin @ {##} &
-    ],
-    "single_quoted" -> ParseAction[
-        ParseLiteral["'"] ~~
-            ParseMany[ParseCharacter[_?(# =!= "'" &)]] ~~ ParseLiteral["'"],
-        StringJoin["'", StringJoin @ #2, "'"] &
-    ],
-    "distinct_object" -> ParseAction[
-        ParseLiteral["\""] ~~
-            ParseMany[ParseCharacter[_?(# =!= "\"" &)]] ~~ ParseLiteral["\""],
-        StringJoin["\"", StringJoin @ #2, "\""] &
-    ],
-    "dollar_word" -> ParseAction[
-        ParseLiteral["$"] ~~ ParseSome[ParseCharacter[
-            CharacterRange["a", "z"] | CharacterRange["A", "Z"] |
-            DigitCharacter | "_"]],
-        StringJoin[#1, StringJoin @ #2] &
-    ],
-    "vline" -> ParseLiteral["|"], "star" -> ParseLiteral["*"],
-    "plus"  -> ParseLiteral["+"], "arrow" -> ParseLiteral[">"],
-    "less_sign" -> ParseLiteral["<"], "hash" -> ParseLiteral["#"],
-    "dot" -> ParseLiteral["."]
+    "sq_char"        -> ParseCharacter[_?(# =!= "'" &)],
+    "do_char"        -> ParseCharacter[_?(# =!= "\"" &)],
+    "not_star_slash" -> ParseAction[ParseMany[ParseCharacter[_]], StringJoin @ {##} &],
+    "printable_char" -> ParseCharacter[_?(# =!= "\n" &)],
+    "viewable_char"  -> ParseCharacter[_]
 |>;
 
 parsers = EBNFParse[tptpBnf, "PrimitiveOverrides" -> primitiveOverrides];
-(* Association of 280 rule-name -> ParserCombinator. *)
+(* Association of 338 rule-name -> ParserCombinator. *)
 ```
+
+The `::-` (token) and `:::` (char-class) rules auto-compile through a regex meta-parser built out of the same `Parse*` combinators. `<lower_alpha> ::: [a-z]`, `<lower_word> ::- <lower_alpha><alpha_numeric>*`, `<vline> ::: [|]`, the `(<x>|<y>|<z>)` choice form - all handled. Only the rules with regex shapes the meta-parser does NOT yet handle (`<sq_char>` and `<do_char>` use octal escapes like `[\40-\41\43-\133\135-\176]`, `<not_star_slash>` is the full regex `([^*]*[*][*]*[^/*])*[^*]*` with negated classes) need an override.
 
 That's the entire setup. `parsers["TPTP_file"]` is the top-level parser; `parsers["cnf_annotated"]`, `parsers["fof_annotated"]`, etc. are the per-clause-head parsers; `parsers["fof_unitary_formula"]`, `parsers["fof_quantified_formula"]`, ... are the inner rules.
 

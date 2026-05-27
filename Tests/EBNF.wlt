@@ -82,40 +82,18 @@ VerificationTest[
         primOverrides,
         parsers
     },
+        (* Most TPTP lexical rules (lower_word, upper_word, integer,
+           vline, star, plus, arrow, less_sign, hash, dot, lower_alpha,
+           upper_alpha, numeric, ...) auto-compile from the BNF's `::-`
+           and `:::` rule kinds. Only the rules with regex shapes the
+           compiler does NOT support yet (octal escapes, negated char
+           classes, full regex) need overrides. *)
         primOverrides = <|
-            "lower_word" -> ParseAction[
-                ParseCharacter[CharacterRange["a", "z"]] ~~
-                    ParseMany[ParseCharacter[
-                        CharacterRange["a", "z"] | CharacterRange["A", "Z"] |
-                        DigitCharacter | "_"
-                    ]],
-                StringJoin[#1, StringJoin @ #2] &
-            ],
-            "upper_word" -> ParseAction[
-                ParseCharacter[CharacterRange["A", "Z"]] ~~
-                    ParseMany[ParseCharacter[
-                        CharacterRange["a", "z"] | CharacterRange["A", "Z"] |
-                        DigitCharacter | "_"
-                    ]],
-                StringJoin[#1, StringJoin @ #2] &
-            ],
-            "integer" -> ParseAction[
-                ParseSome[ParseCharacter[DigitCharacter]],
-                StringJoin @ {##} &
-            ],
-            "single_quoted" -> ParseAction[
-                ParseLiteral["'"] ~~
-                    ParseMany[ParseCharacter[_?(# =!= "'" &)]] ~~
-                    ParseLiteral["'"],
-                StringJoin["'", StringJoin @ #2, "'"] &
-            ],
-            "vline" -> ParseLiteral["|"],
-            "star"  -> ParseLiteral["*"],
-            "plus"  -> ParseLiteral["+"],
-            "arrow" -> ParseLiteral[">"],
-            "less_sign" -> ParseLiteral["<"],
-            "hash"  -> ParseLiteral["#"],
-            "dot"   -> ParseLiteral["."]
+            "sq_char"         -> ParseCharacter[_?(# =!= "'" &)],
+            "do_char"         -> ParseCharacter[_?(# =!= "\"" &)],
+            "not_star_slash"  -> ParseAction[ParseMany[ParseCharacter[_]], StringJoin @ {##} &],
+            "printable_char"  -> ParseCharacter[_?(# =!= "\n" &)],
+            "viewable_char"   -> ParseCharacter[_]
         |>;
         parsers = EBNFParse[bnf, "PrimitiveOverrides" -> primOverrides];
         (* A minimal cnf clause from a real TPTP problem. The output is
@@ -140,52 +118,11 @@ VerificationTest[
         primOverrides, parsers, source
     },
         primOverrides = <|
-            "lower_word" -> ParseAction[
-                ParseCharacter[CharacterRange["a", "z"]] ~~
-                    ParseMany[ParseCharacter[
-                        CharacterRange["a", "z"] | CharacterRange["A", "Z"] |
-                        DigitCharacter | "_"
-                    ]],
-                StringJoin[#1, StringJoin @ #2] &
-            ],
-            "upper_word" -> ParseAction[
-                ParseCharacter[CharacterRange["A", "Z"]] ~~
-                    ParseMany[ParseCharacter[
-                        CharacterRange["a", "z"] | CharacterRange["A", "Z"] |
-                        DigitCharacter | "_"
-                    ]],
-                StringJoin[#1, StringJoin @ #2] &
-            ],
-            "integer" -> ParseAction[
-                ParseSome[ParseCharacter[DigitCharacter]],
-                StringJoin @ {##} &
-            ],
-            "single_quoted" -> ParseAction[
-                ParseLiteral["'"] ~~
-                    ParseMany[ParseCharacter[_?(# =!= "'" &)]] ~~
-                    ParseLiteral["'"],
-                StringJoin["'", StringJoin @ #2, "'"] &
-            ],
-            "distinct_object" -> ParseAction[
-                ParseLiteral["\""] ~~
-                    ParseMany[ParseCharacter[_?(# =!= "\"" &)]] ~~
-                    ParseLiteral["\""],
-                StringJoin["\"", StringJoin @ #2, "\""] &
-            ],
-            "dollar_word" -> ParseAction[
-                ParseLiteral["$"] ~~ ParseSome[ParseCharacter[
-                    CharacterRange["a", "z"] | CharacterRange["A", "Z"] |
-                    DigitCharacter | "_"
-                ]],
-                StringJoin[#1, StringJoin @ #2] &
-            ],
-            "vline" -> ParseLiteral["|"],
-            "star"  -> ParseLiteral["*"],
-            "plus"  -> ParseLiteral["+"],
-            "arrow" -> ParseLiteral[">"],
-            "less_sign" -> ParseLiteral["<"],
-            "hash"  -> ParseLiteral["#"],
-            "dot"   -> ParseLiteral["."]
+            "sq_char"        -> ParseCharacter[_?(# =!= "'" &)],
+            "do_char"        -> ParseCharacter[_?(# =!= "\"" &)],
+            "not_star_slash" -> ParseAction[ParseMany[ParseCharacter[_]], StringJoin @ {##} &],
+            "printable_char" -> ParseCharacter[_?(# =!= "\n" &)],
+            "viewable_char"  -> ParseCharacter[_]
         |>;
         parsers = EBNFParse[bnf, "PrimitiveOverrides" -> primOverrides];
         (* A real-world TPTP problem: group axioms + a commutator

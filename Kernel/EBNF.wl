@@ -278,6 +278,181 @@ sortAltsLongestFirst[alts_List] := SortBy[alts, -Length[#] &]
 
 (* ===== Public entry points ===== *)
 
+(* ===== Token / char-class rule compilation =====
+
+   `::-` and `:::` rules use regex-style bodies (`[a-z]`, `[+-]`,
+   `(<x>|<y>)`, `<x>*`, `<x>+`) at the *character* level - the brackets
+   and parens are meta, not literal, and adjacent elements have no
+   whitespace between them. The structured token tree the main BNF
+   parser produces for `::=` rules tokenizes `[a-z]` for THAT context,
+   so reusing it would lose the char-class shape.
+
+   Instead, we reconstruct the original body string from the structured
+   tokens (the reconstruction is exact because every Lit / NonTerm /
+   Rep maps to its original source) and run a second parser - the
+   `regexParser` below - on that string. The second parser is itself
+   built out of `Parse*` combinators (same library this paclet exposes);
+   its action functions return *ParserCombinator values* instead of
+   strings, so the regex source compiles directly to the target parser.
+
+   This is the same "use the combinator core to parse its own meta-
+   grammar" pattern the BNF parser uses, just applied to a different
+   meta-grammar (regex syntax instead of BNF rule shapes). *)
+
+reconstructBody[alts_List] :=
+    StringRiffle[reconstructAlt /@ alts, "|"]
+
+reconstructAlt[elts_List] :=
+    StringJoin[reconstructElt /@ elts]
+
+reconstructElt[Lit[s_String]]            := s
+reconstructElt[NonTerm[n_String]]        := "<" <> n <> ">"
+reconstructElt[Rep["Many", inner_]]      := reconstructElt[inner] <> "*"
+
+(* The regex meta-grammar's action functions look up non-terminal
+   references in these two Block-scoped maps. *)
+regexSymMap   = <||>
+regexOverrides = <||>
+
+regexLookupRef[name_String] :=
+    Which[
+        KeyExistsQ[regexOverrides, name],
+            regexOverrides[name],
+        KeyExistsQ[regexSymMap, name],
+            With[{sym = regexSymMap[name]}, ParseRecursive[sym]],
+        True,
+            ParseFail["No parser bound for non-terminal: " <> name]
+    ]
+
+(* The regex meta-grammar, built with Parse* combinators. Each piece's
+   action returns a ParserCombinator value (the compiled target parser
+   for that sub-expression). *)
+
+regexMetaChar = "|" | "*" | "+" | "?" | "(" | ")" | "[" | "]" | "<" | "{" | "\\"
+regexCharNotMeta = ParseCharacter[_ ? (! MatchQ[#, regexMetaChar] &)]
+
+(* A backslash escape: \X stands for the literal char X *)
+regexEscape = ParseAction[
+    ParseLiteral["\\"] ~~ ParseCharacter[_],
+    ParseLiteral[#2] &
+]
+
+regexLiteralChar = ParseAction[regexCharNotMeta, ParseLiteral[#] &]
+
+(* Inside a char class: `a-z` is a range, `\X` is a literal X, plain
+   chars are themselves. Each item produces a WL string pattern. *)
+regexCharClassRangeItem = ParseAction[
+    regexCharNotMeta ~~ ParseLiteral["-"] ~~ regexCharNotMeta,
+    CharacterRange[#1, #3] &
+]
+
+regexCharClassEscapeItem = ParseAction[
+    ParseLiteral["\\"] ~~ ParseCharacter[_],
+    #2 &
+]
+
+regexCharClassSingleItem = ParseAction[
+    regexCharNotMeta,
+    # &
+]
+
+regexCharClassItem = ParseChoice[
+    regexCharClassRangeItem,
+    regexCharClassEscapeItem,
+    regexCharClassSingleItem
+]
+
+regexCharClass = ParseAction[
+    ParseLiteral["["] ~~ ParseSome[regexCharClassItem] ~~ ParseLiteral["]"],
+    With[{parts = #2},
+        ParseCharacter[
+            Switch[Length[parts],
+                1, parts[[1]],
+                _, Apply[Alternatives, parts]
+            ]
+        ]
+    ] &
+]
+
+regexRefName = ParseAction[
+    ParseCharacter[LetterCharacter | "_"] ~~
+        ParseMany[ParseCharacter[LetterCharacter | DigitCharacter | "_"]],
+    StringJoin[#1, StringJoin @ #2] &
+]
+
+regexNonTermRef = ParseAction[
+    (ParseLiteral["<"] ~~ regexRefName ~~ ParseLiteral[">"]) |
+        (ParseLiteral["{"] ~~ regexRefName ~~ ParseLiteral["}"]),
+    regexLookupRef[#2] &
+]
+
+(* Forward reference for the recursive parenthesised group. *)
+regexParenGroup = ParseAction[
+    ParseLiteral["("] ~~ ParseRecursive[regexBodyRef] ~~ ParseLiteral[")"],
+    #2 &
+]
+
+regexAtom = ParseChoice[
+    regexCharClass,
+    regexParenGroup,
+    regexNonTermRef,
+    regexEscape,
+    regexLiteralChar
+]
+
+(* atom followed by optional postfix *, +, ? - returns the wrapped
+   ParserCombinator joined back into a string-yielding parser. *)
+regexEltWithPostfix = ParseAction[
+    regexAtom ~~ ParseOptional[ParseCharacter["*" | "+" | "?"]],
+    Switch[#2,
+        "*", ParseAction[ParseMany[#1], StringJoin @ {##} &],
+        "+", ParseAction[ParseSome[#1], StringJoin @ {##} &],
+        "?", ParseAction[ParseOptional[#1], If[MissingQ[#], "", #] &],
+        _,   #1
+    ] &
+]
+
+(* A sequence of elements with no separator; the result is a parser
+   that concatenates the per-element matches into one string. The
+   empty case is ParseSucceed[""] (matches the empty string). *)
+regexSeq = ParseAction[
+    ParseMany[regexEltWithPostfix],
+    With[{elts = {##}},
+        Switch[Length[elts],
+            0, ParseSucceed[""],
+            1, elts[[1]],
+            _, ParseAction[ParseSequence @@ elts, StringJoin @ {##} &]
+        ]
+    ] &
+]
+
+regexBody = ParseAction[
+    ParseSepBy1[regexSeq, ParseLiteral["|"]],
+    With[{alts = {##}},
+        If[Length[alts] === 1, alts[[1]], ParseChoice @@ alts]
+    ] &
+]
+
+regexBodyRef := ParseRecursive[regexBody]
+
+(* compile a `::-` / `:::` rule body to a target parser by running the
+   regex meta-grammar on the reconstructed body string. The Parse call
+   has to run inside the Block (not in its init list), because Block's
+   init RHSs evaluate in the OUTER scope - regexSymMap / regexOverrides
+   would still hold their outer values when Parse was running. *)
+regexCompile[body_String, sm_Association, ov_Association] :=
+    Block[{regexSymMap = sm, regexOverrides = ov},
+        With[{r = Parse[regexBody, body]},
+            If[ MatchQ[r, _ParseError],
+                ParseFail["regex body did not compile: " <> body],
+                r
+            ]
+        ]
+    ]
+
+
+(* ===== Public entry points ===== *)
+
 (* Parse the BNF source via the combinator grammar above and return the
    raw rule list. Useful for tests and inspection. *)
 EBNFRules[source_String] := Parse[grammarP, source]
@@ -286,34 +461,52 @@ EBNFRules[File[path_String]] := EBNFRules[Import[path, "Text"]]
 Options[EBNFParse] = {"PrimitiveOverrides" -> <||>}
 
 EBNFParse[source_String, OptionsPattern[]] :=
-    Block[{rules, gram, overrides, symMap, parsers},
+    Block[{rules, structuredGram, tokenGram, overrides, allNames, symMap, parsers},
         overrides = OptionValue["PrimitiveOverrides"];
         rules = EBNFRules[source];
         If[ MatchQ[rules, _ParseError],
             Return[rules]
         ];
-        (* Only `::=` and `:==` rules auto-lower; `::-` and `:::` rules
-           describe tokens / character classes that the caller supplies. *)
-        gram = Association @ Cases[rules,
+        (* `::=` and `:==` rules carry the structured body; `::-` and
+           `:::` rules carry regex-style bodies that the regexCompile
+           pass walks character by character. *)
+        structuredGram = Association @ Cases[rules,
             EBNFRule[name_, "::=" | ":==", body_] :> (name -> body)
+        ];
+        tokenGram = Association @ Cases[rules,
+            EBNFRule[name_, "::-" | ":::", body_] :> (name -> reconstructBody[body])
         ];
         (* Apply direct-left-recursion elimination before lowering, so the
            PEG ordering of the lowered ParseChoice doesn't commit to a
            non-recursive alt and miss the recursive form. *)
-        gram = AssociationMap[
-            Function[name, rewriteLeftRecursive[name, gram[name]]],
-            Keys[gram]
+        structuredGram = AssociationMap[
+            Function[name, rewriteLeftRecursive[name, structuredGram[name]]],
+            Keys[structuredGram]
         ];
         (* Then sort each rule's alts longest-first so a shared-prefix
            alt pair like `<constant> | <functor>(<fof_arguments>)` tries
            the longer (and more specific) form before the bare prefix. *)
-        gram = sortAltsLongestFirst /@ gram;
-        symMap = AssociationMap[Function[Unique["ebnfRule$"]], Keys[gram]];
-        parsers = Association @ KeyValueMap[
-            Function[{name, body},
-                name -> lowerBody[body, symMap, overrides]
-            ],
-            gram
+        structuredGram = sortAltsLongestFirst /@ structuredGram;
+        allNames = Union[Keys[structuredGram], Keys[tokenGram]];
+        symMap = AssociationMap[Function[Unique["ebnfRule$"]], allNames];
+        parsers = Association[
+            Join[
+                KeyValueMap[
+                    Function[{name, body},
+                        name -> lowerBody[body, symMap, overrides]
+                    ],
+                    structuredGram
+                ],
+                KeyValueMap[
+                    Function[{name, bodyStr},
+                        name -> Quiet @ Check[
+                            regexCompile[bodyStr, symMap, overrides],
+                            ParseFail["Could not compile " <> name <> " body: " <> bodyStr]
+                        ]
+                    ],
+                    tokenGram
+                ]
+            ]
         ];
         (* Bind each rule's parser to its allocated symbol; the
            ParseRecursive[sym] references resolve at parse time. Use
