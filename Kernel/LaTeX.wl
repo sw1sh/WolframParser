@@ -76,6 +76,26 @@ identAtom = ParseAction[
     StyleBox[#, "TI"] &
 ]
 
+(* Fallback atom for non-ASCII characters that aren't LetterCharacter
+   but DO carry math meaning (Unicode math symbols like \[PartialD],
+   \[Del], \[Infinity], \[Pi]; also accented letters that StringMatchQ
+   doesn't class as LetterCharacter). Defined via a function predicate
+   because StringExpression's Except doesn't accept Alternatives in
+   that role. *)
+unicodeReservedQ = MemberQ[{
+    " ", "\t", "\n", "\r",
+    "\\", "{", "}", "[", "]", "(", ")",
+    "|", "&", "$", "^", "_", "~",
+    ",", ";", ":", "+", "-", "=",
+    "<", ">", "*", "/", "?", "!", "#", ".",
+    "`", "'", "\""
+}, #] &
+
+unicodeAtom = ParseAction[
+    token[ParseCharacter[_?(! unicodeReservedQ[#] &)]],
+    StyleBox[#, "TI"] &
+]
+
 
 (* === command (\name, optional [bracketed] arg, any number of {braced} args) ===
    A command name is a backslash followed by either one-or-more letters
@@ -90,7 +110,8 @@ commandName = ParseChoice[
     ],
     ParseAction[
         ParseLiteral["\\"] ~~ ParseCharacter[
-            "{" | "}" | "$" | "%" | "&" | "#" | "_" | "," | ";" | ":" | " " | "!"
+            "{" | "}" | "$" | "%" | "&" | "#" | "_" | "," | ";" | ":" | " " | "!" |
+                "'" | "." | "`" | "\"" | "="
         ],
         Function[{slash, c}, slash <> c]
     ]
@@ -107,9 +128,16 @@ exprRef = ParseRecursive[expr]
    delimiters handled by environmentAtom. The leading NotFollowedBy
    guard returns Null (consumes nothing), so the dispatch args shift to
    #2 / #3 / #4. *)
+(* commandAtom must not swallow the env-delimiter forms \begin{...},
+   \end{...}, or \cr (row break). But user macros like \endExp or
+   \crfoo are fine - the env-delimiter guard is keyed on the *exact*
+   shapes "\begin" / "\end" followed (possibly past whitespace) by
+   "{", and "\cr" followed by a non-letter. *)
 commandAtom = ParseAction[
     ParseNotFollowedBy[
-        ParseLiteral["\\begin"] | ParseLiteral["\\end"] | ParseLiteral["\\cr"]
+        ParseAction[ParseLiteral["\\begin"] ~~ ws ~~ ParseLiteral["{"], Null &] |
+        ParseAction[ParseLiteral["\\end"] ~~ ws ~~ ParseLiteral["{"], Null &] |
+        ParseAction[ParseLiteral["\\cr"] ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &]
     ] ~~
         commandName ~~ Optional[bracketedArgRef] ~~ ParseMany[bracedArgRef] ~~ ws,
     dispatchCommand[#2, #3, #4] &
@@ -118,17 +146,16 @@ commandAtom = ParseAction[
 (* A braced arg is normally an expression, but \pmb{=}, \stackrel{?}{=},
    \overset?, etc. put a bare operator inside the braces. Allow that as
    a second alternative - just emit the operator glyph. *)
+(* A braced group is anything between { and }, modeled here as a
+   topRow (which already chains expressions, accepts leading ops, bare
+   ? / ! / *, line breaks, $ toggles), plus a final empty-group escape
+   hatch for the literal {}. *)
 bracedArg = ParseBetween[
     literal["{"],
-    ParseChoice[
-        exprRef,
-        ParseRecursive[cellLeadingOp],
-        ParseRecursive[puncToken],
-        ParseSucceed[""]
-    ],
+    ParseChoice[ParseRecursive[topRow], ParseSucceed[""]],
     literal["}"]
 ]
-bracketedArg = ParseBetween[literal["["], exprRef, literal["]"]]
+bracketedArg = ParseBetween[literal["["], ParseRecursive[topRow], literal["]"]]
 
 
 (* === environments: \begin{name} cells \end{name} ===
@@ -176,10 +203,32 @@ cellLeadingOp = ParseAction[
         _, #1] &
 ]
 
-(* Single-char tokens ? ! and asterisk that can appear bare inside a
-   braced group - \stackrel{?}{=}, \boxed{!}, etc. *)
+(* Single-char tokens that can appear bare in a math row, in any
+   context: as the only thing in a braced group (\stackrel{?}{=},
+   \textcolor{#0f0}), the lone trailing/leading operator in a matrix
+   cell (`1+`, `^3`), or sprinkled through expressions (~ for TeX
+   no-break space, . at end of sentences, / inside file paths).
+   These are tried only AFTER expr, so balanced absAtom / parenAtom
+   / chained sumExpr still wins on inputs like `|x|`, `(x)`, `a+b` -
+   only the unbalanced / leading-op leftovers fall through here.
+   Closing delimiters ) and ] are NOT here - they'd break parenAtom /
+   bracketAtom by stealing the close from the recursive inner row. *)
 puncToken = ParseAction[
-    literal["?"] | literal["!"] | literal["*"],
+    literal["?"] | literal["!"] | literal["*"] | literal["#"] |
+        literal["~"] | literal["."] | literal["|"] | literal["/"] |
+        literal["+"] | literal["-"] | literal["="] |
+        literal["<"] | literal[">"] |
+        literal["^"] | literal["_"] |
+        literal["`"] | literal["'"] | literal["\""],
+    #1 &
+]
+
+(* Tokens valid ONLY at the outermost top level - intentionally
+   unbalanced closing delimiters from `\left. + a \right)` etc. They
+   are kept out of puncToken so they don't leak into parenAtom's inner
+   row. *)
+outerPuncToken = ParseAction[
+    literal[")"] | literal["]"],
     #1 &
 ]
 matrixCell = ParseChoice[
@@ -194,9 +243,9 @@ matrixRow  = ParseSepBy[matrixCell, colSep]
 matrixBody = ParseSepBy[matrixRow, rowSep]
 
 environmentAtom = ParseAction[
-    ParseLiteral["\\begin"] ~~ envName ~~ ws ~~ Optional[bracedArgRef] ~~
-        matrixBody ~~ ParseLiteral["\\end"] ~~ envName,
-    buildEnv[#2, #5] &
+    ParseLiteral["\\begin"] ~~ ws ~~ envName ~~ ws ~~ Optional[bracedArgRef] ~~
+        matrixBody ~~ ParseLiteral["\\end"] ~~ ws ~~ envName,
+    buildEnv[#3, #6] &
 ]
 
 buildEnv[name_String, rows_List] :=
@@ -385,6 +434,60 @@ commandHandlers["\\mod"]  = Function[{opt, req},
 ]
 
 
+(* === structural no-ops ===
+   Commands that exist for TeX's typesetting needs (numbering, line
+   breaking, hint to spacing engine) but carry no semantic information
+   for a doc-math renderer. We accept them and emit nothing. *)
+
+noopHandler = Function[{opt, req}, ""]
+
+Scan[
+    (commandHandlers[#] = noopHandler) &,
+    {"\\limits", "\\nolimits", "\\displaylimits",
+     "\\nonumber", "\\notag", "\\tag", "\\eqno", "\\leqno",
+     "\\hline", "\\hdashline", "\\cline",
+     "\\newline", "\\linebreak", "\\nolinebreak",
+     "\\nobreak", "\\allowbreak", "\\noindent", "\\indent", "\\displaybreak",
+     "\\smallskip", "\\medskip", "\\bigskip", "\\strut", "\\mathstrut",
+     "\\phantom", "\\hphantom", "\\vphantom",
+     "\\rule", "\\raisebox", "\\colorbox", "\\fcolorbox",
+     "\\htmlId", "\\htmlClass", "\\htmlStyle", "\\htmlData",
+     "\\includegraphics", "\\def", "\\renewcommand", "\\newcommand", "\\gdef",
+     "\\kern", "\\mkern", "\\hskip", "\\mskip", "\\hspace", "\\vspace",
+     "\\thinspace", "\\negthinspace", "\\medspace", "\\negmedspace",
+     "\\thickspace", "\\negthickspace",
+     "\\enspace", "\\quad", (* \quad already in namedSymbolChars - this no-ops if no handler hit *)
+     "\\textstyle", "\\displaystyle", "\\scriptstyle", "\\scriptscriptstyle",
+     "\\tiny", "\\scriptsize", "\\footnotesize", "\\small", "\\normalsize",
+     "\\large", "\\Large", "\\LARGE", "\\huge", "\\Huge",
+     "\\it", "\\bf", "\\rm", "\\sf", "\\tt", "\\sl", "\\em"}
+]
+
+(* Re-pin entries that the no-op scan above would have stomped: \quad,
+   \qquad, \tag-with-arg need their previous semantics. (Scan runs after
+   namedSymbolChars setup, so \quad's space-glyph handler was just
+   replaced by noopHandler - put it back.) *)
+commandHandlers["\\quad"]  = Function[{opt, req}, namedSymbolChars["\\quad"]]
+commandHandlers["\\qquad"] = Function[{opt, req}, namedSymbolChars["\\qquad"]]
+
+
+(* === math-atom classification ===
+   \mathop / \mathrel / \mathbin / \mathord / \mathopen / \mathclose /
+   \mathpunct only affect spacing classification in TeX. For rendering,
+   we just emit the argument unchanged. Same for \smash and \boxed (a
+   visual box that we drop). *)
+
+identArgHandler = Function[{opt, req}, First[req, ""]]
+
+Scan[
+    (commandHandlers[#] = identArgHandler) &,
+    {"\\mathop", "\\mathrel", "\\mathbin", "\\mathord",
+     "\\mathopen", "\\mathclose", "\\mathpunct", "\\mathinner",
+     "\\smash", "\\boxed", "\\fbox", "\\mbox", "\\hbox",
+     "\\underleftarrow", "\\underrightarrow", "\\underleftrightarrow"}
+]
+
+
 (* === big operators and named symbols === *)
 
 (* Bare-symbol commands: each emits a single Unicode character. *)
@@ -551,15 +654,18 @@ Scan[
 
 (* parenthesised subexpression: emits the parens as part of the box so
    they render visually, unlike `{...}` which is structural-only. Inner
-   is the comma-aware mathRow so `(x, y)` and `\max(a, b)` parse. *)
+   is topRow so `(x \\ y)` and `(a, b $c$ d)` survive - real-world TeX
+   does sometimes put a row break or math toggle inside delimited
+   groups. The recursive inner ROW must be topRow (not outerRow) so
+   the closing ) is still available for our literal[")"] to consume,
+   rather than being eaten as outerPuncToken. *)
 parenAtom = ParseAction[
-    literal["("] ~~ ParseRecursive[mathRow] ~~ literal[")"],
+    literal["("] ~~ ParseRecursive[topRow] ~~ literal[")"],
     RowBox[{"(", #2, ")"}] &
 ]
 
-(* bracket subexpression: [ expr ] visible *)
 bracketAtom = ParseAction[
-    literal["["] ~~ ParseRecursive[mathRow] ~~ literal["]"],
+    literal["["] ~~ ParseRecursive[topRow] ~~ literal["]"],
     RowBox[{"[", #2, "]"}] &
 ]
 
@@ -572,7 +678,7 @@ absAtom = ParseAction[
 
 atom = ParseChoice[
     numberAtom, environmentAtom, commandAtom, parenAtom, bracketAtom, absAtom,
-    bracedArgRef, identAtom
+    bracedArgRef, identAtom, unicodeAtom
 ]
 
 (* A postfix is _x, ^y, or a run of primes - each tagged so factor can
@@ -692,7 +798,8 @@ mathToken = ParseChoice[
     expr,
     ParseAction[literal[","], "," <> "\[ThinSpace]" &],
     ParseAction[literal[";"], "; " &],
-    ParseAction[literal[":"], " : " &]
+    ParseAction[literal[":"], " : " &],
+    ParseRecursive[puncToken]
 ]
 
 mathRow = ParseAction[
@@ -700,23 +807,74 @@ mathRow = ParseAction[
     If[Length[{##}] === 1, #1, RowBox[{##}]] &
 ]
 
+(* topRow: like mathRow, but additionally tolerates the things that
+   are valid at the document level but NOT inside a matrix cell:
+   - `\\` and `\\[1ex]` and `\cr` (line breaks outside an environment)
+   - `$ ... $` (math-mode toggles - a no-op for us since we're already
+     parsing math; nests harmlessly inside \tag{$+$x}, \text{$a<b$})
+   - `\hline` / `\hdashline` / `\newline` would also live here but they
+     already match commandAtom via the noop handlers above. *)
+linebreakToken = ParseAction[
+    (literal["\\\\"] | literal["\\cr"]) ~~ Optional[bracketedArgRef] ~~ ws,
+    "" &
+]
+dollarToken = ParseAction[literal["$"], "" &]
+
+topToken = ParseChoice[
+    mathToken,
+    ParseRecursive[cellLeadingOp],
+    ParseRecursive[puncToken],
+    linebreakToken,
+    dollarToken
+]
+
+topRow = ParseAction[
+    ParseSome[topToken],
+    If[Length[{##}] === 1, #1, RowBox[{##}]] &
+]
+
+(* outerRow is topRow + outerPuncToken; used ONLY as the LaTeXMathParser
+   entry point so that unbalanced ) and ] from \left./\right)-style
+   inputs render as bare characters at the document level. outerPuncToken
+   is kept OUT of topRow because the recursive inner rows in parenAtom /
+   bracketAtom / bracketedArg need to leave the literal close delimiter
+   for their own literal["]"] / literal[")"] to consume. *)
+outerToken = ParseChoice[topToken, ParseRecursive[outerPuncToken]]
+
+outerRow = ParseAction[
+    ParseSome[outerToken],
+    If[Length[{##}] === 1, #1, RowBox[{##}]] &
+]
+
 
 (* === top-level entry === *)
 
-LaTeXMathParser := ParseAction[ws ~~ mathRow, #2 &]
+LaTeXMathParser := ParseAction[ws ~~ outerRow, #2 &]
 
-(* Strip the delimiter-sizing prefixes (\left \right \big \Big \bigg
-   \Bigg and the l/r/m variants) before parsing - we render the bare
-   delimiter and don't model size. The negative lookahead (?![a-zA-Z])
-   keeps `\bigcup` / `\Big...` words from being mangled. `\left.` /
-   `\right.` (the empty-delimiter forms) lose the dot too. *)
+(* Delimiter-sizing macros are dropped before parsing - we render the
+   bare delimiter and don't model size. Two different strategies for
+   the two families:
+
+   \left and \right always have a *matching pair* in the source - if we
+   keep the delimiter character, parenAtom / bracketAtom / absAtom pick
+   it up naturally. So we strip JUST the macro prefix, leaving the
+   delimiter (e.g. \left( -> ().
+
+   \big / \bigl / \bigr / \Big / \bigg / \Bigg and friends are NOT
+   guaranteed to come in matched pairs (e.g. \big( without a \big) in
+   the same group breaks any balanced-paren parser). Strip the macro
+   AND the delimiter together (the next char or \macro). This loses the
+   visual but keeps the input parseable. The negative lookahead
+   (?![a-zA-Z]) keeps `\bigcup` etc. from being mangled. *)
 preprocessLaTeX[s_String] :=
     StringReplace[s, {
+        RegularExpression["\\\\(left|right)\\s*\\."] -> "",
+        RegularExpression["\\\\(left|right)(?![a-zA-Z])"] -> "",
         RegularExpression[
-            "\\\\(left|right|bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg)\\s*\\."
+            "\\\\(bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|.])"
         ] -> "",
         RegularExpression[
-            "\\\\(left|right|bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg)(?![a-zA-Z])"
+            "\\\\(bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg)(?![a-zA-Z])"
         ] -> ""
     }]
 

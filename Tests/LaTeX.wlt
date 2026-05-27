@@ -374,9 +374,14 @@ VerificationTest[
 ]
 
 VerificationTest[
+    (* \bigl( and \bigr) are stripped together with their delimiters -
+       we lose the visual parens but gain the ability to parse the
+       far-more-common unbalanced TeX (\big(, \Big\uparrow, ...) where
+       there is no matching \bigr counterpart in the source. The
+       balanced case still parses cleanly, just to the inner content. *)
     LaTeXMathParse["\\bigl( a \\bigr)"],
-    RowBox[{"(", StyleBox["a", "TI"], ")"}],
-    TestID -> "KaTeX delimiters: \\bigl ... \\bigr stripped"
+    StyleBox["a", "TI"],
+    TestID -> "KaTeX delimiters: \\bigl ... \\bigr strip with their delim"
 ]
 
 VerificationTest[
@@ -477,9 +482,14 @@ VerificationTest[
 ]
 
 VerificationTest[
-    MatchQ[LaTeXMathParse["a\\\\b"], _ParseError],
+    (* Top-level \\ is a tolerated line break (renders empty); the point
+       of this test is just that it terminates, not that it errors. *)
+    MatchQ[
+        TimeConstrained[LaTeXMathParse["a\\\\b"], 5, $TimedOut],
+        Except[$TimedOut]
+    ],
     True,
-    TestID -> "Robustness: row-break \\\\ returns ParseError (no infinite recursion)"
+    TestID -> "Robustness: row-break \\\\ parses cleanly (no infinite recursion)"
 ]
 
 VerificationTest[
@@ -514,8 +524,8 @@ VerificationTest[
     },
         Count[Values[cases], _?(! MatchQ[LaTeXMathParse[#], _ParseError] &)]
     ],
-    91,
-    TestID -> "KaTeX corpus: at least 91 of the 126 inline cases parse clean"
+    123,
+    TestID -> "KaTeX corpus: at least 123 of the 126 inline cases parse clean"
 ]
 
 
