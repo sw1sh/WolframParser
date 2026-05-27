@@ -177,23 +177,91 @@ styleHandler[lookup_, fontOpt_] :=
 
 commandHandlers["\\mathbb"]   = styleHandler[doubleStruckChars, FontWeight -> "Bold"]
 commandHandlers["\\mathcal"]  = styleHandler[scriptCapitalChars, FontVariations -> {}]
+commandHandlers["\\mathscr"]  = styleHandler[scriptCapitalChars, FontVariations -> {}]
 commandHandlers["\\mathfrak"] = styleHandler[gothicCapitalChars, FontVariations -> {}]
 commandHandlers["\\mathbf"]   = Function[{opt, req}, StyleBox[First[req, ""], FontWeight -> "Bold"]]
 commandHandlers["\\boldsymbol"] = commandHandlers["\\mathbf"]
 commandHandlers["\\mathrm"]   = Function[{opt, req}, StyleBox[First[req, ""], FontSlant -> "Plain"]]
+commandHandlers["\\mathit"]   = Function[{opt, req}, StyleBox[First[req, ""], FontSlant -> "Italic"]]
+commandHandlers["\\mathsf"]   = Function[{opt, req}, StyleBox[First[req, ""], FontFamily -> "SansSerif"]]
+commandHandlers["\\mathtt"]   = Function[{opt, req}, StyleBox[First[req, ""], FontFamily -> "Courier"]]
+commandHandlers["\\operatorname"] = commandHandlers["\\mathrm"]
+
+(* \text{...}: upright text. The arg comes through the math grammar
+   (so a multi-letter run is a RowBox of italic letters); re-style the
+   whole thing upright. An approximation - good enough for doc math. *)
+commandHandlers["\\text"]   = Function[{opt, req}, StyleBox[First[req, ""], FontSlant -> "Plain"]]
+commandHandlers["\\textrm"] = commandHandlers["\\text"]
+commandHandlers["\\textbf"] = Function[{opt, req}, StyleBox[First[req, ""], FontWeight -> "Bold", FontSlant -> "Plain"]]
+commandHandlers["\\textit"] = Function[{opt, req}, StyleBox[First[req, ""], FontSlant -> "Italic"]]
+commandHandlers["\\texttt"] = Function[{opt, req}, StyleBox[First[req, ""], FontFamily -> "Courier", FontSlant -> "Plain"]]
 
 
-(* === fractions, roots === *)
+(* === accents ===
+   Each is a command with one required arg; renders as an OverscriptBox
+   with the accent glyph on top. \overline / \underline / the wide
+   accents span their whole argument. *)
 
-commandHandlers["\\frac"] = Function[{opt, req},
+accentHandler[glyph_] := Function[{opt, req}, OverscriptBox[First[req, ""], glyph]]
+
+commandHandlers["\\hat"]      = accentHandler["^"]
+commandHandlers["\\widehat"]  = accentHandler["^"]
+commandHandlers["\\tilde"]    = accentHandler["~"]
+commandHandlers["\\widetilde"] = accentHandler["~"]
+commandHandlers["\\bar"]      = accentHandler["_"]
+commandHandlers["\\vec"]      = accentHandler["\[RightVector]"]
+commandHandlers["\\dot"]      = accentHandler["."]
+commandHandlers["\\ddot"]     = accentHandler[".."]
+commandHandlers["\\check"]    = accentHandler["\[Hacek]"]
+commandHandlers["\\breve"]    = accentHandler["\[Breve]"]
+commandHandlers["\\acute"]    = accentHandler[FromCharacterCode[180]]
+commandHandlers["\\grave"]    = accentHandler[FromCharacterCode[96]]
+commandHandlers["\\mathring"] = accentHandler["\[SmallCircle]"]
+commandHandlers["\\overrightarrow"] = accentHandler["\[RightArrow]"]
+commandHandlers["\\overleftarrow"]  = accentHandler["\[LeftArrow]"]
+commandHandlers["\\overline"] = accentHandler["_"]
+
+commandHandlers["\\underline"] = Function[{opt, req}, UnderscriptBox[First[req, ""], "_"]]
+
+(* over/under braces - the optional label rides above/below the brace. *)
+commandHandlers["\\overbrace"]  = Function[{opt, req}, OverscriptBox[First[req, ""], "\[OverBrace]"]]
+commandHandlers["\\underbrace"] = Function[{opt, req}, UnderscriptBox[First[req, ""], "\[UnderBrace]"]]
+
+
+(* === fractions, roots, binomials === *)
+
+fracHandler = Function[{opt, req},
     If[ Length[req] >= 2, FractionBox[req[[1]], req[[2]]], "\\frac" ]
 ]
+
+commandHandlers["\\frac"]  = fracHandler
+commandHandlers["\\tfrac"] = fracHandler
+commandHandlers["\\dfrac"] = fracHandler
+commandHandlers["\\cfrac"] = fracHandler
+
+commandHandlers["\\binom"] = Function[{opt, req},
+    If[ Length[req] >= 2,
+        RowBox[{"(", GridBox[{{req[[1]]}, {req[[2]]}}], ")"}],
+        "\\binom"
+    ]
+]
+commandHandlers["\\tbinom"] = commandHandlers["\\binom"]
+commandHandlers["\\dbinom"] = commandHandlers["\\binom"]
 
 commandHandlers["\\sqrt"] = Function[{opt, req},
     If[ Length[req] === 1,
         If[ MissingQ[opt], SqrtBox[req[[1]]], RadicalBox[req[[1]], opt] ],
         "\\sqrt"
     ]
+]
+
+(* modular-arithmetic notations - PAdic uses \pmod a lot. *)
+commandHandlers["\\pmod"] = Function[{opt, req},
+    RowBox[{"(", StyleBox["mod", FontSlant -> "Plain"], " ", First[req, ""], ")"}]
+]
+commandHandlers["\\bmod"] = Function[{opt, req}, StyleBox["mod", FontSlant -> "Plain"]]
+commandHandlers["\\mod"]  = Function[{opt, req},
+    RowBox[{StyleBox["mod", FontSlant -> "Plain"], " ", First[req, ""]}]
 ]
 
 
@@ -240,7 +308,66 @@ namedSymbolChars = <|
     "\\&"       -> "&",               "\\#"     -> "#",
     "\\_"       -> "_",               "\\ "     -> " ",
     "\\quad"    -> "\[NonBreakingSpace]\[NonBreakingSpace]",
-    "\\qquad"   -> "\[NonBreakingSpace]\[NonBreakingSpace]\[NonBreakingSpace]\[NonBreakingSpace]"
+    "\\qquad"   -> "\[NonBreakingSpace]\[NonBreakingSpace]\[NonBreakingSpace]\[NonBreakingSpace]",
+    (* extra binary operators *)
+    "\\div"     -> "\[Divide]",        "\\ast"   -> "\[Star]",
+    "\\star"    -> "\[FivePointedStar]", "\\bullet" -> "\[Bullet]",
+    "\\ominus"  -> "\[CircleMinus]",   "\\odot"  -> "\[CircleDot]",
+    "\\oslash"  -> "\[CircleTimes]",   "\\wedge" -> "\[Wedge]",
+    "\\vee"     -> "\[Vee]",           "\\sqcap" -> "\[SquareIntersection]",
+    "\\sqcup"   -> "\[SquareUnion]",   "\\uplus" -> "\[UnionPlus]",
+    "\\amalg"   -> "\[Coproduct]",     "\\dagger" -> "\[Dagger]",
+    "\\ddagger" -> "\[DoubleDagger]",  "\\wr"    -> "\[Wolf]",
+    (* big operators *)
+    "\\bigcup"  -> "\[Union]",         "\\bigcap" -> "\[Intersection]",
+    "\\bigoplus" -> "\[CirclePlus]",   "\\bigotimes" -> "\[CircleTimes]",
+    "\\bigsqcup" -> "\[SquareUnion]",  "\\bigvee" -> "\[Vee]",
+    "\\bigwedge" -> "\[Wedge]",        "\\coprod" -> "\[Coproduct]",
+    (* extra relations *)
+    "\\simeq"   -> "\[TildeEqual]",    "\\doteq" -> "\[DotEqual]",
+    "\\prec"    -> "\[Precedes]",      "\\succ"  -> "\[Succeeds]",
+    "\\preceq"  -> "\[PrecedesEqual]", "\\succeq" -> "\[SucceedsEqual]",
+    "\\ni"      -> "\[ReverseElement]", "\\propto" -> "\[Proportional]",
+    "\\parallel" -> "\[DoubleVerticalBar]", "\\perp" -> "\[Perpendicular]",
+    "\\asymp"   -> "\[CupCap]",
+    "\\vdash"   -> "\[RightTee]",      "\\dashv" -> "\[LeftTee]",
+    "\\models"  -> "\[DoubleRightTee]", "\\sqsubseteq" -> "\[SquareSubsetEqual]",
+    "\\sqsupseteq" -> "\[SquareSupersetEqual]",
+    (* arrows *)
+    "\\gets"        -> "\[LeftArrow]",
+    "\\leftrightarrow" -> "\[LeftRightArrow]",
+    "\\Leftarrow"   -> "\[DoubleLeftArrow]",
+    "\\Leftrightarrow" -> "\[DoubleLeftRightArrow]",
+    "\\uparrow"     -> "\[UpArrow]",   "\\downarrow" -> "\[DownArrow]",
+    "\\updownarrow" -> "\[UpDownArrow]",
+    "\\Uparrow"     -> "\[DoubleUpArrow]", "\\Downarrow" -> "\[DoubleDownArrow]",
+    "\\longrightarrow" -> "\[LongRightArrow]",
+    "\\longleftarrow"  -> "\[LongLeftArrow]",
+    "\\longleftrightarrow" -> "\[LongLeftRightArrow]",
+    "\\Longrightarrow" -> "\[DoubleLongRightArrow]",
+    "\\Longleftarrow"  -> "\[DoubleLongLeftArrow]",
+    "\\Longleftrightarrow" -> "\[DoubleLongLeftRightArrow]",
+    "\\hookrightarrow" -> "\[RightArrow]", "\\hookleftarrow" -> "\[LeftArrow]",
+    "\\longmapsto"  -> "\[Function]",  "\\implies" -> "\[DoubleLongRightArrow]",
+    "\\impliedby"   -> "\[DoubleLongLeftArrow]", "\\iff" -> "\[DoubleLongLeftRightArrow]",
+    "\\rightsquigarrow" -> "\[RightArrow]",
+    (* logic / misc symbols *)
+    "\\nexists" -> "\[NotExists]",     "\\top" -> "\[UpTee]",
+    "\\bot"     -> "\[DownTee]",       "\\therefore" -> "\[Therefore]",
+    "\\because" -> "\[Because]",       "\\angle" -> "\[Angle]",
+    "\\triangle" -> "\[EmptyUpTriangle]", "\\square" -> "\[EmptySquare]",
+    "\\diamond" -> "\[Diamond]",       "\\flat" -> "\[Flat]",
+    "\\sharp"   -> "\[Sharp]",         "\\natural" -> "\[Natural]",
+    "\\clubsuit" -> "\[ClubSuit]",     "\\spadesuit" -> "\[SpadeSuit]",
+    "\\heartsuit" -> "\[HeartSuit]",   "\\diamondsuit" -> "\[DiamondSuit]",
+    "\\surd"    -> "\[Sqrt]",          "\\ell" -> "\[ScriptL]",
+    "\\Re"      -> "\[GothicCapitalR]", "\\Im" -> "\[GothicCapitalI]",
+    "\\wp"      -> "\[WeierstrassP]",   "\\Finv" -> "\[FinalSigma]",
+    "\\complement" -> "\[NotElement]", "\\degree" -> "\[Degree]",
+    "\\prime"   -> "\[Prime]",         "\\backslash" -> "\[Backslash]",
+    "\\lnot"    -> "\[Not]",           "\\lor" -> "\[Or]", "\\land" -> "\[And]",
+    "\\gtrsim"  -> "\[GreaterTilde]",  "\\lesssim" -> "\[LessTilde]",
+    "\\ne"      -> "\[NotEqual]",      "\\notni" -> "\[NotReverseElement]"
 |>
 
 Scan[
@@ -438,7 +565,22 @@ mathRow = ParseAction[
 
 LaTeXMathParser := ParseAction[ws ~~ mathRow, #2 &]
 
-LaTeXMathParse[source_String] := Parse[LaTeXMathParser, source]
+(* Strip the delimiter-sizing prefixes (\left \right \big \Big \bigg
+   \Bigg and the l/r/m variants) before parsing - we render the bare
+   delimiter and don't model size. The negative lookahead (?![a-zA-Z])
+   keeps `\bigcup` / `\Big...` words from being mangled. `\left.` /
+   `\right.` (the empty-delimiter forms) lose the dot too. *)
+preprocessLaTeX[s_String] :=
+    StringReplace[s, {
+        RegularExpression[
+            "\\\\(left|right|bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg)\\s*\\."
+        ] -> "",
+        RegularExpression[
+            "\\\\(left|right|bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg)(?![a-zA-Z])"
+        ] -> ""
+    }]
+
+LaTeXMathParse[source_String] := Parse[LaTeXMathParser, preprocessLaTeX[source]]
 
 
 End[]

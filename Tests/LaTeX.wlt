@@ -298,3 +298,129 @@ VerificationTest[
     True,
     TestID -> "LaTeX: full PAdic corpus parses without error"
 ]
+
+
+(* ============================================================
+   KaTeX-coverage tests (modelled on the KaTeX support table,
+   https://katex.org/docs/support_table.html). Grouped by the same
+   categories KaTeX documents: accents, fonts, fractions/binomials,
+   delimiters & sizing, operators, relations, arrows, big operators,
+   over/under decorations, modular arithmetic, and symbols.
+   ============================================================ *)
+
+(* === accents === *)
+
+VerificationTest[
+    LaTeXMathParse["\\hat{x}"],
+    OverscriptBox[StyleBox["x", "TI"], "^"],
+    TestID -> "KaTeX accents: \\hat{x}"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\vec{v}"],
+    OverscriptBox[StyleBox["v", "TI"], "\[RightVector]"],
+    TestID -> "KaTeX accents: \\vec{v}"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\overline{AB}"],
+    OverscriptBox[RowBox[{StyleBox["A", "TI"], StyleBox["B", "TI"]}], "_"],
+    TestID -> "KaTeX accents: \\overline spans its arg"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\underline{x}"],
+    UnderscriptBox[StyleBox["x", "TI"], "_"],
+    TestID -> "KaTeX accents: \\underline"
+]
+
+
+(* === fonts === *)
+
+VerificationTest[
+    LaTeXMathParse["\\mathsf{X}"],
+    StyleBox[StyleBox["X", "TI"], FontFamily -> "SansSerif"],
+    TestID -> "KaTeX fonts: \\mathsf"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\mathtt{x}"],
+    StyleBox[StyleBox["x", "TI"], FontFamily -> "Courier"],
+    TestID -> "KaTeX fonts: \\mathtt"
+]
+
+
+(* === fractions & binomials === *)
+
+VerificationTest[
+    LaTeXMathParse["\\dfrac{a}{b}"],
+    FractionBox[StyleBox["a", "TI"], StyleBox["b", "TI"]],
+    TestID -> "KaTeX fractions: \\dfrac"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\binom{n}{k}"],
+    RowBox[{"(", GridBox[{{StyleBox["n", "TI"]}, {StyleBox["k", "TI"]}}], ")"}],
+    TestID -> "KaTeX binomials: \\binom"
+]
+
+
+(* === delimiters & sizing (\left \right \big stripped) === *)
+
+VerificationTest[
+    LaTeXMathParse["\\left( x \\right)"],
+    RowBox[{"(", StyleBox["x", "TI"], ")"}],
+    TestID -> "KaTeX delimiters: \\left( ... \\right) sizing stripped"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\bigl( a \\bigr)"],
+    RowBox[{"(", StyleBox["a", "TI"], ")"}],
+    TestID -> "KaTeX delimiters: \\bigl ... \\bigr stripped"
+]
+
+VerificationTest[
+    (* \bigcup must NOT be mangled by the \big stripper *)
+    LaTeXMathParse["\\bigcup"],
+    "\[Union]",
+    TestID -> "KaTeX delimiters: \\bigcup survives the \\big stripper"
+]
+
+
+(* === modular arithmetic === *)
+
+VerificationTest[
+    LaTeXMathParse["a \\equiv b \\pmod{p}"],
+    RowBox[{
+        StyleBox["a", "TI"], "\[Congruent]", StyleBox["b", "TI"],
+        "(", StyleBox["mod", FontSlant -> "Plain"], " ", StyleBox["p", "TI"], ")"
+    }],
+    TestID -> "KaTeX modular: a \\equiv b \\pmod{p}"
+]
+
+
+(* === operators / relations / arrows / symbols parse clean === *)
+
+VerificationTest[
+    AllTrue[
+        {
+            "a \\div b", "x \\wedge y", "p \\vee q", "A \\sqsubseteq B",
+            "x \\preceq y", "a \\parallel b", "x \\perp y", "a \\asymp b",
+            "x \\prec y", "A \\supseteq B", "x \\ni y",
+            "a \\gets b", "x \\leftrightarrow y", "P \\Leftrightarrow Q",
+            "x \\longrightarrow y", "a \\hookrightarrow b",
+            "P \\implies Q", "P \\impliedby Q", "P \\iff Q",
+            "\\therefore x", "\\because y",
+            "\\bigcup_{i=1}^n A_i", "\\bigcap_i B_i", "\\bigoplus_k V_k",
+            "\\nexists x", "\\top", "\\bot", "\\angle ABC",
+            "\\ell", "\\wp", "\\hbar", "\\aleph_0",
+            "\\flat", "\\sharp", "\\clubsuit",
+            "\\mathring{a}", "\\check{x}", "\\breve{u}", "\\acute{e}", "\\grave{a}",
+            "\\widetilde{xy}", "\\overrightarrow{AB}",
+            "\\operatorname{lcm}(a, b)", "x \\simeq y", "a \\doteq b"
+        },
+        ! MatchQ[LaTeXMathParse[#], _ParseError] &
+    ],
+    True,
+    TestID -> "KaTeX coverage: operators / relations / arrows / symbols parse clean"
+]
