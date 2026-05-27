@@ -69,16 +69,19 @@ Parse[
 
 ## Properties and Relations
 
-`ParseBetween` makes recursive nested-bracket grammars natural - the inner argument can be the parser itself, via the `ParseRecursive` tie (v0.3+ - recursive ties are not implemented in v0.2). When that lands, the call shape will be:
+`ParseBetween` makes recursive nested-bracket grammars natural - the inner argument can be the parser itself, via the [ParseRecursive]() tie that defers the lookup until parse time:
 
-```
+```wl
 group = ParseBetween[
     ParseLiteral["("],
-    (ParseCharacter[LetterCharacter] | ParseRecursive["group"])...,
+    ParseMany[ParseCharacter[LetterCharacter] | ParseRecursive[group]],
     ParseLiteral[")"]
 ];
-Parse[group, "((a)(b))"]    (* => {{"a"}, {"b"}} *)
+Parse[group, "((a)(b))"]
+(* {{"a"}, {"b"}} *)
 ```
+
+The same technique drives the recursive cross-references inside `Wolfram\`Parser\`LaTeX\``'s grammar (factor refers to atom which refers to bracedArg which refers back to atom, ...).
 
 The `ParseAction[Sequence, #2 &]` derivation matches the convenience helper:
 

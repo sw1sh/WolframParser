@@ -5,8 +5,8 @@ Title: Parsing in the Wolfram Language
 Context: Wolfram`Parser`
 Paclet: Wolfram/WolframParser
 URI: Wolfram/WolframParser/guide/WolframParser
-Description: A general, fast, composable parser library for the Wolfram Language - Parse* combinators around a single ParserCombinator wrapper, GrammarRules-compatible declarative grammars, FunctionCompile-backed local execution.
-Keywords: [parser, parsing, grammar, combinator, ParserCombinator, GrammarRules, FunctionCompile, LaTeX, TPTP, DSL]
+Description: A general, fast, composable parser library for the Wolfram Language - Parse* combinators around a single ParserCombinator wrapper, GrammarRules-compatible declarative grammars, FunctionCompile-backed local execution, a working LaTeX math parser at 100% KaTeX corpus coverage.
+Keywords: [parser, parsing, grammar, combinator, ParserCombinator, GrammarRules, FunctionCompile, LaTeX, KaTeX, TPTP, DSL]
 RelatedGuides: [StringManipulation]
 Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_combinator)", "[Parsing expression grammar (Wikipedia)](https://en.wikipedia.org/wiki/Parsing_expression_grammar)"]
 ---
@@ -15,62 +15,65 @@ Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_co
 
 The Wolfram Language has rich *piecewise* support for parsing: [StringExpression]() and [RegularExpression]() for regex-style patterns, [Interpreter]() for type-driven extraction from text, [CodeParser]() for parsing Wolfram code itself, and [GrammarRules]() for higher-level rule-based grammars (cloud-only). What it does not have is a single, general, *local* parser library that lets you compose your own grammar at any scale - the niche occupied by Parsec in Haskell, nom in Rust, or pyparsing in Python.
 
-This paclet (context `Wolfram`Parser` `) fills that niche. The strategy is twofold:
+This paclet (context `Wolfram`Parser` `) fills that niche on three fronts:
 
-- **Reuse the [GrammarRules]() declarative DSL.** The same `"the weather in <city>" -> city` slot syntax that the built-in path ships to [CloudDeploy]() is compiled here to a local parser via [FunctionCompile](). Same declaration, different deployment.
-- **Expose a `Parse*` combinator core** for grammars that don't fit the declarative shape, all funneling into a single computable [ParserCombinator]() head with [UpValues]() for the natural WL operator overloads and a [SubValues]() rule that makes `parser[input]` work directly.
-
-The v0.1 release is *design + scaffold*: two tech notes carry the design, the library code lands incrementally against them.
+- **A `Parse*` combinator core** around a single computable [ParserCombinator]() head, with [UpValues]() for the natural WL operator overloads (`p1 | p2`, `p1 ~~ p2`, `p..`, `p...`, `Optional[p]`) and a [SubValues]() rule that makes `parser[input]` work directly.
+- **[GrammarRules]() declarative compatibility.** `Parse[GrammarRules[{"the weather in <city>" -> city}], "the weather in NYC"]` lowers each rule to a `ParserCombinator` and runs it locally, no [CloudDeploy](). See [Parsing GrammarRules Locally](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules) for the supported subset.
+- **A LaTeX math parser** ([`Wolfram\`Parser\`LaTeX\``](paclet:Wolfram/WolframParser/ref/LaTeXMathParse)) that parses 126/126 of [KaTeX's own screenshotter corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml) into Wolfram boxes (`FractionBox`, `SubsuperscriptBox`, `GridBox`, ...) - turn `$\frac{a}{b}$` markdown into a renderable notebook cell.
 
 ## Tech notes (read these first)
 
-- [The Parser Landscape: a survey of existing tech](paclet:Wolfram/WolframParser/tutorial/ParserLandscape) — what's already in WL and outside, where the gaps are
-- [Design and Compilation Strategy](paclet:Wolfram/WolframParser/tutorial/DesignAndCompilationStrategy) — `ParserCombinator` wrapper, `Parse*` constructors, operator UpValues, FunctionCompile lowering, worked LaTeX-math and TPTP targets
+- [The Parser Landscape: a survey of existing tech](paclet:Wolfram/WolframParser/tutorial/ParserLandscape) - what's already in WL and outside, where the gaps are
+- [Design and Compilation Strategy](paclet:Wolfram/WolframParser/tutorial/DesignAndCompilationStrategy) - `ParserCombinator` wrapper, `Parse*` constructors, operator UpValues, FunctionCompile lowering, worked LaTeX-math and TPTP targets
+- [Implementing the LaTeX Math Parser](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation) - how the doc-math layer handles real-world TeX (`\big*` stripping, `\left/\right` mismatched delim pairs, matrix env aliases, the row variants topRow / cellRow / outerRow)
+- [Parsing GrammarRules Locally](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules) - the supported subset of [GrammarRules]() and how to drop to the combinator core for the rest
 
-## Functions (intended shape)
+## Functions
 
 ### Run a parser
-- `Parse[parser, input]` apply a parser to an input (interpretive for an uncompiled `ParserCombinator`, the cached compiled function for a compiled one)
-- `parser[input]` equivalent SubValue form - the wrapper carries the rule
-- `ParserCompile[parser]` materialise the compiled form: attaches a `CompiledCodeFunction` under the `"Code"` key of the wrapper's options
+- [Parse]() apply a parser to an input - returns the parser's value or a `ParseError`
+- [ParsePartial]() return `{result, leftover-suffix}` instead of requiring whole-input match
+- `parser[input]` SubValue form, equivalent to `Parse[parser, input]`
+- [ParserCompile]() materialise the [FunctionCompile]()d form - attaches a `CompiledCodeFunction` under the `"Code"` key of the wrapper's options
 
 ### The wrapper
-- `ParserCombinator[type, args, opts]` the single computable head every constructor returns; opaque to user code, formats as a summary box, carries the operator UpValues and the call-as-function SubValue
+- [ParserCombinator]() the single computable head every constructor returns; opaque to user code, formats as a summary box, carries the operator UpValues and the call-as-function SubValue
+- [ParserCombinatorQ]() test whether an expression is a `ParserCombinator`
 
-### Parse* constructors (Anton-style naming, each returns a `ParserCombinator`)
+### Parse* constructors (each returns a `ParserCombinator`)
 
 #### Terminals
-- `ParseLiteral[s]` match an exact string / token
-- `ParseCharacter[pat]` match a single character against a character-class atom ([LetterCharacter](), [DigitCharacter](), [WordCharacter](), [WhitespaceCharacter](), ...), a [CharacterRange]()`[a, b]`, an [Alternatives]() of these, or a literal one-character [String]()
-- `ParseToken[type]` match a tagged `Token[type, _, _]`
-- `ParseSucceed[val]` always succeed with `val` (consume nothing)
-- `ParseFail[msg]` always fail with `msg`
+- [ParseLiteral]() match an exact string
+- [ParseCharacter]() match a single character against a character-class atom ([LetterCharacter](), [DigitCharacter](), [WordCharacter](), [WhitespaceCharacter](), ...), a [CharacterRange]()`[a, b]`, an [Alternatives]() of these, or a literal one-character [String]()
+- [ParseSucceed]() always succeed with the given value (consume nothing)
+- [ParseFail]() always fail with the given message
 
 #### Composition
-- `ParseSequence[p1, p2, ...]` each in order
-- `ParseChoice[p1, p2, ...]` first that matches (PEG-ordered)
-- `ParseBetween[open, p, close]` open, then p, then close; result is p's
-- `ParseSepBy[p, sep]` zero or more `p` separated by `sep`
-- `ParseSepBy1[p, sep]` one or more `p` separated by `sep`
-- `ParseChainLeft[p, op]` left-associative operator chain
-- `ParseChainRight[p, op]` right-associative operator chain
+- [ParseSequence]() each in order
+- [ParseChoice]() first that matches (PEG-ordered)
+- [ParseBetween]() open, then p, then close; result is p's
+- [ParseSepBy]() zero or more `p` separated by `sep`
+- [ParseSepBy1]() one or more `p` separated by `sep`
+- [ParseChainLeft]() left-associative operator chain
+- [ParseChainRight]() right-associative operator chain
 
 #### Repetition
-- `ParseMany[p]` zero or more
-- `ParseSome[p]` one or more
-- `ParseOptional[p]` zero or one
+- [ParseMany]() zero or more
+- [ParseSome]() one or more
+- [ParseOptional]() zero or one
 
 #### Lookahead / backtracking
-- `ParseLookahead[p]` succeed iff `p` would match, consume nothing
-- `ParseNotFollowedBy[p]` succeed iff `p` would not match, consume nothing
-- `ParseTry[p]` backtrack on failure even after consuming
+- [ParseLookahead]() succeed iff `p` would match, consume nothing
+- [ParseNotFollowedBy]() succeed iff `p` would not match, consume nothing
+- [ParseTry]() backtrack on failure even after consuming
 
-#### Capture / action
-- `ParseCapture[name, p]` tag `p`'s result with `name` (for slot lowering)
-- `ParseAction[p, f]` apply `f` to `p`'s result
+#### Action / recursion
+- [ParseAction]() apply a function to a parser's result
+- [ParseRecursive]() defer the lookup of a parser definition until parse time (the recursion knot)
 
-#### Recursion
-- `ParseRecursive[name, body]` a named recursive parser body
+### LaTeX math sub-context (`Wolfram\`Parser\`LaTeX\``)
+
+- `LaTeXMathParse[s]` parse a LaTeX math expression into a Wolfram `Box`. Returns one of `FractionBox`, `SubsuperscriptBox`, `RadicalBox`, `GridBox`, `RowBox`, `StyleBox`, ..., or `ParseError`. 100% coverage of KaTeX's inline screenshotter test corpus; see [Implementing the LaTeX Math Parser](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation).
 
 ### Operator overloads on `ParserCombinator`
 
@@ -82,8 +85,21 @@ The v0.1 release is *design + scaffold*: two tech notes carry the design, the li
 | `p...`        | `RepeatedNull[p]`               | `ParseMany`      |
 | `Optional[p]` | `Optional[p]`                   | `ParseOptional`  |
 
-The `~~` UpValue *only* fires when both sides are `ParserCombinator` instances; plain `"foo" ~~ "bar"` between strings keeps its built-in [StringExpression]() meaning. `~` is *not* overloaded - it stays as WL's infix function notation `a~f~b == f[a, b]`.
+The `~~` UpValue *only* fires when at least one side is a `ParserCombinator`; plain `"foo" ~~ "bar"` between strings keeps its built-in [StringExpression]() meaning. `~` is *not* overloaded - it stays as WL's infix function notation `a~f~b == f[a, b]`.
+
+### GrammarRules
+
+`Parse[GrammarRules[...], input]` accepts the same shape as the built-in cloud-deployed [GrammarRules]() for the *string-template* subset:
+
+```
+Parse[GrammarRules[{"the weather in <city>" -> city}], "the weather in NYC"]
+(* "NYC" *)
+
+Parse[GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}], "add 3 and 5"]
+(* 8 *)
+```
+
+Slot types supported locally: bare `<name>` (word characters), `<name:Word>`, `<name:Number>`, `<name:Integer>`. The richer cloud pattern shapes (`FixedOrder`, `AnyOrder`, `DelimitedSequence`, `GrammarToken[...]`, `CaseSensitive`, `x : form`) drop to the combinator core - see [ParsingGrammarRules](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules) for the side-by-side coverage map.
 
 ### Diagnostics
-- `ParseError` structured error with position, rule, expected tokens
-- `ExplainParseError[err]` "expected X at line L col C, saw Y" rendering
+- [ParseError]() structured error with `"Position"`, `"Expected"`, `"Found"` keys

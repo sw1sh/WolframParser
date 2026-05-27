@@ -12,7 +12,7 @@ RelatedTutorials: [DesignAndCompilationStrategy, ParserLandscape]
 
 ## What this note covers
 
-[`Wolfram\`Parser\`LaTeX\``](paclet:Wolfram/WolframParser/guide/WolframParser) is a working LaTeX math-mode parser built on top of the [ParserCombinator]() core. It parses 126 / 126 of the inline cases from KaTeX's own [screenshot test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml) - the same shapes a production JS-side math renderer is expected to handle. This note is the second half of the [`DesignAndCompilationStrategy`](paclet:Wolfram/WolframParser/tutorial/DesignAndCompilationStrategy) story: that one explained the combinator core; this one walks through what it takes to point those primitives at real-world TeX and not flinch.
+[Wolfram\`Parser\`LaTeX\`](paclet:Wolfram/WolframParser/guide/WolframParser) is a working LaTeX math-mode parser built on top of the [ParserCombinator]() core. It parses 126 / 126 of the inline cases from KaTeX's own [screenshot test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml) - the same shapes a production JS-side math renderer is expected to handle. This note is the second half of the [`DesignAndCompilationStrategy`](paclet:Wolfram/WolframParser/tutorial/DesignAndCompilationStrategy) story: that one explained the combinator core; this one walks through what it takes to point those primitives at real-world TeX and not flinch.
 
 The interesting part of writing a LaTeX parser is not the grammar - LaTeX math has no grammar in any formal sense. The interesting part is *tolerance*: real TeX users mix balanced and unbalanced constructs, single-character and multi-character delimiters, math-mode and text-mode, optional and required brace arguments, and macros that were defined in someone's `.sty` file 15 years ago and never documented. A parser that demands well-formedness rejects most of the corpus on the first line. A parser that's pure regex-fallback renders the corpus as gibberish.
 
@@ -31,7 +31,7 @@ This note has four parts:
 
 | Layer        | Purpose                                          | Defined in [Kernel/LaTeX.wl](paclet:Wolfram/WolframParser/guide/WolframParser) |
 |--------------|--------------------------------------------------|--------------------|
-| `atom`       | the smallest unit a factor can latch onto        | numbers, identifiers, commands, `(...)`, `[...]`, `|...|`, `{...}`, `\left...\right`, Unicode glyphs |
+| `atom`       | the smallest unit a factor can latch onto        | numbers, identifiers, commands, `(...)`, `[...]`, `\|...\|`, `{...}`, `\left...\right`, Unicode glyphs |
 | `factor`     | atom + a chain of `_` / `^` / `'` postfixes      | `x^2_i'` collapses into one `SubsuperscriptBox` with prime-decorated sup |
 | `factorChain`| factors joined by `*`, `/`, `\cdot`, `\times`, or juxtaposition | `2x` and `\sin x` parse the same as `2 * x` |
 | `term`       | optional leading sign + factorChain              | `-x^2` parses as a single unary-minus expression |

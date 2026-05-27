@@ -105,11 +105,14 @@ Parse[
 
 <!-- => {"foo", "foo"} -->
 
-`ParseAction` is what powers the `:>` slot bodies in a [GrammarRules]() declaration (v0.3+ - GrammarRules lowering is not yet implemented in v0.2). When that lands, the call shape will be:
+`ParseAction` is what powers the `:>` slot bodies in a [GrammarRules]() declaration. The string template `"add <a:Number> and <b:Number>"` lowers to a [ParseSequence]() of literals and slot-recognizers, all wrapped in a `ParseAction` that binds the captured slot values to `a` / `b` in the rule body:
 
+```wl
+Parse[GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}], "add 3 and 5"]
+(* 8 *)
 ```
-Parse[GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}], "add 3 and 5"]   (* => 8 *)
-```
+
+See [Parsing GrammarRules Locally](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules) for the full subset of `GrammarRules` shapes lowered to `ParserCombinator`s.
 
 ## Possible Issues
 
