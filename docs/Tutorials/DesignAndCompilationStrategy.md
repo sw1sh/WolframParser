@@ -38,13 +38,13 @@ The head is *opaque* to user code: you never write `ParserCombinator[...]` by ha
 
 **(1) Composition via UpValues.** Because every parser is a `ParserCombinator`, we can attach [UpValues]() to that head and overload the WL operators that actually parse:
 
-| WL syntax       | Lowers to                               | Combinator                |
-|-----------------|-----------------------------------------|---------------------------|
-| `p1 \| p2`      | `Alternatives[p1, p2]`                  | `ParseChoice`             |
-| `p1 ~~ p2`      | `StringExpression[p1, p2]`              | `ParseSequence`           |
-| `p..`           | `Repeated[p]`                           | `ParseSome` (one or more) |
-| `p...`          | `RepeatedNull[p]`                       | `ParseMany` (zero or more)|
-| `Optional[p]`   | `Optional[p]`                           | `ParseOptional`           |
+| WL syntax                  | Lowers to                                 | Combinator                   |
+|----------------------------|-------------------------------------------|------------------------------|
+| <code>p1 \| p2</code>      | <code>[Alternatives]()[p1, p2]</code>     | [ParseChoice]()              |
+| <code>p1 ~~ p2</code>      | <code>[StringExpression]()[p1, p2]</code> | [ParseSequence]()            |
+| <code>p..</code>           | <code>[Repeated]()[p]</code>              | [ParseSome]() (one or more)  |
+| <code>p...</code>          | <code>[RepeatedNull]()[p]</code>          | [ParseMany]() (zero or more) |
+| <code>Optional[p]</code>   | <code>[Optional]()[p]</code>              | [ParseOptional]()            |
 
 Why these and not others:
 

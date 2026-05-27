@@ -78,18 +78,18 @@ This paclet (context `Wolfram`Parser` `) fills that niche on three fronts:
 
 ### EBNF sub-context (`Wolfram\`Parser\`EBNF\``)
 
-- `EBNFParseString[source]` / `EBNFParseFile[path]` read a BNF grammar in the TPTP / Backus-Naur style (`<name> ::= alt1 | alt2 | ...`) and return an `Association[name -> ParserCombinator]`. The BNF parser itself is built out of `Parse*` combinators (no regex `StringCases`); the lowering ties non-terminal references via `ParseRecursive` symbols so mutually recursive rules wake up together. Verified against the [TPTPWorld SyntaxBNF v9.2.1.4](https://github.com/TPTPWorld/SyntaxBNF/blob/master/SyntaxBNF-v9.2.1.4) (354 rules parse). See [Parsing BNF Grammars](paclet:Wolfram/WolframParser/tutorial/ParsingBNFGrammars).
-- `EBNFRules[source]` returns the unlowered list of `EBNFRule[name, kind, body]` records for inspection.
+- `EBNFParse[source]` / `EBNFParse[File[path]]` read a BNF grammar in the TPTP / Backus-Naur style (`<name> ::= alt1 | alt2 | ...`) and return an `Association[name -> ParserCombinator]`. The BNF parser itself is built out of `Parse*` combinators (no regex [StringCases]()); the lowering ties non-terminal references via `ParseRecursive` symbols so mutually recursive rules wake up together. Verified against the [TPTPWorld SyntaxBNF v9.2.1.4](https://github.com/TPTPWorld/SyntaxBNF/blob/master/SyntaxBNF-v9.2.1.4) (354 rules parse). See [Parsing BNF Grammars](paclet:Wolfram/WolframParser/tutorial/ParsingBNFGrammars).
+- `EBNFRules[source]` / `EBNFRules[File[path]]` returns the unlowered list of `EBNFRule[name, kind, body]` records for inspection.
 
 ### Operator overloads on `ParserCombinator`
 
-| Syntax        | Lowers to                       | Combinator       |
-|---------------|---------------------------------|------------------|
-| `p1 \| p2`    | `Alternatives[p1, p2]`          | `ParseChoice`    |
-| `p1 ~~ p2`    | `StringExpression[p1, p2]`      | `ParseSequence`  |
-| `p..`         | `Repeated[p]`                   | `ParseSome`      |
-| `p...`        | `RepeatedNull[p]`               | `ParseMany`      |
-| `Optional[p]` | `Optional[p]`                   | `ParseOptional`  |
+| Syntax                          | Lowers to                                       | Combinator           |
+|---------------------------------|-------------------------------------------------|----------------------|
+| <code>p1 \| p2</code>           | <code>[Alternatives]()[p1, p2]</code>           | [ParseChoice]()      |
+| <code>p1 ~~ p2</code>           | <code>[StringExpression]()[p1, p2]</code>       | [ParseSequence]()    |
+| <code>p..</code>                | <code>[Repeated]()[p]</code>                    | [ParseSome]()        |
+| <code>p...</code>               | <code>[RepeatedNull]()[p]</code>                | [ParseMany]()        |
+| <code>Optional[p]</code>        | <code>[Optional]()[p]</code>                    | [ParseOptional]()    |
 
 The `~~` UpValue *only* fires when at least one side is a `ParserCombinator`; plain `"foo" ~~ "bar"` between strings keeps its built-in [StringExpression]() meaning. `~` is *not* overloaded - it stays as WL's infix function notation `a~f~b == f[a, b]`.
 

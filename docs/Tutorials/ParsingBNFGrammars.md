@@ -49,7 +49,7 @@ Without the `ParseNotFollowedBy[nonTerm]`, a punctuation run is greedy and would
 ```wl
 Needs["Wolfram`Parser`EBNF`"]
 
-g = EBNFParseString["
+g = EBNFParse["
     <digit>  ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
     <number> ::= <digit><digit>*
     <expr>   ::= <number> + <number>
@@ -94,7 +94,7 @@ primitiveOverrides = <|
 |>;
 
 tptpBnf  = Import["Tests/tptp-bnf.txt", "Text"];
-parsers  = EBNFParseString[tptpBnf, "PrimitiveOverrides" -> primitiveOverrides];
+parsers  = EBNFParse[tptpBnf, "PrimitiveOverrides" -> primitiveOverrides];
 
 Parse[parsers["cnf_annotated"], "cnf(test, axiom, p)."]
 (* {"cnf", "(", "test", ",", "axiom", ",", "p", Null, ")."} *)
@@ -143,7 +143,7 @@ The [TPTPImport](https://github.com/sw1sh/thvm) (a sibling project, ~1100 lines)
 What the EBNF approach gives you for free:
 
 - **The recogniser skeleton.** 354 rules, ~280 of which lower to `ParserCombinator`s without any manual work. The recogniser stops at the four points above (left recursion, dual definitions, `::-`/`:::`, semantic actions).
-- **Vendored grammar tracking.** When the upstream TPTP grammar updates (the `v9.2.1.x` version numbers in the comment header), the auto-generated parser updates with it - you re-run `EBNFParseString` on the new file and rebind the actions. The handwritten parser has to be diffed line-by-line against the new grammar.
+- **Vendored grammar tracking.** When the upstream TPTP grammar updates (the `v9.2.1.x` version numbers in the comment header), the auto-generated parser updates with it - you re-run `EBNFParse` on the new file and rebind the actions. The handwritten parser has to be diffed line-by-line against the new grammar.
 - **Single source of truth.** The grammar IS the parser definition; you can't end up with a parser that disagrees with the published grammar because they're the same file.
 
 What you still need to do by hand:
@@ -166,7 +166,7 @@ Needs["Wolfram`Parser`EBNF`"]
 
 source = "<S> ::= a <S> b | epsilon
           <epsilon> ::=";
-g = EBNFParseString[source];
+g = EBNFParse[source];
 Parse[g["S"], "aaabbb"]
 (* the classic a^n b^n grammar - parses cleanly *)
 ```

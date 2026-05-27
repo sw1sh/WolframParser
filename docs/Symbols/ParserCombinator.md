@@ -21,13 +21,13 @@ RelatedGuides: [WolframParser]
 - A `ParserCombinator` is **callable as a function** via a [SubValues]() rule: `pc[input]` is equivalent to `Parse[pc, input]`. If `"Code"` is present in `opts`, the compiled function is invoked; otherwise the *interpretive* path runs.
 - `ParserCombinator` carries [UpValues]() for the WL operators that overload to combinator composition:
 
-| WL syntax    | UpValue                      | Combinator         |
-|--------------|------------------------------|--------------------|
-| `p1 \| p2`   | [Alternatives]()             | [ParseChoice]()    |
-| `p1 ~~ p2`   | [StringExpression]()         | [ParseSequence]()  |
-| `p..`        | [Repeated]()                 | [ParseSome]()      |
-| `p...`       | [RepeatedNull]()             | [ParseMany]()      |
-| `Optional[p]`| [Optional]()                 | [ParseOptional]()  |
+| WL syntax                  | UpValue                      | Combinator         |
+|----------------------------|------------------------------|--------------------|
+| <code>p1 \| p2</code>      | [Alternatives]()             | [ParseChoice]()    |
+| <code>p1 ~~ p2</code>      | [StringExpression]()         | [ParseSequence]()  |
+| <code>p..</code>           | [Repeated]()                 | [ParseSome]()      |
+| <code>p...</code>          | [RepeatedNull]()             | [ParseMany]()      |
+| <code>Optional[p]</code>   | [Optional]()                 | [ParseOptional]()  |
 
 - `~~` is overloaded *only* when **both** sides are `ParserCombinator` instances. Plain `"foo" ~~ "bar"` between strings keeps its built-in [StringExpression]() meaning.
 - `~` is *not* overloaded - it stays as WL's infix function notation `a~f~b == f[a, b]`.

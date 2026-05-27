@@ -29,10 +29,10 @@ VerificationTest[
 ]
 
 
-(* ===== EBNFParseString: lower to Association[name -> parser] ===== *)
+(* ===== EBNFParse: lower to Association[name -> parser] ===== *)
 
 VerificationTest[
-    Module[{g = EBNFParseString["<greeting> ::= hello | bye"]},
+    Module[{g = EBNFParse["<greeting> ::= hello | bye"]},
         Parse[g["greeting"], "hello"]
     ],
     "hello",
@@ -40,7 +40,7 @@ VerificationTest[
 ]
 
 VerificationTest[
-    Module[{g = EBNFParseString["
+    Module[{g = EBNFParse["
         <digit>  ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
         <number> ::= <digit><digit>*
     "]},
@@ -51,7 +51,7 @@ VerificationTest[
 ]
 
 VerificationTest[
-    Module[{g = EBNFParseString["
+    Module[{g = EBNFParse["
         <digit>  ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
         <number> ::= <digit><digit>*
         <expr>   ::= <number> + <number>
@@ -118,7 +118,7 @@ VerificationTest[
             "hash"  -> ParseLiteral["#"],
             "dot"   -> ParseLiteral["."]
         |>;
-        parsers = EBNFParseString[bnf, "PrimitiveOverrides" -> primOverrides];
+        parsers = EBNFParse[bnf, "PrimitiveOverrides" -> primOverrides];
         (* A minimal cnf clause from a real TPTP problem: name, role,
            a single-literal formula, terminated by `).`. The output is
            the raw parse tree (no semantic actions); going further to

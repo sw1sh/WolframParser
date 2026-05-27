@@ -23,17 +23,16 @@
 
 BeginPackage["Wolfram`Parser`EBNF`", {"Wolfram`Parser`"}]
 
-EBNFParseFile::usage =
-    "EBNFParseFile[path] reads a BNF grammar file and returns an " <>
-    "Association of rule names to ParserCombinators.";
-
-EBNFParseString::usage =
-    "EBNFParseString[source] reads a BNF grammar from a string.";
+EBNFParse::usage =
+    "EBNFParse[source] reads a BNF grammar from a string and returns " <>
+    "an Association of rule names to ParserCombinators. " <>
+    "EBNFParse[File[path]] reads from a file.";
 
 EBNFRules::usage =
     "EBNFRules[source] returns the list of raw EBNFRule[name, kind, " <>
     "alts] structures parsed from `source`, without lowering them to " <>
-    "ParserCombinators. Useful for inspecting the parsed grammar shape.";
+    "ParserCombinators. Useful for inspecting the parsed grammar shape. " <>
+    "EBNFRules[File[path]] reads from a file.";
 
 Begin["`Private`"]
 
@@ -208,11 +207,11 @@ lowerBody[alts_List, symMap_, overrides_] :=
 (* Parse the BNF source via the combinator grammar above and return the
    raw rule list. Useful for tests and inspection. *)
 EBNFRules[source_String] := Parse[grammarP, source]
+EBNFRules[File[path_String]] := EBNFRules[Import[path, "Text"]]
 
-Options[EBNFParseString] = {"PrimitiveOverrides" -> <||>}
-Options[EBNFParseFile]   = {"PrimitiveOverrides" -> <||>}
+Options[EBNFParse] = {"PrimitiveOverrides" -> <||>}
 
-EBNFParseString[source_String, OptionsPattern[]] :=
+EBNFParse[source_String, OptionsPattern[]] :=
     Block[{rules, gram, overrides, symMap, parsers},
         overrides = OptionValue["PrimitiveOverrides"];
         rules = EBNFRules[source];
@@ -242,8 +241,8 @@ EBNFParseString[source_String, OptionsPattern[]] :=
         parsers
     ]
 
-EBNFParseFile[path_String, opts : OptionsPattern[]] :=
-    EBNFParseString[Import[path, "Text"], opts]
+EBNFParse[File[path_String], opts : OptionsPattern[]] :=
+    EBNFParse[Import[path, "Text"], opts]
 
 
 End[]
