@@ -129,15 +129,17 @@ exprRef = ParseRecursive[expr]
    guard returns Null (consumes nothing), so the dispatch args shift to
    #2 / #3 / #4. *)
 (* commandAtom must not swallow the env-delimiter forms \begin{...},
-   \end{...}, or \cr (row break). But user macros like \endExp or
-   \crfoo are fine - the env-delimiter guard is keyed on the *exact*
-   shapes "\begin" / "\end" followed (possibly past whitespace) by
-   "{", and "\cr" followed by a non-letter. *)
+   \end{...}, the \cr row break, or the \right that closes a
+   leftRightAtom. The guard is keyed on the *exact* shapes so user
+   macros like \endExp, \crfoo, or \rightarrow are unaffected:
+   - \begin / \end: only blocked when followed (past ws) by {
+   - \cr / \right: only blocked when followed by a non-letter *)
 commandAtom = ParseAction[
     ParseNotFollowedBy[
         ParseAction[ParseLiteral["\\begin"] ~~ ws ~~ ParseLiteral["{"], Null &] |
         ParseAction[ParseLiteral["\\end"] ~~ ws ~~ ParseLiteral["{"], Null &] |
-        ParseAction[ParseLiteral["\\cr"] ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &]
+        ParseAction[ParseLiteral["\\cr"]    ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &] |
+        ParseAction[ParseLiteral["\\right"] ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &]
     ] ~~
         commandName ~~ Optional[bracketedArgRef] ~~ ParseMany[bracedArgRef] ~~ ws,
     dispatchCommand[#2, #3, #4] &
@@ -231,12 +233,30 @@ outerPuncToken = ParseAction[
     literal[")"] | literal["]"],
     #1 &
 ]
+(* matrix cells use a slightly looser row that accepts the closing
+   delimiters ) and ] as bare tokens, so `3\times)` or `[a]` typo
+   trailers don't abort the cell. The closes are kept OUT of `mathRow`
+   itself so the recursive inner row of parenAtom / bracketAtom still
+   has a ) / ] available for its literal close to consume. *)
+cellPuncToken = ParseAction[literal[")"] | literal["]"], #1 &]
+
+cellRow = ParseAction[
+    ParseSome[ParseChoice[mathToken, ParseRecursive[cellPuncToken]]],
+    If[Length[{##}] === 1, #1, RowBox[{##}]] &
+]
+
+(* cellRow is tried BEFORE the cellLeadingOp form because cellLeadingOp
+   would greedily match \le (= \leq alias) at the start of \left,
+   stealing the \left from the leftRightAtom path. Now \left(...)
+   reaches leftRightAtom via cellRow's normal expr -> atom chain, and
+   the cellLeadingOp form only kicks in when a true leading operator
+   like = / \neq / + appears that cellRow's expr can't open with. *)
 matrixCell = ParseChoice[
+    ParseRecursive[cellRow],
     ParseAction[
-        cellLeadingOp ~~ Optional[ParseRecursive[mathRow]],
+        cellLeadingOp ~~ Optional[ParseRecursive[cellRow]],
         If[MissingQ[#2], #1, RowBox[{#1, #2}]] &
     ],
-    ParseRecursive[mathRow],
     ParseSucceed[""]
 ]
 matrixRow  = ParseSepBy[matrixCell, colSep]
@@ -669,6 +689,56 @@ bracketAtom = ParseAction[
     RowBox[{"[", #2, "]"}] &
 ]
 
+(* \left X content \right Y - any X, Y delimiter pair, including the
+   mismatched forms TeX permits (\left(...\right]) and the null-delim
+   form \left. and \right. (which we render as the empty string). The
+   inner content is topRow so line breaks / math toggles survive. *)
+delimMacro = ParseChoice[
+    literal["("], literal[")"], literal["["], literal["]"],
+    literal["|"], literal["<"], literal[">"], literal["."], literal["/"],
+    literal["\\{"], literal["\\}"],
+    literal["\\langle"], literal["\\rangle"],
+    literal["\\lceil"],  literal["\\rceil"],
+    literal["\\lfloor"], literal["\\rfloor"],
+    literal["\\lvert"],  literal["\\rvert"],
+    literal["\\lVert"],  literal["\\rVert"],
+    literal["\\|"], literal["\\backslash"], literal["\\uparrow"],
+    literal["\\downarrow"], literal["\\updownarrow"],
+    literal["\\Uparrow"], literal["\\Downarrow"], literal["\\Updownarrow"]
+]
+
+delimGlyph["."] = "";
+delimGlyph["\\{"] = "{";
+delimGlyph["\\}"] = "}";
+delimGlyph["\\langle"]  = "\[LeftAngleBracket]";
+delimGlyph["\\rangle"]  = "\[RightAngleBracket]";
+delimGlyph["\\lceil"]   = "\[LeftCeiling]";
+delimGlyph["\\rceil"]   = "\[RightCeiling]";
+delimGlyph["\\lfloor"]  = "\[LeftFloor]";
+delimGlyph["\\rfloor"]  = "\[RightFloor]";
+delimGlyph["\\lvert"]   = "|";
+delimGlyph["\\rvert"]   = "|";
+delimGlyph["\\lVert"]   = "\[DoubleVerticalBar]";
+delimGlyph["\\rVert"]   = "\[DoubleVerticalBar]";
+delimGlyph["\\|"]       = "\[DoubleVerticalBar]";
+delimGlyph["\\backslash"] = "\\";
+delimGlyph["\\uparrow"]     = "\[UpArrow]";
+delimGlyph["\\downarrow"]   = "\[DownArrow]";
+delimGlyph["\\updownarrow"] = "\[UpDownArrow]";
+delimGlyph["\\Uparrow"]     = "\[DoubleUpArrow]";
+delimGlyph["\\Downarrow"]   = "\[DoubleDownArrow]";
+delimGlyph["\\Updownarrow"] = "\[DoubleUpDownArrow]";
+delimGlyph[s_String] := s
+
+leftRightAtom = ParseAction[
+    ParseLiteral["\\left"] ~~ ws ~~ delimMacro ~~ ws ~~
+        ParseRecursive[topRow] ~~
+        ParseLiteral["\\right"] ~~ ws ~~ delimMacro,
+    With[{l = delimGlyph[#3], r = delimGlyph[#8]},
+        RowBox[Select[{l, #5, r}, # =!= "" &]]
+    ] &
+]
+
 (* absolute-value / norm bars: |expr| renders the bars visibly. The
    inner is the relation-free sumExpr so a stray | terminates it. *)
 absAtom = ParseAction[
@@ -677,7 +747,8 @@ absAtom = ParseAction[
 ]
 
 atom = ParseChoice[
-    numberAtom, environmentAtom, commandAtom, parenAtom, bracketAtom, absAtom,
+    numberAtom, environmentAtom, leftRightAtom, commandAtom,
+    parenAtom, bracketAtom, absAtom,
     bracedArgRef, identAtom, unicodeAtom
 ]
 
@@ -868,14 +939,21 @@ LaTeXMathParser := ParseAction[ws ~~ outerRow, #2 &]
    (?![a-zA-Z]) keeps `\bigcup` etc. from being mangled. *)
 preprocessLaTeX[s_String] :=
     StringReplace[s, {
-        RegularExpression["\\\\(left|right)\\s*\\."] -> "",
-        RegularExpression["\\\\(left|right)(?![a-zA-Z])"] -> "",
+        (* \big and friends consume their next delimiter together. These
+           are NOT guaranteed to come in matched pairs (e.g. \big( without
+           a \big) elsewhere), so stripping the macro alone leaves an
+           unbalanced delimiter behind. Dropping both keeps the input
+           parseable at the cost of losing the visual big-delim. *)
         RegularExpression[
             "\\\\(bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|.])"
         ] -> "",
         RegularExpression[
             "\\\\(bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg)(?![a-zA-Z])"
-        ] -> ""
+        ] -> "",
+        (* \middle X inside a \left...\right group: drop both, since we
+           don't model the middle delimiter visually. *)
+        RegularExpression["\\\\middle\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|.\\/])"] -> "",
+        RegularExpression["\\\\middle(?![a-zA-Z])"] -> ""
     }]
 
 LaTeXMathParse[source_String] := Parse[LaTeXMathParser, preprocessLaTeX[source]]

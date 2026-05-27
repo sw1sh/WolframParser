@@ -524,8 +524,8 @@ VerificationTest[
     },
         Count[Values[cases], _?(! MatchQ[LaTeXMathParse[#], _ParseError] &)]
     ],
-    123,
-    TestID -> "KaTeX corpus: at least 123 of the 126 inline cases parse clean"
+    126,
+    TestID -> "KaTeX corpus: all 126 inline cases parse clean"
 ]
 
 
