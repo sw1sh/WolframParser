@@ -166,9 +166,8 @@ VerificationTest[
 VerificationTest[
     LaTeXMathParse["f(x) = x^2 + 1"],
     RowBox[{
-        RowBox[{StyleBox["f", "TI"], RowBox[{"(", StyleBox["x", "TI"], ")"}]}],
-        "=",
-        RowBox[{SuperscriptBox[StyleBox["x", "TI"], "2"], "+", "1"}]
+        StyleBox["f", "TI"], "(", StyleBox["x", "TI"], ")",
+        "=", SuperscriptBox[StyleBox["x", "TI"], "2"], "+", "1"
     }],
     TestID -> "LaTeX: f(x) = x^2 + 1"
 ]
@@ -189,4 +188,113 @@ VerificationTest[
     MatchQ[LaTeXMathParse["{unclosed"], _ParseError],
     True,
     TestID -> "LaTeX: unclosed brace returns ParseError"
+]
+
+
+(* === division === *)
+
+VerificationTest[
+    LaTeXMathParse["1/2"],
+    FractionBox["1", "2"],
+    TestID -> "LaTeX: inline division -> FractionBox"
+]
+
+VerificationTest[
+    LaTeXMathParse["1/49 = 1/7^2"],
+    RowBox[{FractionBox["1", "49"], "=", FractionBox["1", SuperscriptBox["7", "2"]]}],
+    TestID -> "LaTeX: division with relation"
+]
+
+
+(* === absolute-value / norm bars === *)
+
+VerificationTest[
+    LaTeXMathParse["|x|"],
+    RowBox[{"|", StyleBox["x", "TI"], "|"}],
+    TestID -> "LaTeX: absolute-value bars"
+]
+
+VerificationTest[
+    LaTeXMathParse["|x|_p"],
+    SubscriptBox[RowBox[{"|", StyleBox["x", "TI"], "|"}], StyleBox["p", "TI"]],
+    TestID -> "LaTeX: norm bars with subscript"
+]
+
+
+(* === unary signs === *)
+
+VerificationTest[
+    LaTeXMathParse["v(0) = +\\infty"],
+    RowBox[{StyleBox["v", "TI"], "(", "0", ")", "=", "+", "\[Infinity]"}],
+    TestID -> "LaTeX: unary + after relation"
+]
+
+
+(* === commas / colons in sequences and parens === *)
+
+VerificationTest[
+    LaTeXMathParse["(a, b, c)"],
+    RowBox[{"(", RowBox[{StyleBox["a", "TI"], "," <> "\[ThinSpace]", StyleBox["b", "TI"], "," <> "\[ThinSpace]", StyleBox["c", "TI"]}], ")"}],
+    TestID -> "LaTeX: comma-separated tuple in parens"
+]
+
+VerificationTest[
+    LaTeXMathParse["f(x, y)"],
+    RowBox[{StyleBox["f", "TI"], "(", RowBox[{StyleBox["x", "TI"], "," <> "\[ThinSpace]", StyleBox["y", "TI"]}], ")"}],
+    TestID -> "LaTeX: function of two args"
+]
+
+
+(* === named symbols / commands added in the bugfix pass === *)
+
+VerificationTest[
+    LaTeXMathParse["a \\colon b"],
+    RowBox[{StyleBox["a", "TI"], ":", StyleBox["b", "TI"]}],
+    TestID -> "LaTeX: \\colon"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\max"],
+    StyleBox["max", FontSlant -> "Plain"],
+    TestID -> "LaTeX: \\max upright operator"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\{1, 2\\}"],
+    RowBox[{RowBox[{"{", "1"}], "," <> "\[ThinSpace]", RowBox[{"2", "}"}]}],
+    TestID -> "LaTeX: escaped braces \\{ \\}"
+]
+
+VerificationTest[
+    LaTeXMathParse["a \\cdot b"],
+    RowBox[{StyleBox["a", "TI"], "\[Times]", StyleBox["b", "TI"]}],
+    TestID -> "LaTeX: \\cdot visible product"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\ldots"],
+    "\[Ellipsis]",
+    TestID -> "LaTeX: \\ldots ellipsis"
+]
+
+
+(* === the full PAdic-style corpus parses without ParseError === *)
+
+VerificationTest[
+    AllTrue[
+        {
+            "\\mathbb{Q}", "\\mathbb{R}", "|x|_p", "\\mathbb{Q}_p",
+            "v_p \\colon \\mathbb{Q}^\\times \\to \\mathbb{Z}",
+            "v_p(0) = +\\infty", "1/49 = 1/7^2",
+            "v_p(xy) = v_p(x) + v_p(y)", "|x|_p = p^{-v_p(x)}",
+            "v_p(n) = \\max\\{e \\ge 0 : p^e \\mid n\\}",
+            "\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}",
+            "\\lim_{n \\to \\infty} a_n", "f(x, y) = x^2 + y^2",
+            "|x + y|_p \\leq \\max(|x|_p, |y|_p)",
+            "\\mathbb{Q}_p \\setminus \\mathbb{Z}_p"
+        },
+        ! MatchQ[LaTeXMathParse[#], _ParseError] &
+    ],
+    True,
+    TestID -> "LaTeX: full PAdic corpus parses without error"
 ]

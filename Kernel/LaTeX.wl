@@ -77,11 +77,23 @@ identAtom = ParseAction[
 ]
 
 
-(* === command (\name, optional [bracketed] arg, any number of {braced} args) === *)
+(* === command (\name, optional [bracketed] arg, any number of {braced} args) ===
+   A command name is a backslash followed by either one-or-more letters
+   (\frac, \mathbb, \alpha, ...) OR a single non-letter character
+   (\{, \}, \,, \;, \$, \%, \&, \#, \_, the escaped punctuation /
+   spacing commands). *)
 
-commandName = ParseAction[
-    ParseLiteral["\\"] ~~ ParseSome[letter],
-    Function[{slash, name}, StringJoin[slash, Apply[StringJoin, {name}]]]
+commandName = ParseChoice[
+    ParseAction[
+        ParseLiteral["\\"] ~~ ParseSome[letter],
+        Function[{slash, name}, StringJoin[slash, Apply[StringJoin, {name}]]]
+    ],
+    ParseAction[
+        ParseLiteral["\\"] ~~ ParseCharacter[
+            "{" | "}" | "$" | "%" | "&" | "#" | "_" | "," | ";" | ":" | " " | "!"
+        ],
+        Function[{slash, c}, slash <> c]
+    ]
 ]
 
 (* recursive ties - need to look up the production at parse time *)
@@ -209,7 +221,26 @@ namedSymbolChars = <|
     "\\land"    -> "\[And]",          "\\lor"   -> "\[Or]",
     "\\neg"     -> "\[Not]",
     "\\partial" -> "\[PartialD]",     "\\nabla" -> "\[Del]",
-    "\\emptyset" -> "\[EmptySet]"
+    "\\emptyset" -> "\[EmptySet]",
+    "\\colon"   -> ":",               "\\mid"   -> "\[VerticalSeparator]",
+    "\\cong"    -> "\[TildeFullEqual]", "\\propto" -> "\[Proportional]",
+    "\\ll"      -> "\[LessLess]",      "\\gg"    -> "\[GreaterGreater]",
+    "\\setminus" -> "\[Backslash]",   "\\circ"  -> "\[SmallCircle]",
+    "\\oplus"   -> "\[CirclePlus]",   "\\otimes" -> "\[CircleTimes]",
+    "\\langle"  -> "\[LeftAngleBracket]", "\\rangle" -> "\[RightAngleBracket]",
+    "\\lfloor"  -> "\[LeftFloor]",    "\\rfloor" -> "\[RightFloor]",
+    "\\lceil"   -> "\[LeftCeiling]",  "\\rceil" -> "\[RightCeiling]",
+    "\\ldots"   -> "\[Ellipsis]",     "\\dots"  -> "\[Ellipsis]",
+    "\\cdots"   -> "\[CenterEllipsis]", "\\vdots" -> "\[VerticalEllipsis]",
+    "\\ddots"   -> "\[DescendingEllipsis]",
+    "\\aleph"   -> "\[Aleph]",        "\\hbar"  -> "\[HBar]",
+    "\\Re"      -> "\[GothicCapitalR]", "\\Im"  -> "\[GothicCapitalI]",
+    "\\{"       -> "{",               "\\}"     -> "}",
+    "\\$"       -> "$",               "\\%"     -> "%",
+    "\\&"       -> "&",               "\\#"     -> "#",
+    "\\_"       -> "_",               "\\ "     -> " ",
+    "\\quad"    -> "\[NonBreakingSpace]\[NonBreakingSpace]",
+    "\\qquad"   -> "\[NonBreakingSpace]\[NonBreakingSpace]\[NonBreakingSpace]\[NonBreakingSpace]"
 |>
 
 Scan[
@@ -250,23 +281,52 @@ Scan[
     Keys[greekChars]
 ]
 
+(* Named function operators (\sin, \log, \max, ...) render upright. *)
+functionNames = {
+    "sin", "cos", "tan", "cot", "sec", "csc",
+    "sinh", "cosh", "tanh", "arcsin", "arccos", "arctan",
+    "log", "ln", "lg", "exp",
+    "max", "min", "sup", "inf", "lim", "limsup", "liminf",
+    "det", "dim", "ker", "gcd", "lcm", "deg", "arg", "mod", "hom",
+    "Pr", "tr", "rank"
+}
+
+Scan[
+    Function[nm,
+        commandHandlers["\\" <> nm] =
+            Function[{opt, req}, StyleBox[nm, FontSlant -> "Plain"]]
+    ],
+    functionNames
+]
+
 
 (* === precedence stratification: atom < factor < term < expr === *)
 
 (* parenthesised subexpression: emits the parens as part of the box so
-   they render visually, unlike `{...}` which is structural-only. *)
+   they render visually, unlike `{...}` which is structural-only. Inner
+   is the comma-aware mathRow so `(x, y)` and `\max(a, b)` parse. *)
 parenAtom = ParseAction[
-    literal["("] ~~ ParseRecursive[expr] ~~ literal[")"],
+    literal["("] ~~ ParseRecursive[mathRow] ~~ literal[")"],
     RowBox[{"(", #2, ")"}] &
 ]
 
-atom = ParseChoice[numberAtom, commandAtom, parenAtom, bracedArgRef, identAtom]
+(* bracket subexpression: [ expr ] visible *)
+bracketAtom = ParseAction[
+    literal["["] ~~ ParseRecursive[mathRow] ~~ literal["]"],
+    RowBox[{"[", #2, "]"}] &
+]
 
-(* Unary minus is intentionally NOT in atom / factor - it would
-   greedily absorb `x + 1`'s binary `+` as a juxtaposed `+ 1` factor.
-   Instead it's hoisted to expr (next section) where it can only
-   appear at the start of a subexpression (top-level or inside a
-   brace). *)
+(* absolute-value / norm bars: |expr| renders the bars visibly. The
+   inner is the relation-free sumExpr so a stray | terminates it. *)
+absAtom = ParseAction[
+    literal["|"] ~~ ParseRecursive[sumExpr] ~~ literal["|"],
+    RowBox[{"|", #2, "|"}] &
+]
+
+atom = ParseChoice[
+    numberAtom, commandAtom, parenAtom, bracketAtom, absAtom,
+    bracedArgRef, identAtom
+]
 
 subscript = ParseAction[literal["_"] ~~ (bracedArgRef | atom), #2 &]
 superscript = ParseAction[literal["^"] ~~ (bracedArgRef | atom), #2 &]
@@ -283,57 +343,100 @@ factor = ParseAction[
     ]
 ]
 
-(* term is a juxtaposition of factors - the way LaTeX writes implicit
-   multiplication (`2x`, `\sum x_i`, `\sin x`, `\frac{a}{b}c`) - emitted
-   as a RowBox with no inter-element operator. Explicit `\cdot` /
-   `\times` produce a visible product symbol; explicit `/` produces a
-   FractionBox of the two adjacent factors. *)
+(* rowJoin: concatenate two boxes into a single flat RowBox, splicing
+   any existing RowBox operands so chains stay flat
+   (`RowBox[{a, b, c}]`, not nested pairs). *)
+rowParts[RowBox[l_List]] := l
+rowParts[x_] := {x}
+rowJoin[a_, b_] := RowBox[Join[rowParts[a], rowParts[b]]]
+rowJoin[a_, mid_, b_] := RowBox[Join[rowParts[a], {mid}, rowParts[b]]]
 
-mulSep = ParseAction[
-    literal["\\cdot"] | literal["\\times"],
-    Function[op, "\[Times]"]
+(* mulOp joins adjacent factors. PEG-ordered: explicit `/` builds a
+   FractionBox, explicit `*` / `\cdot` / `\times` a visible product,
+   and (the final fallback) ParseSucceed gives juxtaposition - LaTeX's
+   implicit multiplication (`2x`, `\sum x_i`, `\sin x`). *)
+mulOp = ParseChoice[
+    ParseAction[literal["/"], Function[op, Function[{a, b}, FractionBox[a, b]]]],
+    ParseAction[
+        literal["*"] | literal["\\cdot"] | literal["\\times"],
+        Function[op, Function[{a, b}, rowJoin[a, "\[Times]", b]]]
+    ],
+    ParseAction[ParseSucceed[Null], Function[op, Function[{a, b}, rowJoin[a, b]]]]
 ]
 
+factorChain = ParseChainLeft[factor, mulOp]
+
+(* term: an optional leading unary +/- on the factor chain. The sign
+   lives here (not at the atom level) so binary +/- between terms is
+   consumed by addOp first; the unary form only fires when a term
+   starts fresh (top-level, after a relation, after `(`, etc.). *)
 term = ParseAction[
-    ParseSome[factor],
-    If[Length[{##}] === 1, #1, RowBox[{##}]] &
+    Optional[literal["+"] | literal["-"]] ~~ factorChain,
+    Function[{sign, body}, If[MissingQ[sign], body, rowJoin[sign, body]]]
 ]
 
 addOp = ParseAction[
     literal["+"] | literal["-"],
-    Function[op, Function[{a, b}, RowBox[{a, op, b}]]]
+    Function[op, Function[{a, b}, rowJoin[a, op, b]]]
 ]
 
 sumExpr = ParseChainLeft[term, addOp]
 
-(* relation: zero-or-one =, !=, <, >, <=, >= chains, lowest precedence. *)
+(* relation: =, !=, <, >, <=, >=, etc., lowest precedence. *)
 relOp = ParseAction[
-    literal["="] | literal["\\neq"] | literal["<"] | literal[">"] |
-        literal["\\leq"] | literal["\\geq"] | literal["\\le"] | literal["\\ge"],
+    literal["="] | literal["\\neq"] | literal["\\equiv"] |
+        literal["<"] | literal[">"] |
+        literal["\\leq"] | literal["\\geq"] | literal["\\le"] | literal["\\ge"] |
+        literal["\\subset"] | literal["\\subseteq"] |
+        literal["\\supset"] | literal["\\supseteq"] |
+        literal["\\in"] | literal["\\notin"] |
+        literal["\\to"] | literal["\\mapsto"] | literal["\\sim"] | literal["\\approx"] |
+        literal["\\mid"],
     Function[op, Function[{a, b},
-        RowBox[{a, Switch[op,
+        rowJoin[a, Switch[op,
             "\\neq", "\[NotEqual]",
+            "\\equiv", "\[Congruent]",
             "\\leq" | "\\le", "\[LessEqual]",
             "\\geq" | "\\ge", "\[GreaterEqual]",
+            "\\subset", "\[Subset]",
+            "\\subseteq", "\[SubsetEqual]",
+            "\\supset", "\[Superset]",
+            "\\supseteq", "\[SupersetEqual]",
+            "\\in", "\[Element]",
+            "\\notin", "\[NotElement]",
+            "\\to", "\[Rule]",
+            "\\mapsto", "\[Function]",
+            "\\sim", "\[Tilde]",
+            "\\approx", "\[TildeTilde]",
+            "\\mid", "\[VerticalSeparator]",
             _, op
-        ], b}]
+        ], b]
     ]]
 ]
 
-relExpr = ParseChainLeft[sumExpr, relOp]
+expr = ParseChainLeft[sumExpr, relOp]
 
-(* expr: allow an optional leading unary minus at the very start of a
-   subexpression. Recursive calls (parens, braces) re-enter expr and
-   so admit the same form. *)
-expr = ParseAction[
-    Optional[literal["-"]] ~~ relExpr,
-    Function[{sign, body}, If[MissingQ[sign], body, RowBox[{"-", body}]]]
+(* mathRow: a top-level sequence of expr's separated by literal
+   punctuation (`,` `:` `;`) - the separators that appear in sets,
+   tuples, "such that" clauses, and function-argument lists but carry
+   no algebraic precedence. Each renders inline (comma / semicolon get
+   a trailing thin space for readability). *)
+mathToken = ParseChoice[
+    expr,
+    ParseAction[literal[","], "," <> "\[ThinSpace]" &],
+    ParseAction[literal[";"], "; " &],
+    ParseAction[literal[":"], " : " &]
+]
+
+mathRow = ParseAction[
+    ParseSome[mathToken],
+    If[Length[{##}] === 1, #1, RowBox[{##}]] &
 ]
 
 
 (* === top-level entry === *)
 
-LaTeXMathParser := ParseAction[ws ~~ expr, #2 &]
+LaTeXMathParser := ParseAction[ws ~~ mathRow, #2 &]
 
 LaTeXMathParse[source_String] := Parse[LaTeXMathParser, source]
 
