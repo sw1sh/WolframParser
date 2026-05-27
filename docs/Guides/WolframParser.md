@@ -27,6 +27,7 @@ This paclet (context `Wolfram`Parser` `) fills that niche on three fronts:
 - [Design and Compilation Strategy](paclet:Wolfram/WolframParser/tutorial/DesignAndCompilationStrategy) - `ParserCombinator` wrapper, `Parse*` constructors, operator UpValues, FunctionCompile lowering, worked LaTeX-math and TPTP targets
 - [Implementing the LaTeX Math Parser](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation) - how the doc-math layer handles real-world TeX (`\big*` stripping, `\left/\right` mismatched delim pairs, matrix env aliases, the row variants topRow / cellRow / outerRow)
 - [Parsing GrammarRules Locally](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules) - the supported subset of [GrammarRules]() and how to drop to the combinator core for the rest
+- [Parsing BNF Grammars](paclet:Wolfram/WolframParser/tutorial/ParsingBNFGrammars) - the `Wolfram\`Parser\`EBNF\`` sub-context reads a BNF grammar (verified on the 354-rule TPTP SyntaxBNF) and lowers it to a `ParserCombinator` map; bootstraps a TPTP recognizer from the published grammar
 
 ## Functions
 
@@ -74,6 +75,11 @@ This paclet (context `Wolfram`Parser` `) fills that niche on three fronts:
 ### LaTeX math sub-context (`Wolfram\`Parser\`LaTeX\``)
 
 - `LaTeXMathParse[s]` parse a LaTeX math expression into a Wolfram `Box`. Returns one of `FractionBox`, `SubsuperscriptBox`, `RadicalBox`, `GridBox`, `RowBox`, `StyleBox`, ..., or `ParseError`. 100% coverage of KaTeX's inline screenshotter test corpus; see [Implementing the LaTeX Math Parser](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation).
+
+### EBNF sub-context (`Wolfram\`Parser\`EBNF\``)
+
+- `EBNFParseString[source]` / `EBNFParseFile[path]` read a BNF grammar in the TPTP / Backus-Naur style (`<name> ::= alt1 | alt2 | ...`) and return an `Association[name -> ParserCombinator]`. The BNF parser itself is built out of `Parse*` combinators (no regex `StringCases`); the lowering ties non-terminal references via `ParseRecursive` symbols so mutually recursive rules wake up together. Verified against the [TPTPWorld SyntaxBNF v9.2.1.4](https://github.com/TPTPWorld/SyntaxBNF/blob/master/SyntaxBNF-v9.2.1.4) (354 rules parse). See [Parsing BNF Grammars](paclet:Wolfram/WolframParser/tutorial/ParsingBNFGrammars).
+- `EBNFRules[source]` returns the unlowered list of `EBNFRule[name, kind, body]` records for inspection.
 
 ### Operator overloads on `ParserCombinator`
 

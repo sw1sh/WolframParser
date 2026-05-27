@@ -214,7 +214,7 @@ The cell `\left(,\right)` works for a different reason: `leftRightAtom` matches 
 
 ```
 unicodeReservedQ = MemberQ[{" ", "\\", "{", "}", ..., "?", "!", ...}, #] &
-unicodeAtom = token[ParseCharacter[_?(! unicodeReservedQ[#] &)]]
+unicodeAtom = token[ParseCharacter[_ ? (! unicodeReservedQ[#] &)]]
 ```
 
 It matches any single character that *isn't* one of the reserved punctuation characters - so Unicode math symbols, Asian script (`\[Korean]`, `\[Japanese]`), and accented letters that miss `LetterCharacter`'s definition all parse.
@@ -228,7 +228,7 @@ The benchmark assertion in [`Tests/LaTeX.wlt`](paclet:Wolfram/WolframParser/tuto
 ```
 VerificationTest[
     With[{cases = Association @ Import[FileNameJoin[{DirectoryName[$TestFileName], "katex-cases.json"}]]},
-        Count[Values[cases], _?(! MatchQ[LaTeXMathParse[#], _ParseError] &)]
+        Count[Values[cases], _ ? (! MatchQ[LaTeXMathParse[#], _ParseError] &)]
     ],
     126,
     TestID -> "KaTeX corpus: all 126 inline cases parse clean"

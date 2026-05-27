@@ -52,6 +52,16 @@ PacletObject[<|
             }
         },
         {
+            "Kernel",
+            "Root" -> "Kernel",
+            "Context" -> "Wolfram`Parser`EBNF`",
+            "Symbols" -> {
+                "Wolfram`Parser`EBNF`EBNFParseFile",
+                "Wolfram`Parser`EBNF`EBNFParseString",
+                "Wolfram`Parser`EBNF`EBNFRules"
+            }
+        },
+        {
             "Documentation",
             "Language" -> "English"
         }

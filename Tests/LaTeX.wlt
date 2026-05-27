@@ -522,7 +522,7 @@ VerificationTest[
             FileNameJoin[{DirectoryName[$TestFileName], "katex-cases.json"}]
         ]
     },
-        Count[Values[cases], _?(! MatchQ[LaTeXMathParse[#], _ParseError] &)]
+        Count[Values[cases], _ ? (! MatchQ[LaTeXMathParse[#], _ParseError] &)]
     ],
     126,
     TestID -> "KaTeX corpus: all 126 inline cases parse clean"

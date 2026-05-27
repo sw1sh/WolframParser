@@ -92,7 +92,7 @@ unicodeReservedQ = MemberQ[{
 }, #] &
 
 unicodeAtom = ParseAction[
-    token[ParseCharacter[_?(! unicodeReservedQ[#] &)]],
+    token[ParseCharacter[_ ? (! unicodeReservedQ[#] &)]],
     StyleBox[#, "TI"] &
 ]
 

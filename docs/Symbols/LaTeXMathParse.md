@@ -142,7 +142,7 @@ End-to-end: count how many of KaTeX's own test cases parse cleanly:
 cases = Association @ Import[
     FileNameJoin[{PacletObject["Wolfram/WolframParser"]["Location"], "Tests", "katex-cases.json"}]
 ];
-Count[Values[cases], _?(! MatchQ[LaTeXMathParse[#], _ParseError] &)]
+Count[Values[cases], _ ? (! MatchQ[LaTeXMathParse[#], _ParseError] &)]
 ```
 
 <!-- => 126  (out of 126 total) -->
