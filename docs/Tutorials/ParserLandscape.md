@@ -27,9 +27,9 @@ Each section says what the tool does well, where it stops, and how `WolframParse
 
 ## Part 1 - Wolfram built-ins
 
-### `StringExpression` / `StringPattern`
+### `StringExpression` and the string-pattern atoms
 
-The native pattern language for strings. Composable in the sense that you can `~~` two patterns together, name parts, and use named character classes - `LetterCharacter`, `DigitCharacter`, `WhitespaceCharacter`, `WordBoundary`, etc. It plugs directly into [StringCases](), [StringSplit](), [StringReplace](), [StringMatchQ]() and the rest of the string toolkit.
+The native pattern language for strings - `StringExpression` plus the character-class atoms ([LetterCharacter](), [DigitCharacter](), [WhitespaceCharacter](), [WordCharacter](), [HexadecimalCharacter](), [PunctuationCharacter](), [CharacterRange]()) that slot into it. Composable in the sense that you can `~~` two patterns together, name parts, and use named character classes - `LetterCharacter`, `DigitCharacter`, `WhitespaceCharacter`, `WordBoundary`, etc. It plugs directly into [StringCases](), [StringSplit](), [StringReplace](), [StringMatchQ]() and the rest of the string toolkit.
 
 ```wl
 StringCases["v3.14 v2.71", "v" ~~ x : NumberString :> x]

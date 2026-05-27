@@ -87,7 +87,7 @@ Following the [`AntonAntonov/FunctionalParsers`](paclet:AntonAntonov/FunctionalP
 | Constructor                            | Returns `ParserCombinator[...]` of type | What it matches                                  |
 |----------------------------------------|------------------------------------------|--------------------------------------------------|
 | `ParseLiteral[s]`                      | `Literal`                                | the exact string / token `s`                     |
-| `ParseCharacter[pat]`                  | `Character`                              | a single character matching `pat` ([CharacterClass]() or [StringPattern]()) |
+| `ParseCharacter[pat]`                  | `Character`                              | a single character matching `pat` ([LetterCharacter](), [DigitCharacter](), [CharacterRange]()`[a, b]`, an `Alternatives` of these, or a literal 1-char string) |
 | `ParseToken[type]`                     | `Token`                                  | a tagged `Token[type, _, _]`                     |
 | `ParseSucceed[val]`                    | `Succeed`                                | always succeed with `val` (no input consumed)    |
 | `ParseFail[msg]`                       | `Fail`                                   | always fail with `msg`                           |

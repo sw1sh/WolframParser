@@ -1,0 +1,132 @@
+---
+Template: Symbol
+Name: Parse
+Context: Wolfram`Parser`
+Paclet: Wolfram/WolframParser
+URI: Wolfram/WolframParser/ref/Parse
+Keywords: [parser, parse, run, entry point]
+SeeAlso: [ParserCompile, ParserCombinator, ParsePartial, ParseError, Interpreter]
+RelatedGuides: [WolframParser]
+---
+
+## Usage
+
+<code>[Parse]()[$parser$, $input$]</code> runs a $parser$ (a [ParserCombinator]() or a [GrammarRules]() declaration) against an $input$ (a [String](), a [List]() of tokens, or a [List]() of Wolfram expressions). Returns the parse result on success, or a [ParseError]() object on failure.
+
+## Details & Options
+
+- `Parse` requires the parser to consume the *entire* input. To accept a partial parse and get back the leftover, use [ParsePartial]().
+- A `GrammarRules` declaration is lowered to a `ParserCombinator` (and JIT-compiled the first time it is seen) before being run; the lowering result is cached so a second `Parse[grammar, ...]` call against the same grammar reuses the work.
+- On success the return value is the structured result the combinator built - usually a string, a list of children, or an action's return value.
+- On failure the return value is a `ParseError[<|"Position" -> _, "Expected" -> _, "Found" -> _, ...|>]` association carrying the position of the furthest-advanced failure, the set of expected tokens at that position, and what was found instead.
+- `Parse` is a wrapper over `ParserCompile[parser][input]`; it exists as a single ergonomic entry point so users don't have to compile-then-apply explicitly.
+
+## Basic Examples
+
+A literal parser matches when the input is exactly the literal:
+
+```wl
+Parse[ParseLiteral["foo"], "foo"]
+```
+
+<!-- => "foo" -->
+
+A digit parser:
+
+```wl
+Parse[ParseCharacter[DigitCharacter], "5"]
+```
+
+<!-- => "5" -->
+
+A sequence built with the `**` operator:
+
+```wl
+Parse[ParseLiteral["foo"] ** ParseLiteral["bar"], "foobar"]
+```
+
+<!-- => {"foo", "bar"} -->
+
+## Scope
+
+Choice with the `|` operator - PEG-ordered, first match wins:
+
+```wl
+Parse[ParseLiteral["foo"] | ParseLiteral["bar"], "bar"]
+```
+
+<!-- => "bar" -->
+
+A repetition - one-or-more digits:
+
+```wl
+Parse[ParseCharacter[DigitCharacter].., "123"]
+```
+
+<!-- => {"1", "2", "3"} -->
+
+## Properties and Relations
+
+A `GrammarRules` declaration is accepted directly (and lowered + compiled internally):
+
+```wl
+Parse[
+    GrammarRules[{"the weather in <city>" -> city}],
+    "the weather in NYC"
+]
+```
+
+<!-- => "NYC" -->
+
+`Parse` requires the *whole* input to be consumed. A partial match is an error:
+
+```wl
+Parse[ParseLiteral["foo"], "foobar"]
+```
+
+<!-- => ParseError[<|"Position" -> 4, "Expected" -> "<end of input>", "Found" -> "b", "Rule" -> Literal["foo"]|>] -->
+
+[ParsePartial]() relaxes this and returns the leftover:
+
+```wl
+ParsePartial[ParseLiteral["foo"], "foobar"]
+```
+
+<!-- => {"foo", "bar"} -->
+
+## Possible Issues
+
+A complete-input mismatch returns a `ParseError` rather than throwing - the error is a value, easy to pattern-match on:
+
+```wl
+Parse[ParseLiteral["foo"], "xyz"]
+```
+
+<!-- => ParseError[<|"Position" -> 1, "Expected" -> "foo", "Found" -> "x", "Rule" -> Literal["foo"]|>] -->
+
+Use [MatchQ]() to branch on success vs failure:
+
+```wl
+res = Parse[ParseLiteral["foo"], "xyz"];
+If[MatchQ[res, _ParseError], "failed: " <> res["Found"], "ok: " <> res]
+```
+
+<!-- => "failed: x" -->
+
+## Neat Examples
+
+A floating-point parser, end-to-end:
+
+```wl
+Parse[
+    ParseAction[
+        ParseCharacter[DigitCharacter].. ** Optional[
+            ParseLiteral["."] ** ParseCharacter[DigitCharacter]..
+        ],
+        ToExpression @ StringJoin @ Flatten[{##}] &
+    ],
+    "3.14"
+]
+```
+
+<!-- => 3.14 -->

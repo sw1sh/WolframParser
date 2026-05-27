@@ -40,7 +40,7 @@ The v0.1 release is *design + scaffold*: two tech notes carry the design, the li
 
 **Terminals**
 - `ParseLiteral[s]` match an exact string / token
-- `ParseCharacter[pat]` match a single character against a [CharacterClass]() / [StringPattern]()
+- `ParseCharacter[pat]` match a single character against a character-class atom ([LetterCharacter](), [DigitCharacter](), [WordCharacter](), [WhitespaceCharacter](), ...), a [CharacterRange]()`[a, b]`, an [Alternatives]() of these, or a literal one-character [String]()
 - `ParseToken[type]` match a tagged `Token[type, _, _]`
 - `ParseSucceed[val]` always succeed with `val` (consume nothing)
 - `ParseFail[msg]` always fail with `msg`
