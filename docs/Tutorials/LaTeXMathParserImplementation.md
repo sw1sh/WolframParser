@@ -270,6 +270,6 @@ For a macro that takes a non-brace single-token argument (like `\big`, `\not`), 
 
 ## What this parser is for
 
-`LaTeXMathParse[s]` returns Wolfram boxes - `FractionBox`, `SubsuperscriptBox`, `RadicalBox`, `GridBox`, `RowBox`, `StyleBox`. These slot directly into a notebook cell or `DisplayForm[...]` for rendering. The downstream `MarkdownToNotebook` workflow routes `$...$` and `$$...$$` math through this parser when it's available, so a markdown source with KaTeX-flavored math compiles to a notebook with proper typeset math - the same path the v0.2 [PAdic](https://resources.wolframcloud.com/PacletRepository/resources/Wolfram/PAdic/) docs use.
+`LaTeXMathParse[s]` returns Wolfram boxes - `FractionBox`, `SubsuperscriptBox`, `RadicalBox`, `GridBox`, `RowBox`, `StyleBox`. These slot directly into a notebook cell, or wrap with [DisplayForm](paclet:ref/DisplayForm) / [RawBoxes](paclet:ref/RawBoxes) for kernel-side rendering. Any pipeline that has a way to take inline LaTeX strings out of a document and put boxes back in - a notebook authoring tool, a chat-app math renderer, a static-site generator - can use this parser as the `LaTeX -> WL boxes` leg.
 
 The next thing to add is the same treatment for *display-mode* features that aren't in the inline corpus: numbered equations with `\label` / `\ref`, multi-line aligned proofs, the `\boxed`-as-result-frame convention. The infrastructure is in place; what's left is the macro dictionary.
