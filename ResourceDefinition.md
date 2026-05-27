@@ -52,15 +52,17 @@ LaTeXMathParse["\\frac{x^2}{y^2} = z^2"]
 
 ## Hero Image
 
-`LaTeXMathParse` turns a math-mode LaTeX string into a tree of Wolfram boxes
-that renders verbatim in a notebook - the same `FractionBox` / `SubsuperscriptBox` /
-`StyleBox` shape the front end uses internally. Here it is on the Basel identity:
+The parser in action: a raw LaTeX source string on the left, the tree of
+Wolfram boxes `LaTeXMathParse` produces on the right (rendered by the
+front end as typeset math). The arrow is the parser.
 
 ```wl
-Rasterize[
-    Cell[BoxData @ LaTeXMathParse["\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}"],
-        "Text", FontSize -> 36],
-    ImageResolution -> 144
+With[{src = "\\sum_{n=1}^{\\infty} \\frac{1}{n^2}"},
+    Row[{
+        Style[src, "Input", FontSize -> 22],
+        Style["  \[LongRightArrow]  ", FontSize -> 28, GrayLevel[0.5]],
+        Style[DisplayForm @ LaTeXMathParse[src], FontSize -> 36]
+    }]
 ]
 ```
 
