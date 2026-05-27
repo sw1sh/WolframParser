@@ -89,17 +89,27 @@ The `~~` UpValue *only* fires when at least one side is a `ParserCombinator`; pl
 
 ### GrammarRules
 
-`Parse[GrammarRules[...], input]` accepts the same shape as the built-in cloud-deployed [GrammarRules]() for the *string-template* subset:
+`Parse[GrammarRules[...], input]` accepts two surface shapes for the rule LHS, lowered on the same code path:
 
 ```
+(* string-template form - the Interpreter / FormFunction style *)
 Parse[GrammarRules[{"the weather in <city>" -> city}], "the weather in NYC"]
 (* "NYC" *)
 
 Parse[GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}], "add 3 and 5"]
 (* 8 *)
+
+(* pattern form - the same shape the built-in cloud-deployed GrammarRules takes *)
+Parse[
+    GrammarRules[{
+        FixedOrder["add", a : GrammarToken["Number"], "and", b : GrammarToken["Number"]] :> a + b
+    }],
+    "add 3 and 5"
+]
+(* 8 *)
 ```
 
-Slot types supported locally: bare `<name>` (word characters), `<name:Word>`, `<name:Number>`, `<name:Integer>`. The richer cloud pattern shapes (`FixedOrder`, `AnyOrder`, `DelimitedSequence`, `GrammarToken[...]`, `CaseSensitive`, `x : form`) drop to the combinator core - see [ParsingGrammarRules](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules) for the side-by-side coverage map.
+Pattern nodes lowered: `"string"`, `form1 | form2`, `FixedOrder`, `OptionalElement`, `form..` / `form...`, `DelimitedSequence`, `CaseSensitive`, `GrammarToken["Number" | "Integer" | "Word"]`, and the `Pattern[name, form]` capture form (`x : form`). What's still cloud-only: semantic `GrammarToken` types (`"City"`, `"Color"`, `"SemanticNumber"`, ...) that need [Interpreter](paclet:ref/Interpreter), `AnyOrder`, `RegularExpression`, subsidiary domain defs in `GrammarRules[rules, defs]`, and the `AllowLooseGrammar` / `IgnoreCase` / `IgnoreDiacritics` options. See [ParsingGrammarRules](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules) for the full coverage map and workarounds.
 
 ### Diagnostics
 - [ParseError]() structured error with `"Position"`, `"Expected"`, `"Found"` keys

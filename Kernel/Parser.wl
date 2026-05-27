@@ -672,7 +672,7 @@ slotParser["Integer"] := slotParser["Number"]
 
 slotParser[other_] :=
     ParseFail[
-        "Slot type " <> ToString[other, InputForm] <> " not supported in v0.2.5 (only Word, Number / Integer, and the default any-word slot)"
+        "Slot type " <> ToString[other, InputForm] <> " not supported"
     ]
 
 (* Build the binding { slotName -> value, ... } and substitute into the
@@ -682,6 +682,129 @@ evalBoundBody[HoldComplete[body_], slotNames_List, values_List] :=
     ReleaseHold[
         HoldComplete[body] /. Thread[
             (Symbol /@ slotNames) -> values
+        ]
+    ]
+
+
+(* === GrammarRules: lowering the *pattern* form ===
+   Templates ("the weather in <city>") are handled above. This branch
+   handles the richer pattern shapes that real GrammarRules expressions
+   carry: FixedOrder, AnyOrder, OptionalElement, DelimitedSequence,
+   Repeated (form..), Alternatives (form1 | form2), CaseSensitive,
+   GrammarToken["Name"], and the Pattern[name, form] capture form
+   (`x : form` syntactic sugar).
+
+   The internal contract: every parser returned by lowerPat emits a
+   2-list `{value, bindings}`. `value` is the matched value for the
+   parent context to use; `bindings` is an Association of all captured
+   {slotName -> capturedValue} that bubble up from Pattern[] inside.
+   The top-level rule lowering reads the final bindings and substitutes
+   the names into the rule body via the same evalBoundBody machinery
+   the template path uses. *)
+
+grammarWs := ParseMany[ParseCharacter[WhitespaceCharacter]]
+
+lowerPat[s_String] := ParseAction[ParseLiteral[s], {#, <||>} &]
+
+(* Verbatim[Pattern] is needed because Pattern[name_, form_] would
+   itself be parsed AS a pattern (head Pattern in a pattern context
+   names a sub-pattern). Verbatim pins it to the literal head. *)
+lowerPat[Verbatim[Pattern][name_, form_]] :=
+    With[{nm = SymbolName[Unevaluated[name]], inner = lowerPat[form]},
+        ParseAction[
+            inner,
+            Function[{v, b}, {v, Join[b, <|nm -> v|>]}]
+        ]
+    ]
+
+lowerPat[FixedOrder[fs__]] :=
+    With[{lowered = lowerPat /@ {fs}},
+        ParseAction[
+            ParseSequence @@ Riffle[lowered, grammarWs],
+            (* args are {v1,b1}, ws1, {v2,b2}, ws2, ..., {vn,bn}; the
+               odd indices are the elements, the evens are whitespace *)
+            Function[Block[{parts = {##}[[Range[1, Length[{##}], 2]]]},
+                {parts[[All, 1]], Join @@ parts[[All, 2]]}
+            ]]
+        ]
+    ]
+
+(* Verbatim[Alternatives] - bare Alternatives in pattern position means
+   pattern-OR, which would swallow every call. Pin it to the literal. *)
+lowerPat[Verbatim[Alternatives][fs__]] :=
+    ParseChoice @@ (lowerPat /@ {fs})
+
+lowerPat[OptionalElement[form_, default_]] :=
+    ParseChoice[
+        lowerPat[form],
+        ParseAction[ParseSucceed[Null], {default, <||>} &]
+    ]
+
+lowerPat[OptionalElement[form_]] :=
+    ParseChoice[
+        lowerPat[form],
+        ParseAction[ParseSucceed[Null], {Missing["NoMatch"], <||>} &]
+    ]
+
+(* Verbatim[Repeated] / Verbatim[RepeatedNull] - Repeated[form] is the
+   "form.." pattern in WL, similar pinning needed. *)
+lowerPat[Verbatim[Repeated][form_]] :=
+    ParseAction[
+        ParseSome[lowerPat[form]],
+        Function[{{##}[[All, 1]], Join @@ {##}[[All, 2]]}]
+    ]
+
+lowerPat[Verbatim[RepeatedNull][form_]] :=
+    ParseAction[
+        ParseMany[lowerPat[form]],
+        Function[
+            If[ Length[{##}] === 0,
+                {{}, <||>},
+                {{##}[[All, 1]], Join @@ {##}[[All, 2]]}
+            ]
+        ]
+    ]
+
+(* DelimitedSequence[form, sep] - one or more `form`s with `sep`
+   between. Sep can be a literal string or an Alternatives of strings,
+   so lower it the same way and discard its {v, b} pair. *)
+lowerPat[DelimitedSequence[form_, sep_]] :=
+    ParseAction[
+        ParseSepBy1[lowerPat[form], lowerPat[sep]],
+        Function[{{##}[[All, 1]], Join @@ {##}[[All, 2]]}]
+    ]
+
+(* CaseSensitive[form] - we don't model case insensitivity locally,
+   so this is a no-op wrapper. *)
+lowerPat[CaseSensitive[form_]] := lowerPat[form]
+
+(* GrammarToken["Name"] - look up the local slot parser. Unsupported
+   types fail through slotParser's catchall. *)
+lowerPat[GrammarToken[name_String]] :=
+    ParseAction[slotParser[name], {#, <||>} &]
+
+lowerPat[other_] :=
+    ParseFail[
+        "Pattern element not supported in local GrammarRules lowering: " <>
+            ToString[Unevaluated[other], InputForm]
+    ]
+
+(* Lower a non-template rule. Tried after the template_String branch
+   because that one is more specific. *)
+lowerGrammarRule[(Rule | RuleDelayed)[pattern_, body_]] :=
+    lowerGrammarRulePattern[pattern, HoldComplete[body]]
+
+lowerGrammarRulePattern[pattern_, held : HoldComplete[_]] :=
+    With[{p = lowerPat[pattern]},
+        ParseAction[
+            p,
+            Function[{value, bindings},
+                evalBoundBody[
+                    held,
+                    Keys[bindings],
+                    Values[bindings]
+                ]
+            ]
         ]
     ]
 

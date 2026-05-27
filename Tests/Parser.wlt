@@ -607,3 +607,94 @@ VerificationTest[
     kind -> "sushi",
     TestID -> "GrammarRules: multi-slot template"
 ]
+
+
+(* === GrammarRules: lowering the *pattern* form ===
+   The same shapes a real cloud-deployed GrammarRules takes - FixedOrder,
+   Alternatives (form1 | form2), OptionalElement, DelimitedSequence,
+   Repeated (form..), CaseSensitive, GrammarToken[...], and the
+   Pattern[name, form] capture form (`x : form`). *)
+
+VerificationTest[
+    Parse[
+        GrammarRules[{
+            FixedOrder["add",
+                a : GrammarToken["Number"], "and",
+                b : GrammarToken["Number"]
+            ] :> a + b
+        }],
+        "add 3 and 5"
+    ],
+    8,
+    TestID -> "GrammarRules pattern: FixedOrder + Pattern + GrammarToken[Number]"
+]
+
+VerificationTest[
+    Parse[
+        GrammarRules[{appl : ("stove" | "oven" | "fridge") :> appl}],
+        "fridge"
+    ],
+    "fridge",
+    TestID -> "GrammarRules pattern: Alternatives with Pattern capture"
+]
+
+VerificationTest[
+    Parse[
+        GrammarRules[{
+            FixedOrder["turn", OptionalElement["the", ""],
+                appl : ("stove" | "oven")] :> appl
+        }],
+        "turn the stove"
+    ],
+    "stove",
+    TestID -> "GrammarRules pattern: OptionalElement (present)"
+]
+
+VerificationTest[
+    Parse[
+        GrammarRules[{
+            FixedOrder["turn", OptionalElement["the", "no-the"],
+                appl : ("stove" | "oven")] :> appl
+        }],
+        "turn stove"
+    ],
+    "stove",
+    TestID -> "GrammarRules pattern: OptionalElement (absent uses default)"
+]
+
+VerificationTest[
+    Parse[
+        GrammarRules[{
+            nums : DelimitedSequence[GrammarToken["Number"], ","] :> Total[nums]
+        }],
+        "1,2,3,4"
+    ],
+    10,
+    TestID -> "GrammarRules pattern: DelimitedSequence"
+]
+
+VerificationTest[
+    Parse[
+        GrammarRules[{xs : (GrammarToken["Number"] ..) :> xs}],
+        "42"
+    ],
+    {42},
+    TestID -> "GrammarRules pattern: Repeated (form..)"
+]
+
+VerificationTest[
+    Parse[GrammarRules[{CaseSensitive["Hello"] -> "matched"}], "Hello"],
+    "matched",
+    TestID -> "GrammarRules pattern: CaseSensitive wrapper (no-op locally)"
+]
+
+VerificationTest[
+    Parse[
+        GrammarRules[{
+            FixedOrder["from", a : GrammarToken["Word"], "to", b : GrammarToken["Word"]] :> {a, b}
+        }],
+        "from foo to bar"
+    ],
+    {"foo", "bar"},
+    TestID -> "GrammarRules pattern: GrammarToken[Word] + multi-slot binding"
+]
