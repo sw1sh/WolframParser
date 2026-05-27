@@ -2,7 +2,7 @@
 Template: TechNote
 Name: ParserLandscape
 Title: The Parser Landscape - a Survey of What Exists Today
-Context: Wolfram`WolframParser`
+Context: Wolfram`Parser`
 Paclet: Wolfram/WolframParser
 URI: Wolfram/WolframParser/tutorial/ParserLandscape
 Keywords: [parser, parsing, grammar, combinator, EBNF, parsec, survey, comparison]
@@ -236,22 +236,22 @@ These are *not* in the v0.1 design scope for `WolframParser`. Combinator parsing
 
 ## The shape of WolframParser
 
-The survey above defines the niche by exclusion. Concretely, `WolframParser` aims to provide:
+The survey above defines the niche by exclusion. Concretely, the paclet aims to provide:
 
-1. **A combinator core** in the Parsec / FunctionalParsers tradition: a `Parser` is a function-like head; combinators (`Sequence`, `Choice`, `Many`, `Some`, `Optional`, `Between`, `SepBy`, `ChainLeft`, `ChainRight`) build bigger parsers from smaller ones. Operator overloads (`p1 | p2` for `Choice`, `p1 ~> p2` for `Sequence`, `p..` for `Many`, etc.) give a short-form notation that reads more like a grammar than a function pipeline.
+1. **A combinator core** in the Parsec / FunctionalParsers tradition: a `Parser` is a function-like head; combinators (`Sequence`, `Choice`, `Many`, `Some`, `Optional`, `Between`, `SepBy`, `ChainLeft`, `ChainRight`, `Lookahead`, `NotFollowedBy`) build bigger parsers from smaller ones. Operator overloads (`p1 | p2` for `Choice`, `p1 ~ p2` for `Sequence`, `p..` for `Many`, etc.) give a short-form notation that reads more like a grammar than a function pipeline.
 
-2. **A declarative `Grammar[rules]` entry point** that mirrors `GrammarRules` syntax (`"the weather in <who>" -> who`) and compiles to combinators under the hood. Same ergonomics as `GrammarRules`, no cloud round-trip.
+2. **A declarative `GrammarRules`-compatible entry point.** The same `GrammarRules[{"slot syntax" -> action}]` declaration that the built-in path ships off to [CloudDeploy]() is accepted here and compiled to a local parser via [FunctionCompile](). Anything the cloud path accepts, the local path accepts; only the deployment changes.
 
-3. **A uniform input model**: a parser runs on a string (chars as tokens), on a list of tagged tokens (`Token[type, value, pos]`), or on a list of Wolfram expressions (so the same combinators that lex a string can walk a CodeParser AST, an XML tree, or any other expression).
+3. **A uniform input model**: a parser runs on a string (chars as tokens), on a list of tagged tokens (`Token[type, value, pos]`), or on a list of Wolfram expressions (so the same combinators that lex a string can walk a [CodeParser]() AST, an XML tree, or any other expression).
 
 4. **Structured `ParseError` diagnostics**: a failure carries the position, the rule that was being matched, and the set of expected tokens. `ExplainParseError` renders it as a "expected X at line L col C, saw Y" message - the bare minimum to make a parser library usable for end users, conspicuously missing from `FunctionalParsers`.
 
-5. **A compilation path for hot loops**: simple parsers (terminals, character classes, regex-equivalent shapes) fall through to `StringExpression` under the hood; complex parsers run interpretively. This is a tractable, incremental performance story rather than a "rewrite the world in C" project.
+5. **A `FunctionCompile`-based compilation path for hot loops**: simple parsers (terminals, character classes, regex-equivalent shapes) fall through to `StringExpression` under the hood; richer grammars are lowered to a typed first-order representation and shipped through [FunctionCompile]() for LLVM codegen. No C dependency.
 
-What `WolframParser` is *not* trying to be:
+What the paclet is *not* trying to be:
 - a `CodeParser` replacement (we interoperate with it instead)
 - an ANTLR (the generator-based heavyweight school is a different ecosystem)
 - a general CFG parser (Earley / GLR / GLL backends are out of scope for v0.1)
-- a tokeniser for any specific format (those belong in companion paclets that *use* `WolframParser` to define their lexers)
+- a tokeniser for any specific format (those belong in companion paclets that *use* this library to define their lexers)
 
-The detailed API design is the subject of the next tech note. This one's job is to be honest about what already exists, so the design decisions to come can be read against the alternatives instead of in a vacuum.
+The detailed API design, the parser algebra, and the FunctionCompile lowering live in [DesignAndCompilationStrategy](paclet:Wolfram/WolframParser/tutorial/DesignAndCompilationStrategy). This note's job is to be honest about what already exists, so the design decisions there can be read against the alternatives instead of in a vacuum.

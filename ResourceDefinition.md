@@ -2,11 +2,11 @@
 Template: Paclet
 ResourceType: Paclet
 Name: Wolfram/WolframParser
-Context: Wolfram`WolframParser`
+Context: Wolfram`Parser`
 Paclet: Wolfram/WolframParser
-Description: A general, fast, composable parser library for the Wolfram Language - parser combinators, EBNF grammars, and structured ASTs, all running locally
+Description: A general, fast, composable parser library for the Wolfram Language - parser combinators, GrammarRules-compatible declarative grammars, FunctionCompile-backed local execution
 ContributedBy: Nikolay Murzin, Claude (Anthropic)
-Keywords: [parser, parsing, grammar, combinator, EBNF, parsec, AST, tokenization]
+Keywords: [parser, parsing, grammar, combinator, GrammarRules, FunctionCompile, LaTeX, TPTP, DSL]
 MainGuide: Documentation/English/Guides/WolframParser.nb
 License: MIT
 WolframVersion: 14.0+
@@ -18,13 +18,14 @@ Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_co
 
 ## Details & Options
 
-- The library combines parser combinators ([Parsec]()-style), declarative EBNF / GrammarRules-style grammars, and a token-oriented core that works on strings, lists of tokens, and lists of Wolfram expressions.
-- It runs entirely locally - in contrast to [GrammarRules](), which requires cloud deployment.
-- The kernel is dependency-free.
+- The library reuses the [GrammarRules]() declarative slot-syntax DSL, but compiles each grammar to a local parser via [FunctionCompile]() instead of round-tripping through [CloudDeploy]().
+- A Parsec-style combinator core covers grammars that don't fit the declarative shape (LaTeX math, TPTP formula bodies, custom DSLs with backtracking / lookahead).
+- Operates uniformly on strings, on lists of tagged tokens, and on lists of Wolfram expressions (so the same combinators that lex a string can walk a [CodeParser]() AST).
+- The kernel is dependency-free and has no C library; performance comes from [FunctionCompile]()'s LLVM backend.
 
 ## Usage
 
-`v0.1` ships only the survey tech note. The implementation is being filled in iteratively; see the survey for the design problem and the [Tutorials](#tutorials) for what each piece is meant to look like.
+`v0.1` ships the two design tech notes - the survey of existing tech and the design / compilation strategy - and a placeholder kernel. The implementation lands incrementally against the design.
 
 ## Author Notes
 
