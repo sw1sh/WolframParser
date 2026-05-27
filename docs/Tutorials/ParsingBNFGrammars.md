@@ -102,70 +102,101 @@ The output is the raw parse tree - a list of matched literals and sub-parser res
 
 ---
 
-## Part 3 - The PEG wall: where the bootstrap stops
+## Part 3 - PEG-vs-CFG rewrites done at lowering time
 
-The TPTP grammar is published in a form that assumes an LALR or LL parser with operator-precedence support. PEG parser combinators (which is what `Wolfram\`Parser\`` is) handle a strict subset cleanly. The categorical issues that the auto-generation cannot resolve without grammar rewrites:
+The TPTP grammar is published in a form that assumes an LALR/yacc parser with operator-precedence support. PEG parser combinators handle a strict subset of CFGs cleanly. Two categorical mismatches surface in the published BNF; the lowering rewrites both automatically.
 
-**Left recursion.** Multiple TPTP rules are left-recursive:
+**(a) Left recursion.** Eleven TPTP rules are directly left-recursive:
 
 ```
-<thf_apply_formula>   ::= <thf_unit_formula> @ <thf_unit_formula> |
+<cnf_disjunction>      ::= <cnf_literal> | <cnf_disjunction> <vline> <cnf_literal>
+<fof_or_formula>       ::= <fof_unit_formula> <vline> <fof_unit_formula> |
+                          <fof_or_formula> <vline> <fof_unit_formula>
+<thf_apply_formula>    ::= <thf_unit_formula> @ <thf_unit_formula> |
                           <thf_apply_formula> @ <thf_unit_formula>
-
-<thf_xprod_type>      ::= <thf_unitary_type> <star> <thf_unitary_type> |
-                          <thf_xprod_type> <star> <thf_unitary_type>
+...  (and 8 others: fof_and_formula, thf_or_formula, thf_and_formula,
+      thf_xprod_type, thf_union_type, tff_or_formula, tff_and_formula,
+      tff_xprod_type)
 ```
 
-A PEG parser following the literal grammar would infinite-loop on the second alternative (it tries `<thf_apply_formula>`, which immediately tries `<thf_apply_formula>`, ...). Left-recursive rules must be rewritten to right-recursive + `ParseChainLeft` before they can run on a PEG. This is a *mechanical* transformation (Paull's algorithm) but the EBNF parser doesn't apply it automatically.
-
-**Dual definitions.** Many rules have BOTH a `::=` and a `:==` definition for the same name, expressing the syntactic shape and the semantic value separately:
+A PEG parser following the literal grammar would never reach the recursive alt (the non-recursive alt always matches the prefix first and commits). The lowering applies the standard rewrite:
 
 ```
-<formula_role> ::= <lower_word> | <lower_word>-<general_term>
-<formula_role> :== axiom | hypothesis | definition | assumption | lemma |
-                   theorem | corollary | conjecture | ...
+A ::= A r1 | A r2 | ... | b1 | b2 | ...
 ```
 
-The auto-lowering keys both into a single `name -> parser` map and the second definition overwrites the first, losing the syntactic / semantic distinction the grammar deliberately encodes.
+becomes the right-recursive equivalent
 
-**`::-` / `:::` rules untouched.** These produce tokens and character classes. The auto-lowering reads them (so the EBNF parser successfully parses all 354 rules - 230 `::=`, 68 `:==`, 18 `::-`, 38 `:::`), but only the first two kinds get lowered to combinators. The `::-` / `:::` rules require either a small regex-to-`ParseCharacter` compiler or hand-defined primitives via `PrimitiveOverrides`.
+```
+A ::= b1 (r1 | r2 | ...)*  |  b2 (r1 | r2 | ...)*  |  ...
+```
 
-**Semantic actions.** What `<cnf_annotated>` parses to today is `{"cnf", "(", "name", ",", "role", ",", parsedFormula, parsedAnnotation, ")."}` - the raw token list. The handwritten parser's per-rule action turns that into `clauseToFormula[name, "cnf", "axiom", formula]` which then becomes `Or[lit1, ...]`. The lowering would need a hook for `name -> actionFn` mappings, with each `actionFn` taking the auto-generated raw tuple and emitting the WL value. Adding this is straightforward - the `ParseAction` is already the right shape - but the *content* of each action is grammar-specific.
+Implemented as `Rep["ManyAlts", recursive]` appended to each non-recursive alt. After the rewrite, `p | q | r` parses correctly as `cnf_disjunction`, `p & q & r` parses as `fof_and_formula`, etc.
+
+**(b) Left factoring via longest-alt-first sorting.** When two alts share a common prefix - the canonical example is
+
+```
+<fof_plain_term> ::= <constant> | <functor>(<fof_arguments>)
+```
+
+where both `<constant>` and `<functor>` expand to `<atomic_word>` - PEG would commit to the shorter alt (`<constant>` matches `p` in `p(a)` and never reaches the function-application form). The lowering sorts each rule's alternatives by length, longest first. The longer alt is tried first; if its longer suffix fails (e.g. no `(` after the functor), PEG backtracks to the shorter prefix-only alt. This is a heuristic approximation of true left factoring but it covers the cases TPTP needs.
+
+After both rewrites land, real TPTP inputs parse via the auto-generated parser:
+
+| Input                                                         | Result |
+|---------------------------------------------------------------|--------|
+| `cnf(test, axiom, p).`                                        | OK     |
+| `cnf(t, axiom, p \| q \| r).`                                 | OK     |
+| `cnf(t, axiom, p(a) \| ~q(b)).`                               | OK     |
+| `fof(t, axiom, p & q & r & s).`                               | OK     |
+| `fof(t, axiom, p => q).` / `p <=> q`                          | OK     |
+| `fof(t, axiom, p(a, b, c)).`                                  | OK     |
+| `fof(t, axiom, p = q).` / `p != q`                            | OK     |
+| `fof(t, axiom, ! [X] : p(X)).`                                | OK     |
+| `fof(t, axiom, ? [X] : p(X)).`                                | OK     |
+| `fof(t, axiom, ! [X, Y] : (p(X) & q(Y))).`                    | OK     |
+| 5-clause group-theory problem with quantifiers and equality   | OK     |
+| `include('Axioms/SET006-0.ax').`                              | OK     |
+
+What still doesn't lower automatically:
+
+**Dual definitions.** Many rules have BOTH a `::=` and a `:==` definition for the same name. The auto-lowering keys both into one `name -> parser` map and the second definition overwrites the first.
+
+**`::-` / `:::` rules untouched.** The lowering reads them (so all 354 rules parse), but only `::=` and `:==` get auto-lowered. The `::-` / `:::` rules need either a small regex-to-`ParseCharacter` compiler or hand-defined primitives via `PrimitiveOverrides` (the same 12-entry override map shown in Part 2).
+
+**Semantic actions.** What `<cnf_annotated>` parses to today is the raw token tree `{"cnf", "(", name, ",", role, ",", {formula, {tail-matches}}, annotations, ")."}` - the literals and the sub-parser results in BNF order, with `{}` placeholders where ParseMany produced zero matches. The handwritten [TPTPImport](https://github.com/sw1sh/thvm) lifts this to the `<|"Axioms" -> {phi1, ...}, "Conjecture" -> phi|>` shape via per-rule actions; the lowering doesn't yet take an `actionMap` option.
 
 ---
 
 ## Comparison to the handwritten TPTPImport
 
-The [TPTPImport](https://github.com/sw1sh/thvm) (a sibling project, ~1100 lines) is a complete reference implementation of the TPTP subset its author needed: cnf, fof, tff, tcf, thf, ncf clauses, the full Boolean grammar, quantifiers, sequents, includes with optional clause-name selectors, the term-level coverage (variables, distinct objects, numeric literals, single-quoted atoms), and the WL-term lifting that gives downstream consumers the right structure.
+The [TPTPImport](https://github.com/sw1sh/thvm) (a sibling project, ~1100 lines) is a complete reference implementation: cnf, fof, tff, tcf, thf, ncf clauses, the full Boolean grammar, quantifiers, sequents, includes with optional clause-name selectors, the term-level coverage (variables, distinct objects, numeric literals, single-quoted atoms), and the WL-term lifting.
 
-What the EBNF approach gives you for free:
+What the EBNF approach gives you:
 
-- **The recogniser skeleton.** 354 rules, ~280 of which lower to `ParserCombinator`s without any manual work. The recogniser stops at the four points above (left recursion, dual definitions, `::-`/`:::`, semantic actions).
-- **Vendored grammar tracking.** When the upstream TPTP grammar updates (the `v9.2.1.x` version numbers in the comment header), the auto-generated parser updates with it - you re-run `EBNFParse` on the new file and rebind the actions. The handwritten parser has to be diffed line-by-line against the new grammar.
-- **Single source of truth.** The grammar IS the parser definition; you can't end up with a parser that disagrees with the published grammar because they're the same file.
+- **The recogniser, done.** 354 rules parsed, 280 lowered, the two PEG-vs-CFG rewrites applied automatically. Real TPTP problems with quantifiers, function application, equality, and multi-term boolean connectives parse end-to-end.
+- **Vendored grammar tracking.** When the upstream TPTP grammar updates (the `v9.2.1.x` version numbers in the comment header), the auto-generated parser updates with it - re-run `EBNFParse` on the new file. The handwritten parser has to be diffed line-by-line against the new grammar.
+- **Single source of truth.** The grammar IS the parser definition; you can't end up with a parser that disagrees with the published grammar.
 
-What you still need to do by hand:
+What still has to be written by hand:
 
-- **Eliminate left recursion** in `<thf_apply_formula>`, `<thf_xprod_type>`, the relevant `<fof_*_formula>` rules - replace recursive-LHS alternatives with `ParseChainLeft` / `ParseChainRight` over the right-recursive form.
-- **Provide `::-` and `:::` primitives** for `lower_word`, `upper_word`, `integer`, `real`, `rational`, `single_quoted`, `distinct_object`, `dollar_word`, `dollar_dollar_word`, and the punctuation tokens (`vline`, `star`, etc.).
-- **Write the action map** that lifts each rule's raw parse tree to the WL value the consumer wants. For TPTP this is the `clauseToFormula` / `readTerm` / sequent-rewrite logic from the handwritten reference.
+- **`::-` and `:::` primitives** for the lexical tokens. The 12-entry `PrimitiveOverrides` map in Part 2 is a working starter set; a more complete one would cover `real`, `rational`, `dollar_dollar_word`, the spacing / punctuation tokens, and the comment / whitespace rules properly.
+- **The action map** that lifts each rule's raw parse tree to the WL value the consumer wants. For TPTP this is the `clauseToFormula` / `readTerm` / sequent-rewrite logic from the handwritten reference. The lowering's `ParseAction` is the right shape; what's missing is the `name -> actionFn` plumbing through `EBNFParse`.
 
-The endpoint is a v0.4 of `Wolfram\`Parser\`EBNF\`` that takes a BNF + an action map + an override map, applies Paull's left-recursion elimination automatically, and returns a parser whose output is the user-defined WL shape - same surface contract as `GrammarRules`, but for the formal-grammar-with-actions case instead of the natural-language-templates case. The pieces are all here; what's left is wiring them into one entry point.
+The endpoint is a v0.4 of `EBNFParse` that takes a BNF + action map + override map and returns a parser whose output is the user-defined WL shape. The hard parts (recogniser construction, left-recursion elimination, left-factoring) are done.
 
 ---
 
 ## Try it
 
-The tests in `Tests/EBNF.wlt` cover the unit cases above. The vendored grammar lives at `Tests/tptp-bnf.txt`. To experiment:
+The tests in `Tests/EBNF.wlt` cover the unit cases above plus the five-clause group-theory TPTP problem end-to-end. The vendored grammar lives at `Tests/tptp-bnf.txt`. To experiment:
 
 ```wl
 Needs["Wolfram`Parser`"]
 
-source = "<S> ::= a <S> b | epsilon
+source = "<S> ::= a <S> b | <epsilon>
           <epsilon> ::=";
 g = EBNFParse[source];
 Parse[g["S"], "aaabbb"]
 (* the classic a^n b^n grammar - parses cleanly *)
 ```
-
-For the TPTP case, the test `EBNF: minimal cnf clause parses via auto-generated TPTP parser` is the working end-to-end demo. Extending it - left-recursion elimination, the action map, the production WL-term shape - is the v0.4 chapter of this story.
