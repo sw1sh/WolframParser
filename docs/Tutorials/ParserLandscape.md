@@ -226,7 +226,7 @@ These are *not* in the v0.1 design scope for `WolframParser`. Combinator parsing
 | User-defined types / actions           | weak               |               | ✓              |              | ✓                   | ✓                        |
 | Declarative EBNF / rule grammar        |                    |               | ✓              |              | ✓                   | ✓                        |
 | Combinator (Parsec-style) entry point  |                    |               |                |              | ✓                   | ✓                        |
-| Operator syntax (`p1 \| p2`, `p*`)     | partial            |               |                |              |                     | ✓                        |
+| Operator syntax (`p1 \| p2`, `p..`)    | partial            |               |                |              |                     | ✓                        |
 | Runs locally (no cloud)                | ✓                  | ✓             | ✗              | ✓            | ✓                   | ✓                        |
 | Token + string + expression input      | string             | string        | string         | string→tree  | string→tokens       | all three                |
 | Structured parse errors with positions |                    | weak          |                | ✓            |                     | ✓                        |
@@ -238,7 +238,7 @@ These are *not* in the v0.1 design scope for `WolframParser`. Combinator parsing
 
 The survey above defines the niche by exclusion. Concretely, the paclet aims to provide:
 
-1. **A combinator core** in the Parsec / FunctionalParsers tradition: a `Parser` is a function-like head; combinators (`Sequence`, `Choice`, `Many`, `Some`, `Optional`, `Between`, `SepBy`, `ChainLeft`, `ChainRight`, `Lookahead`, `NotFollowedBy`) build bigger parsers from smaller ones. Operator overloads (`p1 | p2` for `Choice`, `p1 ~ p2` for `Sequence`, `p..` for `Many`, etc.) give a short-form notation that reads more like a grammar than a function pipeline.
+1. **A combinator core** in the Parsec / FunctionalParsers tradition, with constructors named in Anton's `Parse*` style (`ParseSequence`, `ParseChoice`, `ParseMany`, `ParseSome`, `ParseOptional`, `ParseBetween`, `ParseSepBy`, `ParseChainLeft`, `ParseChainRight`, `ParseLookahead`, `ParseNotFollowedBy`, `ParseTry`, `ParseAction`). Each returns a single computable `ParserCombinator` head that formats as a [SummaryBox]() and carries operator [UpValues](): `p1 | p2` for choice ([Alternatives]()), `p1 ** p2` for sequence ([NonCommutativeMultiply]()), `p..` for one-or-more ([Repeated]()), `p...` for zero-or-more ([RepeatedNull]()).
 
 2. **A declarative `GrammarRules`-compatible entry point.** The same `GrammarRules[{"slot syntax" -> action}]` declaration that the built-in path ships off to [CloudDeploy]() is accepted here and compiled to a local parser via [FunctionCompile](). Anything the cloud path accepts, the local path accepts; only the deployment changes.
 
