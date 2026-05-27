@@ -37,11 +37,11 @@ front end as typeset math). The arrow is the parser.
 
 ```wl
 With[{src = "\\sum_{n=1}^{\\infty} \\frac{1}{n^2}"},
-    Row[{
-        Style[src, "Input", FontSize -> 22],
-        Style["  \[LongRightArrow]  ", FontSize -> 28, GrayLevel[0.5]],
-        Style[DisplayForm @ LaTeXMathParse[src], FontSize -> 36]
-    }]
+    Column[{
+        Style[src, FontFamily -> "Source Code Pro", FontSize -> 20, GrayLevel[0.4]],
+        Style["\[DownArrow]", FontSize -> 24, GrayLevel[0.65]],
+        Style[DisplayForm @ LaTeXMathParse[src], FontSize -> 44]
+    }, Alignment -> Center, Spacings -> 1.2]
 ]
 ```
 
