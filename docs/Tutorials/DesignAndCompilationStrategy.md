@@ -341,9 +341,9 @@ The choice of primitives above is motivated by two concrete targets. This sectio
 
 LaTeX math has been the breaking point for `MarkdownToNotebook`'s built-in path repeatedly. `ImportString[..., "TeX"]` drops styling commands (`\mathbb{R}` becomes a plain `R`); `ToExpression[..., TeXForm]` parses some structure but fails on common constructs like `dx` in integrals; neither composes with the kind of custom-macro extension a real user wants.
 
-A `WolframParser` LaTeX math grammar (sketched at the combinator level):
+A `WolframParser` LaTeX math grammar (sketched at the combinator level - non-evaluating prose, the productions are mutually recursive and depend on a `ParseRecursive` tie not in v0.2):
 
-```wl
+```
 math = expr;
 
 expr = ParseAction[
@@ -406,9 +406,9 @@ The grammar is BNF, publicly specified, and of moderate size (~100 productions f
 - **`ParseTry[...]`** for the LR-conflict-like cases (FOF vs TFF can look identical at the prefix)
 - **`ParseBetween[ParseLiteral["("], expr, ParseLiteral[")"]]`** everywhere
 
-A skeleton:
+A skeleton (non-evaluating prose - mutually recursive):
 
-```wl
+```
 tptpFile = formula...;
 
 formula = (ParseLiteral["fof"] | ParseLiteral["cnf"] | ParseLiteral["tff"] | ParseLiteral["thf"]) ~~
