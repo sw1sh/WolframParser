@@ -639,23 +639,188 @@ charPatName[s_String] := s
 charPatName[other_] := ToString[other, InputForm]
 
 
-(* === ParserCompile stub ===
-   v0.2: attach a thunk that routes back through the interpreter. The
-   shape the docs promise is in place; the real FunctionCompile
-   lowering replaces the thunk later. *)
+(* === ParserCompile ===
+   For a "regular-grammar" subset (Literal, Character, Sequence, Choice,
+   Optional, Many, Some - the parsers whose results are substrings of
+   the input), generate a single fused Function via FunctionCompile.
+   The compiled function returns the new position (or -1 on failure);
+   the Parse driver checks the return value and reconstructs the result
+   by re-walking the tree interpretively (cheap when the match is
+   known to succeed).
+
+   For trees that include Action / Capture / Recursive / Lookahead /
+   NotFollowedBy / Try / SepBy / ChainLeft / ChainRight or any unknown
+   node, the stub Function fallback runs the interpreter - same shape
+   the user gets back, just no speedup. *)
 
 ParserCompile[pc_ParserCombinator, OptionsPattern[]] :=
-    ParserCombinator[
-        pc[[1]], pc[[2]],
-        Append[
-            pc[[3]],
-            "Code" -> Function[{input, pos},
-                interpret[
+    If[ compilableQ[pc],
+        compileParser[pc],
+        ParserCombinator[
+            pc[[1]], pc[[2]],
+            Append[
+                pc[[3]],
+                "Code" -> Function[{input, pos},
+                    interpretCompiledShim[pc, input, pos]
+                ]
+            ]
+        ]
+    ]
+
+(* Predicate: can this combinator tree be lowered to a single
+   FunctionCompile-built function? Action / Capture etc. need
+   user-supplied Wolfram callbacks, which we don't yet ship through
+   the compiler. *)
+compilableQ[ParserCombinator["Literal", _String, _]] := True
+compilableQ[ParserCombinator["Character", pat_, _]] := compilableCharPatQ[pat]
+compilableQ[ParserCombinator["Sequence", pcs_List, _]] := AllTrue[pcs, compilableQ]
+compilableQ[ParserCombinator["Choice", pcs_List, _]] := AllTrue[pcs, compilableQ]
+compilableQ[ParserCombinator["Optional", p_, _]] := compilableQ[p]
+compilableQ[ParserCombinator["Many", p_, _]] := compilableQ[p]
+compilableQ[ParserCombinator["Some", p_, _]] := compilableQ[p]
+compilableQ[ParserCombinator["Between", {open_, p_, close_}, _]] :=
+    compilableQ[open] && compilableQ[p] && compilableQ[close]
+compilableQ[_] := False
+
+compilableCharPatQ[DigitCharacter | LetterCharacter | WhitespaceCharacter |
+    WordCharacter | HexadecimalCharacter | PunctuationCharacter] := True
+compilableCharPatQ[_String] := True
+compilableCharPatQ[CharacterRange[_String, _String]] := True
+compilableCharPatQ[Alternatives[args__]] := AllTrue[{args}, compilableCharPatQ]
+compilableCharPatQ[_] := False
+
+(* === Codegen (string-based) ===
+   Each emitCheck returns a string of WL source code that, when read,
+   evaluates to a MachineInteger (the new position, or -1 on failure).
+   The source uses bare symbols `input` and `pos` for the (yet-
+   unbound) Function parameters; compileParser wraps the assembled
+   source in a typed Function and feeds it through FunctionCompile.
+
+   String codegen is verbose but avoids any of the held-expression
+   evaluation pitfalls of expression-based composition - each combinator
+   just splices subparser source-strings together. *)
+
+emitCheck[ParserCombinator["Literal", s_String, _]] :=
+    With[{len = StringLength[s], lit = ToString[s, InputForm]},
+        "If[ StringLength[input] - pos + 1 >= " <> ToString[len] <>
+        " && StringTake[input, {pos, pos + " <> ToString[len - 1] <> "}] === " <> lit <>
+        ", pos + " <> ToString[len] <> ", -1]"
+    ]
+
+emitCheck[ParserCombinator["Character", pat_, _]] :=
+    "If[ pos <= StringLength[input] && (" <> emitCharTest[pat] <>
+    "), pos + 1, -1]"
+
+emitCharTest[DigitCharacter] := "DigitQ[StringTake[input, {pos, pos}]]"
+emitCharTest[LetterCharacter] := "LetterQ[StringTake[input, {pos, pos}]]"
+emitCharTest[WhitespaceCharacter] :=
+    "StringMatchQ[StringTake[input, {pos, pos}], WhitespaceCharacter]"
+emitCharTest[WordCharacter] :=
+    "StringMatchQ[StringTake[input, {pos, pos}], WordCharacter]"
+emitCharTest[HexadecimalCharacter] :=
+    "StringMatchQ[StringTake[input, {pos, pos}], HexadecimalCharacter]"
+emitCharTest[PunctuationCharacter] :=
+    "StringMatchQ[StringTake[input, {pos, pos}], PunctuationCharacter]"
+emitCharTest[s_String] /; StringLength[s] === 1 :=
+    "StringTake[input, {pos, pos}] === " <> ToString[s, InputForm]
+emitCharTest[HoldPattern[CharacterRange[a_String, b_String]]] :=
+    "MemberQ[" <> ToString[CharacterRange[a, b], InputForm] <>
+    ", StringTake[input, {pos, pos}]]"
+emitCharTest[Alternatives[args__]] :=
+    "(" <> StringRiffle[emitCharTest /@ {args}, " || "] <> ")"
+
+emitCheck[ParserCombinator["Sequence", pcs_List, _]] :=
+    Fold[
+        Function[{accSrc, nextSrc},
+            "Block[{p2 = " <> accSrc <> "}, If[p2 < 0, -1, Block[{pos = p2}, " <>
+                nextSrc <> "]]]"
+        ],
+        emitCheck[First[pcs]],
+        emitCheck /@ Rest[pcs]
+    ]
+
+emitCheck[ParserCombinator["Choice", pcs_List, _]] :=
+    Fold[
+        Function[{accSrc, nextSrc},
+            "Block[{r = " <> accSrc <> "}, If[r >= 0, r, " <> nextSrc <> "]]"
+        ],
+        emitCheck[First[pcs]],
+        emitCheck /@ Rest[pcs]
+    ]
+
+emitCheck[ParserCombinator["Optional", p_, _]] :=
+    "Block[{r = " <> emitCheck[p] <> "}, If[r >= 0, r, pos]]"
+
+emitCheck[ParserCombinator["Many", p_, _]] :=
+    With[{inner = emitCheck[p]},
+        "Module[{cur = pos, prev = pos - 1, r}, " <>
+            "While[True, r = Block[{pos = cur}, " <> inner <> "]; " <>
+                "If[r < 0 || r <= prev, Break[]]; prev = cur; cur = r]; cur]"
+    ]
+
+emitCheck[ParserCombinator["Some", p_, _]] :=
+    With[{inner = emitCheck[p]},
+        "Module[{r1 = " <> inner <> ", cur, prev, r}, " <>
+            "If[r1 < 0, -1, cur = r1; prev = pos; " <>
+                "While[True, r = Block[{pos = cur}, " <> inner <> "]; " <>
+                    "If[r < 0 || r <= prev, Break[]]; prev = cur; cur = r]; cur]]"
+    ]
+
+emitCheck[ParserCombinator["Between", {open_, p_, close_}, _]] :=
+    emitCheck[ParserCombinator["Sequence", {open, p, close}, <||>]]
+
+(* compileParser: assemble the source, wrap in a typed Function, and
+   feed to FunctionCompile. *)
+compileParser[pc_ParserCombinator] :=
+    Module[{src, fnSrc, fn, cf},
+        src = emitCheck[pc];
+        fnSrc = "Function[{Typed[input, \"String\"], Typed[pos, \"MachineInteger\"]}, " <>
+            src <> "]";
+        fn = ToExpression[fnSrc];
+        cf = Quiet @ Check[FunctionCompile[fn], $Failed];
+        If[ MatchQ[cf, _CompiledCodeFunction],
+            ParserCombinator[pc[[1]], pc[[2]],
+                Append[pc[[3]], "Code" -> compiledShim[pc, cf]]
+            ],
+            Message[ParserCompile::nocompile, pc];
+            ParserCombinator[pc[[1]], pc[[2]],
+                Append[pc[[3]],
+                    "Code" -> Function[{input, pos},
+                        interpretCompiledShim[pc, input, pos]
+                    ]
+                ]
+            ]
+        ]
+    ]
+
+ParserCompile::nocompile = "Failed to FunctionCompile parser ``; falling back to interpretive evaluation."
+
+(* compiledShim: the bridge between the integer-only compiled function
+   and the parseOk / parseErr internal contract. Calls the compiled
+   function for the position-advancing predicate; reconstructs the
+   result via the interpreter (which is guaranteed to succeed when the
+   predicate says so) when newPos is non-negative. *)
+compiledShim[pc_, cf_CompiledCodeFunction] :=
+    Function[{input, pos},
+        Block[{newPos = cf[input, pos]},
+            If[ newPos < 0,
+                parseErr[pos, "<compiled-predicate failure>", safeChar[input, pos]],
+                (* re-walk the original tree interpretively to build the result *)
+                interpretCompiledShim[
                     ParserCombinator[pc[[1]], pc[[2]], KeyDrop[pc[[3]], "Code"]],
                     input, pos
                 ]
             ]
         ]
+    ]
+
+(* The fallback / re-walker: just calls interpret. Kept as a named
+   helper so the stub-fallback path and the post-success rebuild path
+   share the same name. *)
+interpretCompiledShim[pc_, input_, pos_] :=
+    interpret[
+        ParserCombinator[pc[[1]], pc[[2]], KeyDrop[pc[[3]], "Code"]],
+        input, pos
     ]
 
 
