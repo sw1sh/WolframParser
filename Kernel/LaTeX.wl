@@ -1852,6 +1852,24 @@ rewriteInfixFractions[s_String] := Module[{
     out
 ]
 
+(* Plain-TeX font switches `\rm`/`\it`/`\bf`/`\sf`/`\tt` were
+   noopHandlers - they just dropped on the floor. KaTeX renders them
+   as font-style switches affecting the rest of the current group.
+   Approximate: rewrite `\rm <word>` to `\mathrm{<word>}` etc., where
+   <word> is up to the next whitespace, brace, or cell separator.
+   Handles the common `\rm rm`, `\bf bf`, `\text{\it it}` patterns. *)
+$oldFontMap = <|
+    "rm" -> "mathrm", "it" -> "mathit", "bf" -> "mathbf",
+    "sf" -> "mathsf", "tt" -> "mathtt"
+|>
+$oldFontRegex = RegularExpression[
+    "\\\\(rm|it|bf|sf|tt)(?![a-zA-Z])\\s*([a-zA-Z0-9]+|\\\\[a-zA-Z]+)"
+]
+rewriteOldFontSwitches[s_String] :=
+    StringReplace[s, $oldFontRegex :>
+        "\\math$1{$2}"
+    ]
+
 preprocessLaTeX[s_String] :=
     expandShorthand @
     StringReplace[#,
@@ -1860,6 +1878,7 @@ preprocessLaTeX[s_String] :=
     ] &@
     applyTextModeSubstitutions @
     rewriteInfixFractions @
+    rewriteOldFontSwitches @
     StringReplace[s, {
         (* \big and friends consume their next delimiter together. These
            are NOT guaranteed to come in matched pairs (e.g. \big( without
