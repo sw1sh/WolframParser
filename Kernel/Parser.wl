@@ -884,7 +884,7 @@ compilableQ[_] := False
 compilableCharPatQ[DigitCharacter | LetterCharacter | WhitespaceCharacter |
     WordCharacter | HexadecimalCharacter | PunctuationCharacter] := True
 compilableCharPatQ[_String] := True
-compilableCharPatQ[CharacterRange[_String, _String]] := True
+compilableCharPatQ[HoldPattern[CharacterRange[_String, _String]]] := True
 compilableCharPatQ[Alternatives[args__]] := AllTrue[{args}, compilableCharPatQ]
 compilableCharPatQ[_] := False
 
