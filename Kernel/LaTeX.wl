@@ -134,6 +134,14 @@ exprRef = ParseRecursive[expr]
    macros like \endExp, \crfoo, or \rightarrow are unaffected:
    - \begin / \end: only blocked when followed (past ws) by {
    - \cr / \right: only blocked when followed by a non-letter *)
+(* `wsBeforeArg` lets `\sqrt {a b}` (or `\frac { a } { b }`) parse: TeX
+   accepts whitespace between a command and its `[...]` / `{...}` args,
+   so a strict no-whitespace rule misses real-world inputs. We allow
+   intervening whitespace between command name and each arg slot, then
+   re-add a final ws consumer at the end. *)
+wsBeforeArg = ParseAction[ws ~~ bracedArgRef, #2 &]
+wsBeforeOpt = ParseAction[ws ~~ bracketedArgRef, #2 &]
+
 commandAtom = ParseAction[
     ParseNotFollowedBy[
         ParseAction[ParseLiteral["\\begin"] ~~ ws ~~ ParseLiteral["{"], Null &] |
@@ -141,7 +149,7 @@ commandAtom = ParseAction[
         ParseAction[ParseLiteral["\\cr"]    ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &] |
         ParseAction[ParseLiteral["\\right"] ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &]
     ] ~~
-        commandName ~~ Optional[bracketedArgRef] ~~ ParseMany[bracedArgRef] ~~ ws,
+        commandName ~~ Optional[wsBeforeOpt] ~~ ParseMany[wsBeforeArg] ~~ ws,
     dispatchCommand[#2, #3, #4] &
 ]
 
@@ -375,6 +383,28 @@ commandHandlers["\\textrm"] = commandHandlers["\\text"]
 commandHandlers["\\textbf"] = Function[{opt, req}, StyleBox[First[req, ""], FontWeight -> "Bold", FontSlant -> "Plain"]]
 commandHandlers["\\textit"] = Function[{opt, req}, StyleBox[First[req, ""], FontSlant -> "Italic"]]
 commandHandlers["\\texttt"] = Function[{opt, req}, StyleBox[First[req, ""], FontFamily -> "Courier", FontSlant -> "Plain"]]
+commandHandlers["\\textsf"] = Function[{opt, req},
+    StyleBox[First[req, ""], FontFamily -> "Helvetica", FontSlant -> "Plain"]]
+commandHandlers["\\textnormal"] = commandHandlers["\\text"]
+commandHandlers["\\emph"]       = commandHandlers["\\textit"]
+(* \mathnormal / \mathsfit / \mathchoice: math-style variants that map
+   to one of our existing styles, or pass through unchanged. *)
+commandHandlers["\\mathnormal"] = identArgHandler
+commandHandlers["\\mathsfit"]   = commandHandlers["\\mathsf"]
+(* \mathchoice{display}{text}{script}{scriptscript}: TeX picks one of
+   the four based on current math style. We render the `display` arg
+   unconditionally, which is the conservative read in a doc-math
+   context where styles aren't tracked. *)
+commandHandlers["\\mathchoice"] = Function[{opt, req}, First[req, ""]]
+
+(* \not: prefix that draws a slash through the next char (`\not =` is
+   the typical input). We attach a strikethrough StyleBox to the
+   following arg. Our parser sees `\not` as a 0-arg command unless
+   followed by `{...}`, so the bracedArg case handles `\not{=}`; bare
+   `\not =` is converted by the preprocess (`$oneArgShortNames` list). *)
+commandHandlers["\\not"] = Function[{opt, req},
+    StyleBox[First[req, ""], FontVariations -> {"StrikeThrough" -> True}]
+]
 
 
 (* === accents ===
@@ -406,6 +436,21 @@ commandHandlers["\\underline"] = Function[{opt, req}, UnderscriptBox[First[req, 
 (* over/under braces - the optional label rides above/below the brace. *)
 commandHandlers["\\overbrace"]  = Function[{opt, req}, OverscriptBox[First[req, ""], "\[OverBrace]"]]
 commandHandlers["\\underbrace"] = Function[{opt, req}, UnderscriptBox[First[req, ""], "\[UnderBrace]"]]
+commandHandlers["\\overbracket"]  = Function[{opt, req}, OverscriptBox[First[req, ""], "\[OverBracket]"]]
+commandHandlers["\\underbracket"] = Function[{opt, req}, UnderscriptBox[First[req, ""], "\[UnderBracket]"]]
+(* `\overgroup` / `\undergroup` are KaTeX's stretchy
+   parenthesis-style brace variants - use the same OverBrace/UnderBrace
+   glyphs as a close visual approximation. *)
+commandHandlers["\\overgroup"]   = commandHandlers["\\overbrace"]
+commandHandlers["\\undergroup"]  = commandHandlers["\\underbrace"]
+commandHandlers["\\overlinesegment"]  = commandHandlers["\\overline"]
+commandHandlers["\\underlinesegment"] = commandHandlers["\\underline"]
+(* stretchy over-arrows / over-harpoons *)
+commandHandlers["\\overleftrightarrow"] = accentHandler["\[LeftRightArrow]"]
+commandHandlers["\\overleftharpoon"]    = accentHandler["\[LeftArrow]"]
+commandHandlers["\\overrightharpoon"]   = accentHandler["\[RightArrow]"]
+(* \utilde: under-tilde companion to \tilde (over-tilde). *)
+commandHandlers["\\utilde"] = Function[{opt, req}, UnderscriptBox[First[req, ""], "~"]]
 
 
 (* === fractions, roots, binomials === *)
@@ -476,6 +521,10 @@ Scan[
      "\\kern", "\\mkern", "\\hskip", "\\mskip", "\\hspace", "\\vspace",
      "\\thinspace", "\\negthinspace", "\\medspace", "\\negmedspace",
      "\\thickspace", "\\negthickspace",
+     (* Plain-TeX one-char spacing primitives. They take no args and
+        their sole TeX effect is a glue adjustment; emit empty so they
+        don't clutter the output as literal "\;" / "\," tokens. *)
+     "\\,", "\\;", "\\!", "\\:", "\\>",
      "\\enspace", "\\quad", (* \quad already in namedSymbolChars - this no-ops if no handler hit *)
      "\\textstyle", "\\displaystyle", "\\scriptstyle", "\\scriptscriptstyle",
      "\\tiny", "\\scriptsize", "\\footnotesize", "\\small", "\\normalsize",
@@ -504,8 +553,182 @@ Scan[
     {"\\mathop", "\\mathrel", "\\mathbin", "\\mathord",
      "\\mathopen", "\\mathclose", "\\mathpunct", "\\mathinner",
      "\\smash", "\\boxed", "\\fbox", "\\mbox", "\\hbox",
+     (* \mathrlap / \mathllap / \mathclap render their arg with zero
+        horizontal advance - r/l/c picks alignment. For doc-math we drop
+        the layout trick and emit the arg unchanged. *)
+     "\\mathrlap", "\\mathllap", "\\mathclap", "\\rlap", "\\llap", "\\clap",
      "\\underleftarrow", "\\underrightarrow", "\\underleftrightarrow"}
 ]
+
+(* === colors ===
+   KaTeX color macros: `\color{name}{body}` and `\textcolor{name}{body}`
+   accept a CSS-named color and an arg to colour.  For doc-math we drop
+   the colour but keep the arg - the visual hue isn't load-bearing for
+   semantics, and Mathematica's notebook FE renders the math regardless.
+   The same logic covers the named colour shortcuts (`\red{x}`, `\blue{x}`,
+   ...) KaTeX defines on top of `\textcolor`. *)
+commandHandlers["\\color"]      = Function[{opt, req}, Last[req, ""]]
+commandHandlers["\\textcolor"]  = Function[{opt, req}, Last[req, ""]]
+Scan[
+    (commandHandlers["\\" <> #] = identArgHandler) &,
+    {"red", "orange", "yellow", "green", "blue", "purple", "pink",
+     "gray", "black", "white", "magenta", "cyan", "olive", "teal",
+     "lime", "violet", "maroon", "navy",
+     "Apricot", "Aquamarine", "Bittersweet", "Black", "Blue",
+     "BlueGreen", "BlueViolet", "BrickRed", "Brown", "BurntOrange",
+     "CadetBlue", "CarnationPink", "Cerulean", "CornflowerBlue",
+     "Cyan", "Dandelion", "DarkOrchid", "Emerald", "ForestGreen",
+     "Fuchsia", "Goldenrod", "Gray", "Green", "GreenYellow", "JungleGreen",
+     "Lavender", "LimeGreen", "Magenta", "Mahogany", "Maroon", "Melon",
+     "MidnightBlue", "Mulberry", "NavyBlue", "OliveGreen", "Orange",
+     "OrangeRed", "Orchid", "Peach", "Periwinkle", "PineGreen", "Plum",
+     "ProcessBlue", "Purple", "RawSienna", "Red", "RedOrange", "RedViolet",
+     "Rhodamine", "RoyalBlue", "RoyalPurple", "RubineRed", "Salmon",
+     "SeaGreen", "Sepia", "SkyBlue", "SpringGreen", "Tan", "TealBlue",
+     "Thistle", "Turquoise", "Violet", "VioletRed", "White", "WildStrawberry",
+     "Yellow", "YellowGreen", "YellowOrange"}
+]
+
+(* === strike-through / cancel ===
+   \sout, \cancel, \bcancel, \xcancel all visually score out the
+   argument; render the arg with `FontVariations -> {"StrikeThrough" -> True}`.
+   The struck-through glyph captures the semantic intent (the bit being
+   cancelled) better than dropping the macro. *)
+strikeHandler = Function[{opt, req},
+    StyleBox[First[req, ""], FontVariations -> {"StrikeThrough" -> True}]
+]
+Scan[
+    (commandHandlers[#] = strikeHandler) &,
+    {"\\sout", "\\cancel", "\\bcancel", "\\xcancel"}
+]
+
+(* `\pod{X}` -> `(X)` (parenthesised remainder annotation, used after
+   modular-arithmetic expressions like `a ≡ b \pod{n}`). The visually-
+   distinct `\mod` / `\bmod` already live above. *)
+commandHandlers["\\pod"] = Function[{opt, req}, RowBox[{"(", First[req, ""], ")"}]]
+commandHandlers["\\pmod"] = Function[{opt, req},
+    RowBox[{"(", StyleBox["mod", FontSlant -> "Plain"], " ",
+        First[req, ""], ")"}]
+]
+
+(* `\underbar{X}` is a Plain-TeX alias for `\underline{X}` - same render. *)
+commandHandlers["\\underbar"] = commandHandlers["\\underline"]
+
+(* `\substack{a\\b\\c}`: small vertical stack used under summation /
+   product limits.  Render as a column GridBox.  The arg is parsed as
+   a topRow, where `\\` becomes a row break - so the arg ends up as
+   either a single value or a `RowBox` whose entries are separated by
+   `""` (the linebreakToken's transparent emit).  Either way wrapping in
+   a single-column grid gives the visual stack. *)
+commandHandlers["\\substack"] = Function[{opt, req},
+    With[{body = First[req, ""]},
+        Switch[body,
+            RowBox[{rows___}], GridBox[List /@ {rows}],
+            _, GridBox[{{body}}]
+        ]
+    ]
+]
+
+(* `\Set{ x | x > 0 }` / `\Braket{ x | y }`: KaTeX set-builder macros.
+   Render as braced/angled content, with the inner `|` preserved
+   verbatim.  The handler just wraps with `{...}` or `<...|...>`. *)
+commandHandlers["\\Set"]    = Function[{opt, req},
+    RowBox[{"{", First[req, ""], "}"}]
+]
+commandHandlers["\\Braket"] = Function[{opt, req},
+    RowBox[{"\[LeftAngleBracket]", First[req, ""], "\[RightAngleBracket]"}]
+]
+
+(* `\phase{angle}`: phase / angle notation, render as `\[Angle] angle`. *)
+commandHandlers["\\phase"] = Function[{opt, req},
+    RowBox[{"\[Angle]", First[req, ""]}]
+]
+
+(* `\vcenter{box}`: vertical centring trick; we just emit the arg. *)
+commandHandlers["\\vcenter"] = identArgHandler
+
+(* `\genfrac` is the most general TeX fraction primitive:
+   `\genfrac<left-delim><right-delim>{thickness}{style}{num}{denom}`
+   - the first two args are single-token delimiters (often `.` for none),
+   the next two are layout hints we drop, and the final two are the
+   fraction parts.  Render as `delim num/denom delim`. *)
+commandHandlers["\\genfrac"] = Function[{opt, req},
+    With[{n = Length[req]},
+        Which[
+            n >= 6,
+                RowBox[{
+                    Replace[req[[1]], "." -> Nothing],
+                    FractionBox[req[[5]], req[[6]]],
+                    Replace[req[[2]], "." -> Nothing]
+                }],
+            n >= 5, FractionBox[req[[4]], req[[5]]],
+            n >= 4, FractionBox[req[[3]], req[[4]]],
+            True, "\\genfrac"
+        ]
+    ]
+]
+
+(* Text-mode accent macros that get dragged into math via `\text{...}`.
+   Each takes a single (often un-braced) argument; treat as accents. *)
+commandHandlers["\\H"] = accentHandler[FromCharacterCode[733]]   (* double acute U+02DD *)
+commandHandlers["\\r"] = accentHandler["\[SmallCircle]"]
+commandHandlers["\\i"] = Function[{opt, req}, "\[DotlessI]"]
+commandHandlers["\\j"] = Function[{opt, req}, "\[DotlessJ]"]
+commandHandlers["\\u"] = accentHandler["\[Breve]"]
+commandHandlers["\\v"] = accentHandler["\[Hacek]"]
+(* Punct-name accents: TeX text-mode `\'a` -> á, `\`a` -> à, etc.
+   Render as the letter with the accent glyph above. *)
+commandHandlers["\\'"]   = accentHandler[FromCharacterCode[180]]   (* acute *)
+commandHandlers["\\`"]   = accentHandler[FromCharacterCode[96]]    (* grave *)
+commandHandlers["\\\""] = accentHandler[FromCharacterCode[168]]    (* diaeresis *)
+commandHandlers["\\."]   = accentHandler["."]                       (* dot *)
+commandHandlers["\\="]   = accentHandler["_"]                       (* macron *)
+commandHandlers["\\~"]   = accentHandler["~"]                       (* tilde *)
+
+(* Extensible arrows: `\xrightarrow[below]{above}` and friends. KaTeX
+   renders these as a long arrow with the optional `[below]` annotation
+   beneath it and the required `{above}` annotation above. We approximate
+   with `UnderoverscriptBox[arrow, below, above]`, which is the closest
+   one-shot box analogue in WL. *)
+xarrowHandler[arrow_String] := Function[{opt, req},
+    With[{above = First[req, ""], below = If[opt === Null || MissingQ[opt], "", opt]},
+        UnderoverscriptBox[arrow, below, above]
+    ]
+]
+commandHandlers["\\xrightarrow"]            = xarrowHandler["\[LongRightArrow]"]
+commandHandlers["\\xleftarrow"]             = xarrowHandler["\[LongLeftArrow]"]
+commandHandlers["\\xRightarrow"]            = xarrowHandler["\[DoubleLongRightArrow]"]
+commandHandlers["\\xLeftarrow"]             = xarrowHandler["\[DoubleLongLeftArrow]"]
+commandHandlers["\\xleftrightarrow"]        = xarrowHandler["\[LongLeftRightArrow]"]
+commandHandlers["\\xLeftrightarrow"]        = xarrowHandler["\[DoubleLongLeftRightArrow]"]
+commandHandlers["\\xhookleftarrow"]         = xarrowHandler["\[LongLeftArrow]"]
+commandHandlers["\\xhookrightarrow"]        = xarrowHandler["\[LongRightArrow]"]
+commandHandlers["\\xmapsto"]                = xarrowHandler["\[Function]"]
+commandHandlers["\\xrightharpoonup"]        = xarrowHandler["\[RightArrow]"]
+commandHandlers["\\xrightharpoondown"]      = xarrowHandler["\[RightArrow]"]
+commandHandlers["\\xleftharpoonup"]         = xarrowHandler["\[LeftArrow]"]
+commandHandlers["\\xleftharpoondown"]       = xarrowHandler["\[LeftArrow]"]
+commandHandlers["\\xrightleftharpoons"]     = xarrowHandler["\[Equilibrium]"]
+commandHandlers["\\xleftrightharpoons"]     = xarrowHandler["\[Equilibrium]"]
+commandHandlers["\\xrightequilibrium"]      = xarrowHandler["\[Equilibrium]"]
+commandHandlers["\\xleftequilibrium"]       = xarrowHandler["\[ReverseEquilibrium]"]
+commandHandlers["\\xrightleftarrows"]       = xarrowHandler["\[LeftRightArrow]"]
+commandHandlers["\\xtwoheadrightarrow"]     = xarrowHandler["\[LongRightArrow]"]
+commandHandlers["\\xtwoheadleftarrow"]      = xarrowHandler["\[LongLeftArrow]"]
+commandHandlers["\\xtofrom"]                = xarrowHandler["\[LeftRightArrow]"]
+(* Capital `\Overrightarrow` variant - KaTeX uses both. *)
+commandHandlers["\\Overrightarrow"]         = commandHandlers["\\overrightarrow"]
+
+(* \verb|text|: TeX's verbatim macro. The delimiter is the first char
+   after \verb (here we only see it post-tokenisation, where the arg
+   already arrived as one braced run). Render as monospace. *)
+commandHandlers["\\verb"] = Function[{opt, req},
+    StyleBox[First[req, ""], FontFamily -> "Courier"]
+]
+
+(* Wide-accent companions: \widecheck, \widebreve, \widering. *)
+commandHandlers["\\widecheck"] = accentHandler["\[Hacek]"]
+commandHandlers["\\widebreve"] = accentHandler["\[Breve]"]
 
 
 (* === big operators and named symbols === *)
@@ -610,7 +833,44 @@ namedSymbolChars = <|
     "\\prime"   -> "\[Prime]",         "\\backslash" -> "\[Backslash]",
     "\\lnot"    -> "\[Not]",           "\\lor" -> "\[Or]", "\\land" -> "\[And]",
     "\\gtrsim"  -> "\[GreaterTilde]",  "\\lesssim" -> "\[LessTilde]",
-    "\\ne"      -> "\[NotEqual]",      "\\notni" -> "\[NotReverseElement]"
+    "\\ne"      -> "\[NotEqual]",      "\\notni" -> "\[NotReverseElement]",
+    (* dotless variants and other plain-TeX letter macros *)
+    "\\imath"   -> "\[DotlessI]",      "\\jmath" -> "\[DotlessJ]",
+    "\\jmath"   -> "\[DotlessJ]",
+    (* KaTeX's literal logo. We emit "KaTeX" as plain text rather than
+       try to typeset the slanted Kₐ form - the visual fidelity isn't
+       worth the layout cost. *)
+    "\\KaTeX"   -> "KaTeX",
+    "\\LaTeX"   -> "LaTeX",
+    "\\TeX"     -> "TeX",
+    (* extras KaTeX corpus exercises - skip ones WL doesn't ship a
+       named char for (\beth, \gimel, \daleth, \backepsilon). *)
+    "\\digamma" -> "\[Digamma]",
+    "\\nothing" -> "\[EmptySet]",
+    "\\mho"     -> "\[Mho]",
+    (* multi-integrals *)
+    "\\iint"    -> "\[Integral]\[Integral]",
+    "\\iiint"   -> "\[Integral]\[Integral]\[Integral]",
+    "\\oiint"   -> "\[ContourIntegral]\[ContourIntegral]",
+    "\\oiiint"  -> "\[ContourIntegral]\[ContourIntegral]\[ContourIntegral]",
+    "\\intop"   -> "\[Integral]",
+    (* delimiter aliases used as `\lvert` / `\rvert` *)
+    "\\lvert"   -> "|",          "\\rvert"   -> "|",
+    "\\lVert"   -> "\[DoubleVerticalBar]", "\\rVert" -> "\[DoubleVerticalBar]",
+    (* miscellaneous symbols - some have no WL named character so we
+       use Unicode literals (FromCharacterCode handles them either way). *)
+    "\\maltese" -> FromCharacterCode[10016],   (* MALTESE CROSS U+2720 *)
+    "\\pounds"  -> "\[Sterling]",
+    "\\textdollar" -> "$",
+    "\\minuso"  -> "\[CircleMinus]",
+    (* \varepsilon variant *)
+    "\\varepsilon" -> "\[Epsilon]",
+    "\\varphi"     -> "\[CurlyPhi]",
+    "\\varrho"     -> "\[CurlyRho]",
+    "\\varsigma"   -> "\[FinalSigma]",
+    "\\vartheta"   -> "\[CurlyTheta]",
+    "\\varpi"      -> "\[CurlyPi]",
+    "\\varkappa"   -> "\[CurlyKappa]"
 |>
 
 Scan[
@@ -937,7 +1197,169 @@ LaTeXMathParser := ParseAction[ws ~~ outerRow, #2 &]
    AND the delimiter together (the next char or \macro). This loses the
    visual but keeps the input parseable. The negative lookahead
    (?![a-zA-Z]) keeps `\bigcup` etc. from being mangled. *)
+(* Walk forward from `pos` (1-indexed) skipping whitespace, then read
+   one TeX argument: either a balanced `{...}` group (handles nested
+   braces), a `\command` token, or a single non-brace character.
+   Returns {argString, newPos}, or Missing[] if at end of input. *)
+readArgToken[s_String, pos0_Integer] := Module[{
+    n = StringLength[s], pos = pos0, ch, depth, start
+},
+    While[pos <= n && StringMatchQ[StringTake[s, {pos, pos}], WhitespaceCharacter],
+        pos++
+    ];
+    If[pos > n, Return[Missing[]]];
+    ch = StringTake[s, {pos, pos}];
+    Which[
+        (* balanced brace group *)
+        ch === "{",
+            depth = 1; start = pos; pos++;
+            While[pos <= n && depth > 0,
+                Switch[StringTake[s, {pos, pos}],
+                    "{", depth++,
+                    "}", depth--
+                ];
+                pos++
+            ];
+            If[depth =!= 0, Missing[], {StringTake[s, {start, pos - 1}], pos}],
+        (* `\command` (letters) or single-char escape *)
+        ch === "\\",
+            start = pos; pos++;
+            If[pos <= n && StringMatchQ[StringTake[s, {pos, pos}], LetterCharacter],
+                While[pos <= n && StringMatchQ[StringTake[s, {pos, pos}], LetterCharacter],
+                    pos++
+                ],
+                pos++
+            ];
+            {StringTake[s, {start, pos - 1}], pos},
+        (* single non-brace character *)
+        True,
+            {ch, pos + 1}
+    ]
+]
+
+(* `\frac{a}{b}` already has braces; wrap the unbraced shape. *)
+ensureBraced[a_String] :=
+    If[StringStartsQ[a, "{"], a, "{" <> a <> "}"]
+
+(* Walk `s` left-to-right; whenever we see one of the registered
+   short-arg command names, consume its required arg(s) (each a brace
+   group, \command, or single char) and rewrite with explicit braces
+   so the grammar's brace-only commandAtom sees a uniform shape. *)
+$twoArgShortNames = {
+    "frac", "tfrac", "dfrac", "cfrac",
+    "binom", "tbinom", "dbinom",
+    "overset", "underset", "stackrel"
+}
+
+$oneArgShortNames = {
+    "sqrt",
+    "hat", "widehat", "tilde", "widetilde", "bar", "vec",
+    "dot", "ddot", "check", "breve", "acute", "grave", "mathring",
+    "overline", "underline", "underbar",
+    "overrightarrow", "overleftarrow",
+    "overbrace", "underbrace",
+    "mathbb", "mathcal", "mathfrak", "mathbf", "mathrm",
+    "mathit", "mathsf", "mathsfit", "mathnormal", "mathtt", "mathscr",
+    "boldsymbol", "pmb",
+    "text", "textrm", "textbf", "textit", "texttt", "textsf",
+    "textnormal", "emph",
+    "operatorname",
+    "smash", "boxed",
+    "cancel", "bcancel", "xcancel", "sout",
+    "pod", "pmod",
+    "not"
+}
+
+$shortNameRegex = RegularExpression[
+    "\\\\(" <> StringRiffle[Join[$twoArgShortNames, $oneArgShortNames], "|"] <>
+    ")(?![a-zA-Z])"
+]
+
+(* Skip past an optional `[...]` bracketed arg (with balanced-bracket
+   awareness for nested cases like `\sqrt[\sqrt[2]{4}]{16}`).  Returns
+   `{"[...]", newPos}`, or `{"", pos}` if no `[` is next. *)
+skipBracketedOpt[s_String, pos0_Integer] := Module[{
+    n = StringLength[s], pos = pos0, depth, start
+},
+    While[pos <= n && StringMatchQ[StringTake[s, {pos, pos}], WhitespaceCharacter],
+        pos++
+    ];
+    If[pos > n || StringTake[s, {pos, pos}] =!= "[",
+        Return[{"", pos0}]
+    ];
+    depth = 1; start = pos; pos++;
+    While[pos <= n && depth > 0,
+        Switch[StringTake[s, {pos, pos}],
+            "[", depth++,
+            "]", depth--
+        ];
+        pos++
+    ];
+    {StringTake[s, {start, pos - 1}], pos}
+]
+
+expandShorthand[s_String] := Module[{
+    n = StringLength[s], pos = 1, out = "",
+    rel, abs, name, after, opt, a1, a2
+},
+    While[pos <= n,
+        (* StringPosition[s, patt, 1] returns the FIRST occurrence in
+           the whole string, not the first one at-or-after `pos`. Search
+           the remainder explicitly so the loop advances past earlier
+           matches we already processed. *)
+        rel = StringPosition[StringTake[s, {pos, n}], $shortNameRegex,
+            1, IgnoreCase -> False];
+        If[ rel === {},
+            out = out <> StringTake[s, {pos, n}]; pos = n + 1,
+            Module[{p = First[rel]},
+                abs = {p[[1]] + pos - 1, p[[2]] + pos - 1};
+                out = out <> StringTake[s, {pos, abs[[1]] - 1}];
+                name = StringTake[s, {abs[[1]] + 1, abs[[2]]}];   (* strip leading \ *)
+                (* Preserve a `[...]` optional arg (e.g. `\sqrt[3]{27}`)
+                   - the parser still reads it via `Optional[bracketedArgRef]`,
+                   so we just skip past it without brace-wrapping. *)
+                {opt, after} = skipBracketedOpt[s, abs[[2]] + 1];
+                Which[
+                    MemberQ[$twoArgShortNames, name],
+                        a1 = readArgToken[s, after];
+                        If[ a1 === Missing[],
+                            out = out <> StringTake[s, {abs[[1]], n}]; pos = n + 1,
+                            a2 = readArgToken[s, a1[[2]]];
+                            If[ a2 === Missing[],
+                                out = out <> "\\" <> name <> opt <> ensureBraced[a1[[1]]];
+                                pos = a1[[2]],
+                                out = out <> "\\" <> name <> opt <>
+                                    ensureBraced[a1[[1]]] <> ensureBraced[a2[[1]]];
+                                pos = a2[[2]]
+                            ]
+                        ],
+                    MemberQ[$oneArgShortNames, name],
+                        a1 = readArgToken[s, after];
+                        If[ a1 === Missing[],
+                            out = out <> StringTake[s, {abs[[1]], n}]; pos = n + 1,
+                            out = out <> "\\" <> name <> opt <> ensureBraced[a1[[1]]];
+                            pos = a1[[2]]
+                        ]
+                ]
+            ]
+        ]
+    ];
+    out
+]
+
+(* TeX text-mode accents: `\'a`, `\"a`, `\.a`, `\`a`, `\=a`, `\~a`,
+   `\^a` (and `\H{a}`, `\r{a}`, `\u{a}`, `\v{a}` letter variants
+   handled by the letter-name shorthand pass). The next char (or `\i`
+   / `\j`) is the accented letter. Rewrite to braced form so the
+   accent handlers we registered above receive a proper arg. The
+   regex is in `[]` so the special chars don't have to be escaped. *)
+$textAccentRegex = RegularExpression[
+    "\\\\([\\'`\".=~^])\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[^{}\\s])"
+]
+
 preprocessLaTeX[s_String] :=
+    expandShorthand @
+    StringReplace[#, $textAccentRegex :> "\\$1{$2}"] &@
     StringReplace[s, {
         (* \big and friends consume their next delimiter together. These
            are NOT guaranteed to come in matched pairs (e.g. \big( without
