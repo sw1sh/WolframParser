@@ -1565,9 +1565,12 @@ expr = ParseChainLeft[sumExpr, relOp]
    a trailing thin space for readability). *)
 mathToken = ParseChoice[
     expr,
+    (* `,` keeps a thin space after — list-separator look in
+       `(a, b, c)`.  `;` and `:` emit the bare glyph; both classify
+       as relations in TeX math so the FE inserts the right gap. *)
     ParseAction[literal[","], "," <> "\[ThinSpace]" &],
-    ParseAction[literal[";"], "; " &],
-    ParseAction[literal[":"], " : " &],
+    ParseAction[literal[";"], ";" &],
+    ParseAction[literal[":"], ":" &],
     ParseRecursive[puncToken]
 ]
 
