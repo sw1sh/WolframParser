@@ -1965,6 +1965,87 @@ rewriteBareOver[s_String] :=
             "\\atopfrac{$1}{$2}"
     }]
 
+(* Basic `\def\NAME{body}` support: parameter-less macros only (no
+   `\def\foo#1{...}` argument templating).  Scan for definitions,
+   build a map, strip the definitions from the source, then expand
+   each `\NAME` usage to its body.  Iterates a few times so nested
+   uses (a definition that references another defined macro) settle. *)
+extractDefs[s_String] := Module[{n = StringLength[s], pos = 1, defs = <||>, out = "", j, depth, name, start, body, k, end},
+    While[pos <= n,
+        If[ StringTake[s, {pos, Min[pos + 4, n]}] === "\\def\\",
+            (* find macro name: letters after \def\ *)
+            j = pos + 5;
+            start = j;
+            While[j <= n && StringMatchQ[StringTake[s, {j, j}], LetterCharacter], j++];
+            name = StringTake[s, {start, j - 1}];
+            (* skip ws *)
+            While[j <= n && StringMatchQ[StringTake[s, {j, j}], WhitespaceCharacter], j++];
+            (* parse body: balanced {...} *)
+            If[j <= n && StringTake[s, {j, j}] === "{",
+                depth = 1; k = j + 1; end = k;
+                While[end <= n && depth > 0,
+                    Switch[StringTake[s, {end, end}],
+                        "{", depth++, "}", depth--
+                    ];
+                    end++
+                ];
+                If[ depth === 0,
+                    body = StringTake[s, {k, end - 2}];
+                    defs[name] = body;
+                    pos = end,   (* skip over def *)
+                    out = out <> StringTake[s, {pos, n}]; pos = n + 1
+                ],
+                (* no body? emit \def\NAME and continue *)
+                out = out <> StringTake[s, {pos, j - 1}];
+                pos = j
+            ],
+            out = out <> StringTake[s, {pos, pos}]; pos++
+        ]
+    ];
+    {defs, out}
+]
+
+(* Expand user-defined macros from `defs` in `s`.  Iterate until no
+   change or a small fixed iteration cap. *)
+expandUserMacros[s_String, defs_Association] := Module[{cur = s, prev, n = 5},
+    While[n > 0,
+        prev = cur;
+        cur = StringReplace[cur,
+            KeyValueMap[
+                Function[{name, body},
+                    "\\" ~~ name ~~ Except[LetterCharacter] :> body <> StringTake["$0", -1]
+                ] /; True &&  (* condition keeps the rule list well-formed *)
+                False,    (* this is a placeholder - real rules below *)
+                defs
+            ]
+        ];
+        If[cur === prev, n = 0, n--]
+    ];
+    cur
+]
+(* The placeholder above doesn't work because StringExpression-form
+   rules with `$0` capture aren't supported cleanly. Use RegularExpression
+   for each def. *)
+expandUserMacros[s_String, defs_Association] := Module[{cur = s, prev, n = 5, rules},
+    rules = KeyValueMap[
+        Function[{name, body},
+            RegularExpression["\\\\" <> name <> "(?![a-zA-Z])"] -> body
+        ],
+        defs
+    ];
+    While[n > 0,
+        prev = cur;
+        cur = StringReplace[cur, rules];
+        If[cur === prev, n = 0, n--]
+    ];
+    cur
+]
+
+applyUserDefs[s_String] := Module[{defs, stripped},
+    {defs, stripped} = extractDefs[s];
+    expandUserMacros[stripped, defs]
+]
+
 preprocessLaTeX[s_String] :=
     expandShorthand @
     StringReplace[#,
@@ -1976,6 +2057,7 @@ preprocessLaTeX[s_String] :=
     rewriteInfixFractions @
     rewriteOldFontSwitches @
     rewriteCDEnv @
+    applyUserDefs @
     StringReplace[s, {
         (* \big and friends consume their next delimiter together. These
            are NOT guaranteed to come in matched pairs (e.g. \big( without
