@@ -406,13 +406,25 @@ commandHandlers["\\operatorname"] = commandHandlers["\\mathrm"]
 (* \text{...}: upright text. The arg comes through the math grammar
    (so a multi-letter run is a RowBox of italic letters); re-style the
    whole thing upright. An approximation - good enough for doc math. *)
-commandHandlers["\\text"]   = Function[{opt, req}, StyleBox[First[req, ""], FontSlant -> "Plain"]]
+(* `\text{abc}` switches to text mode: the contents are NOT math
+   (no per-letter italic, no inter-letter math spacing).  Strip the
+   inner StyleBox[c, "TI"] dressing that identAtom puts on letters
+   so the output is upright text - matching KaTeX's behaviour where
+   `\text{def}` renders as upright "def", not as italic "d e f". *)
+commandHandlers["\\text"]   = Function[{opt, req},
+    StyleBox[stripItalic @ First[req, ""], FontSlant -> "Plain"]
+]
 commandHandlers["\\textrm"] = commandHandlers["\\text"]
-commandHandlers["\\textbf"] = Function[{opt, req}, StyleBox[First[req, ""], FontWeight -> "Bold", FontSlant -> "Plain"]]
+commandHandlers["\\textbf"] = Function[{opt, req},
+    StyleBox[stripItalic @ First[req, ""], FontWeight -> "Bold", FontSlant -> "Plain"]
+]
 commandHandlers["\\textit"] = Function[{opt, req}, StyleBox[First[req, ""], FontSlant -> "Italic"]]
-commandHandlers["\\texttt"] = Function[{opt, req}, StyleBox[First[req, ""], FontFamily -> "Courier", FontSlant -> "Plain"]]
+commandHandlers["\\texttt"] = Function[{opt, req},
+    StyleBox[stripItalic @ First[req, ""], FontFamily -> "Courier", FontSlant -> "Plain"]
+]
 commandHandlers["\\textsf"] = Function[{opt, req},
-    StyleBox[First[req, ""], FontFamily -> "Helvetica", FontSlant -> "Plain"]]
+    StyleBox[stripItalic @ First[req, ""], FontFamily -> "Helvetica", FontSlant -> "Plain"]
+]
 commandHandlers["\\textnormal"] = commandHandlers["\\text"]
 commandHandlers["\\emph"]       = commandHandlers["\\textit"]
 (* \mathnormal / \mathsfit / \mathchoice: math-style variants that map
@@ -1453,12 +1465,72 @@ $textAccentArg = ("\\" ~~ LetterCharacter ..) |
     ("\\" ~~ Except[LetterCharacter]) |
     Except["{" | "}" | WhitespaceCharacter]
 
+(* Inside `\text{...}` only: substitute TeX's text-mode typographic
+   conventions to Unicode - smart quotes, en/em-dashes, ellipsis.
+   Outside `\text` these chars carry math meaning (`'` is prime, `-`
+   is binary minus, ...) and are left alone. *)
+(* Substitute typographic shorthand inside `\text{...}`. Use
+   StringExpression with a lookbehind via `Except["\\"]` so we
+   don't touch `\'`, `\``, `\"` etc. - those are text-mode accent
+   commands the next pass picks up. *)
+textModeSubstitute[s_String] := StringReplace[s, {
+    "---" -> "\[LongDash]",                  (* em-dash U+2014 *)
+    "--"  -> "\[Dash]",                       (* en-dash U+2013 *)
+    (* `` and '' opening/closing double quotes - and `, ' single
+       quotes - only when NOT preceded by a backslash (which would
+       mean they're a `\'` accent command, not a quote). *)
+    a:Except["\\"] ~~ "``" :> a <> FromCharacterCode[8220],
+    StartOfString ~~ "``" :> FromCharacterCode[8220],
+    a:Except["\\"] ~~ "''" :> a <> FromCharacterCode[8221],
+    StartOfString ~~ "''" :> FromCharacterCode[8221],
+    a:Except["\\"] ~~ "`"  :> a <> FromCharacterCode[8216],
+    StartOfString ~~ "`"  :> FromCharacterCode[8216],
+    a:Except["\\"] ~~ "'"  :> a <> FromCharacterCode[8217],
+    StartOfString ~~ "'"  :> FromCharacterCode[8217]
+}]
+
+(* Walk the source, find each `\text{...}` region (with balanced
+   braces), apply textModeSubstitute inside. *)
+applyTextModeSubstitutions[s_String] := Module[{
+    n = StringLength[s], pos = 1, out = "", match, inner, after, depth, start
+},
+    While[pos <= n,
+        match = StringPosition[StringTake[s, {pos, n}],
+            RegularExpression["\\\\text(?:bf|it|tt|sf|rm|normal)?\\s*\\{"],
+            1, IgnoreCase -> False];
+        If[ match === {},
+            out = out <> StringTake[s, {pos, n}]; pos = n + 1,
+            Module[{p = First[match], absStart, braceStart},
+                absStart = p[[1]] + pos - 1;
+                braceStart = p[[2]] + pos - 1;   (* the `{` *)
+                out = out <> StringTake[s, {pos, braceStart}];
+                (* find matching close brace *)
+                depth = 1; start = braceStart + 1; pos = start;
+                While[pos <= n && depth > 0,
+                    Switch[StringTake[s, {pos, pos}],
+                        "{", depth++,
+                        "}", depth--
+                    ];
+                    pos++
+                ];
+                If[depth =!= 0,
+                    out = out <> StringTake[s, {start, n}]; pos = n + 1,
+                    inner = StringTake[s, {start, pos - 2}];
+                    out = out <> textModeSubstitute[inner] <> "}";
+                ]
+            ]
+        ]
+    ];
+    out
+]
+
 preprocessLaTeX[s_String] :=
     expandShorthand @
     StringReplace[#,
         "\\" ~~ c:$textAccentChars ~~ WhitespaceCharacter ... ~~
             x:$textAccentArg :> "\\" <> c <> "{" <> x <> "}"
     ] &@
+    applyTextModeSubstitutions @
     StringReplace[s, {
         (* \big and friends consume their next delimiter together. These
            are NOT guaranteed to come in matched pairs (e.g. \big( without
