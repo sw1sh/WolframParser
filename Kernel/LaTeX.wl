@@ -2221,6 +2221,79 @@ applyUserDefs[s_String] := Module[{defs, stripped},
     expandUserMacros[stripped, defs]
 ]
 
+(* TeX `\color{X}` switches the current group's color for the
+   REST of the group — it's a scoping switch, not a 2-arg command.
+   Our grammar treats it as zero/one/two-arg form via the greedy
+   command parser, which loses the scope.  Walk every balanced
+   `{...}`, find the first top-level `\color{...}`, and rewrite
+   `{prefix \color{X} suffix}` to
+   `{prefix \textcolor{X}{recurse(suffix)}}`.  Recurse on the
+   suffix so multiple `\color` switches in the same group chain
+   correctly (`\color{red}red\color{blue}blue` -> red text then
+   blue text). *)
+rewriteScopedColor[s_String] := Module[{
+    n = StringLength[s], pos = 1, out = "",
+    depth, start, contents, j, ch, rewritten, colorPos, colorEnd, colorArg,
+    argStart, argDepth, k, prefix, suffix
+},
+    While[pos <= n,
+        If[ StringTake[s, {pos, pos}] =!= "{",
+            out = out <> StringTake[s, {pos, pos}]; pos++,
+            depth = 1; start = pos + 1; j = start;
+            While[j <= n && depth > 0,
+                Switch[StringTake[s, {j, j}], "{", depth++, "}", depth--];
+                j++
+            ];
+            If[ depth =!= 0,
+                out = out <> StringTake[s, {pos, n}]; pos = n + 1,
+                contents = StringTake[s, {start, j - 2}];
+                (* Look for the leftmost top-level `\color{...}` inside
+                   contents.  Top-level means depth-0 (not nested in
+                   another `{...}`). *)
+                colorPos = 0;
+                Module[{cd = 0, ci = 1, cn = StringLength[contents], hit = 0},
+                    While[ci <= cn && hit === 0,
+                        ch = StringTake[contents, {ci, ci}];
+                        Switch[ch, "{", cd++, "}", cd--];
+                        If[ cd === 0 && ci + 6 <= cn &&
+                            StringTake[contents, {ci, ci + 6}] === "\\color{",
+                            hit = ci
+                        ];
+                        ci++
+                    ];
+                    colorPos = hit
+                ];
+                If[ colorPos === 0,
+                    out = out <> "{" <> rewriteScopedColor[contents] <> "}";
+                    pos = j,
+                    (* find matching } of the `\color{...}` arg *)
+                    argStart = colorPos + 7; (* after `\color{` *)
+                    argDepth = 1; k = argStart;
+                    While[k <= StringLength[contents] && argDepth > 0,
+                        ch = StringTake[contents, {k, k}];
+                        Switch[ch, "{", argDepth++, "}", argDepth--];
+                        k++
+                    ];
+                    If[ argDepth =!= 0,
+                        (* malformed; emit as-is *)
+                        out = out <> "{" <> rewriteScopedColor[contents] <> "}";
+                        pos = j,
+                        colorArg = StringTake[contents, {argStart, k - 2}];
+                        prefix = StringTake[contents, {1, colorPos - 1}];
+                        suffix = StringTake[contents,
+                            {k, StringLength[contents]}];
+                        rewritten = prefix <> "\\textcolor{" <> colorArg <>
+                            "}{" <> rewriteScopedColor[suffix] <> "}";
+                        out = out <> "{" <> rewriteScopedColor[rewritten] <> "}";
+                        pos = j
+                    ]
+                ]
+            ]
+        ]
+    ];
+    out
+]
+
 (* TeX scopes size and style switches (\Huge, \rm, \displaystyle, ...)
    to the enclosing brace group: `{\Huge body more body}` means
    "the rest of THIS group is huge".  Our grammar treats those
@@ -2320,6 +2393,7 @@ preprocessLaTeX[s_String] :=
        to `{\Huge{body}}` so the switch ends up with a single
        brace-group argument carrying the whole rest of the group. *)
     rewriteGroupScopedSwitches @
+    rewriteScopedColor @
     StringReplace[s, {
         (* \big and friends consume their next delimiter together. These
            are NOT guaranteed to come in matched pairs (e.g. \big( without
