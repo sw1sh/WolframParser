@@ -43,7 +43,8 @@ PacletObject[<|
                 "Wolfram`Parser`LaTeXMathParse",
                 "Wolfram`Parser`LaTeXMathParser",
                 "Wolfram`Parser`EBNFParse",
-                "Wolfram`Parser`EBNFRules"
+                "Wolfram`Parser`EBNFRules",
+                "Wolfram`Parser`TPTPImport"
             }
         },
         {

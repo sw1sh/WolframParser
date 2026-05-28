@@ -1115,8 +1115,10 @@ End[]
 
 EndPackage[]
 
-(* LaTeX and EBNF sub-modules both BeginPackage["Wolfram`Parser`"] and
-   add LaTeXMathParse / LaTeXMathParser / EBNFParse / EBNFRules to the
-   root context, so a single Needs["Wolfram`Parser`"] loads everything. *)
+(* LaTeX, EBNF, and TPTP sub-modules all BeginPackage["Wolfram`Parser`"]
+   and add their public symbols (LaTeXMathParse / LaTeXMathParser /
+   EBNFParse / EBNFRules / TPTPImport) to the root context, so a single
+   Needs["Wolfram`Parser`"] loads everything. *)
 Get[FileNameJoin[{DirectoryName[$InputFileName], "LaTeX.wl"}]];
 Get[FileNameJoin[{DirectoryName[$InputFileName], "EBNF.wl"}]];
+Get[FileNameJoin[{DirectoryName[$InputFileName], "TPTP.wl"}]];

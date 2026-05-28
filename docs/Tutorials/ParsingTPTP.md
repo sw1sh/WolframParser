@@ -12,9 +12,9 @@ RelatedTutorials: [ParsingBNFGrammars, DesignAndCompilationStrategy]
 
 ## What this note covers
 
-[TPTP](https://tptp.org/) (Thousands of Problems for Theorem Provers) is the standard cross-prover benchmark corpus for automated reasoning - 25,775 problems across 48 mathematical domains, used by Vampire, E, Twee, Waldmeister, and every modern ATP system. Every problem is a `.p` file with one of six clause heads: `cnf`, `fof`, `tff`, `tcf`, `thf`, `ncf`. The [TPTPWorld project](https://github.com/TPTPWorld/SyntaxBNF) publishes the formal grammar as a 735-line BNF file (`SyntaxBNF-v9.2.1.4`, 354 rules).
+[TPTP](https://tptp.org/) (Thousands of Problems for Theorem Provers) is the standard cross-prover benchmark corpus for automated reasoning - 26,264 problems across 57 mathematical domains, used by Vampire, E, Twee, Waldmeister, and every modern ATP system. Every problem is a `.p` file with one of six clause heads: `cnf`, `fof`, `tff`, `tcf`, `thf`, `ncf`. The [TPTPWorld project](https://github.com/TPTPWorld/SyntaxBNF) publishes the formal grammar as a 735-line BNF file (`SyntaxBNF-v9.2.1.4`, 338 rules).
 
-This note shows a TPTP parser built mechanically from that BNF using [EBNFParse]() - no per-rule hand-coding. It works in two steps:
+The paclet ships the result of this construction as [TPTPImport](paclet:Wolfram/WolframParser/ref/TPTPImport) - `TPTPImport[File["p.p"]]` (or `TPTPImport["cnf(...)"]`) returns the canonical `<|"Axioms" -> {phi1, ...}, "Conjecture" -> phi|>` shape directly. The corpus-walking sibling tutorial [TPTPProblemLibrary](paclet:Wolfram/WolframParser/tutorial/TPTPProblemLibrary) shows it driving the full 26K-problem distribution. This note tells the story of how the parser is *built* - the BNF + action map that `TPTPImport` reuses internally. It works in two steps:
 
 1. Read the BNF into an `Association[name -> ParserCombinator]`.
 2. Apply the result to TPTP source - optionally with an `"Actions"` map that lifts the raw parse tree to a Wolfram-Language data shape.
@@ -29,7 +29,7 @@ The lowering applies three standard PEG-vs-CFG rewrites automatically: direct le
 Needs["Wolfram`Parser`"]
 
 tptpBnf = Import[
-    FileNameJoin[{PacletObject["Wolfram/WolframParser"]["Location"], "Tests", "tptp-bnf.txt"}],
+    "https://raw.githubusercontent.com/TPTPWorld/SyntaxBNF/master/SyntaxBNF-v9.2.1.4",
     "Text"
 ];
 
@@ -65,7 +65,7 @@ Five clauses, quantifiers, function application, equality - all parsed. But the 
 
 ## Lifting to a useful shape: the `"Actions"` map
 
-Each entry in `"Actions" -> <|name -> fn|>` wraps the named rule's parser in a `ParseAction`. The function receives the rule's parsed value via the normal splatted convention - `Function[#1, #2, ...]` indexes into the sequence of matched sub-pieces. The action map below mechanically lifts the auto-generated parser's raw tree to the same Wolfram-Language shape the handwritten [TPTPImport](https://github.com/sw1sh/thvm) returns:
+Each entry in `"Actions" -> <|name -> fn|>` wraps the named rule's parser in a `ParseAction`. The function receives the rule's parsed value via the normal splatted convention - `Function[#1, #2, ...]` indexes into the sequence of matched sub-pieces. The action map below is the one [TPTPImport](paclet:Wolfram/WolframParser/ref/TPTPImport) installs at first call - it lifts the raw parse tree to the canonical Wolfram-Language shape:
 
 ```wl
 binConn[op_String, x_, y_] := Switch[op,
@@ -92,7 +92,7 @@ quant[q_, vs_, body_] := Quiet[
 tptpActions = <|
     (* Term level. Constants emit as `tok[]` (String-headed 0-ary
        compound) to sidestep `Equal["a", "b"] -> False` eager
-       evaluation - the same trick TPTPImport uses. *)
+       evaluation. *)
     "constant"  -> Function[#1[]],
     "functor"   -> Function[#1], "variable"  -> Function[#1],
     "fof_term"  -> Function[#1], "fof_function_term" -> Function[#1],
@@ -150,7 +150,7 @@ tptpActions = <|
     ]],
 
     (* Top-level clauses and file partition. negated_conjecture is
-       flipped through Not, matching TPTPImport's convention. *)
+       flipped through Not so the returned Conjecture is the positive goal. *)
     "cnf_annotated" -> Function[<|"Head" -> "cnf",
         "Name" -> #3, "Role" -> #5, "Formula" -> #7|>],
     "fof_annotated" -> Function[<|"Head" -> "fof",
@@ -191,7 +191,7 @@ fof(goal, conjecture, ! [X] : multiply(X, identity) = X)."]
      "Conjecture" -> ForAll[{X}, multiply[X, identity[]] == X]|> *)
 ```
 
-This is the shape the production [TPTPImport](https://github.com/sw1sh/thvm) returns: `ForAll`/`Exists` quantifiers, function application as `head[args...]`, `Equal`/`Unequal` for `=`/`!=`, the full Boolean grammar as `And`/`Or`/`Not`/`Implies`/`Equivalent`/`Xor`/`Nor`/`Nand`, cnf disjunctions as `Or[...]` (single literal stays bare), the file partitioned into `<|"Includes", "Axioms", "Conjecture"|>`, and `negated_conjecture` flipped through `Not`. The action map is ~50 entries, one per BNF rule on the path from `<TPTP_file>` to `<constant>`. The recogniser is unchanged - the same `EBNFParse` call drives both the with-actions and without-actions flows.
+This is the shape [TPTPImport](paclet:Wolfram/WolframParser/ref/TPTPImport) returns: `ForAll`/`Exists` quantifiers, function application as `head[args...]`, `Equal`/`Unequal` for `=`/`!=`, the Boolean grammar as `And`/`Or`/`Not`/`Implies`/`Equivalent`/`Xor`, cnf disjunctions as `Or[...]` (single literal stays bare), and `negated_conjecture` flipped through `Not` so the returned `Conjecture` is the positive goal. The action map is ~50 entries, one per BNF rule on the path from `<TPTP_file>` to `<constant>`. The recogniser is unchanged - the same `EBNFParse` call drives both the with-actions and without-actions flows.
 
 Without actions, the parser is just a recogniser - it tells you whether the source matches the grammar but the value is the structural skeleton. The action layer is what turns that into a workable Wolfram Language data structure.
 
@@ -201,7 +201,7 @@ Without actions, the parser is just a recogniser - it tells you whether the sour
 
 On the small CNF / FOF problems from the published `v9.2.1` distribution, per-clause parse time lands in the tens of milliseconds for short clauses (a few atoms, ground equations) and climbs into the hundreds of milliseconds for clauses with nested quantifiers and function applications. The 5-clause group-theory problem at the top of this note parses in ~700 ms end-to-end on a 2024 laptop with default `"ChoiceMode" -> "Auto"`.
 
-For reference, the handwritten [TPTPImport](https://github.com/sw1sh/thvm) parses the full 25,775-problem corpus at roughly 80 ms per problem (~35 minutes total). The auto-generated parser is comparable on small CNF and noticeably slower on FOF with deep boolean / quantifier nesting - the cost of trying every alternative under longest-match without memoisation. Adding [packrat-style memoisation](https://en.wikipedia.org/wiki/Parsing_expression_grammar#Implementing_parsers_from_parsing_expression_grammars) to `ParseRecursive` would close most of the throughput gap; a Pratt-style precedence climber for the connective grammar would be the right move for THF, where alternative explosion overwhelms even longest-match.
+On the published `v9.2.1` distribution, per-clause parse time lands in the tens of milliseconds for short clauses (a few atoms, ground equations) and climbs into the hundreds of milliseconds for clauses with nested quantifiers and function applications. The cost of trying every alternative under longest-match without memoisation shows up on FOF with deep boolean / quantifier nesting. Adding [packrat-style memoisation](https://en.wikipedia.org/wiki/Parsing_expression_grammar#Implementing_parsers_from_parsing_expression_grammars) to `ParseRecursive` would close most of the throughput gap; a Pratt-style precedence climber for the connective grammar would be the right move for THF, where alternative explosion overwhelms even longest-match.
 
 ### ParserCompile is currently a stub
 
@@ -272,15 +272,9 @@ The current `ParserCompile` is interpretive-equivalent (stubbed), so per-file ti
 
 ---
 
-## Comparison to the handwritten TPTPImport
+## What this approach buys
 
-The [TPTPImport](https://github.com/sw1sh/thvm) (sibling project, ~1100 lines of WL) is a complete reference implementation: CNF, FOF, TFF, TCF, THF, NCF clauses, the full Boolean grammar, quantifiers, sequents, includes with optional clause-name selectors, the term-level coverage (variables, distinct objects, numeric literals, single-quoted atoms), and the WL-term lifting that gives `<|"Axioms" -> {phi1, ...}, "Conjecture" -> phi|>` for downstream consumers.
-
-What you get for free with the EBNF-driven approach:
-
-- **The recogniser.** 280 of the 354 TPTP rules lower automatically; small CNF/FOF clauses parse end-to-end via a generic mechanism.
-- **Grammar-tracking.** When TPTP-v9.3 ships, you re-run `EBNFParse` on the new BNF file and re-bind the actions - no per-rule diff. The handwritten parser has to be updated rule by rule.
-- **Single source of truth.** The grammar IS the parser definition; the parser cannot disagree with the published BNF because they are the same file.
+The EBNF-driven path means the grammar IS the parser definition - the parser cannot disagree with the published BNF because they are the same file. When TPTP-v9.3 ships, re-run `EBNFParse` on the new BNF and re-bind the actions; no per-rule diff. The recogniser drops out for free: 280 of the 338 TPTP rules lower automatically, and small CNF / FOF clauses parse end to end via a generic mechanism. Compare this to a hand-coded parser, where every grammar change is a per-rule code edit.
 
 What still needs hand-work:
 
@@ -288,4 +282,4 @@ What still needs hand-work:
 - **THF higher-order.** The mutual recursion + alternative explosion in the higher-order grammar needs memoisation or a different parsing strategy (e.g. Pratt-style precedence climbing) to be tractable.
 - **Lexical primitives.** The `PrimitiveOverrides` map above covers the common cases; a complete map adds `real`, `rational`, `dollar_dollar_word`, the spacing tokens, comment / whitespace rules. A small `:::`-to-`ParseCharacter` compiler would generate these from the BNF too.
 
-For a single-purpose ATP frontend, the handwritten parser remains the production choice today: faster, action-complete, and battle-tested against the full corpus. For evolving formal-grammar work where the published spec is moving and the hand-coded shadow drifts, the EBNF-driven path is what closes the gap.
+For most TPTP workflows, [TPTPImport](paclet:Wolfram/WolframParser/ref/TPTPImport) (built on this construction) is the entry point. For evolving formal-grammar work where the published spec is moving, the EBNF-driven path is what keeps the parser in lockstep with the spec.

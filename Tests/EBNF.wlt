@@ -2,6 +2,13 @@
 
 Needs["Wolfram`Parser`"]
 
+(* The TPTP BNF tests fetch the canonical grammar from TPTPWorld once
+   per test run, then reuse the cached string across every test below
+   so a flaky network doesn't multiply into N timeouts. *)
+$tptpBnf = Import[
+    "https://raw.githubusercontent.com/TPTPWorld/SyntaxBNF/master/SyntaxBNF-v9.2.1.4",
+    "Text"]
+
 
 (* ===== EBNFRules: BNF source -> structured rule list ===== *)
 
@@ -65,22 +72,13 @@ VerificationTest[
 (* ===== TPTP coverage: the full grammar parses ===== *)
 
 VerificationTest[
-    Length @ EBNFRules @ Import[
-        FileNameJoin[{DirectoryName[$TestFileName], "tptp-bnf.txt"}],
-        "Text"
-    ],
+    Length @ EBNFRules @ $tptpBnf,
     354,
     TestID -> "EBNF: TPTPWorld SyntaxBNF-v9.2.1.4 parses to 354 rule records"
 ]
 
 VerificationTest[
-    Module[{
-        bnf = Import[
-            FileNameJoin[{DirectoryName[$TestFileName], "tptp-bnf.txt"}],
-            "Text"
-        ],
-        parsers
-    },
+    Module[{bnf = $tptpBnf, parsers},
         (* Every TPTP lexical rule (lower_word, upper_word, integer,
            single_quoted, distinct_object, dollar_word, vline, star,
            plus, ..., and the regex-heavy sq_char / do_char /
@@ -144,10 +142,7 @@ VerificationTest[
 
 VerificationTest[
     Module[{
-        bnf = Import[
-            FileNameJoin[{DirectoryName[$TestFileName], "tptp-bnf.txt"}],
-            "Text"
-        ],
+        bnf = $tptpBnf,
         parsers, source
     },
         parsers = EBNFParse[bnf];
@@ -191,10 +186,7 @@ fof(goal, conjecture, ! [X] : commutator(X, identity) = identity).";
 
 VerificationTest[
     Module[{
-        bnf = Import[
-            FileNameJoin[{DirectoryName[$TestFileName], "tptp-bnf.txt"}],
-            "Text"
-        ],
+        bnf = $tptpBnf,
         binConn, rightList, quant, actions, parsers, source
     },
         binConn[op_String, x_, y_] := Switch[op,
