@@ -1965,37 +1965,63 @@ rewriteBareOver[s_String] :=
             "\\atopfrac{$1}{$2}"
     }]
 
-(* Basic `\def\NAME{body}` support: parameter-less macros only (no
-   `\def\foo#1{...}` argument templating).  Scan for definitions,
-   build a map, strip the definitions from the source, then expand
-   each `\NAME` usage to its body.  Iterates a few times so nested
-   uses (a definition that references another defined macro) settle. *)
-extractDefs[s_String] := Module[{n = StringLength[s], pos = 1, defs = <||>, out = "", j, depth, name, start, body, k, end},
+(* `\above<dim>` is a custom-thickness variant of `\over`; FractionBox
+   has no thickness knob so drop the dimension and treat as `\over`.
+   Similarly `\abovewithdelims<l><r><dim>` and `\atopwithdelims<l><r>`
+   — discard the delimiters and the dimen, keep the structure.  Done
+   as a pre-pass before rewriteInfixFractions so the existing infix
+   walker handles the result.  Dimen format covers the common units. *)
+rewriteAboveAtopVariants[s_String] :=
+    StringReplace[s, {
+        (* \abovewithdelims <l><r><dim> -> \over, losing delims+dim *)
+        RegularExpression[
+            "\\\\abovewithdelims\\s*(?:\\\\[a-zA-Z]+|.)\\s*(?:\\\\[a-zA-Z]+|.)\\s*[0-9.]+\\s*(?:pt|em|ex|mm|cm|in|bp|pc|dd|cc|sp|mu)"
+        ] -> "\\over",
+        (* \atopwithdelims <l><r> -> \atop, losing delims *)
+        RegularExpression[
+            "\\\\atopwithdelims\\s*(?:\\\\[a-zA-Z]+|.)\\s*(?:\\\\[a-zA-Z]+|.)"
+        ] -> "\\atop",
+        (* \above <dim> -> \over, losing dim *)
+        RegularExpression["\\\\above\\s*[0-9.]+\\s*(?:pt|em|ex|mm|cm|in|bp|pc|dd|cc|sp|mu)"] -> "\\over"
+    }]
+
+(* `\def\NAME<params>{body}` support.  Scan source for definitions,
+   capture a parameter template (`#1#2...`), strip the definitions,
+   then expand each `\NAME{a}{b}` call site by substituting args into
+   the body.  Iterates a few times so a body that calls another user
+   macro settles.  Parameter templates are minimal: just `#1#2...`
+   with no inter-parameter delimiters (the common KaTeX-corpus form).
+
+   defs[name] = {arity, body}; body holds literal `#1`/`#2`/... slots. *)
+extractDefs[s_String] := Module[
+    {n = StringLength[s], pos = 1, defs = <||>, out = "",
+     j, depth, name, start, body, k, end, arity, ch},
     While[pos <= n,
         If[ StringTake[s, {pos, Min[pos + 4, n]}] === "\\def\\",
-            (* find macro name: letters after \def\ *)
             j = pos + 5;
             start = j;
             While[j <= n && StringMatchQ[StringTake[s, {j, j}], LetterCharacter], j++];
             name = StringTake[s, {start, j - 1}];
-            (* skip ws *)
+            (* Parameter template: count `#1#2...#N` (must be sequential). *)
+            arity = 0;
+            While[ j + 1 <= n && StringTake[s, {j, j}] === "#" &&
+                   StringTake[s, {j + 1, j + 1}] === ToString[arity + 1],
+                arity++; j += 2
+            ];
             While[j <= n && StringMatchQ[StringTake[s, {j, j}], WhitespaceCharacter], j++];
-            (* parse body: balanced {...} *)
-            If[j <= n && StringTake[s, {j, j}] === "{",
+            If[j <= n && StringTake[s, {j, j}] === "{" && name =!= "",
                 depth = 1; k = j + 1; end = k;
                 While[end <= n && depth > 0,
-                    Switch[StringTake[s, {end, end}],
-                        "{", depth++, "}", depth--
-                    ];
+                    ch = StringTake[s, {end, end}];
+                    Switch[ch, "{", depth++, "}", depth--];
                     end++
                 ];
                 If[ depth === 0,
                     body = StringTake[s, {k, end - 2}];
-                    defs[name] = body;
-                    pos = end,   (* skip over def *)
+                    defs[name] = {arity, body};
+                    pos = end,
                     out = out <> StringTake[s, {pos, n}]; pos = n + 1
                 ],
-                (* no body? emit \def\NAME and continue *)
                 out = out <> StringTake[s, {pos, j - 1}];
                 pos = j
             ],
@@ -2005,37 +2031,68 @@ extractDefs[s_String] := Module[{n = StringLength[s], pos = 1, defs = <||>, out 
     {defs, out}
 ]
 
-(* Expand user-defined macros from `defs` in `s`.  Iterate until no
-   change or a small fixed iteration cap. *)
-expandUserMacros[s_String, defs_Association] := Module[{cur = s, prev, n = 5},
-    While[n > 0,
-        prev = cur;
-        cur = StringReplace[cur,
-            KeyValueMap[
-                Function[{name, body},
-                    "\\" ~~ name ~~ Except[LetterCharacter] :> body <> StringTake["$0", -1]
-                ] /; True &&  (* condition keeps the rule list well-formed *)
-                False,    (* this is a placeholder - real rules below *)
-                defs
-            ]
-        ];
-        If[cur === prev, n = 0, n--]
+(* Substitute `#i` placeholders in body with the corresponding arg. *)
+substituteMacroBody[body_String, args_List] := Module[{out = body},
+    Do[
+        out = StringReplace[out, "#" <> ToString[i] -> args[[i]]],
+        {i, Length[args]}
     ];
-    cur
+    out
 ]
-(* The placeholder above doesn't work because StringExpression-form
-   rules with `$0` capture aren't supported cleanly. Use RegularExpression
-   for each def. *)
-expandUserMacros[s_String, defs_Association] := Module[{cur = s, prev, n = 5, rules},
-    rules = KeyValueMap[
-        Function[{name, body},
-            RegularExpression["\\\\" <> name <> "(?![a-zA-Z])"] -> body
-        ],
-        defs
+
+(* One-shot expansion of a single macro by name through the whole string.
+   Hand-walked so we can pull `arity` balanced `{...}` arguments after
+   each `\NAME` call site.  For arity-0 macros this degenerates to
+   pure replacement; for parametric ones it grabs the args, substitutes,
+   and emits the expanded text. *)
+expandOneMacro[s_String, name_String, arity_Integer, body_String] := Module[
+    {n = StringLength[s], pos = 1, out = "", nameLen = StringLength[name],
+     after, j, k, depth, args, argStart, expanded, ch, abort},
+    While[pos <= n,
+        If[ pos + nameLen <= n &&
+            StringTake[s, {pos, pos + nameLen}] === "\\" <> name &&
+            (pos + nameLen + 1 > n ||
+             !StringMatchQ[StringTake[s, {pos + nameLen + 1, pos + nameLen + 1}], LetterCharacter]),
+            after = pos + nameLen + 1;
+            j = after; args = {}; abort = False;
+            Do[
+                While[j <= n && StringMatchQ[StringTake[s, {j, j}], WhitespaceCharacter], j++];
+                If[ j > n || StringTake[s, {j, j}] =!= "{",
+                    abort = True; Break[]
+                ];
+                depth = 1; k = j + 1; argStart = k;
+                While[k <= n && depth > 0,
+                    ch = StringTake[s, {k, k}];
+                    Switch[ch, "{", depth++, "}", depth--];
+                    k++
+                ];
+                If[ depth =!= 0, abort = True; Break[]];
+                AppendTo[args, StringTake[s, {argStart, k - 2}]];
+                j = k,
+                {arity}
+            ];
+            If[ abort,
+                out = out <> StringTake[s, {pos, pos}]; pos++,
+                expanded = If[arity === 0, body, substituteMacroBody[body, args]];
+                out = out <> expanded;
+                pos = j
+            ],
+            out = out <> StringTake[s, {pos, pos}]; pos++
+        ]
     ];
+    out
+]
+
+(* Iterate macro expansion to a small fixed point. *)
+expandUserMacros[s_String, defs_Association] := Module[{cur = s, prev, n = 8},
     While[n > 0,
         prev = cur;
-        cur = StringReplace[cur, rules];
+        KeyValueMap[
+            Function[{name, spec},
+                cur = expandOneMacro[cur, name, spec[[1]], spec[[2]]]
+            ],
+            defs
+        ];
         If[cur === prev, n = 0, n--]
     ];
     cur
@@ -2055,6 +2112,7 @@ preprocessLaTeX[s_String] :=
     applyTextModeSubstitutions @
     rewriteBareOver @
     rewriteInfixFractions @
+    rewriteAboveAtopVariants @
     rewriteOldFontSwitches @
     rewriteCDEnv @
     applyUserDefs @
