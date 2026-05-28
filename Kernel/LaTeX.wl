@@ -244,11 +244,14 @@ puncToken = ParseAction[
 ] | tildeToken
 
 (* Tokens valid ONLY at the outermost top level - intentionally
-   unbalanced closing delimiters from `\left. + a \right)` etc. They
-   are kept out of puncToken so they don't leak into parenAtom's inner
-   row. *)
+   unbalanced delimiters: the closing `)` `]` from `\left. + a \right)`,
+   and the OPENING `(` `[` left behind by an unmatched `\big(` (e.g.
+   `x^{\big(}`).  They are kept out of puncToken so they don't leak into
+   parenAtom's / bracketAtom's inner row - balanced `(x)` / `[x]` still
+   win via expr (tried first); only a genuinely unmatched delimiter
+   falls through to here and renders as a bare glyph. *)
 outerPuncToken = ParseAction[
-    literal[")"] | literal["]"],
+    literal[")"] | literal["]"] | literal["("] | literal["["],
     #1 &
 ]
 (* matrix cells use a slightly looser row that accepts the closing
@@ -2432,21 +2435,24 @@ preprocessLaTeX[s_String] :=
     rewriteGroupScopedSwitches @
     rewriteScopedColor @
     StringReplace[s, {
-        (* \big and friends consume their next delimiter together. These
-           are NOT guaranteed to come in matched pairs (e.g. \big( without
-           a \big) elsewhere), so stripping the macro alone leaves an
-           unbalanced delimiter behind. Dropping both keeps the input
-           parseable at the cost of losing the visual big-delim. *)
+        (* \big / \Big / \bigg / \bigl / \bigr / \middle ... are
+           delimiter-SIZING macros. We don't model the size, but the
+           delimiter itself has to stay visible - `\big|` is a bar,
+           `\Big\uparrow` an arrow, `\bigl(` a paren. So strip JUST the
+           sizing macro and keep the delimiter. The `.` null delimiter
+           maps to nothing. An unmatched opener (e.g. `\big(` alone in a
+           script) renders via the grammar's bare-delimiter fallback
+           (outerPuncToken). Pairs like `\bigl( .. \bigr)` reunite as a
+           normal balanced `( .. )`. *)
         RegularExpression[
-            "\\\\(bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|.])"
+            "\\\\(?:bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg|middle)\\s*\\."
         ] -> "",
         RegularExpression[
-            "\\\\(bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg)(?![a-zA-Z])"
-        ] -> "",
-        (* \middle X inside a \left...\right group: drop both, since we
-           don't model the middle delimiter visually. *)
-        RegularExpression["\\\\middle\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|.\\/])"] -> "",
-        RegularExpression["\\\\middle(?![a-zA-Z])"] -> ""
+            "\\\\(?:bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg|middle)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/])"
+        ] -> "$1",
+        RegularExpression[
+            "\\\\(?:bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg|middle)(?![a-zA-Z])"
+        ] -> ""
     }]
 
 (* Post-process: the big-operator characters (Σ, Π, ∫, ∮, ∐, ⋃, ⋂, ⋁,

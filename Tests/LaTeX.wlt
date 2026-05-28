@@ -393,14 +393,28 @@ VerificationTest[
 ]
 
 VerificationTest[
-    (* \bigl( and \bigr) are stripped together with their delimiters -
-       we lose the visual parens but gain the ability to parse the
-       far-more-common unbalanced TeX (\big(, \Big\uparrow, ...) where
-       there is no matching \bigr counterpart in the source. The
-       balanced case still parses cleanly, just to the inner content. *)
+    (* \bigl / \bigr drop only the SIZING macro and keep the delimiter
+       glyph, so the parens stay visible (we just don't model the size).
+       A matched pair reunites as a normal balanced ( ... ); an
+       unmatched opener like \big( alone in a script renders as a bare
+       glyph via the grammar's outerPuncToken fallback. *)
     LaTeXMathParse["\\bigl( a \\bigr)"],
-    StyleBox["a", "TI"],
-    TestID -> "KaTeX delimiters: \\bigl ... \\bigr strip with their delim"
+    RowBox[{"(", StyleBox["a", "TI"], ")"}],
+    TestID -> "KaTeX delimiters: \\bigl ... \\bigr keep their delim"
+]
+
+VerificationTest[
+    (* unmatched \big( in a superscript: paren stays visible *)
+    LaTeXMathParse["x^{\\big(}"],
+    SuperscriptBox[StyleBox["x", "TI"], "("],
+    TestID -> "KaTeX delimiters: unmatched \\big( renders bare paren"
+]
+
+VerificationTest[
+    (* \Big\uparrow keeps the arrow glyph *)
+    LaTeXMathParse["a_{\\Big\\uparrow}"],
+    SubscriptBox[StyleBox["a", "TI"], "\[UpArrow]"],
+    TestID -> "KaTeX delimiters: \\Big\\uparrow keeps the arrow"
 ]
 
 VerificationTest[
