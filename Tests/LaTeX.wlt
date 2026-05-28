@@ -280,7 +280,10 @@ VerificationTest[
 
 VerificationTest[
     LaTeXMathParse["a \\cdot b"],
-    RowBox[{StyleBox["a", "TI"], "\[Times]", StyleBox["b", "TI"]}],
+    (* `\cdot` is U+22C5 CENTER DOT (·), distinct from `\times` (×)
+       and `*` (asterisk operator) - KaTeX renders all three with
+       different glyphs and so do we now. *)
+    RowBox[{StyleBox["a", "TI"], "\[CenterDot]", StyleBox["b", "TI"]}],
     TestID -> "LaTeX: \\cdot visible product"
 ]
 

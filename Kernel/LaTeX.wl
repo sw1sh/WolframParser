@@ -431,7 +431,28 @@ commandHandlers["\\mathfrak"] = styleHandler[gothicCapitalChars, FontVariations 
    `\mathbf{ab}` renders as bold-italic (StyleBox wraps a RowBox of
    italic letters in a bold-only outer style); KaTeX renders \mathbf
    as upright bold, \mathrm as upright, \mathsf as upright sans-serif. *)
-stripItalic[e_] := e //. StyleBox[s_String, "TI"] :> s
+(* Drop the per-letter math-italic dressing AND coalesce the resulting
+   bare-string runs in any RowBox into a single string.  The notebook
+   FE renders a RowBox of consecutive strings with a small gap between
+   each child, so `\text{abc}` parsed into RowBox[{"a", "b", "c"}]
+   would display as `a b c` (visible spaces).  Joining to RowBox[{"abc"}]
+   - or just "abc" if only one piece remains - renders as the tight
+   "abc" KaTeX gives.  Done as a single bottom-up pass (Replace at
+   level Infinity, not ReplaceRepeated) so the RowBox unwrap doesn't
+   cycle with parent re-application. *)
+mergeRowStrings[parts_List] := Module[{merged},
+    merged = Replace[
+        Split[parts, StringQ[#1] && StringQ[#2] &],
+        run : {_String, __String} :> StringJoin @@ run,
+        {1}
+    ];
+    If[Length[merged] === 1, First[merged], RowBox[merged]]
+]
+stripItalic[e_] := Replace[
+    e //. StyleBox[s_String, "TI"] :> s,
+    RowBox[parts_List] :> mergeRowStrings[parts],
+    {0, Infinity}
+]
 
 commandHandlers["\\mathbf"]   = Function[{opt, req},
     StyleBox[stripItalic @ First[req, ""], FontWeight -> "Bold", FontSlant -> "Plain"]
@@ -1270,10 +1291,14 @@ rowJoin[a_, mid_, b_] := RowBox[Join[rowParts[a], {mid}, rowParts[b]]]
    multiplication (`2x`, `\sum x_i`, `\sin x`). *)
 mulOp = ParseChoice[
     ParseAction[literal["/"], Function[op, Function[{a, b}, rowJoin[a, "/", b]]]],
-    ParseAction[
-        literal["*"] | literal["\\cdot"] | literal["\\times"],
-        Function[op, Function[{a, b}, rowJoin[a, "\[Times]", b]]]
-    ],
+    (* Distinct glyphs: `\cdot` is ·, `\times` is ×, `*` is the
+       asterisk operator. KaTeX renders all three differently. *)
+    ParseAction[literal["\\cdot"],
+        Function[op, Function[{a, b}, rowJoin[a, "\[CenterDot]", b]]]],
+    ParseAction[literal["\\times"],
+        Function[op, Function[{a, b}, rowJoin[a, "\[Times]", b]]]],
+    ParseAction[literal["*"],
+        Function[op, Function[{a, b}, rowJoin[a, "*", b]]]],
     ParseAction[ParseSucceed[Null], Function[op, Function[{a, b}, rowJoin[a, b]]]]
 ]
 
