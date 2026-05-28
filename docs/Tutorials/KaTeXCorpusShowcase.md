@@ -56,16 +56,30 @@ katexReference[name_String] := Module[{cached, url, img},
     ]
 ];
 
+(* KaTeX renders in Computer Modern (its KaTeX_Math face).  Our boxes
+   inherit the front end's default math font, which is Times-based, so
+   the side-by-side glyph shapes differ even when the structure matches.
+   If a Computer-Modern-family font happens to be installed, prefer it
+   so the comparison is about content, not typeface; otherwise fall back
+   to the FE default (no FontFamily).  No font is installed by this
+   build - this is purely opportunistic. *)
+$mathFontCandidates = {
+    "Latin Modern Math", "Latin Modern Roman", "CMU Serif",
+    "STIX Two Math", "STIXGeneral"
+};
+$mathFont = SelectFirst[$mathFontCandidates, MemberQ[$FontFamilies, #] &, None];
+$mathFontOpts = If[$mathFont === None, {}, {FontFamily -> $mathFont}];
+
 (* Rasterise our parse at a font size chosen to roughly match the
    visual scale of KaTeX's published screenshots (default WL math is
-   ~10pt, KaTeX renders nearer to ~24pt with a Computer-Modern-style
-   serif math font). Both renders end up as bitmaps so the side-by-
-   side compare honestly reflects what each engine produced. *)
+   ~10pt, KaTeX renders nearer to ~24pt). Both renders end up as
+   bitmaps so the side-by-side compare honestly reflects what each
+   engine produced. *)
 ourRender[src_String] := Module[{r = Quiet @ Check[LaTeXMathParse[src], $Failed]},
     If[ MatchQ[r, _ParseError | $Failed],
         Style["ParseError", Red, FontSize -> 14],
         Rasterize[
-            Style[DisplayForm[r], FontSize -> 24],
+            Style[DisplayForm[r], FontSize -> 24, Sequence @@ $mathFontOpts],
             ImageResolution -> 144
         ]
     ]
