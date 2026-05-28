@@ -2281,6 +2281,17 @@ preprocessLaTeX[s_String] :=
        with the `*` absorbed; commandHandlers["\\operatornamestar"]
        picks it up. *)
     StringReplace[#, RegularExpression["\\\\operatorname\\*"] -> "\\operatornamestar"] &@
+    (* TeX-form unbraced length args: `\kern1em`, `\mkern18mu`,
+       `\hskip 3pt`, `\rule{2em}{1em}` already has braces and is
+       fine.  Wrap the dimension in braces so the command parser
+       grabs it as the required arg instead of leaving `1em` as
+       loose literal text. *)
+    StringReplace[#,
+        RegularExpression[
+            "\\\\(kern|mkern|hskip|mskip|hspace|vspace)\\s*" <>
+            "(-?[0-9]*\\.?[0-9]+\\s*(?:pt|em|ex|mm|cm|in|bp|pc|dd|cc|sp|mu))"
+        ] :> ("\\" <> "$1" <> "{" <> "$2" <> "}")
+    ] &@
     (* TeX size / style switches scope to the END of the current
        brace group, but our grammar treats them as commands that
        eat just ONE following `{...}` arg.  Rewrite `{\Huge body}`
