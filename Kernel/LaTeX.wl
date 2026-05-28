@@ -1037,10 +1037,17 @@ commandHandlers["\\underbar"] = commandHandlers["\\underline"]
    a single-column grid gives the visual stack. *)
 commandHandlers["\\substack"] = Function[{opt, req},
     With[{body = First[req, ""]},
-        Switch[body,
-            RowBox[{rows___}], GridBox[List /@ {rows}],
-            _, GridBox[{{body}}]
-        ]
+        (* Switch doesn't bind pattern variables — `rows___` was being
+           left as a literal symbol and showed up in the output as
+           `Wolfram`Parser`LaTeXPrivate`rows`.  Use Replace, which
+           does bind.  `\\` between rows leaves an empty "" sibling
+           in the parsed RowBox; drop those so the grid doesn't get
+           blank middle rows. *)
+        Replace[body, {
+            RowBox[parts_List] :>
+                GridBox[List /@ DeleteCases[parts, ""]],
+            other_ :> GridBox[{{other}}]
+        }]
     ]
 ]
 
