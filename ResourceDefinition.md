@@ -4,7 +4,7 @@ ResourceType: Paclet
 Name: Wolfram/WolframParser
 Context: Wolfram`Parser`
 Paclet: Wolfram/WolframParser
-Description: A general, fast, composable parser library for the Wolfram Language - parser combinators, GrammarRules-compatible declarative grammars, FunctionCompile-backed local execution, a LaTeX math parser at 100% KaTeX corpus coverage
+Description: Parser combinators for the Wolfram Language - GrammarRules compatible, locally compiled, with a LaTeX math parser
 ContributedBy: Nikolay Murzin, Claude (Anthropic)
 Keywords: [parser, parsing, grammar, combinator, GrammarRules, FunctionCompile, LaTeX, KaTeX, TPTP, DSL]
 MainGuide: Documentation/English/Guides/WolframParser.nb
@@ -29,19 +29,75 @@ RelatedResources: [Wolfram/MarkdownToNotebook]
 
 The package provides [Parse]() and [ParserCompile]() as the entry points, [ParserCombinator]() as the single computable head every constructor returns, and the `Parse*` family of constructors - [ParseLiteral](), [ParseCharacter](), [ParseSequence](), [ParseChoice](), [ParseMany](), [ParseSome](), [ParseOptional](), [ParseBetween](), [ParseAction](), [ParseRecursive](), [ParseLookahead](), [ParseNotFollowedBy](), [ParseTry](). [GrammarRules]() is accepted as input to `Parse` and lowered locally. [LaTeXMathParse]() parses LaTeX math-mode source to a tree of Wolfram boxes.
 
+## Basic Examples
+
+A literal-string parser:
+
+```wl
+Parse[ParseLiteral["foo"], "foo"]
+```
+
+<!-- => "foo" -->
+
+---
+
+A one-or-more digit parser with an action that folds the captured digits into an integer:
+
+```wl
+Parse[
+    ParseAction[
+        ParseSome[ParseCharacter[DigitCharacter]],
+        FromDigits @ StringJoin[{##}] &
+    ],
+    "12345"
+]
+```
+
+<!-- => 12345 -->
+
+---
+
+A `GrammarRules` slot template, parsed locally (no `CloudDeploy` round-trip):
+
+```wl
+Parse[GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}], "add 3 and 5"]
+```
+
+<!-- => 8 -->
+
+---
+
+`LaTeXMathParse` on an inline math source - the output is a tree of Wolfram boxes ready to drop into a notebook cell:
+
+```wl
+LaTeXMathParse["\\frac{x^2}{y^2} = z^2"]
+```
+
+<!-- => RowBox[{FractionBox[SuperscriptBox["x", "2"], SuperscriptBox["y", "2"]], "=", SuperscriptBox["z", "2"]}] -->
+
 ## Hero Image
 
-The parser in action: a raw LaTeX source string on the left, the tree of
-Wolfram boxes `LaTeXMathParse` produces on the right (rendered by the
-front end as typeset math). The arrow is the parser.
+The parser in action: a raw LaTeX source string on top, an arrow, and
+the tree of Wolfram boxes `LaTeXMathParse` produces below it (the
+front end renders those boxes as typeset math).
 
 ```wl
 With[{src = "\\sum_{n=1}^{\\infty} \\frac{1}{n^2}"},
-    Column[{
-        Style[src, FontFamily -> "Source Code Pro", FontSize -> 20, GrayLevel[0.4]],
-        Style["\[DownArrow]", FontSize -> 24, GrayLevel[0.65]],
-        Style[DisplayForm @ LaTeXMathParse[src], FontSize -> 44]
-    }, Alignment -> Center, Spacings -> 1.2]
+    Rasterize[
+        Framed[
+            Column[{
+                Style[src, FontFamily -> "Source Code Pro", FontSize -> 22, GrayLevel[0.45]],
+                Spacer[{0, 20}],
+                Style["\[DownArrow]", FontSize -> 32, GrayLevel[0.7]],
+                Spacer[{0, 20}],
+                Style[DisplayForm @ LaTeXMathParse[src], FontSize -> 64, FontColor -> GrayLevel[0.15]]
+            }, Alignment -> Center],
+            Background -> GrayLevel[0.98], FrameMargins -> 80,
+            FrameStyle -> GrayLevel[0.9], RoundingRadius -> 20,
+            ImageSize -> {700, 500}
+        ],
+        ImageResolution -> 144, Background -> None
+    ]
 ]
 ```
 

@@ -2,7 +2,7 @@
 
 PacletObject[<|
     "Name" -> "Wolfram/WolframParser",
-    "Description" -> "A general, fast, composable parser library for the Wolfram Language - parser combinators, GrammarRules-compatible declarative grammars, FunctionCompile-backed local execution",
+    "Description" -> "Parser combinators for the Wolfram Language - GrammarRules compatible, locally compiled, with a LaTeX math parser",
     "Creator" -> "Nikolay Murzin, Claude (Anthropic)",
     "PublisherID" -> "Wolfram",
     "License" -> "MIT",
