@@ -292,8 +292,20 @@ environmentAtom = ParseAction[
     buildEnv[#3, #8] &
 ]
 
-buildEnv[name_String, rows_List] :=
-    Module[{width, padded, grid},
+(* True for a row that carries no content: empty, or every cell is the
+   empty-string the `ParseSucceed[""]` fallback emits. *)
+emptyMatrixRowQ[row_List] := MatchQ[row, {} | {(""|" ") ...}]
+
+buildEnv[name_String, rowsIn_List] :=
+    Module[{rows = rowsIn, width, padded, grid},
+        (* A trailing `\\` before `\end{...}` makes ParseSepBy parse one
+           more (empty) row. LaTeX/KaTeX tolerate the trailing separator
+           and render NO extra row, so drop trailing all-empty rows -
+           but never drop the last surviving row (an all-empty matrix
+           should still be a 1x1 empty grid, not nothing). *)
+        While[Length[rows] > 1 && emptyMatrixRowQ[Last[rows]],
+            rows = Most[rows]
+        ];
         width = Max[Length /@ rows, 1];
         padded = Map[PadRight[#, width, ""] &, rows];
         grid = GridBox[padded];
@@ -1029,25 +1041,29 @@ commandHandlers["\\pmod"] = Function[{opt, req},
 (* `\underbar{X}` is a Plain-TeX alias for `\underline{X}` - same render. *)
 commandHandlers["\\underbar"] = commandHandlers["\\underline"]
 
+(* Split a flat box / RowBox-parts list at each `$lineBreakMark`,
+   returning one entry per line: a bare box for a single-token line,
+   a RowBox for a multi-token line, "" for an empty line.  Shared by
+   \substack and the top-level applyLineBreaks pass. *)
+lineBreakSegments[body_] := Module[{parts},
+    parts = Replace[body, {RowBox[p_List] :> p, x_ :> {x}}];
+    Replace[
+        SequenceSplit[parts, {$lineBreakMark}],
+        {
+            {} :> "",
+            {one_} :> one,
+            many_List :> RowBox[many]
+        },
+        {1}
+    ]
+]
+
 (* `\substack{a\\b\\c}`: small vertical stack used under summation /
-   product limits.  Render as a column GridBox.  The arg is parsed as
-   a topRow, where `\\` becomes a row break - so the arg ends up as
-   either a single value or a `RowBox` whose entries are separated by
-   `""` (the linebreakToken's transparent emit).  Either way wrapping in
-   a single-column grid gives the visual stack. *)
+   product limits.  Render as a single-column GridBox, one row per
+   `\\`-separated segment. *)
 commandHandlers["\\substack"] = Function[{opt, req},
-    With[{body = First[req, ""]},
-        (* Switch doesn't bind pattern variables — `rows___` was being
-           left as a literal symbol and showed up in the output as
-           `Wolfram`Parser`LaTeXPrivate`rows`.  Use Replace, which
-           does bind.  `\\` between rows leaves an empty "" sibling
-           in the parsed RowBox; drop those so the grid doesn't get
-           blank middle rows. *)
-        Replace[body, {
-            RowBox[parts_List] :>
-                GridBox[List /@ DeleteCases[parts, ""]],
-            other_ :> GridBox[{{other}}]
-        }]
+    With[{rows = lineBreakSegments[First[req, ""]]},
+        GridBox[List /@ rows]
     ]
 ]
 
@@ -1593,9 +1609,15 @@ mathRow = ParseAction[
      parsing math; nests harmlessly inside \tag{$+$x}, \text{$a<b$})
    - `\hline` / `\hdashline` / `\newline` would also live here but they
      already match commandAtom via the noop handlers above. *)
+(* A distinct sentinel for `\\` / `\cr` line breaks, kept separate from
+   the `""` that empty groups / spacing no-ops emit.  Carrying it as its
+   own marker lets applyLineBreaks (post-parse) tell a genuine line
+   break apart from incidental empty strings and stack the segments into
+   a GridBox.  The marker never survives to output - applyLineBreaks
+   removes every occurrence. *)
 linebreakToken = ParseAction[
     (literal["\\\\"] | literal["\\cr"]) ~~ Optional[bracketedArgRef] ~~ ws,
-    "" &
+    $lineBreakMark &
 ]
 dollarToken = ParseAction[literal["$"], "" &]
 
@@ -2387,6 +2409,21 @@ preprocessLaTeX[s_String] :=
             "(-?[0-9]*\\.?[0-9]+\\s*(?:pt|em|ex|mm|cm|in|bp|pc|dd|cc|sp|mu))"
         ] :> ("\\" <> "$1" <> "{" <> "$2" <> "}")
     ] &@
+    (* `\verb<delim>content<delim>` and `\verb*<delim>content<delim>`
+       are verbatim macros — the next non-letter, non-space, non-asterisk
+       character after `\verb` or `\verb*` becomes the delimiter, and
+       content is read raw until the matching delimiter.  Approximate
+       by rewriting to `\texttt{content}`.  Only handle a fixed set
+       of common delimiters (`|`, `!`, `+`, `=`, `/`) — the
+       space-delimited form would interact with whitespace-stripping
+       elsewhere, so we leave it as a literal.  Done as a preprocess
+       so the rest of the pipeline sees a regular `\texttt{...}`. *)
+    StringReplace[#, {
+        RegularExpression["\\\\verb\\*([|!+=/])([^|!+=/]*?)\\1"] :>
+            ("\\texttt{" <> "$2" <> "}"),
+        RegularExpression["\\\\verb([|!+=/])([^|!+=/]*?)\\1"] :>
+            ("\\texttt{" <> "$2" <> "}")
+    }] &@
     (* TeX size / style switches scope to the END of the current
        brace group, but our grammar treats them as commands that
        eat just ONE following `{...}` arg.  Rewrite `{\Huge body}`
@@ -2532,9 +2569,30 @@ suppressCommaSpaceBetweenDigits[boxes_] := boxes //. {
         ]
 }
 
+(* Convert top-level / nested `\\` line breaks (carried as
+   $lineBreakMark) into a stacked single-column GridBox, so multi-line
+   display math like the BoldSymbol corpus case renders on separate
+   lines instead of running together.  Bottom-up via //. so a RowBox
+   that becomes a GridBox doesn't re-trigger.  A trailing `\\` leaves a
+   final empty segment; drop it (LaTeX tolerates the trailing
+   separator), mirroring buildEnv's trailing-row handling. *)
+applyLineBreaks[boxes_] := boxes //. {
+    RowBox[parts_List] /; MemberQ[parts, $lineBreakMark] :>
+        Module[{rows = lineBreakSegments[RowBox[parts]]},
+            While[Length[rows] > 1 && MatchQ[Last[rows], "" | " "],
+                rows = Most[rows]
+            ];
+            If[Length[rows] === 1, First[rows], GridBox[List /@ rows]]
+        ]
+}
+
 LaTeXMathParse[source_String] := Module[{r = Parse[LaTeXMathParser, preprocessLaTeX[source]]},
     If[MatchQ[r, _ParseError], r,
-        suppressCommaSpaceBetweenDigits @ stripEmptyRowChildren @ bigOpDisplayLimits[r]
+        (* `/. $lineBreakMark -> ""` is a safety net: a stray marker not
+           inside a RowBox (e.g. the whole input was just `\\`) would
+           otherwise leak the private symbol into output. *)
+        suppressCommaSpaceBetweenDigits @ stripEmptyRowChildren @
+            applyLineBreaks @ bigOpDisplayLimits[r] /. $lineBreakMark -> ""
     ]
 ]
 
