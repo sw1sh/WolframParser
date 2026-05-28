@@ -160,9 +160,14 @@ commandAtom = ParseAction[
    topRow (which already chains expressions, accepts leading ops, bare
    ? / ! / *, line breaks, $ toggles), plus a final empty-group escape
    hatch for the literal {}. *)
+(* A braced arg's inner content uses outerRow (NOT topRow) so bare
+   single delimiters like `[`, `]`, `(`, `)` survive - `\genfrac{[}{]}...`
+   in particular has braces wrapping a single bare bracket char, which
+   topRow's strict bracketAtom rejects.  outerRow includes
+   outerPuncToken which accepts those bare closers. *)
 bracedArg = ParseBetween[
     literal["{"],
-    ParseChoice[ParseRecursive[topRow], ParseSucceed[""]],
+    ParseChoice[ParseRecursive[outerRow], ParseSucceed[""]],
     literal["}"]
 ]
 bracketedArg = ParseBetween[literal["["], ParseRecursive[topRow], literal["]"]]
@@ -631,6 +636,24 @@ commandHandlers["\\binom"] = Function[{opt, req},
 ]
 commandHandlers["\\tbinom"] = commandHandlers["\\binom"]
 commandHandlers["\\dbinom"] = commandHandlers["\\binom"]
+
+(* Custom helpers the `\over` / `\atop` / `\brace` / `\brack` infix
+   rewrites emit. `\atopfrac` = stacked numerator over denominator with
+   no horizontal rule; `\bracefrac` / `\brackfrac` wrap that stack in
+   curly / square delimiters. *)
+commandHandlers["\\atopfrac"] = Function[{opt, req},
+    If[Length[req] >= 2, GridBox[{{req[[1]]}, {req[[2]]}}], "\\atopfrac"]
+]
+commandHandlers["\\bracefrac"] = Function[{opt, req},
+    If[Length[req] >= 2,
+        RowBox[{"{", GridBox[{{req[[1]]}, {req[[2]]}}], "}"}],
+        "\\bracefrac"]
+]
+commandHandlers["\\brackfrac"] = Function[{opt, req},
+    If[Length[req] >= 2,
+        RowBox[{"[", GridBox[{{req[[1]]}, {req[[2]]}}], "]"}],
+        "\\brackfrac"]
+]
 
 commandHandlers["\\sqrt"] = Function[{opt, req},
     If[ Length[req] === 1,
@@ -1733,6 +1756,102 @@ applyTextModeSubstitutions[s_String] := Module[{
     out
 ]
 
+(* Plain-TeX infix fractions: `{a \over b}` = `\frac{a}{b}`,
+   `{a \atop b}` = vertical stack with no rule, `{a \brace b}` and
+   `{a \brack b}` add curly / square delim wraps, `{a \above1.0pt b}`
+   uses an explicit rule thickness.  KaTeX renders all of these as
+   visible fractions / stacks; we'd otherwise leave `\over` etc as
+   literal text in the output.
+
+   Rewrite at the source level: walk each brace group, look for one of
+   the infix tokens at the group's TOP level (skip nested braces), and
+   if found, split the group content into num / denom and rewrite as
+   the corresponding command.  Only the first match per group is
+   rewritten (matching Plain TeX semantics - a single infix per group). *)
+$infixFracMap = <|
+    "\\over"  -> Function[{n, d}, "\\frac{" <> n <> "}{" <> d <> "}"],
+    (* \atop, \brace, \brack: use direct \atopfrac / \bracefrac /
+       \brackfrac shapes (custom commands we register below); they
+       produce GridBox-based renders without the bare-delim
+       brace-arg parsing issue that \genfrac{[}{]} would hit. *)
+    "\\atop"  -> Function[{n, d}, "\\atopfrac{" <> n <> "}{" <> d <> "}"],
+    "\\brace" -> Function[{n, d}, "\\bracefrac{" <> n <> "}{" <> d <> "}"],
+    "\\brack" -> Function[{n, d}, "\\brackfrac{" <> n <> "}{" <> d <> "}"]
+|>
+
+(* Walk the source, find each balanced `{...}` group, see if it
+   contains an infix-fraction token at TOP level (not nested in
+   another `{...}`), and rewrite if so. Recurse so nested groups
+   inside numerator / denominator get their own pass. *)
+rewriteInfixFractions[s_String] := Module[{
+    n = StringLength[s], pos = 1, out = "",
+    depth, start, contents, infixPos, infixName, num, den, j, recursed
+},
+    While[pos <= n,
+        If[ StringTake[s, {pos, pos}] =!= "{",
+            out = out <> StringTake[s, {pos, pos}]; pos++,
+            (* find matching close brace at the same depth *)
+            depth = 1; start = pos + 1; j = start;
+            While[j <= n && depth > 0,
+                Switch[StringTake[s, {j, j}],
+                    "{", depth++, "}", depth--
+                ];
+                j++
+            ];
+            If[depth =!= 0,  (* unbalanced - emit rest as-is and stop *)
+                out = out <> StringTake[s, {pos, n}]; pos = n + 1,
+                contents = StringTake[s, {start, j - 2}];
+                (* find an infix token at TOP-level of `contents`
+                   (depth tracker over `contents`). Use first hit only. *)
+                Module[{cd = 0, ci = 1, cn = StringLength[contents], hit = Missing[]},
+                    While[ci <= cn && MissingQ[hit],
+                        Switch[StringTake[contents, {ci, ci}],
+                            "{", cd++,
+                            "}", cd--
+                        ];
+                        If[ cd === 0,
+                            KeyValueMap[
+                                Function[{key, fn},
+                                    If[ MissingQ[hit] &&
+                                            StringLength[contents] - ci + 1 >= StringLength[key] &&
+                                            StringTake[contents, {ci, ci + StringLength[key] - 1}] === key &&
+                                            (* boundary check: next char isn't a letter
+                                               (so \overrightarrow isn't matched as \over) *)
+                                            With[{afterPos = ci + StringLength[key]},
+                                                afterPos > cn ||
+                                                ! StringMatchQ[StringTake[contents, {afterPos, afterPos}], LetterCharacter]
+                                            ],
+                                        hit = {ci, key, fn}
+                                    ]
+                                ],
+                                $infixFracMap
+                            ]
+                        ];
+                        ci++
+                    ];
+                    If[ MissingQ[hit],
+                        (* no infix - recurse into contents and emit *)
+                        recursed = rewriteInfixFractions[contents];
+                        out = out <> "{" <> recursed <> "}";
+                        pos = j,
+                        (* found infix - split, recurse each side *)
+                        infixPos = hit[[1]];
+                        infixName = hit[[2]];
+                        num = StringTrim @ StringTake[contents, {1, infixPos - 1}];
+                        den = StringTrim @ StringTake[contents,
+                            {infixPos + StringLength[infixName], cn}];
+                        out = out <> "{" <>
+                            hit[[3]][rewriteInfixFractions[num], rewriteInfixFractions[den]] <>
+                            "}";
+                        pos = j
+                    ]
+                ]
+            ]
+        ]
+    ];
+    out
+]
+
 preprocessLaTeX[s_String] :=
     expandShorthand @
     StringReplace[#,
@@ -1740,6 +1859,7 @@ preprocessLaTeX[s_String] :=
             x:$textAccentArg :> "\\" <> c <> "{" <> x <> "}"
     ] &@
     applyTextModeSubstitutions @
+    rewriteInfixFractions @
     StringReplace[s, {
         (* \big and friends consume their next delimiter together. These
            are NOT guaranteed to come in matched pairs (e.g. \big( without
