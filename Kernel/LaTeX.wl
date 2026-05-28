@@ -665,9 +665,7 @@ Scan[
      "\\nobreak", "\\allowbreak", "\\noindent", "\\indent", "\\displaybreak",
      "\\smallskip", "\\medskip", "\\bigskip", "\\strut", "\\mathstrut",
      "\\phantom", "\\hphantom", "\\vphantom",
-     "\\rule", "\\raisebox", "\\colorbox", "\\fcolorbox",
-     "\\htmlId", "\\htmlClass", "\\htmlStyle", "\\htmlData",
-     "\\includegraphics", "\\def", "\\renewcommand", "\\newcommand", "\\gdef",
+     "\\rule", "\\includegraphics", "\\def", "\\renewcommand", "\\newcommand", "\\gdef",
      "\\kern", "\\mkern", "\\hskip", "\\mskip", "\\hspace", "\\vspace",
      "\\thinspace", "\\negthinspace", "\\medspace", "\\negmedspace",
      "\\thickspace", "\\negthickspace",
@@ -724,6 +722,25 @@ commandHandlers["\\fbox"]  = commandHandlers["\\boxed"]
 commandHandlers["\\tag"] = Function[{opt, req},
     RowBox[{"(", First[req, ""], ")"}]
 ]
+
+(* HTML / styling extension macros: KaTeX's `\htmlId{id}{body}`,
+   `\htmlClass{cls}{body}`, `\htmlStyle{css}{body}`, `\htmlData{key}{body}`,
+   `\colorbox{color}{body}`, `\fcolorbox{frame}{bg}{body}` - all 2-3
+   arg, with the LAST arg being the visible content. We drop the
+   styling metadata and emit just the content. \raisebox{offset}{body}
+   similarly: drop offset, keep body. *)
+commandHandlers["\\htmlId"]    = Function[{opt, req}, Last[req, ""]]
+commandHandlers["\\htmlClass"] = Function[{opt, req}, Last[req, ""]]
+commandHandlers["\\htmlStyle"] = Function[{opt, req}, Last[req, ""]]
+commandHandlers["\\htmlData"]  = Function[{opt, req}, Last[req, ""]]
+commandHandlers["\\colorbox"]  = Function[{opt, req}, Last[req, ""]]
+commandHandlers["\\fcolorbox"] = Function[{opt, req}, FrameBox @ Last[req, ""]]
+commandHandlers["\\raisebox"]  = Function[{opt, req}, Last[req, ""]]
+(* \phantom / \hphantom / \vphantom take their arg as INVISIBLE space
+   the same width/height. Emit "" (the contents shouldn't render). *)
+commandHandlers["\\phantom"]  = Function[{opt, req}, ""]
+commandHandlers["\\hphantom"] = commandHandlers["\\phantom"]
+commandHandlers["\\vphantom"] = commandHandlers["\\phantom"]
 
 (* === colors ===
    KaTeX `\color{name}{body}` and `\textcolor{name}{body}` accept a
@@ -1016,7 +1033,7 @@ namedSymbolChars = <|
     "\\simeq"   -> "\[TildeEqual]",    "\\doteq" -> "\[DotEqual]",
     "\\prec"    -> "\[Precedes]",      "\\succ"  -> "\[Succeeds]",
     "\\preceq"  -> "\[PrecedesEqual]", "\\succeq" -> "\[SucceedsEqual]",
-    "\\ni"      -> "\[ReverseElement]", "\\propto" -> "\[Proportional]",
+    "\\ni"      -> "\[ReverseElement]",
     "\\parallel" -> "\[DoubleVerticalBar]", "\\perp" -> "\[Perpendicular]",
     "\\asymp"   -> "\[CupCap]",
     "\\vdash"   -> "\[RightTee]",      "\\dashv" -> "\[LeftTee]",
@@ -1050,11 +1067,10 @@ namedSymbolChars = <|
     "\\clubsuit" -> "\[ClubSuit]",     "\\spadesuit" -> "\[SpadeSuit]",
     "\\heartsuit" -> "\[HeartSuit]",   "\\diamondsuit" -> "\[DiamondSuit]",
     "\\surd"    -> "\[Sqrt]",          "\\ell" -> "\[ScriptL]",
-    "\\Re"      -> "\[GothicCapitalR]", "\\Im" -> "\[GothicCapitalI]",
     "\\wp"      -> "\[WeierstrassP]",   "\\Finv" -> "\[FinalSigma]",
     "\\complement" -> "\[NotElement]", "\\degree" -> "\[Degree]",
     "\\prime"   -> "\[Prime]",         "\\backslash" -> "\[Backslash]",
-    "\\lnot"    -> "\[Not]",           "\\lor" -> "\[Or]", "\\land" -> "\[And]",
+    "\\lnot"    -> "\[Not]",
     "\\gtrsim"  -> "\[GreaterTilde]",  "\\lesssim" -> "\[LessTilde]",
     "\\ne"      -> "\[NotEqual]",      "\\notni" -> "\[NotReverseElement]",
     (* dotless variants and other plain-TeX letter macros *)
