@@ -65,7 +65,7 @@ VerificationTest[
 
 VerificationTest[
     LaTeXMathParse["\\alpha"],
-    "\[Alpha]",
+    StyleBox["\[Alpha]", "TI"],
     TestID -> "LaTeX: Greek \\alpha"
 ]
 
@@ -144,7 +144,9 @@ VerificationTest[
 VerificationTest[
     LaTeXMathParse["\\sum_{n=0}^{\\infty} \\frac{1}{n^2}"],
     RowBox[{
-        SubsuperscriptBox["\[Sum]",
+        (* big-op characters get the limits stacked (display-style),
+           matching KaTeX's default rendering for `\sum`, `\int`, ... *)
+        UnderoverscriptBox["\[Sum]",
             RowBox[{StyleBox["n", "TI"], "=", "0"}],
             "\[Infinity]"
         ],
@@ -192,16 +194,24 @@ VerificationTest[
 
 (* === division === *)
 
+(* `/` is rendered as a slash operator (inline), NOT as a stacked
+   FractionBox - that's `\frac{a}{b}`'s job.  Matches KaTeX's default. *)
 VerificationTest[
     LaTeXMathParse["1/2"],
-    FractionBox["1", "2"],
-    TestID -> "LaTeX: inline division -> FractionBox"
+    RowBox[{"1", "/", "2"}],
+    TestID -> "LaTeX: `/` renders as inline slash, not a stacked fraction"
 ]
 
 VerificationTest[
     LaTeXMathParse["1/49 = 1/7^2"],
-    RowBox[{FractionBox["1", "49"], "=", FractionBox["1", SuperscriptBox["7", "2"]]}],
-    TestID -> "LaTeX: division with relation"
+    RowBox[{"1", "/", "49", "=", "1", "/", SuperscriptBox["7", "2"]}],
+    TestID -> "LaTeX: `/` with relations stays inline"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\frac{1}{2}"],
+    FractionBox["1", "2"],
+    TestID -> "LaTeX: `\\frac{a}{b}` builds a FractionBox"
 ]
 
 
@@ -336,15 +346,18 @@ VerificationTest[
 
 (* === fonts === *)
 
+(* `\mathsf` / `\mathtt` / `\mathrm` / `\mathbf` strip the per-letter
+   italic styling that identAtom puts on math letters by default - in
+   TeX these macros switch to upright text faces. *)
 VerificationTest[
     LaTeXMathParse["\\mathsf{X}"],
-    StyleBox[StyleBox["X", "TI"], FontFamily -> "SansSerif"],
+    StyleBox["X", FontFamily -> "Helvetica", FontSlant -> "Plain"],
     TestID -> "KaTeX fonts: \\mathsf"
 ]
 
 VerificationTest[
     LaTeXMathParse["\\mathtt{x}"],
-    StyleBox[StyleBox["x", "TI"], FontFamily -> "Courier"],
+    StyleBox["x", FontFamily -> "Courier", FontSlant -> "Plain"],
     TestID -> "KaTeX fonts: \\mathtt"
 ]
 

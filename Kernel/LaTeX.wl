@@ -270,10 +270,16 @@ matrixCell = ParseChoice[
 matrixRow  = ParseSepBy[matrixCell, colSep]
 matrixBody = ParseSepBy[matrixRow, rowSep]
 
+(* `\begin{matrix*}[l] ... \end{matrix*}` and the `array{c|r}`-style
+   column-spec arg appear AFTER the `\begin{name}`. The braced
+   arg captures `{c|r}`; the bracketed arg captures `[l]` / `[r]` for
+   matrix* / pmatrix* alignment. Both are consumed and dropped - we
+   render every alignment-variant as a default-aligned grid. *)
 environmentAtom = ParseAction[
-    ParseLiteral["\\begin"] ~~ ws ~~ envName ~~ ws ~~ Optional[bracedArgRef] ~~
+    ParseLiteral["\\begin"] ~~ ws ~~ envName ~~ ws ~~
+        Optional[bracedArgRef] ~~ ws ~~ Optional[bracketedArgRef] ~~
         matrixBody ~~ ParseLiteral["\\end"] ~~ ws ~~ envName,
-    buildEnv[#3, #6] &
+    buildEnv[#3, #8] &
 ]
 
 buildEnv[name_String, rows_List] :=
@@ -348,17 +354,22 @@ gothicCapitalChars = Association @ Map[
    default math-italic dressing applied by identAtom), so unwrap that
    before the lookup. *)
 
+(* Per-letter font-switch handler: for each ASCII upper-case letter in
+   the arg that has a named-character variant in `lookup`, replace
+   it with the variant; non-letter atoms (digits, punctuation, Greek)
+   pass through with the outer `fontOpt` styling so we don't lose them
+   entirely. This way `\mathscr{ABC123\omega}` becomes script-A +
+   script-B + script-C + 123 + ω (the digits and Greek can't be
+   script-ified, but they shouldn't be dropped). *)
 styleHandler[lookup_, fontOpt_] :=
     Function[{opt, req},
-        Block[{
-            arg = If[Length[req] >= 1, First[req], ""],
-            letter
-        },
-            letter = Replace[arg, StyleBox[s_String, "TI"] :> s];
-            If[ MatchQ[letter, _String] && StringLength[letter] === 1 && KeyExistsQ[lookup, letter],
-                lookup[letter],
-                StyleBox[arg, fontOpt]
-            ]
+        Block[{arg = If[Length[req] >= 1, First[req], ""]},
+            arg /. {
+                StyleBox[s_String, "TI"] /; StringLength[s] === 1 &&
+                    KeyExistsQ[lookup, s] :> lookup[s],
+                s_String /; StringLength[s] === 1 &&
+                    KeyExistsQ[lookup, s] :> lookup[s]
+            }
         ]
     ]
 
@@ -366,13 +377,30 @@ commandHandlers["\\mathbb"]   = styleHandler[doubleStruckChars, FontWeight -> "B
 commandHandlers["\\mathcal"]  = styleHandler[scriptCapitalChars, FontVariations -> {}]
 commandHandlers["\\mathscr"]  = styleHandler[scriptCapitalChars, FontVariations -> {}]
 commandHandlers["\\mathfrak"] = styleHandler[gothicCapitalChars, FontVariations -> {}]
-commandHandlers["\\mathbf"]   = Function[{opt, req}, StyleBox[First[req, ""], FontWeight -> "Bold"]]
+(* Strip the default per-letter "TI" (math-italic) styling from the
+   arg before applying the font-switch macro's own style.  Without this,
+   `\mathbf{ab}` renders as bold-italic (StyleBox wraps a RowBox of
+   italic letters in a bold-only outer style); KaTeX renders \mathbf
+   as upright bold, \mathrm as upright, \mathsf as upright sans-serif. *)
+stripItalic[e_] := e //. StyleBox[s_String, "TI"] :> s
+
+commandHandlers["\\mathbf"]   = Function[{opt, req},
+    StyleBox[stripItalic @ First[req, ""], FontWeight -> "Bold", FontSlant -> "Plain"]
+]
 commandHandlers["\\boldsymbol"] = commandHandlers["\\mathbf"]
 commandHandlers["\\pmb"]      = commandHandlers["\\mathbf"]
-commandHandlers["\\mathrm"]   = Function[{opt, req}, StyleBox[First[req, ""], FontSlant -> "Plain"]]
-commandHandlers["\\mathit"]   = Function[{opt, req}, StyleBox[First[req, ""], FontSlant -> "Italic"]]
-commandHandlers["\\mathsf"]   = Function[{opt, req}, StyleBox[First[req, ""], FontFamily -> "SansSerif"]]
-commandHandlers["\\mathtt"]   = Function[{opt, req}, StyleBox[First[req, ""], FontFamily -> "Courier"]]
+commandHandlers["\\mathrm"]   = Function[{opt, req},
+    StyleBox[stripItalic @ First[req, ""], FontSlant -> "Plain"]
+]
+commandHandlers["\\mathit"]   = Function[{opt, req},
+    StyleBox[First[req, ""], FontSlant -> "Italic"]
+]
+commandHandlers["\\mathsf"]   = Function[{opt, req},
+    StyleBox[stripItalic @ First[req, ""], FontFamily -> "Helvetica", FontSlant -> "Plain"]
+]
+commandHandlers["\\mathtt"]   = Function[{opt, req},
+    StyleBox[stripItalic @ First[req, ""], FontFamily -> "Courier", FontSlant -> "Plain"]
+]
 commandHandlers["\\operatorname"] = commandHandlers["\\mathrm"]
 
 (* \text{...}: upright text. The arg comes through the math grammar
@@ -552,13 +580,20 @@ Scan[
     (commandHandlers[#] = identArgHandler) &,
     {"\\mathop", "\\mathrel", "\\mathbin", "\\mathord",
      "\\mathopen", "\\mathclose", "\\mathpunct", "\\mathinner",
-     "\\smash", "\\boxed", "\\fbox", "\\mbox", "\\hbox",
+     "\\smash", "\\mbox", "\\hbox",
      (* \mathrlap / \mathllap / \mathclap render their arg with zero
         horizontal advance - r/l/c picks alignment. For doc-math we drop
         the layout trick and emit the arg unchanged. *)
      "\\mathrlap", "\\mathllap", "\\mathclap", "\\rlap", "\\llap", "\\clap",
      "\\underleftarrow", "\\underrightarrow", "\\underleftrightarrow"}
 ]
+
+(* `\boxed{X}` / `\fbox{X}`: KaTeX renders these with an actual visible
+   rectangular frame around the contents - dropping the box loses the
+   semantic emphasis (boxed = "this is the boxed result").  Use FrameBox
+   so the FE actually draws the frame. *)
+commandHandlers["\\boxed"] = Function[{opt, req}, FrameBox[First[req, ""]]]
+commandHandlers["\\fbox"]  = commandHandlers["\\boxed"]
 
 (* === colors ===
    KaTeX color macros: `\color{name}{body}` and `\textcolor{name}{body}`
@@ -642,6 +677,14 @@ commandHandlers["\\Braket"] = Function[{opt, req},
 (* `\phase{angle}`: phase / angle notation, render as `\[Angle] angle`. *)
 commandHandlers["\\phase"] = Function[{opt, req},
     RowBox[{"\[Angle]", First[req, ""]}]
+]
+(* `\angl{X}` / `\angln{X}`: KaTeX-specific angle macros.  `\angl` puts
+   an angle bracket before, `\angln` also draws the underbar. *)
+commandHandlers["\\angl"]  = Function[{opt, req},
+    RowBox[{"\[Angle]", First[req, ""]}]
+]
+commandHandlers["\\angln"] = Function[{opt, req},
+    UnderscriptBox[RowBox[{"\[Angle]", First[req, ""]}], "_"]
 ]
 
 (* `\vcenter{box}`: vertical centring trick; we just emit the arg. *)
@@ -904,9 +947,20 @@ greekChars = <|
     "\\Omega" -> "\[CapitalOmega]"
 |>
 
+(* Lowercase Greek renders math-italic to match the standard math-mode
+   convention (`\alpha` displays as italic α, not upright); uppercase
+   Greek stays upright (TeX convention). The names with "Capital" in
+   their NumericValue go upright, lowercase get TI. *)
 Scan[
     Function[name,
-        commandHandlers[name] = Function[{opt, req}, greekChars[name]]
+        commandHandlers[name] = With[{
+            glyph = greekChars[name],
+            isUpper = StringMatchQ[name, "\\" ~~ ("A"|"B"|"C"|"D"|"E"|"F"|"G"|"H"|"I"|"J"|"K"|"L"|"M"|"N"|"O"|"P"|"Q"|"R"|"S"|"T"|"U"|"V"|"W"|"X"|"Y"|"Z") ~~ ___]
+        },
+            Function[{opt, req},
+                If[isUpper, glyph, StyleBox[glyph, "TI"]]
+            ]
+        ]
     ],
     Keys[greekChars]
 ]
@@ -1055,12 +1109,14 @@ rowParts[x_] := {x}
 rowJoin[a_, b_] := RowBox[Join[rowParts[a], rowParts[b]]]
 rowJoin[a_, mid_, b_] := RowBox[Join[rowParts[a], {mid}, rowParts[b]]]
 
-(* mulOp joins adjacent factors. PEG-ordered: explicit `/` builds a
-   FractionBox, explicit `*` / `\cdot` / `\times` a visible product,
-   and (the final fallback) ParseSucceed gives juxtaposition - LaTeX's
-   implicit multiplication (`2x`, `\sum x_i`, `\sin x`). *)
+(* mulOp joins adjacent factors. PEG-ordered: explicit `/` stays as a
+   visible slash (KaTeX renders `a/b` inline, NOT as a stacked
+   FractionBox - that's what `\frac{a}{b}` is for). Explicit `*` /
+   `\cdot` / `\times` build a visible product, and (the final
+   fallback) ParseSucceed gives juxtaposition - LaTeX's implicit
+   multiplication (`2x`, `\sum x_i`, `\sin x`). *)
 mulOp = ParseChoice[
-    ParseAction[literal["/"], Function[op, Function[{a, b}, FractionBox[a, b]]]],
+    ParseAction[literal["/"], Function[op, Function[{a, b}, rowJoin[a, "/", b]]]],
     ParseAction[
         literal["*"] | literal["\\cdot"] | literal["\\times"],
         Function[op, Function[{a, b}, rowJoin[a, "\[Times]", b]]]
@@ -1352,14 +1408,21 @@ expandShorthand[s_String] := Module[{
    handled by the letter-name shorthand pass). The next char (or `\i`
    / `\j`) is the accented letter. Rewrite to braced form so the
    accent handlers we registered above receive a proper arg. The
-   regex is in `[]` so the special chars don't have to be escaped. *)
-$textAccentRegex = RegularExpression[
-    "\\\\([\\'`\".=~^])\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[^{}\\s])"
-]
+   StringExpression form is used because WL's regex-replacement
+   string syntax has no clean way to put a literal `\` before a `$n`
+   capture marker - `"\\$1"` makes `$1` literal, `"\\\\$1"` doubles
+   the backslash. The pattern form names the captures directly. *)
+$textAccentChars = "'" | "`" | "\"" | "." | "=" | "~" | "^"
+$textAccentArg = ("\\" ~~ LetterCharacter ..) |
+    ("\\" ~~ Except[LetterCharacter]) |
+    Except["{" | "}" | WhitespaceCharacter]
 
 preprocessLaTeX[s_String] :=
     expandShorthand @
-    StringReplace[#, $textAccentRegex :> "\\$1{$2}"] &@
+    StringReplace[#,
+        "\\" ~~ c:$textAccentChars ~~ WhitespaceCharacter ... ~~
+            x:$textAccentArg :> "\\" <> c <> "{" <> x <> "}"
+    ] &@
     StringReplace[s, {
         (* \big and friends consume their next delimiter together. These
            are NOT guaranteed to come in matched pairs (e.g. \big( without
@@ -1378,7 +1441,31 @@ preprocessLaTeX[s_String] :=
         RegularExpression["\\\\middle(?![a-zA-Z])"] -> ""
     }]
 
-LaTeXMathParse[source_String] := Parse[LaTeXMathParser, preprocessLaTeX[source]]
+(* Post-process: the big-operator characters (Σ, Π, ∫, ∮, ∐, ⋃, ⋂, ⋁,
+   ⋀, ⨁, ⨂, ⨆, ∏) render with their `_low`/`^hi` indices STACKED in
+   display-style math (KaTeX default). The parser turns
+   `\sum_{i=0}^n` into `SubsuperscriptBox[Σ, i=0, n]` which places
+   the indices to the right - matching `\nolimits` behaviour but not
+   what KaTeX shows on screen. Convert to `UnderoverscriptBox` so
+   the FE stacks them. *)
+$bigOpChars = {
+    "\[Sum]", "\[Product]", "\[Integral]", "\[ContourIntegral]",
+    "\[Coproduct]", "\[Union]", "\[Intersection]", "\[Vee]", "\[Wedge]",
+    "\[CirclePlus]", "\[CircleTimes]", "\[SquareUnion]"
+}
+
+bigOpDisplayLimits[boxes_] := boxes //. {
+    SubsuperscriptBox[c_String /; MemberQ[$bigOpChars, c], lo_, hi_] :>
+        UnderoverscriptBox[c, lo, hi],
+    SubscriptBox[c_String /; MemberQ[$bigOpChars, c], lo_] :>
+        UnderscriptBox[c, lo],
+    SuperscriptBox[c_String /; MemberQ[$bigOpChars, c], hi_] :>
+        OverscriptBox[c, hi]
+}
+
+LaTeXMathParse[source_String] := Module[{r = Parse[LaTeXMathParser, preprocessLaTeX[source]]},
+    If[MatchQ[r, _ParseError], r, bigOpDisplayLimits[r]]
+]
 
 
 End[]
