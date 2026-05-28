@@ -819,8 +819,30 @@ commandHandlers["\\htmlId"]    = Function[{opt, req}, Last[req, ""]]
 commandHandlers["\\htmlClass"] = Function[{opt, req}, Last[req, ""]]
 commandHandlers["\\htmlStyle"] = Function[{opt, req}, Last[req, ""]]
 commandHandlers["\\htmlData"]  = Function[{opt, req}, Last[req, ""]]
-commandHandlers["\\colorbox"]  = Function[{opt, req}, Last[req, ""]]
-commandHandlers["\\fcolorbox"] = Function[{opt, req}, FrameBox @ Last[req, ""]]
+(* `\colorbox{bg}{body}`: KaTeX wraps body with a coloured background.
+   FrameBox with Background -> resolved colour matches the visual. *)
+commandHandlers["\\colorbox"]  = Function[{opt, req},
+    If[Length[req] >= 2,
+        With[{c = resolveColor[req[[1]]]},
+            If[MissingQ[c], Last[req, ""],
+                FrameBox[Last[req, ""], Background -> c, FrameStyle -> None]
+            ]
+        ],
+        Last[req, ""]
+    ]
+]
+(* `\fcolorbox{frame}{bg}{body}`: framed background. *)
+commandHandlers["\\fcolorbox"] = Function[{opt, req},
+    If[Length[req] >= 3,
+        With[{fc = resolveColor[req[[1]]], bc = resolveColor[req[[2]]]},
+            FrameBox[Last[req, ""],
+                Background -> If[MissingQ[bc], White, bc],
+                FrameStyle -> If[MissingQ[fc], Black, fc]
+            ]
+        ],
+        FrameBox @ Last[req, ""]
+    ]
+]
 commandHandlers["\\raisebox"]  = Function[{opt, req}, Last[req, ""]]
 (* \phantom / \hphantom / \vphantom take their arg as INVISIBLE space
    the same width/height. Emit "" (the contents shouldn't render). *)
@@ -1589,7 +1611,11 @@ ensureBraced[a_String] :=
 $twoArgShortNames = {
     "frac", "tfrac", "dfrac", "cfrac",
     "binom", "tbinom", "dbinom",
-    "overset", "underset", "stackrel"
+    "overset", "underset", "stackrel",
+    (* 2-arg styling commands accept single-token args too:
+       `\colorbox{teal}{body}`, `\colorbox{teal}x`, `\color{red}{body}`,
+       `\color{red}x`, `\textcolor{red}{body}`, `\textcolor{red}x`. *)
+    "color", "textcolor", "colorbox"
 }
 
 $oneArgShortNames = {
