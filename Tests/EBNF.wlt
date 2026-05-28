@@ -101,6 +101,48 @@ VerificationTest[
 ]
 
 VerificationTest[
+    Module[{g},
+        g = EBNFParse[
+            "<digit> ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+             <number> ::= <digit><digit>*",
+            "Actions" -> <|
+                "number" -> Function[FromDigits @ StringJoin[#1, StringJoin @ #2]]
+            |>
+        ];
+        Parse[g["number"], "42"]
+    ],
+    42,
+    TestID -> "EBNF: per-rule Actions lift parse tree to user-defined values"
+]
+
+VerificationTest[
+    Module[{bnf, parsers, actions},
+        bnf = "<TPTP_file>      ::= <cnf_annotated>*
+<cnf_annotated>  ::= cnf(<name>, <role>, <atom>).
+<name>           ::= <lower_word>
+<role>           ::= <lower_word>
+<atom>           ::= <lower_word>
+<lower_word>     ::- <lower_alpha><alpha_numeric>*
+<lower_alpha>    ::: [a-z]
+<alpha_numeric>  ::: [a-zA-Z0-9_]";
+        actions = <|
+            "cnf_annotated" -> Function[<|
+                "Head" -> "cnf", "Name" -> #3, "Role" -> #5, "Atom" -> #7
+            |>],
+            "TPTP_file" -> Function[Module[{cs = {##}},
+                <|"Axioms" -> Map[#["Atom"] &,
+                    Cases[cs, KeyValuePattern["Role" -> "axiom"]]]|>
+            ]]
+        |>;
+        parsers = EBNFParse[bnf, "Actions" -> actions];
+        Parse[parsers["TPTP_file"],
+            "cnf(t1, axiom, p).cnf(t2, axiom, q).cnf(t3, hypothesis, r)."]
+    ],
+    <|"Axioms" -> {"p", "q"}|>,
+    TestID -> "EBNF: Actions lift mini-TPTP parse to <|Axioms -> {...}|> shape"
+]
+
+VerificationTest[
     Module[{
         bnf = Import[
             FileNameJoin[{DirectoryName[$TestFileName], "tptp-bnf.txt"}],

@@ -483,11 +483,12 @@ regexCompile[body_String, sm_Association, ov_Association] :=
 EBNFRules[source_String] := Parse[grammarP, source]
 EBNFRules[File[path_String]] := EBNFRules[Import[path, "Text"]]
 
-Options[EBNFParse] = {"PrimitiveOverrides" -> <||>}
+Options[EBNFParse] = {"PrimitiveOverrides" -> <||>, "Actions" -> <||>}
 
 EBNFParse[source_String, OptionsPattern[]] :=
-    Block[{rules, structuredGram, tokenGram, overrides, allNames, symMap, parsers},
+    Block[{rules, structuredGram, tokenGram, overrides, actions, allNames, symMap, parsers},
         overrides = OptionValue["PrimitiveOverrides"];
+        actions   = OptionValue["Actions"];
         rules = EBNFRules[source];
         If[ MatchQ[rules, _ParseError],
             Return[rules]
@@ -518,15 +519,18 @@ EBNFParse[source_String, OptionsPattern[]] :=
             Join[
                 KeyValueMap[
                     Function[{name, body},
-                        name -> lowerBody[body, symMap, overrides]
+                        name -> applyAction[lowerBody[body, symMap, overrides], actions, name]
                     ],
                     structuredGram
                 ],
                 KeyValueMap[
                     Function[{name, bodyStr},
-                        name -> Quiet @ Check[
-                            regexCompile[bodyStr, symMap, overrides],
-                            ParseFail["Could not compile " <> name <> " body: " <> bodyStr]
+                        name -> applyAction[
+                            Quiet @ Check[
+                                regexCompile[bodyStr, symMap, overrides],
+                                ParseFail["Could not compile " <> name <> " body: " <> bodyStr]
+                            ],
+                            actions, name
                         ]
                     ],
                     tokenGram
@@ -542,6 +546,18 @@ EBNFParse[source_String, OptionsPattern[]] :=
             symMap
         ];
         parsers
+    ]
+
+(* Wrap a per-rule parser with the user's action function when one is
+   provided. The action receives the rule's parsed value via the
+   normal ParseAction convention - splatted args when the parser
+   yielded a List, a single arg when it yielded a scalar - and returns
+   whatever WL shape the user wants. Without an action, the parser
+   passes through unchanged. *)
+applyAction[parser_, actions_Association, name_String] :=
+    If[ KeyExistsQ[actions, name],
+        ParseAction[parser, actions[name]],
+        parser
     ]
 
 EBNFParse[File[path_String], opts : OptionsPattern[]] :=

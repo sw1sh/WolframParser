@@ -58,7 +58,55 @@ Length @ Parse[parsers["TPTP_file"], groupAxioms]
 (* 5 *)
 ```
 
-Five clauses, quantifiers, function application, equality - all handled. The result is the raw parse tree (a list of clauses, each clause a list of literal tokens and sub-rule results); semantic actions to lift to the WL-term shape the handwritten [TPTPImport](https://github.com/sw1sh/thvm) returns are a v0.4 layer the lowering does not yet generate.
+Five clauses, quantifiers, function application, equality - all parsed. But the value above is the raw parse tree (a list of clauses, each clause a list of literal tokens and sub-rule results). For a workable downstream shape, pass a per-rule `"Actions"` map.
+
+---
+
+## Lifting to a useful shape: the `"Actions"` map
+
+Each entry in `"Actions" -> <|name -> fn|>` wraps the named rule's parser in a `ParseAction`. The function receives the rule's parsed value via the normal splatted convention - `Function[#1, #2, ...]` indexes into the sequence of matched sub-pieces. A minimal action set that produces the same `<|"Axioms" -> {...}, "Conjecture" -> ...|>` association the handwritten [TPTPImport](https://github.com/sw1sh/thvm) returns:
+
+```wl
+tptpActions = <|
+    "cnf_annotated" -> Function[<|"Head" -> "cnf", "Name" -> #3, "Role" -> #5, "Formula" -> #7|>],
+    "fof_annotated" -> Function[<|"Head" -> "fof", "Name" -> #3, "Role" -> #5, "Formula" -> #7|>],
+    "tff_annotated" -> Function[<|"Head" -> "tff", "Name" -> #3, "Role" -> #5, "Formula" -> #7|>],
+    "include"       -> Function[<|"Head" -> "include", "File" -> #3|>],
+
+    (* term level: build function-call WL expressions *)
+    "fof_plain_term" -> Function[Block[{a = {##}},
+        Switch[Length[a], 1, a[[1]], 4, a[[1]][Sequence @@ Flatten[{a[[3]]}]]]
+    ]],
+    "fof_arguments"  -> Function[Block[{a = {##}},
+        Switch[Length[a], 1, {a[[1]]}, 3, Prepend[a[[3]], a[[1]]]]
+    ]],
+    "constant" -> Function[#1], "functor" -> Function[#1], "variable" -> Function[#1],
+
+    (* the file: partition clauses into axioms + conjecture *)
+    "TPTP_file" -> Function[Module[{cs = {##}}, <|
+        "Axioms" -> Map[#["Formula"] &,
+            Cases[cs, KeyValuePattern["Role" -> "axiom" | "hypothesis"]]],
+        "Conjecture" -> Replace[
+            FirstCase[cs, KeyValuePattern["Role" -> "conjecture"], None],
+            a_Association :> a["Formula"]
+        ]
+    |>]]
+|>;
+
+parsers = EBNFParse[tptpBnf, "Actions" -> tptpActions];
+
+Parse[parsers["TPTP_file"],
+    "fof(assoc, axiom, multiply(multiply(a, b), c) = multiply(a, multiply(b, c))).
+fof(goal, conjecture, multiply(a, b) = multiply(b, a))."]
+
+(* <|"Axioms"     -> {{"multiply"["multiply"["a", "b"], "c"],
+                       "=", "multiply"["a", "multiply"["b", "c"]]}},
+     "Conjecture" -> {"multiply"["a", "b"], "=", "multiply"["b", "a"]}|> *)
+```
+
+Function application compiles to WL function-call shape (`"multiply"["a", "b"]`), the file is partitioned into named slots, and the result is something downstream code can pattern-match on. The 11 actions above are about as much hand-coding as a usable TPTP frontend needs; the production [TPTPImport](https://github.com/sw1sh/thvm) is ~1100 lines because it covers more ground (the full Boolean grammar, quantifiers, sequents, the includes-with-selector machinery, term-level coverage of distinct objects and numeric literals) - the action-map lets you grow toward that incrementally without touching the recogniser.
+
+Without actions, the parser is just a recogniser - it tells you whether the source matches the grammar but the value is the structural skeleton. The action layer is what turns that into a workable Wolfram Language data structure.
 
 ---
 
@@ -163,7 +211,6 @@ What you get for free with the EBNF-driven approach:
 
 What still needs hand-work:
 
-- **Action map.** Per-rule `name -> actionFn` functions that lift the raw parse tree to the WL-term shape consumers want. The `ParseAction` plumbing is there; the `EBNFParse` entry point doesn't yet take an `actionMap` option.
 - **Term-level disambiguation.** The `<fof_plain_term>` left-factoring issue described above. Either a deeper structural rewrite or memoisation.
 - **THF higher-order.** The mutual recursion + alternative explosion in the higher-order grammar needs memoisation or a different parsing strategy (e.g. Pratt-style precedence climbing) to be tractable.
 - **Lexical primitives.** The `PrimitiveOverrides` map above covers the common cases; a complete map adds `real`, `rational`, `dollar_dollar_word`, the spacing tokens, comment / whitespace rules. A small `:::`-to-`ParseCharacter` compiler would generate these from the BNF too.
