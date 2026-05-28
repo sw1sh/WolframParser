@@ -5,6 +5,13 @@
    with the built-in persistence framework. Also builds the paclet-
    repository submission notebook (ResourceDefinition). *)
 
+(* Pin the front end appearance to Light up front: a headless session
+   resolves the Automatic appearance to Dark, which would invert
+   colours in any rasterised example output (the KaTeX showcase, the
+   LaTeX render samples, ...) and leave the notebooks looking nothing
+   like what the cloud / paclet viewer shows. *)
+Quiet @ UsingFrontEnd[CurrentValue[$FrontEnd, LightDark] = "Light"]
+
 pacletDir = DirectoryName[$InputFileName]
 Get[FileNameJoin[{pacletDir, "..", "..", "MarkdownToNotebook.wl"}]]
 

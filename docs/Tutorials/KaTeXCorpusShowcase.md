@@ -62,6 +62,13 @@ ourRender[src_String] := Module[{r = Quiet @ Check[LaTeXMathParse[src], $Failed]
     ]
 ];
 
+(* Resize both renders to a common height so KaTeX's reference image
+   and LaTeXMathParse's render line up at the same visual scale per
+   row. Fixed height (aspect preserved); the row's width adjusts. *)
+$rowHeight = 80;
+normalise[img_Image] := ImageResize[img, {Automatic, $rowHeight}]
+normalise[other_] := other  (* ParseError style, Missing, etc. *)
+
 With[{
     cases = Association @ Import @ FileNameJoin[{
         PacletObject["Wolfram/WolframParser"]["Location"],
@@ -75,26 +82,27 @@ With[{
                     Style[#1, Bold, 11],
                     Pane[
                         Style[#2, FontFamily -> "Source Code Pro",
-                            FontSize -> 9, GrayLevel[0.4]],
+                            FontSize -> 9, GrayLevel[0.3]],
                         {280, Automatic}, Alignment -> {Left, Top}
                     ],
                     Pane[
-                        ImageResize[katexReference[#1], {UpTo[280], UpTo[120]}],
-                        {280, Automatic}, Alignment -> {Center, Center}
+                        normalise @ katexReference[#1],
+                        {Automatic, $rowHeight + 8},
+                        Alignment -> {Center, Center}
                     ],
                     Pane[
-                        ImageResize[ourRender[#2], {UpTo[280], UpTo[120]}],
-                        {280, Automatic}, Alignment -> {Center, Center}
+                        normalise @ ourRender[#2],
+                        {Automatic, $rowHeight + 8},
+                        Alignment -> {Center, Center}
                     ]
                 } &,
                 cases
             ],
-            Style[#, Bold, GrayLevel[0.2]] & /@ {"Name", "Source", "KaTeX", "LaTeXMathParse"}
+            Style[#, Bold, GrayLevel[0.15]] & /@ {"Name", "Source", "KaTeX", "LaTeXMathParse"}
         ],
         Frame -> All,
-        Alignment -> {Left, Top},
+        Alignment -> {Left, Center},
         FrameStyle -> GrayLevel[0.85],
-        Background -> {None, {GrayLevel[0.92], {GrayLevel[0.99], GrayLevel[0.96]}}},
         Spacings -> {1.5, 1}
     ]
 ]
