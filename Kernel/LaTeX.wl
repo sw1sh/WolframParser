@@ -425,13 +425,41 @@ commandHandlers["\\mathsfit"]   = commandHandlers["\\mathsf"]
    context where styles aren't tracked. *)
 commandHandlers["\\mathchoice"] = Function[{opt, req}, First[req, ""]]
 
-(* \not: prefix that draws a slash through the next char (`\not =` is
-   the typical input). We attach a strikethrough StyleBox to the
-   following arg. Our parser sees `\not` as a 0-arg command unless
-   followed by `{...}`, so the bracedArg case handles `\not{=}`; bare
-   `\not =` is converted by the preprocess (`$oneArgShortNames` list). *)
+(* \not: prefix that puts a slash through the next relation. The right
+   way to render this for known relations is the precomposed negated
+   Unicode glyph (≠, ≱, ⊄, ...) - StrikeThrough on a StyleBox doesn't
+   actually slash the glyph in most rendering paths.  Fall back to
+   StyleBox/StrikeThrough only for relations we don't have a precomposed
+   form for.  Lookup keys are the rendered glyph the inner command
+   resolved to (so `\not\leq` works regardless of \le-vs-\leq alias). *)
+$notMap = <|
+    "=" -> "\[NotEqual]",
+    "<" -> "\[NotLess]",
+    ">" -> "\[NotGreater]",
+    "\[LessEqual]" -> "\[NotLessEqual]",
+    "\[GreaterEqual]" -> "\[NotGreaterEqual]",
+    "\[Element]" -> "\[NotElement]",
+    "\[ReverseElement]" -> "\[NotReverseElement]",
+    "\[Subset]" -> "\[NotSubset]",
+    "\[Superset]" -> "\[NotSuperset]",
+    "\[SubsetEqual]" -> "\[NotSubsetEqual]",
+    "\[SupersetEqual]" -> "\[NotSupersetEqual]",
+    "\[Congruent]" -> "\[NotCongruent]",
+    "\[Tilde]" -> "\[NotTilde]",
+    "\[TildeTilde]" -> "\[NotTildeTilde]",
+    "\[TildeEqual]" -> "\[NotTildeEqual]",
+    "\[TildeFullEqual]" -> "\[NotTildeFullEqual]",
+    "\[Precedes]" -> "\[NotPrecedes]",
+    "\[Succeeds]" -> "\[NotSucceeds]",
+    "\[Exists]" -> "\[NotExists]"
+|>
 commandHandlers["\\not"] = Function[{opt, req},
-    StyleBox[First[req, ""], FontVariations -> {"StrikeThrough" -> True}]
+    With[{a = First[req, ""]},
+        Which[
+            StringQ[a] && KeyExistsQ[$notMap, a], $notMap[a],
+            True, StyleBox[a, FontVariations -> {"StrikeThrough" -> True}]
+        ]
+    ]
 ]
 
 
@@ -537,7 +565,7 @@ noopHandler = Function[{opt, req}, ""]
 Scan[
     (commandHandlers[#] = noopHandler) &,
     {"\\limits", "\\nolimits", "\\displaylimits",
-     "\\nonumber", "\\notag", "\\tag", "\\eqno", "\\leqno",
+     "\\nonumber", "\\notag", "\\eqno", "\\leqno",
      "\\hline", "\\hdashline", "\\cline",
      "\\newline", "\\linebreak", "\\nolinebreak",
      "\\nobreak", "\\allowbreak", "\\noindent", "\\indent", "\\displaybreak",
@@ -594,6 +622,14 @@ Scan[
    so the FE actually draws the frame. *)
 commandHandlers["\\boxed"] = Function[{opt, req}, FrameBox[First[req, ""]]]
 commandHandlers["\\fbox"]  = commandHandlers["\\boxed"]
+
+(* `\tag{X}`: KaTeX renders the equation tag as `(X)` to the right of
+   the formula.  We used to noop it (TeX itself uses tags for cross-
+   reference numbering, not visual content), but visually the
+   parenthesised label DOES show up on the page, so emit it. *)
+commandHandlers["\\tag"] = Function[{opt, req},
+    RowBox[{"(", First[req, ""], ")"}]
+]
 
 (* === colors ===
    KaTeX color macros: `\color{name}{body}` and `\textcolor{name}{body}`
@@ -1454,13 +1490,41 @@ $bigOpChars = {
     "\[CirclePlus]", "\[CircleTimes]", "\[SquareUnion]"
 }
 
+(* Chars that get used as the "decoration" overscript for `\overbrace`,
+   `\overrightarrow`, `\overline`, `\overbracket`, `\overgroup`,
+   `\overlinesegment`, the various `\overharpoon` variants - and their
+   under-prefixed siblings. When the parser sees `\overbrace{X}^Y`,
+   it produces `SuperscriptBox[OverscriptBox[X, deco], Y]` - which
+   the FE renders as Y as a normal post-superscript NEXT TO the brace,
+   not as a label ABOVE the brace. KaTeX puts Y above the decoration;
+   convert to nested OverscriptBox so the label stacks. *)
+$overDecoChars = {
+    "\[OverBrace]", "\[OverBracket]",
+    "\[RightArrow]", "\[LeftArrow]", "\[LeftRightArrow]",
+    "\[LongRightArrow]", "\[LongLeftArrow]", "\[LongLeftRightArrow]",
+    "_"
+}
+$underDecoChars = {
+    "\[UnderBrace]", "\[UnderBracket]",
+    "\[RightArrow]", "\[LeftArrow]", "\[LeftRightArrow]",
+    "~", "_"
+}
+
 bigOpDisplayLimits[boxes_] := boxes //. {
     SubsuperscriptBox[c_String /; MemberQ[$bigOpChars, c], lo_, hi_] :>
         UnderoverscriptBox[c, lo, hi],
     SubscriptBox[c_String /; MemberQ[$bigOpChars, c], lo_] :>
         UnderscriptBox[c, lo],
     SuperscriptBox[c_String /; MemberQ[$bigOpChars, c], hi_] :>
-        OverscriptBox[c, hi]
+        OverscriptBox[c, hi],
+    (* `\overbrace{X}^Y`: stack Y above the brace above X. *)
+    SuperscriptBox[OverscriptBox[x_, deco_String], hi_] /;
+        MemberQ[$overDecoChars, deco] :>
+            OverscriptBox[OverscriptBox[x, deco], hi],
+    (* `\underbrace{X}_Y`: stack Y below the brace below X. *)
+    SubscriptBox[UnderscriptBox[x_, deco_String], lo_] /;
+        MemberQ[$underDecoChars, deco] :>
+            UnderscriptBox[UnderscriptBox[x, deco], lo]
 }
 
 LaTeXMathParse[source_String] := Module[{r = Parse[LaTeXMathParser, preprocessLaTeX[source]]},
