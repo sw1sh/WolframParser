@@ -228,15 +228,20 @@ cellLeadingOp = ParseAction[
    only the unbalanced / leading-op leftovers fall through here.
    Closing delimiters ) and ] are NOT here - they'd break parenAtom /
    bracketAtom by stealing the close from the recursive inner row. *)
+(* `~` in TeX = non-breaking space.  KaTeX renders it as a visible
+   space; we emit `\[NonBreakingSpace]` so the FE shows whitespace
+   instead of a tilde glyph. *)
+tildeToken = ParseAction[literal["~"], "\[NonBreakingSpace]" &]
+
 puncToken = ParseAction[
     literal["?"] | literal["!"] | literal["*"] | literal["#"] |
-        literal["~"] | literal["."] | literal["|"] | literal["/"] |
+        literal["."] | literal["|"] | literal["/"] |
         literal["+"] | literal["-"] | literal["="] |
         literal["<"] | literal[">"] |
         literal["^"] | literal["_"] |
         literal["`"] | literal["'"] | literal["\""],
     #1 &
-]
+] | tildeToken
 
 (* Tokens valid ONLY at the outermost top level - intentionally
    unbalanced closing delimiters from `\left. + a \right)` etc. They
@@ -1704,8 +1709,21 @@ $textAccentArg = ("\\" ~~ LetterCharacter ..) |
 (* Substitute typographic shorthand inside `\text{...}`. Use
    StringExpression with a lookbehind via `Except["\\"]` so we
    don't touch `\'`, `\``, `\"` etc. - those are text-mode accent
-   commands the next pass picks up. *)
-textModeSubstitute[s_String] := StringReplace[s, {
+   commands the next pass picks up.
+
+   Also convert each space to `~` (NBSP) so the math parser's ws
+   consumer doesn't drop it - but ONLY when the space isn't part of
+   a `\ ` (backslash-space) command; that's a literal-space escape
+   and replacing the space breaks the accent-shorthand pass. *)
+textModeSubstitute[s_String] := StringReplace[
+    StringReplace[s,
+        (* lookbehind via Except["\\"] - skip the space if it
+           follows a backslash (then it's the `\ ` command, not a
+           plain inter-word space). *)
+        {a:Except["\\"] ~~ " " :> a <> "~",
+         StartOfString ~~ " " :> "~"}
+    ],
+    {
     "---" -> "\[LongDash]",                  (* em-dash U+2014 *)
     "--"  -> "\[Dash]",                       (* en-dash U+2013 *)
     (* `` and '' opening/closing double quotes - and `, ' single
