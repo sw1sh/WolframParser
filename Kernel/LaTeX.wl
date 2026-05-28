@@ -841,7 +841,23 @@ commandHandlers["\\vspace"] = Function[{opt, req}, ""]  (* vertical, drop *)
 
 commandHandlers["\\htmlId"]    = Function[{opt, req}, Last[req, ""]]
 commandHandlers["\\htmlClass"] = Function[{opt, req}, Last[req, ""]]
-commandHandlers["\\htmlStyle"] = Function[{opt, req}, Last[req, ""]]
+(* `\htmlStyle{css}{body}`: parse the CSS arg for `color:<value>` and
+   render the body in that colour.  Other CSS properties (background,
+   font-weight, ...) are dropped — we only pick up the visible-text
+   colour, since that's what the KaTeX corpus exercises.  Unknown
+   colour values fall back to plain body. *)
+commandHandlers["\\htmlStyle"] = Function[{opt, req},
+    Module[{cssText, body, colorMatch},
+        body = Last[req, ""];
+        cssText = If[Length[req] >= 2, nameOfArg[First[req]], ""];
+        colorMatch = StringCases[cssText,
+            RegularExpression["color\\s*:\\s*([#a-zA-Z0-9]+)"] :> "$1", 1];
+        If[ colorMatch =!= {},
+            colorBody[body, First[colorMatch]],
+            body
+        ]
+    ]
+]
 commandHandlers["\\htmlData"]  = Function[{opt, req}, Last[req, ""]]
 (* `\colorbox{bg}{body}`: KaTeX wraps body with a coloured background.
    FrameBox with Background -> resolved colour matches the visual. *)
