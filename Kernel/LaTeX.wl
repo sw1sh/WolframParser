@@ -684,6 +684,19 @@ commandHandlers["\\mod"]  = Function[{opt, req},
 
 noopHandler = Function[{opt, req}, ""]
 
+(* TeX style / size switches take no args, but our greedy command
+   parser will eat any `{...}` that happens to follow.  If we drop
+   the brace content (noopHandler), constructs like `\displaystyle{x}`
+   silently lose `x`.  Re-emit the consumed groups verbatim instead;
+   for the no-following-brace case this still emits "". *)
+styleScopeHandler = Function[{opt, req},
+    Which[
+        Length[req] === 0, "",
+        Length[req] === 1, First[req],
+        True, RowBox[req]
+    ]
+]
+
 Scan[
     (commandHandlers[#] = noopHandler) &,
     {"\\limits", "\\nolimits", "\\displaylimits",
@@ -701,8 +714,13 @@ Scan[
         their sole TeX effect is a glue adjustment; emit empty so they
         don't clutter the output as literal "\;" / "\," tokens. *)
      "\\,", "\\;", "\\!", "\\:", "\\>",
-     "\\enspace", "\\quad", (* \quad already in namedSymbolChars - this no-ops if no handler hit *)
-     "\\textstyle", "\\displaystyle", "\\scriptstyle", "\\scriptscriptstyle",
+     "\\enspace", "\\quad" (* \quad already in namedSymbolChars - this no-ops if no handler hit *)
+    }
+]
+
+Scan[
+    (commandHandlers[#] = styleScopeHandler) &,
+    {"\\textstyle", "\\displaystyle", "\\scriptstyle", "\\scriptscriptstyle",
      "\\tiny", "\\scriptsize", "\\footnotesize", "\\small", "\\normalsize",
      "\\large", "\\Large", "\\LARGE", "\\huge", "\\Huge",
      "\\it", "\\bf", "\\rm", "\\sf", "\\tt", "\\sl", "\\em"}
@@ -1604,6 +1622,17 @@ readArgToken[s_String, pos0_Integer] := Module[{
 ensureBraced[a_String] :=
     If[StringStartsQ[a, "{"], a, "{" <> a <> "}"]
 
+(* readArgToken returns the arg as a literal substring; when it's a
+   brace group, that substring is opaque and shorthand commands inside
+   it won't have run through expandShorthand yet (the outer walker
+   already jumped past).  Recurse into the contents so nested cases
+   like `\overbrace{... \vec E ...}` get their inner accents braced. *)
+expandShorthandInArg[a_String] := If[
+    StringStartsQ[a, "{"] && StringEndsQ[a, "}"],
+    "{" <> expandShorthand[StringTake[a, {2, StringLength[a] - 1}]] <> "}",
+    a
+]
+
 (* Walk `s` left-to-right; whenever we see one of the registered
    short-arg command names, consume its required arg(s) (each a brace
    group, \command, or single char) and rewrite with explicit braces
@@ -1693,10 +1722,12 @@ expandShorthand[s_String] := Module[{
                             out = out <> StringTake[s, {abs[[1]], n}]; pos = n + 1,
                             a2 = readArgToken[s, a1[[2]]];
                             If[ a2 === Missing[],
-                                out = out <> "\\" <> name <> opt <> ensureBraced[a1[[1]]];
+                                out = out <> "\\" <> name <> opt <>
+                                    expandShorthandInArg @ ensureBraced[a1[[1]]];
                                 pos = a1[[2]],
                                 out = out <> "\\" <> name <> opt <>
-                                    ensureBraced[a1[[1]]] <> ensureBraced[a2[[1]]];
+                                    expandShorthandInArg @ ensureBraced[a1[[1]]] <>
+                                    expandShorthandInArg @ ensureBraced[a2[[1]]];
                                 pos = a2[[2]]
                             ]
                         ],
@@ -1704,7 +1735,8 @@ expandShorthand[s_String] := Module[{
                         a1 = readArgToken[s, after];
                         If[ a1 === Missing[],
                             out = out <> StringTake[s, {abs[[1]], n}]; pos = n + 1,
-                            out = out <> "\\" <> name <> opt <> ensureBraced[a1[[1]]];
+                            out = out <> "\\" <> name <> opt <>
+                                expandShorthandInArg @ ensureBraced[a1[[1]]];
                             pos = a1[[2]]
                         ]
                 ]
