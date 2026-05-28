@@ -52,6 +52,8 @@ ParseSequence::usage = "ParseSequence[p1, p2, ...] matches each pi in order; res
 
 ParseChoice::usage = "ParseChoice[p1, p2, ...] tries each pi in order (PEG-ordered) and returns the first match."
 
+ParseChoiceLongest::usage = "ParseChoiceLongest[p1, p2, ...] runs every pi at the current position and returns the longest successful match (POSIX-style). Slower than ParseChoice (it cannot stop at the first hit) but correct for grammars whose alternatives share a leaf-level prefix - e.g. TPTP's `<fof_atomic_formula> ::= <fof_plain_atomic_formula> | <fof_defined_atomic_formula>` where both alternatives can parse a leading term but only the second one (re-entered via `<fof_defined_infix_formula>`) carries the trailing `= rhs`."
+
 ParseMany::usage = "ParseMany[p] matches zero or more p; result is the list."
 
 ParseSome::usage = "ParseSome[p] matches one or more p; result is the list."
@@ -111,6 +113,11 @@ ParseSequence[pcs__ParserCombinator] /; Length[{pcs}] >= 2 :=
 ParseChoice[pc_ParserCombinator] := pc
 ParseChoice[pcs__ParserCombinator] /; Length[{pcs}] >= 2 :=
     ParserCombinator["Choice", flattenChildren["Choice", {pcs}], <||>]
+
+ParseChoiceLongest[pc_ParserCombinator] := pc
+ParseChoiceLongest[pcs__ParserCombinator] /; Length[{pcs}] >= 2 :=
+    ParserCombinator["ChoiceLongest",
+        flattenChildren["ChoiceLongest", {pcs}], <||>]
 
 (* Flatten any direct-child ParserCombinator of the same type into the
    parent's args. Only flattens children with no extra options
@@ -370,6 +377,30 @@ interpretDispatch[ParserCombinator["Choice", pcs_List, _], input_, pos_] :=
                 ],
                 pcs
             ];
+            maxPos = Max[errs[[All, 1]]];
+            atMax = Select[errs, #[[1]] === maxPos &];
+            parseErr[
+                maxPos,
+                Flatten[atMax[[All, 2]]],
+                First[atMax][[3]]
+            ]
+        ]
+    ]
+
+(* Run every alternative, then commit to the one that consumed the
+   most input. The Choice combinator above stops at the first match -
+   correct for PEG, wrong for grammars whose alternatives share a
+   leaf-level prefix and only differ in what comes AFTER that prefix
+   (TPTP's atomic-formula / cnf-literal rules are the canonical
+   example). Ties between equal-length successes resolve to the first
+   listed alternative, mirroring PEG's left-bias. *)
+interpretDispatch[ParserCombinator["ChoiceLongest", pcs_List, _], input_, pos_] :=
+    Block[{results, oks, errs, maxPos, atMax},
+        results = interpret[#, input, pos] & /@ pcs;
+        oks = Cases[results, _parseOk];
+        If[ Length[oks] > 0,
+            First @ MaximalBy[oks, #[[2]] &],
+            errs = Cases[results, _parseErr];
             maxPos = Max[errs[[All, 1]]];
             atMax = Select[errs, #[[1]] === maxPos &];
             parseErr[

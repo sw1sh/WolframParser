@@ -215,11 +215,51 @@ lowerSeq[elts_List, symMap_, overrides_] :=
         Function[{##}[[Range[1, Length[{##}], 2]]]]
     ]
 
+(* The combinator used to fold lowered alternatives. `ChoiceLongest`
+   (POSIX longest-match) is the right semantics for grammars that
+   factor their alternatives across multiple rule levels - TPTP's
+   `<fof_atomic_formula> ::= <fof_plain_atomic_formula> | <fof_defined_atomic_formula>`
+   is the canonical case: both alternatives can consume the same
+   leading function-application term, but only the second reaches the
+   trailing `= rhs` of `<fof_defined_infix_formula>`. PEG `Choice`
+   commits to the first match and never reaches the equality form.
+
+   Three modes, set via the `"ChoiceMode"` option on `EBNFParse`:
+     - "PEG"     PEG-ordered (first match wins).  Fast.
+     - "Longest" Always try every alt, pick the one that consumes
+                 the most input.  Correct for ambiguous grammars but
+                 ~30x slower on TPTP-scale rules.
+     - "Auto"    (default) Hybrid: when a rule's alts have *equal
+                 element counts*, sortAltsLongestFirst can't pick a
+                 winner statically, so use ChoiceLongest for that
+                 rule.  When lengths differ (the common case), the
+                 longest-prefix alt is unambiguous and PEG with
+                 longest-first is both fast and correct. *)
+$choiceMode = "Auto"
+
+chooseCombinator[alts_List] :=
+    Switch[$choiceMode,
+        "PEG",     ParseChoice,
+        "Longest", ParseChoiceLongest,
+        _,         (* "Auto": if ANY two alts share a length, the
+                     longest-alt-first sort can't fully disambiguate,
+                     so fall back to POSIX longest-match. This catches
+                     `<cnf_literal>` (lengths 4, 2, 1, 1 - the two
+                     1-elt alts tie) and `<nonassoc_connective>` while
+                     leaving simple alternation rules like
+                     `<TPTP_input> ::= <annotated_formula> | <include>`
+                     in fast PEG order when only one alt at each
+                     length applies. *)
+                   If[ Length[Union[Length /@ alts]] === Length[alts],
+                       ParseChoice, ParseChoiceLongest]
+    ]
+
 lowerBody[alts_List, symMap_, overrides_] :=
     Switch[Length[alts],
         0, ParseFail["empty rule body"],
         1, lowerSeq[First[alts], symMap, overrides],
-        _, ParseChoice @@ (lowerSeq[#, symMap, overrides] & /@ alts)
+        _, chooseCombinator[alts] @@
+            (lowerSeq[#, symMap, overrides] & /@ alts)
     ]
 
 
@@ -273,7 +313,14 @@ rewriteLeftRecursive[name_String, alts_List] :=
    longer match is tried first; if it fails to commit (e.g. no `(`
    after the functor), PEG backtracks to the shorter alt. *)
 
-sortAltsLongestFirst[alts_List] := SortBy[alts, -Length[#] &]
+(* Use Ordering for a stable sort - SortBy is *unstable* in Mathematica,
+   which would reorder equal-length alts arbitrarily. For TPTP's
+   `<nonassoc_connective> ::= <=> | => | <= | ...` an unstable sort
+   may put `<=` before `<=>`, in which case PEG commits to the prefix
+   match and `<=>` never parses. Stable descending-by-length keeps the
+   original ordering between alts of the same length, so the BNF
+   author's "more-specific-first" ordering is preserved. *)
+sortAltsLongestFirst[alts_List] := alts[[Ordering[-Length /@ alts]]]
 
 
 (* ===== Public entry points ===== *)
@@ -347,11 +394,22 @@ ccNamedEscapeChar = ParseAction[
 ]
 
 (* a "char-class char": one resolved character.  Used as the endpoint
-   of a range `c-c` and as a standalone item. *)
+   of a range `c-c` and as a standalone item.
+
+   Inside `[...]`, regex metas like `|`, `*`, `+`, `?`, `(`, `)`, `<`,
+   `{`, `.`, `$` lose their meta meaning - the class-terminator `]`,
+   the escape introducer `\`, and the range delimiter `-` are the only
+   chars that retain syntactic role. `^` is meta only at the *start*
+   of the class (handled at `regexCharClass`); inside an item it's a
+   literal `^`. So a per-class-context "not meta" parser is strictly
+   more permissive than the outside-class form, which lets `[|]`,
+   `[*]`, `[+-]`, etc. compile to one-char alternatives. *)
+ccCharNotMeta = ParseCharacter[_ ? (# =!= "]" && # =!= "\\" && # =!= "-" &)]
+
 ccChar = ParseChoice[
     ccOctalEscapeChar,
     ccNamedEscapeChar,
-    regexCharNotMeta
+    ccCharNotMeta
 ]
 
 regexCharClassRangeItem = ParseAction[
@@ -483,10 +541,15 @@ regexCompile[body_String, sm_Association, ov_Association] :=
 EBNFRules[source_String] := Parse[grammarP, source]
 EBNFRules[File[path_String]] := EBNFRules[Import[path, "Text"]]
 
-Options[EBNFParse] = {"PrimitiveOverrides" -> <||>, "Actions" -> <||>}
+Options[EBNFParse] = {
+    "PrimitiveOverrides" -> <||>,
+    "Actions" -> <||>,
+    "ChoiceMode" -> "Auto"
+}
 
 EBNFParse[source_String, OptionsPattern[]] :=
-    Block[{rules, structuredGram, tokenGram, overrides, actions, allNames, symMap, parsers},
+    Block[{rules, structuredGram, tokenGram, overrides, actions, allNames, symMap, parsers,
+            $choiceMode = OptionValue["ChoiceMode"]},
         overrides = OptionValue["PrimitiveOverrides"];
         actions   = OptionValue["Actions"];
         rules = EBNFRules[source];
@@ -495,9 +558,18 @@ EBNFParse[source_String, OptionsPattern[]] :=
         ];
         (* `::=` and `:==` rules carry the structured body; `::-` and
            `:::` rules carry regex-style bodies that the regexCompile
-           pass walks character by character. *)
-        structuredGram = Association @ Cases[rules,
-            EBNFRule[name_, "::=" | ":==", body_] :> (name -> body)
+           pass walks character by character.
+
+           When the same name has BOTH a `::=` and a `:==` definition
+           (e.g. <fof_plain_atomic_formula>, <formula_role>), prefer
+           `::=` - per the TPTP README, `::=` is the syntactic form
+           and `:==` adds semantic constraints over the same shape.
+           For parsing, the syntactic form is the right tree. *)
+        structuredGram = Join[
+            Association @ Cases[rules,
+                EBNFRule[name_, ":==", body_] :> (name -> body)],
+            Association @ Cases[rules,
+                EBNFRule[name_, "::=", body_] :> (name -> body)]
         ];
         tokenGram = Association @ Cases[rules,
             EBNFRule[name_, "::-" | ":::", body_] :> (name -> reconstructBody[body])
