@@ -146,8 +146,8 @@ After both rewrites land, real TPTP inputs parse via the auto-generated parser:
 | Input                                                         | Result |
 |---------------------------------------------------------------|--------|
 | `cnf(test, axiom, p).`                                        | OK     |
-| `cnf(t, axiom, p \| q \| r).`                                 | OK     |
-| `cnf(t, axiom, p(a) \| ~q(b)).`                               | OK     |
+| ``cnf(t, axiom, p \| q \| r).``                                 | OK     |
+| ``cnf(t, axiom, p(a) \| ~q(b)).``                               | OK     |
 | `fof(t, axiom, p & q & r & s).`                               | OK     |
 | `fof(t, axiom, p => q).` / `p <=> q`                          | OK     |
 | `fof(t, axiom, p(a, b, c)).`                                  | OK     |
@@ -189,7 +189,7 @@ The endpoint is a v0.4 of `EBNFParse` that takes a BNF + action map + override m
 
 ## Try it
 
-The tests in `Tests/EBNF.wlt` cover the unit cases above plus the five-clause group-theory TPTP problem end-to-end. The vendored grammar lives at `Tests/tptp-bnf.txt`. To experiment:
+The tests in ``Tests/EBNF.wlt`` cover the unit cases above plus the five-clause group-theory TPTP problem end-to-end. The vendored grammar lives at ``Tests/tptp-bnf.txt``. To experiment:
 
 ```wl
 Needs["Wolfram`Parser`"]

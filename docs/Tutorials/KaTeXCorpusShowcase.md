@@ -12,11 +12,11 @@ RelatedTutorials: [LaTeXMathParserImplementation]
 
 ## What this note covers
 
-[KaTeX](https://katex.org) ships an internal [screenshotter test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml) - 126 hand-picked LaTeX math expressions covering every feature the project supports, from `\frac` and `\sqrt` to full `align`/`pmatrix`/`cases` environments, color macros, big-operator decorations, and the long tail of named symbols. KaTeX itself uses these to rasterise reference images for visual diffing.
+[KaTeX](https://katex.org) ships an internal [screenshotter test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml) - 126 hand-picked LaTeX math expressions covering every feature the project supports, from ``\frac`` and ``\sqrt`` to full ``align`` / ``pmatrix`` / ``cases`` environments, color macros, big-operator decorations, and the long tail of named symbols. KaTeX itself uses these to rasterise reference images for visual diffing.
 
 `LaTeXMathParse` parses **126 / 126** of them into a Wolfram box tree. This note is the corpus, evaluated end-to-end: for each entry it shows the raw LaTeX source on the left and `LaTeXMathParse`'s output on the right (the front end renders the boxes as typeset math). It's the most honest read on what the parser covers - the corpus *is* the coverage.
 
-The same `Tests/katex-cases.json` file is loaded by the `Tests/LaTeX.wlt` test suite; the parser is expected to return a non-[ParseError]() for every one. See [LaTeXMathParserImplementation](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation) for the design decisions behind making real-world TeX parse.
+The same ``Tests/katex-cases.json`` file is loaded by the ``Tests/LaTeX.wlt`` test suite; the parser is expected to return a non-[ParseError]() for every one. See [LaTeXMathParserImplementation](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation) for the design decisions behind making real-world TeX parse.
 
 ## The corpus
 
@@ -59,9 +59,9 @@ With[{
 
 ## Failure mode
 
-The parser is *tolerant*: if a `\macro` it doesn't know shows up, the macro name is emitted as a literal token together with its `{arg}` payload rather than aborting the whole expression. So `\foo{a}` from an unknown macro renders as `\foo a` in the output, and the rest of the surrounding math is unaffected. That's why every corpus entry produces a usable result even when the macro is rarely-used (e.g. `\colorbox`, `\htmlId`, `\includegraphics`).
+The parser is *tolerant*: if a ``\macro`` it doesn't know shows up, the macro name is emitted as a literal token together with its ``{arg}`` payload rather than aborting the whole expression. So ``\foo{a}`` from an unknown macro renders as ``\foo a`` in the output, and the rest of the surrounding math is unaffected. That's why every corpus entry produces a usable result even when the macro is rarely-used (e.g. ``\colorbox``, ``\htmlId``, ``\includegraphics``).
 
-A real failure - a malformed brace pair, an unclosed `\begin{...}`, a delimiter without its match - returns a [ParseError]() with a `"Position"` / `"Expected"` / `"Found"` triple. None of the 126 corpus entries trip that path, but it's the same shape `Parse` returns for any parser.
+A real failure - a malformed brace pair, an unclosed ``\begin{...}``, a delimiter without its match - returns a [ParseError]() with a `"Position"`` / ``"Expected"`` / ``"Found"`` triple. None of the 126 corpus entries trip that path, but it's the same shape ``Parse` returns for any parser.
 
 ## See also
 
