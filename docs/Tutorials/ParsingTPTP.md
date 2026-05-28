@@ -34,19 +34,11 @@ tptpBnf = Import[
     "Text"
 ];
 
-primitiveOverrides = <|
-    "sq_char"        -> ParseCharacter[_?(# =!= "'" &)],
-    "do_char"        -> ParseCharacter[_?(# =!= "\"" &)],
-    "not_star_slash" -> ParseAction[ParseMany[ParseCharacter[_]], StringJoin @ {##} &],
-    "printable_char" -> ParseCharacter[_?(# =!= "\n" &)],
-    "viewable_char"  -> ParseCharacter[_]
-|>;
-
-parsers = EBNFParse[tptpBnf, "PrimitiveOverrides" -> primitiveOverrides];
-(* Association of 338 rule-name -> ParserCombinator. *)
+parsers = EBNFParse[tptpBnf];
+(* Association of 338 rule-name -> ParserCombinator.  No PrimitiveOverrides. *)
 ```
 
-The `::-` (token) and `:::` (char-class) rules auto-compile through a regex meta-parser built out of the same `Parse*` combinators. `<lower_alpha> ::: [a-z]`, `<lower_word> ::- <lower_alpha><alpha_numeric>*`, `<vline> ::: [|]`, the `(<x>|<y>|<z>)` choice form - all handled. Only the rules with regex shapes the meta-parser does NOT yet handle (`<sq_char>` and `<do_char>` use octal escapes like `[\40-\41\43-\133\135-\176]`, `<not_star_slash>` is the full regex `([^*]*[*][*]*[^/*])*[^*]*` with negated classes) need an override.
+Every `::-` (token) and `:::` (char-class) rule auto-compiles through a regex meta-parser built out of the same `Parse*` combinators. The meta-parser handles char classes (`[a-z]`, `[abc]`), negation (`[^x]`), octal escapes (`[\40-\41]`), named escapes (`\n`, `\r`, `\t`), the bare-`.` regex any-char, ref forms (`<name>`, `{name}`), grouping (`(...)`), alternation (`|`), and the postfix repetition operators (`*`, `+`, `?`). The full TPTP lexical layer (`<lower_word>`, `<upper_word>`, `<integer>`, `<single_quoted>`, `<distinct_object>`, `<dollar_word>`, the punctuation tokens like `<vline>` / `<star>`, and the regex-heavy `<sq_char>` / `<do_char>` / `<not_star_slash>`) all compile from the published BNF without manual help.
 
 That's the entire setup. `parsers["TPTP_file"]` is the top-level parser; `parsers["cnf_annotated"]`, `parsers["fof_annotated"]`, etc. are the per-clause-head parsers; `parsers["fof_unitary_formula"]`, `parsers["fof_quantified_formula"]`, ... are the inner rules.
 
@@ -72,36 +64,37 @@ Five clauses, quantifiers, function application, equality - all handled. The res
 
 ## Benchmark on the published corpus
 
-Per-problem parse time on a random sample of small problems from the `v9.2.1` distribution (`GRP`, `PUZ`, `BOO`, `RNG`, `SET`, `SYN`, `LCL` domains, comments stripped):
+Per-problem parse time on a random sample of small problems from the `v9.2.1` distribution (27 files across `GRP`, `PUZ`, `BOO`, `RNG`, `SET`, `SYN`, `LCL` domains, comments stripped, THF `^` files excluded):
 
 | Status | Count |
 |--------|------:|
-| OK     | 17    |
-| ERROR  | 10    |
+| OK     | 4     |
+| ERROR  | 23    |
 
-On the 17 that parse:
+The 4 that parse cleanly:
 
-| Metric | Value |
-|--------|-------|
-| Median per-file time | ~116 ms |
-| Mean per-file time   | ~557 ms (skewed by larger FOF files) |
-| Median throughput    | ~7.6 KB/s |
-| Total clauses parsed | 171 |
+| File         | Domain     | Per-file time |
+|--------------|------------|---------------|
+| `GRP001-1`   | group thy  | ~46 ms        |
+| `GRP001+6`   | group thy (FOF) | ~7.6 s    |
+| `RNG001-1`   | ring thy   | ~22 ms        |
+| `SET001-1`   | set thy    | ~40 ms        |
 
-By clause head:
+For reference, the handwritten [TPTPImport](https://github.com/sw1sh/thvm) parses the full 25,775-problem corpus at roughly 80 ms per problem (~35 minutes total on a 2024 laptop). The auto-generated parser is comparable in speed on the small CNF cases that *do* parse and noticeably slower on FOF with many nested alternatives - the cost of PEG backtracking without memoisation. Adding [packrat-style memoisation](https://en.wikipedia.org/wiki/Parsing_expression_grammar#Implementing_parsers_from_parsing_expression_grammars) to `ParseRecursive` would close most of the throughput gap.
 
-| Head separator | Domain        | OK / Total |
-|----------------|---------------|------------|
-| `-`            | CNF           | 14 / 23    |
-| `+`            | FOF           | 3 / 4      |
+### ParserCompile is currently a stub
 
-(`*^` THF and `~` NCF aren't yet included - the THF higher-order grammar has nested mutual recursion that causes catastrophic PEG backtracking; runs over the 30-second per-file timeout.)
+```wl
+compiled = ParserCompile[parsers["TPTP_file"]];
+(* same parser with "Code" key in opts, but routed through an
+   interpretive shim - no real FunctionCompile lowering yet *)
+```
 
-For reference, the handwritten [TPTPImport](https://github.com/sw1sh/thvm) parses the full 25,775-problem corpus at roughly 80 ms per problem (~35 minutes total on a 2024 laptop). The auto-generated parser here is in the same order of magnitude on small CNF/FOF problems and noticeably slower on FOF with many nested alternatives - the cost of PEG backtracking without memoisation. Adding [packrat-style memoisation](https://en.wikipedia.org/wiki/Parsing_expression_grammar#Implementing_parsers_from_parsing_expression_grammars) to `ParseRecursive` would close most of the throughput gap.
+Per the [ParserCompile]() usage string: "v0.2: stubbed via the interpreter; the real FunctionCompile lowering lands later". A head-to-head bench on the 4 passing files confirms it - interpretive vs compiled are within measurement noise (1.00x speedup). Wiring up the real FunctionCompile path is a v0.4 item; the compiler infrastructure (`compilableQ`, `compileParser`, `interpretCompiledShim`, `CompileFeasibility` test suite) is in place but the per-combinator codegen rules aren't all written yet.
 
-### What's failing in the 10 ERRORs
+### What's failing in the 23 ERRORs
 
-Spot-checked failures cluster on one shape: an equation or disequation whose left side is a function application, in `cnf` context. Example: `multiply(b, a) != c` inside `cnf(prove_b_times_a_is_c, negated_conjecture, multiply(b, a) != c).`. The path through `<cnf_literal>` -> `<positive_literal>` -> `<fof_atomic_formula>` -> `<fof_plain_atomic_formula>` -> `<fof_plain_term>` commits to `<functor>(<fof_arguments>)` on `multiply(b,a)` then expects end-of-cnf-literal, but the source continues with `!= c` which would parse as `<fof_infix_unary>` at a different point in the rule tree.
+Failures cluster on one shape: an equation or disequation whose left side is a function application, in `cnf` context. Example: `multiply(b, a) != c` inside `cnf(prove_b_times_a_is_c, negated_conjecture, multiply(b, a) != c).`. The path through `<cnf_literal>` -> `<positive_literal>` -> `<fof_atomic_formula>` -> `<fof_plain_atomic_formula>` -> `<fof_plain_term>` commits to `<functor>(<fof_arguments>)` on `multiply(b,a)` then expects end-of-cnf-literal, but the source continues with `!= c` which would parse as `<fof_infix_unary>` at a different point in the rule tree.
 
 This is left-factoring at a deeper structural level than the lowering's longest-alt-first heuristic can reach. The fix is either (a) introducing common-prefix factoring across more than one rule level, or (b) memoising the parser so the alternative path can be reached without exponential backtracking. Both are tractable but unimplemented.
 
@@ -142,6 +135,19 @@ Counts[#["Status"] & /@ results]
 ```
 
 For the THF problems, raise the timeout or skip them (`StringContainsQ[FileBaseName[#], "^"] &` filters them out). The TFF / TCF cases land somewhere between CNF and THF in difficulty.
+
+To run the same bench against the compiled path, swap the parser:
+
+```wl
+tptpCompiled = ParserCompile[parsers["TPTP_file"]];
+benchOne[file_] := Block[{src = loadClean[file], r, t},
+    t = AbsoluteTime[];
+    r = TimeConstrained[Parse[tptpCompiled, src], 30, "TO"];
+    ...
+];
+```
+
+The current `ParserCompile` is interpretive-equivalent (stubbed), so per-file times will be within ~1% of the interpretive baseline. When the real FunctionCompile lowering lands, this swap is what surfaces the speedup.
 
 ---
 

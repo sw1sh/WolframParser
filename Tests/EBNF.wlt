@@ -79,23 +79,14 @@ VerificationTest[
             FileNameJoin[{DirectoryName[$TestFileName], "tptp-bnf.txt"}],
             "Text"
         ],
-        primOverrides,
         parsers
     },
-        (* Most TPTP lexical rules (lower_word, upper_word, integer,
-           vline, star, plus, arrow, less_sign, hash, dot, lower_alpha,
-           upper_alpha, numeric, ...) auto-compile from the BNF's `::-`
-           and `:::` rule kinds. Only the rules with regex shapes the
-           compiler does NOT support yet (octal escapes, negated char
-           classes, full regex) need overrides. *)
-        primOverrides = <|
-            "sq_char"         -> ParseCharacter[_?(# =!= "'" &)],
-            "do_char"         -> ParseCharacter[_?(# =!= "\"" &)],
-            "not_star_slash"  -> ParseAction[ParseMany[ParseCharacter[_]], StringJoin @ {##} &],
-            "printable_char"  -> ParseCharacter[_?(# =!= "\n" &)],
-            "viewable_char"   -> ParseCharacter[_]
-        |>;
-        parsers = EBNFParse[bnf, "PrimitiveOverrides" -> primOverrides];
+        (* Every TPTP lexical rule (lower_word, upper_word, integer,
+           single_quoted, distinct_object, dollar_word, vline, star,
+           plus, ..., and the regex-heavy sq_char / do_char /
+           not_star_slash) auto-compiles from the BNF's `::-` and
+           `:::` rule kinds.  No PrimitiveOverrides needed. *)
+        parsers = EBNFParse[bnf];
         (* A minimal cnf clause from a real TPTP problem. The output is
            the raw parse tree; the formula slot contains the nested
            `{"p", {}}` because left-recursion elimination of
@@ -115,16 +106,9 @@ VerificationTest[
             FileNameJoin[{DirectoryName[$TestFileName], "tptp-bnf.txt"}],
             "Text"
         ],
-        primOverrides, parsers, source
+        parsers, source
     },
-        primOverrides = <|
-            "sq_char"        -> ParseCharacter[_?(# =!= "'" &)],
-            "do_char"        -> ParseCharacter[_?(# =!= "\"" &)],
-            "not_star_slash" -> ParseAction[ParseMany[ParseCharacter[_]], StringJoin @ {##} &],
-            "printable_char" -> ParseCharacter[_?(# =!= "\n" &)],
-            "viewable_char"  -> ParseCharacter[_]
-        |>;
-        parsers = EBNFParse[bnf, "PrimitiveOverrides" -> primOverrides];
+        parsers = EBNFParse[bnf];
         (* A real-world TPTP problem: group axioms + a commutator
            definition + a conjecture. Five fof clauses with quantifiers,
            function application, and equality - the constructs the

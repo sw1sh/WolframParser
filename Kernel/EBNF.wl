@@ -331,48 +331,72 @@ regexLookupRef[name_String] :=
 regexMetaChar = "|" | "*" | "+" | "?" | "(" | ")" | "[" | "]" | "<" | "{" | "\\"
 regexCharNotMeta = ParseCharacter[_ ? (! MatchQ[#, regexMetaChar] &)]
 
-(* A backslash escape: \X stands for the literal char X *)
-regexEscape = ParseAction[
-    ParseLiteral["\\"] ~~ ParseCharacter[_],
-    ParseLiteral[#2] &
+(* `\nnn` octal char-code escape, `\n`/`\r`/`\t`/`\\`/`\'`/`\"` named
+   escape, or any other `\X` as the literal X. Used both outside and
+   inside char classes (so `[\40-\41]` and `\n` both compile). *)
+ccOctalDigit = ParseCharacter[CharacterRange["0", "7"]]
+
+ccOctalEscapeChar = ParseAction[
+    ParseLiteral["\\"] ~~ ccOctalDigit ~~ ParseMany[ccOctalDigit],
+    FromCharacterCode[ToExpression["8^^" <> #2 <> StringJoin @ #3]] &
 ]
 
-regexLiteralChar = ParseAction[regexCharNotMeta, ParseLiteral[#] &]
+ccNamedEscapeChar = ParseAction[
+    ParseLiteral["\\"] ~~ ParseCharacter[_],
+    Replace[#2, {"n" -> "\n", "r" -> "\r", "t" -> "\t"}] &
+]
 
-(* Inside a char class: `a-z` is a range, `\X` is a literal X, plain
-   chars are themselves. Each item produces a WL string pattern. *)
+(* a "char-class char": one resolved character.  Used as the endpoint
+   of a range `c-c` and as a standalone item. *)
+ccChar = ParseChoice[
+    ccOctalEscapeChar,
+    ccNamedEscapeChar,
+    regexCharNotMeta
+]
+
 regexCharClassRangeItem = ParseAction[
-    regexCharNotMeta ~~ ParseLiteral["-"] ~~ regexCharNotMeta,
+    ccChar ~~ ParseLiteral["-"] ~~ ccChar,
     CharacterRange[#1, #3] &
 ]
 
-regexCharClassEscapeItem = ParseAction[
-    ParseLiteral["\\"] ~~ ParseCharacter[_],
-    #2 &
-]
+regexCharClassItem = ParseChoice[regexCharClassRangeItem, ccChar]
 
-regexCharClassSingleItem = ParseAction[
-    regexCharNotMeta,
-    # &
-]
+(* char class with optional leading `^` for negation - `[^x]` becomes
+   `ParseCharacter[_?(! StringMatchQ[#, x] &)]` so it matches anything
+   *except* the listed set.
 
-regexCharClassItem = ParseChoice[
-    regexCharClassRangeItem,
-    regexCharClassEscapeItem,
-    regexCharClassSingleItem
-]
-
+   Range items resolve to a List of chars via CharacterRange; single
+   items are bare strings. Flatten[parts] coalesces both shapes into
+   one flat char list, which Apply[Alternatives, ...] turns into the
+   one-of pattern the ParseCharacter wants. *)
 regexCharClass = ParseAction[
-    ParseLiteral["["] ~~ ParseSome[regexCharClassItem] ~~ ParseLiteral["]"],
-    With[{parts = #2},
-        ParseCharacter[
-            Switch[Length[parts],
-                1, parts[[1]],
-                _, Apply[Alternatives, parts]
+    ParseLiteral["["] ~~ ParseOptional[ParseLiteral["^"]] ~~
+        ParseSome[regexCharClassItem] ~~ ParseLiteral["]"],
+    With[{
+        neg = ! MissingQ[#2],
+        chars = Flatten[#3]
+    },
+        With[{pat = If[Length[chars] === 1, chars[[1]], Apply[Alternatives, chars]]},
+            If[ neg,
+                ParseCharacter[_?(! StringMatchQ[#, pat] &)],
+                ParseCharacter[pat]
             ]
         ]
     ] &
 ]
+
+(* Outside a char class: bare `.` is the regex any-char metacharacter
+   (so `<printable_char> ::: .` matches any single char); a backslash
+   escape resolves the same way the char-class form does; everything
+   else is a one-character literal. *)
+regexDot = ParseAction[ParseLiteral["."], ParseCharacter[_] &]
+
+regexEscape = ParseAction[
+    ccOctalEscapeChar | ccNamedEscapeChar,
+    ParseLiteral[#] &
+]
+
+regexLiteralChar = ParseAction[regexCharNotMeta, ParseLiteral[#] &]
 
 regexRefName = ParseAction[
     ParseCharacter[LetterCharacter | "_"] ~~
@@ -397,6 +421,7 @@ regexAtom = ParseChoice[
     regexParenGroup,
     regexNonTermRef,
     regexEscape,
+    regexDot,
     regexLiteralChar
 ]
 
