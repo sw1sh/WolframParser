@@ -494,6 +494,12 @@ commandHandlers["\\mathtt"]   = Function[{opt, req},
     StyleBox[stripItalic @ First[req, ""], FontFamily -> "Courier", FontSlant -> "Plain"]
 ]
 commandHandlers["\\operatorname"] = commandHandlers["\\mathrm"]
+(* `\operatorname*` is the limits-form variant: same upright styling
+   as `\operatorname`, but sub/superscripts should attach as
+   under/over limits in display mode.  Preprocessed to a synthetic
+   name `\operatornamestar` (since the grammar's command name doesn't
+   accept a `*` suffix), then handled here. *)
+commandHandlers["\\operatornamestar"] = commandHandlers["\\mathrm"]
 
 (* \text{...}: upright text. The arg comes through the math grammar
    (so a multi-letter run is a RowBox of italic letters); re-style the
@@ -1660,6 +1666,10 @@ $oneArgShortNames = {
     "text", "textrm", "textbf", "textit", "texttt", "textsf",
     "textnormal", "emph",
     "operatorname",
+    (* `\operatorname*` is preprocessed to this synthetic name in
+       preprocessLaTeX so the bare-arg form `\operatornamestar x` is
+       brace-wrapped just like `\operatorname x`. *)
+    "operatornamestar",
     "smash", "boxed",
     "cancel", "bcancel", "xcancel", "sout",
     "pod", "pmod",
@@ -2148,6 +2158,13 @@ preprocessLaTeX[s_String] :=
     rewriteOldFontSwitches @
     rewriteCDEnv @
     applyUserDefs @
+    (* The grammar's commandName matches `\` + letters or `\` + one
+       punctuation char, so `\operatorname*` would parse as the
+       command `\operatorname` followed by a bare `*` and the `*`
+       leaks into the surrounding row.  Rewrite to a synthetic name
+       with the `*` absorbed; commandHandlers["\\operatornamestar"]
+       picks it up. *)
+    StringReplace[#, RegularExpression["\\\\operatorname\\*"] -> "\\operatornamestar"] &@
     StringReplace[s, {
         (* \big and friends consume their next delimiter together. These
            are NOT guaranteed to come in matched pairs (e.g. \big( without
