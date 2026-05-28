@@ -42,21 +42,25 @@ VerificationTest[
 
 (* === font-style commands === *)
 
+(* Use Unicode mathematical-alphanumeric-symbols block directly -
+   covers full A-Z (with legacy-block exceptions for ℝ, ℂ, ℍ, ...),
+   plus lowercase a-z and digits which WL's named-character coverage
+   skips. *)
 VerificationTest[
     LaTeXMathParse["\\mathbb{R}"],
-    "\[DoubleStruckCapitalR]",
+    FromCharacterCode[16^^211D],   (* ℝ - in legacy Letterlike block *)
     TestID -> "LaTeX: \\mathbb{R} -> blackboard R"
 ]
 
 VerificationTest[
     LaTeXMathParse["\\mathcal{F}"],
-    "\[ScriptCapitalF]",
+    FromCharacterCode[16^^2131],   (* ℱ - script F in legacy block *)
     TestID -> "LaTeX: \\mathcal{F} -> script F"
 ]
 
 VerificationTest[
     LaTeXMathParse["\\mathfrak{G}"],
-    "\[GothicCapitalG]",
+    FromCharacterCode[16^^1D50A],  (* 𝔊 - fraktur G in SMP block *)
     TestID -> "LaTeX: \\mathfrak{G} -> gothic G"
 ]
 
@@ -134,7 +138,7 @@ VerificationTest[
 
 VerificationTest[
     LaTeXMathParse["x \\in \\mathbb{R}"],
-    RowBox[{StyleBox["x", "TI"], "\[Element]", "\[DoubleStruckCapitalR]"}],
+    RowBox[{StyleBox["x", "TI"], "\[Element]", FromCharacterCode[16^^211D]}],
     TestID -> "LaTeX: \\in + \\mathbb compose"
 ]
 

@@ -331,19 +331,68 @@ commandHandlers[_String] := Missing["NotFound"]
 namedChar[prefix_String, letter_String] :=
     ToExpression["\"\\[" <> prefix <> letter <> "]\""]
 
-doubleStruckChars = Association @ Map[
-    Function[c, c -> namedChar["DoubleStruckCapital", c]],
-    CharacterRange["A", "Z"]
+(* Use the Unicode mathematical-alphanumeric blocks directly - WL's
+   named-character coverage is incomplete (no `\[Gothicz]`, no
+   `\[DoubleStruck0]`, etc.). The Unicode spec has some letters in
+   their classical math symbol homes (ℂ ℍ ℕ ℙ ℚ ℝ ℤ in U+2102
+   etc.) and the rest in the SMP block U+1D400+; we patch in the
+   exceptions so every A-Z maps to *some* glyph. *)
+
+(* U+1D538 + i is double-struck-capital-{A+i}, with exceptions for
+   C, H, N, P, Q, R, Z which live in the legacy Letterlike Symbols
+   block (U+2102, 210D, 2115, 2119, 211A, 211D, 2124). *)
+$dblExceptions = <|
+    "C" -> 16^^2102, "H" -> 16^^210D, "N" -> 16^^2115,
+    "P" -> 16^^2119, "Q" -> 16^^211A, "R" -> 16^^211D,
+    "Z" -> 16^^2124
+|>
+doubleStruckChars = Association @ Join[
+    Map[Function[c,
+        c -> FromCharacterCode[
+            Lookup[$dblExceptions, c, 16^^1D538 + ToCharacterCode[c][[1]] - 65]
+        ]], CharacterRange["A", "Z"]],
+    Map[Function[c,
+        c -> FromCharacterCode[16^^1D552 + ToCharacterCode[c][[1]] - 97]],
+        CharacterRange["a", "z"]],
+    Map[Function[c,
+        c -> FromCharacterCode[16^^1D7D8 + ToCharacterCode[c][[1]] - 48]],
+        CharacterRange["0", "9"]]
 ]
 
-scriptCapitalChars = Association @ Map[
-    Function[c, c -> namedChar["ScriptCapital", c]],
-    CharacterRange["A", "Z"]
+(* U+1D49C + i is mathematical-script-{A+i}, with exceptions for
+   B, E, F, H, I, L, M, R = legacy letterlike block. *)
+$scrUpperExceptions = <|
+    "B" -> 16^^212C, "E" -> 16^^2130, "F" -> 16^^2131,
+    "H" -> 16^^210B, "I" -> 16^^2110, "L" -> 16^^2112,
+    "M" -> 16^^2133, "R" -> 16^^211B
+|>
+$scrLowerExceptions = <|
+    "e" -> 16^^212F, "g" -> 16^^210A, "o" -> 16^^2134
+|>
+scriptCapitalChars = Association @ Join[
+    Map[Function[c,
+        c -> FromCharacterCode[
+            Lookup[$scrUpperExceptions, c, 16^^1D49C + ToCharacterCode[c][[1]] - 65]
+        ]], CharacterRange["A", "Z"]],
+    Map[Function[c,
+        c -> FromCharacterCode[
+            Lookup[$scrLowerExceptions, c, 16^^1D4B6 + ToCharacterCode[c][[1]] - 97]
+        ]], CharacterRange["a", "z"]]
 ]
 
-gothicCapitalChars = Association @ Map[
-    Function[c, c -> namedChar["GothicCapital", c]],
-    CharacterRange["A", "Z"]
+(* U+1D504 + i is fraktur-{A+i}, with exceptions C, H, I, R, Z. *)
+$frkUpperExceptions = <|
+    "C" -> 16^^212D, "H" -> 16^^210C, "I" -> 16^^2111,
+    "R" -> 16^^211C, "Z" -> 16^^2128
+|>
+gothicCapitalChars = Association @ Join[
+    Map[Function[c,
+        c -> FromCharacterCode[
+            Lookup[$frkUpperExceptions, c, 16^^1D504 + ToCharacterCode[c][[1]] - 65]
+        ]], CharacterRange["A", "Z"]],
+    Map[Function[c,
+        c -> FromCharacterCode[16^^1D51E + ToCharacterCode[c][[1]] - 97]],
+        CharacterRange["a", "z"]]
 ]
 
 (* font-style handler: if arg is a single ASCII upper-case letter and we
@@ -387,8 +436,14 @@ stripItalic[e_] := e //. StyleBox[s_String, "TI"] :> s
 commandHandlers["\\mathbf"]   = Function[{opt, req},
     StyleBox[stripItalic @ First[req, ""], FontWeight -> "Bold", FontSlant -> "Plain"]
 ]
-commandHandlers["\\boldsymbol"] = commandHandlers["\\mathbf"]
-commandHandlers["\\pmb"]      = commandHandlers["\\mathbf"]
+(* `\boldsymbol` / `\pmb` are bold-ITALIC (poor man's bold preserves
+   the math-italic styling and just adds weight). KaTeX renders
+   `\pmb{\mu}` as bold italic mu, NOT upright bold. Keep the inner
+   TI italic dressing intact and only add Bold. *)
+commandHandlers["\\boldsymbol"] = Function[{opt, req},
+    StyleBox[First[req, ""], FontWeight -> "Bold"]
+]
+commandHandlers["\\pmb"]      = commandHandlers["\\boldsymbol"]
 commandHandlers["\\mathrm"]   = Function[{opt, req},
     StyleBox[stripItalic @ First[req, ""], FontSlant -> "Plain"]
 ]
@@ -644,32 +699,82 @@ commandHandlers["\\tag"] = Function[{opt, req},
 ]
 
 (* === colors ===
-   KaTeX color macros: `\color{name}{body}` and `\textcolor{name}{body}`
-   accept a CSS-named color and an arg to colour.  For doc-math we drop
-   the colour but keep the arg - the visual hue isn't load-bearing for
-   semantics, and Mathematica's notebook FE renders the math regardless.
-   The same logic covers the named colour shortcuts (`\red{x}`, `\blue{x}`,
-   ...) KaTeX defines on top of `\textcolor`. *)
-commandHandlers["\\color"]      = Function[{opt, req}, Last[req, ""]]
-commandHandlers["\\textcolor"]  = Function[{opt, req}, Last[req, ""]]
+   KaTeX `\color{name}{body}` and `\textcolor{name}{body}` accept a
+   CSS / dvips color name (or a #RRGGBB hex) and apply that colour
+   to the body. We map known names to RGBColor / GrayLevel and wrap
+   the body in StyleBox[body, FontColor -> ...] so the notebook FE
+   actually renders the colour - matching KaTeX's visible output.
+   Unknown names fall back to dropping the colour. *)
+$colorMap = <|
+    "red" -> Red, "orange" -> Orange, "yellow" -> Yellow,
+    "green" -> Green, "blue" -> Blue, "purple" -> Purple, "pink" -> Pink,
+    "gray" -> Gray, "grey" -> Gray, "black" -> Black, "white" -> White,
+    "magenta" -> Magenta, "cyan" -> Cyan, "olive" -> RGBColor[0.5, 0.5, 0],
+    "teal" -> RGBColor[0, 0.5, 0.5], "lime" -> RGBColor[0.75, 1, 0],
+    "violet" -> RGBColor[0.93, 0.51, 0.93],
+    "maroon" -> RGBColor[0.5, 0, 0], "navy" -> RGBColor[0, 0, 0.5],
+    "brown" -> Brown,
+    (* dvips-style capitalised names KaTeX accepts on top of CSS *)
+    "Red" -> Red, "Orange" -> Orange, "Yellow" -> Yellow,
+    "Green" -> Green, "Blue" -> Blue, "Purple" -> Purple,
+    "Black" -> Black, "White" -> White, "Magenta" -> Magenta,
+    "Cyan" -> Cyan, "Brown" -> Brown, "Gray" -> Gray,
+    "RoyalBlue" -> RGBColor[0.25, 0.41, 0.88],
+    "ForestGreen" -> RGBColor[0.13, 0.55, 0.13],
+    "BrickRed" -> RGBColor[0.7, 0.13, 0.13],
+    "OliveGreen" -> RGBColor[0.33, 0.42, 0.18],
+    "MidnightBlue" -> RGBColor[0.1, 0.1, 0.44],
+    "BurntOrange" -> RGBColor[0.8, 0.34, 0],
+    "Turquoise" -> RGBColor[0.25, 0.88, 0.82],
+    "Goldenrod" -> RGBColor[0.85, 0.65, 0.13],
+    "Lavender" -> RGBColor[0.9, 0.9, 0.98],
+    "SkyBlue" -> RGBColor[0.53, 0.81, 0.92]
+|>
+
+(* Resolve a colour name (or `#RRGGBB`) to a WL colour, or Missing[]
+   if we can't.  The name arrives as the parser's box tree for the
+   arg - typically RowBox[{StyleBox["b", "TI"], StyleBox["l", "TI"],
+   ...}] from the math-mode tokenisation of "blue".  Flatten the
+   box tree, drop every StyleBox dressing, and string-join the leaves. *)
+nameOfArg[a_] := StringJoin @@ Cases[
+    {a} //. StyleBox[s_, ___] :> s,
+    _String, Infinity
+]
+resolveColor[a_] := Module[{n = nameOfArg[a]},
+    Which[
+        StringStartsQ[n, "#"] && StringLength[n] === 7,
+            RGBColor @@ (
+                FromDigits[#, 16] / 255. & /@
+                    StringPartition[StringDrop[n, 1], 2]),
+        StringStartsQ[n, "#"] && StringLength[n] === 4,
+            (* shorthand #rgb -> #rrggbb *)
+            RGBColor @@ (
+                FromDigits[# <> #, 16] / 255. & /@
+                    Characters[StringDrop[n, 1]]),
+        KeyExistsQ[$colorMap, n], $colorMap[n],
+        True, Missing["UnknownColor", n]
+    ]
+]
+
+colorBody[body_, name_] := Module[{c = resolveColor[name]},
+    If[MissingQ[c], body, StyleBox[body, FontColor -> c]]
+]
+
+commandHandlers["\\color"]      = Function[{opt, req},
+    If[Length[req] >= 2, colorBody[req[[2]], req[[1]]], Last[req, ""]]
+]
+commandHandlers["\\textcolor"]  = Function[{opt, req},
+    If[Length[req] >= 2, colorBody[req[[2]], req[[1]]], Last[req, ""]]
+]
+(* KaTeX color shortcuts: `\red{x}`, `\blue{x}`, etc. take one arg
+   and wrap it in the named colour.  Use the same lookup map. *)
 Scan[
-    (commandHandlers["\\" <> #] = identArgHandler) &,
-    {"red", "orange", "yellow", "green", "blue", "purple", "pink",
-     "gray", "black", "white", "magenta", "cyan", "olive", "teal",
-     "lime", "violet", "maroon", "navy",
-     "Apricot", "Aquamarine", "Bittersweet", "Black", "Blue",
-     "BlueGreen", "BlueViolet", "BrickRed", "Brown", "BurntOrange",
-     "CadetBlue", "CarnationPink", "Cerulean", "CornflowerBlue",
-     "Cyan", "Dandelion", "DarkOrchid", "Emerald", "ForestGreen",
-     "Fuchsia", "Goldenrod", "Gray", "Green", "GreenYellow", "JungleGreen",
-     "Lavender", "LimeGreen", "Magenta", "Mahogany", "Maroon", "Melon",
-     "MidnightBlue", "Mulberry", "NavyBlue", "OliveGreen", "Orange",
-     "OrangeRed", "Orchid", "Peach", "Periwinkle", "PineGreen", "Plum",
-     "ProcessBlue", "Purple", "RawSienna", "Red", "RedOrange", "RedViolet",
-     "Rhodamine", "RoyalBlue", "RoyalPurple", "RubineRed", "Salmon",
-     "SeaGreen", "Sepia", "SkyBlue", "SpringGreen", "Tan", "TealBlue",
-     "Thistle", "Turquoise", "Violet", "VioletRed", "White", "WildStrawberry",
-     "Yellow", "YellowGreen", "YellowOrange"}
+    Function[name,
+        commandHandlers["\\" <> name] = Function[{opt, req},
+            colorBody[First[req, ""], name]
+        ]
+    ],
+    Keys[$colorMap]
 ]
 
 (* === strike-through / cancel ===
