@@ -2216,8 +2216,80 @@ bigOpDisplayLimits[boxes_] := boxes //. {
             UnderscriptBox[UnderscriptBox[x, deco], lo]
 }
 
+(* Math-mode comma is `,` + thin space, which reads as a list/tuple
+   separator (`(a, b, c)`).  But inside a numeric grouping like
+   `1,000,000` (or its `\!`-bridged variant) the thin space looks
+   like literal whitespace between digit runs.  Walk every RowBox and
+   drop the thin space whenever the comma sits between digit-only
+   runs — skipping any empty-string siblings between them so the
+   `\!` no-op doesn't break the detection. *)
+$commaThinSpace = "," <> FromCharacterCode[8201]
+digitRunQ[s_String] := s =!= "" && StringMatchQ[s, DigitCharacter ..]
+
+(* Bare digit-run check: pure decimal token, not a RowBox or anything
+   styled.  Used to detect `1,000,000`-style numeric groupings; we
+   stay conservative because `\{1, 2\}` (set literal) also has digit
+   siblings around the comma but should KEEP the thin space. *)
+bareDigitRunQ[s_String] := s =!= "" && StringMatchQ[s, DigitCharacter ..]
+bareDigitRunQ[_] := False
+
+(* Empty-string children get inserted by no-op handlers (e.g. `\!`,
+   `\,`) and end up wrapped in a sibling RowBox like
+   `RowBox[{"", "000"}]`.  Unwrap any RowBox whose only non-empty
+   child is a single element, and drop bare "" entries from larger
+   RowBoxes, so neighbour-based postprocessors (digit-comma below,
+   bigOpDisplayLimits above) see contiguous tokens. *)
+stripEmptyRowChildren[boxes_] := boxes //. {
+    RowBox[{a_, ""}] :> a,
+    RowBox[{"", a_}] :> a,
+    RowBox[parts_List] /; MemberQ[parts, ""] :>
+        With[{filtered = DeleteCases[parts, ""]},
+            If[Length[filtered] === 1, First[filtered], RowBox[filtered]]
+        ]
+}
+
+(* Detect digit-run, comma-thinspace, digit-run, ... patterns in a
+   RowBox and collapse them into a SINGLE string token
+   "1,000,000". Done as one string because the FE inserts visible
+   gaps around standalone "," tokens in math context (it treats them
+   as list punctuation), even if our string has no embedded space. *)
+collapseDigitCommaRun[parts_List] := Module[
+    {n = Length[parts], i = 1, out = {}, start, joined, k},
+    While[i <= n,
+        If[ StringQ[parts[[i]]] && bareDigitRunQ[parts[[i]]],
+            (* try to grow a digit, "," <thin>, digit, ... run *)
+            start = i; k = i;
+            While[ k + 2 <= n &&
+                   parts[[k + 1]] === $commaThinSpace &&
+                   StringQ[parts[[k + 2]]] && bareDigitRunQ[parts[[k + 2]]],
+                k += 2
+            ];
+            If[ k > start,
+                joined = StringJoin @ Table[
+                    If[ OddQ[m - start + 1], parts[[m]], "," ],
+                    {m, start, k}
+                ];
+                AppendTo[out, joined],
+                AppendTo[out, parts[[i]]]
+            ];
+            i = k + 1,
+            AppendTo[out, parts[[i]]]; i++
+        ]
+    ];
+    out
+]
+
+suppressCommaSpaceBetweenDigits[boxes_] := boxes //. {
+    RowBox[parts_List] /; AnyTrue[parts, # === $commaThinSpace &] :>
+        With[{collapsed = collapseDigitCommaRun[parts]},
+            If[Length[collapsed] === 1, First[collapsed], RowBox[collapsed]]
+        ]
+}
+
 LaTeXMathParse[source_String] := Module[{r = Parse[LaTeXMathParser, preprocessLaTeX[source]]},
-    If[MatchQ[r, _ParseError], r, bigOpDisplayLimits[r]]
+    If[MatchQ[r, _ParseError], r,
+        suppressCommaSpaceBetweenDigits @ stripEmptyRowChildren @ bigOpDisplayLimits[r]
+    ]
 ]
 
 
