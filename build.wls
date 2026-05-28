@@ -13,10 +13,14 @@
 Quiet @ UsingFrontEnd[CurrentValue[$FrontEnd, LightDark] = "Light"]
 
 pacletDir = DirectoryName[$InputFileName]
-Get[FileNameJoin[{pacletDir, "..", "..", "MarkdownToNotebook.wl"}]]
 
-(* load the paclet so example cells resolve its symbols during evaluation *)
+(* Register the dev paclet BEFORE Get-ing MarkdownToNotebook.wl - its
+   own bootstrap (PacletFind["Wolfram/WolframParser"]) would otherwise
+   fail and re-install the published version from the ResourceObject
+   URL, shadowing our dev paclet's edits with stale code. *)
 PacletDirectoryLoad[pacletDir]
+
+Get[FileNameJoin[{pacletDir, "..", "..", "MarkdownToNotebook.wl"}]]
 Needs["Wolfram`Parser`"]
 
 subdir["Symbol"] = {"Documentation", "English", "ReferencePages", "Symbols"}

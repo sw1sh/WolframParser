@@ -23,6 +23,15 @@ The same ``Tests/katex-cases.json`` file is loaded by the ``Tests/LaTeX.wlt`` te
 Every row below shows the LaTeX source, KaTeX's reference rendering (fetched from KaTeX's [screenshotter image set](https://github.com/KaTeX/KaTeX/tree/main/test/screenshotter/images)), and `LaTeXMathParse`'s rasterised output. Both renders are bitmaps so visual rendering issues in the notebook front end can't hide a parser bug - what you see is what each engine actually produced.
 
 ```wl
+(* Force the front end to Light appearance up front - the headless
+   build session would otherwise resolve Automatic to Dark, and the
+   Rasterize calls below would emit white-text-on-black tiles
+   for `LaTeXMathParse` while KaTeX's reference PNGs stay light, so
+   the side-by-side compare reads as a colour difference rather than
+   a content one.  The setting is process-wide for the FE session;
+   later examples inherit it. *)
+Quiet @ UsingFrontEnd[CurrentValue[$FrontEnd, LightDark] = "Light"];
+
 $katexImageURL[name_String] :=
     "https://raw.githubusercontent.com/KaTeX/KaTeX/main/test/screenshotter/images/" <> name <> "-chrome.png";
 
