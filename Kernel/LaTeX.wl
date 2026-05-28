@@ -440,11 +440,17 @@ commandHandlers["\\mathfrak"] = styleHandler[gothicCapitalChars, FontVariations 
    "abc" KaTeX gives.  Done as a single bottom-up pass (Replace at
    level Infinity, not ReplaceRepeated) so the RowBox unwrap doesn't
    cycle with parent re-application. *)
+(* `Split` groups adjacent strings into runs (sub-lists), but
+   non-string elements end up as singleton sub-lists too.  Map the
+   merge over the splits and then `Catenate` (= flatten one level)
+   so non-string singletons unwrap correctly - otherwise the RowBox
+   ends up with literal `{OverscriptBox[...]}` children (a List
+   wrapping a box), which the FE renders as `{box}` with visible
+   braces around the inner expression. *)
 mergeRowStrings[parts_List] := Module[{merged},
-    merged = Replace[
-        Split[parts, StringQ[#1] && StringQ[#2] &],
-        run : {_String, __String} :> StringJoin @@ run,
-        {1}
+    merged = Catenate @ Map[
+        If[Length[#] > 1 && VectorQ[#, StringQ], {StringJoin @@ #}, #] &,
+        Split[parts, StringQ[#1] && StringQ[#2] &]
     ];
     If[Length[merged] === 1, First[merged], RowBox[merged]]
 ]
