@@ -566,8 +566,21 @@ $notMap = <|
 commandHandlers["\\not"] = Function[{opt, req},
     With[{a = First[req, ""]},
         Which[
+            (* Precomposed Unicode for the common negated relations
+               (≠, ⊄, ⊀, ...) — the typesetter actually renders them
+               with a single solid stroke, which is what readers see
+               in math. *)
             StringQ[a] && KeyExistsQ[$notMap, a], $notMap[a],
-            True, StyleBox[a, FontVariations -> {"StrikeThrough" -> True}]
+            (* Generic case: overlay the arg with `/` via negative
+               horizontal margin.  FontVariations -> StrikeThrough
+               renders as a barely-visible horizontal line in math
+               mode, so it loses the "negation" affordance.  The
+               AdjustmentBox approach gives a heavy diagonal slash
+               crossing the glyph, matching KaTeX's visual. *)
+            True, RowBox[{
+                AdjustmentBox[a, BoxMargins -> {{0, -0.5}, {0, 0}}],
+                "/"
+            }]
         ]
     ]
 ]
