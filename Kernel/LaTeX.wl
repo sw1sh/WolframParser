@@ -729,6 +729,64 @@ commandHandlers["\\tag"] = Function[{opt, req},
    arg, with the LAST arg being the visible content. We drop the
    styling metadata and emit just the content. \raisebox{offset}{body}
    similarly: drop offset, keep body. *)
+(* `\rule[lift]{width}{height}`: KaTeX renders a filled black
+   rectangle of the given dimensions.  Parse TeX length units (em, ex,
+   pt, in, cm, mm) to points and emit a GraphicsBox with a Black
+   Rectangle so the FE actually draws a visible rule.  No unit, or
+   an unparseable arg, falls back to "" - same as the old noop. *)
+texLengthToPt[s_String] := Module[{m},
+    m = StringCases[StringTrim[s],
+        StartOfString ~~ num:NumberString ~~ unit:LetterCharacter.. ~~ EndOfString
+            :> {num, unit}, 1];
+    If[ m === {}, Missing[],
+        With[{n = ToExpression[m[[1, 1]]], u = m[[1, 2]]},
+            n * Switch[u,
+                "em", 12,  "ex", 6,
+                "pt", 1,   "bp", 1,
+                "in", 72,  "cm", 28.35, "mm", 2.835,
+                "px", 0.75,
+                "mu", 1,
+                _, 1
+            ]
+        ]
+    ]
+]
+commandHandlers["\\rule"] = Function[{opt, req},
+    With[{w = If[Length[req] >= 1, texLengthToPt @ nameOfArg @ req[[1]], Missing[]],
+          h = If[Length[req] >= 2, texLengthToPt @ nameOfArg @ req[[2]], Missing[]]},
+        If[ NumberQ[w] && NumberQ[h] && w > 0 && h > 0,
+            (* FrameBox with explicit ImageSize and a Black background
+               renders as a filled rectangle in the FE.  GraphicsBox
+               doesn't render correctly inside an inline math context
+               (the box gets serialised as code, not drawn). *)
+            FrameBox["", ImageSize -> {w, h},
+                Background -> Black, FrameStyle -> None],
+            ""
+        ]
+    ]
+]
+
+(* \kern{len} / \hspace{len} / \mkern{len} / \mskip{len} / \hskip{len}:
+   KaTeX renders explicit horizontal whitespace of the given amount.
+   We approximate with a SPACE-only StyleBox sized by FontSize - the
+   effect is visible inter-element space, even if not perfectly to
+   length spec. *)
+spacingHandler = Function[{opt, req},
+    With[{pt = texLengthToPt @ nameOfArg @ First[req, "0pt"]},
+        If[ NumberQ[pt] && pt > 0,
+            (* Use AdjustmentBox to insert a precise horizontal offset *)
+            AdjustmentBox[" ", BoxMargins -> {{pt / 2, pt / 2}, {0, 0}}],
+            " "
+        ]
+    ]
+]
+commandHandlers["\\kern"]   = spacingHandler
+commandHandlers["\\mkern"]  = spacingHandler
+commandHandlers["\\hskip"]  = spacingHandler
+commandHandlers["\\mskip"]  = spacingHandler
+commandHandlers["\\hspace"] = spacingHandler
+commandHandlers["\\vspace"] = Function[{opt, req}, ""]  (* vertical, drop *)
+
 commandHandlers["\\htmlId"]    = Function[{opt, req}, Last[req, ""]]
 commandHandlers["\\htmlClass"] = Function[{opt, req}, Last[req, ""]]
 commandHandlers["\\htmlStyle"] = Function[{opt, req}, Last[req, ""]]
@@ -1075,7 +1133,6 @@ namedSymbolChars = <|
     "\\ne"      -> "\[NotEqual]",      "\\notni" -> "\[NotReverseElement]",
     (* dotless variants and other plain-TeX letter macros *)
     "\\imath"   -> "\[DotlessI]",      "\\jmath" -> "\[DotlessJ]",
-    "\\jmath"   -> "\[DotlessJ]",
     (* KaTeX's literal logo. We emit "KaTeX" as plain text rather than
        try to typeset the slanted Kₐ form - the visual fidelity isn't
        worth the layout cost. *)
