@@ -1870,6 +1870,41 @@ rewriteOldFontSwitches[s_String] :=
         "\\math$1{$2}"
     ]
 
+(* `\begin{CD}...\end{CD}`: commutative-diagram environment with the
+   `@`-prefixed arrow syntax (`@>label>`, `@<label<`, `@VlabelV`,
+   `@AlabelA`, `@|`, `@=`, `@.`).  We approximate: rename `CD` to
+   `matrix`, then globally collapse each `@`-spec to a Unicode arrow
+   glyph (labels dropped). `@` is rare outside CD context so the
+   global pass is safe in practice. *)
+rewriteCDEnv[s_String] := StringReplace[
+    StringReplace[s, {
+        "\\begin{CD}" -> "\\begin{matrix}",
+        "\\end{CD}"   -> "\\end{matrix}"
+    }],
+    {
+        (* Most-specific forms first (3-char arrows, then 2-char, etc.)
+           so `@>>b>` matches the "double-open" right-arrow shape before
+           the simpler `@>...>` form steals it. *)
+        RegularExpression["@>>>"]              -> "\[LongRightArrow]",
+        RegularExpression["@<<<"]              -> "\[LongLeftArrow]",
+        RegularExpression["@>>[^>]*>"]         -> "\[LongRightArrow]",
+        RegularExpression["@<<[^<]*<"]         -> "\[LongLeftArrow]",
+        RegularExpression["@>[^>]*>>"]         -> "\[LongRightArrow]",
+        RegularExpression["@<[^<]*<<"]         -> "\[LongLeftArrow]",
+        RegularExpression["@>[^>]*>"]          -> "\[LongRightArrow]",
+        RegularExpression["@<[^<]*<"]          -> "\[LongLeftArrow]",
+        RegularExpression["@VV[^V]*V"]         -> "\[DownArrow]",
+        RegularExpression["@AA[^A]*A"]         -> "\[UpArrow]",
+        RegularExpression["@V[^V]*VV"]         -> "\[DownArrow]",
+        RegularExpression["@A[^A]*AA"]         -> "\[UpArrow]",
+        RegularExpression["@V[^V]*V"]          -> "\[DownArrow]",
+        RegularExpression["@A[^A]*A"]          -> "\[UpArrow]",
+        "@|" -> "\[DoubleVerticalBar]",
+        "@=" -> "=",
+        "@." -> ""
+    }
+]
+
 (* Catch any `\over` that survived the brace-walker (e.g. `1\over2`
    appearing directly between matrix cell separators, with no
    enclosing braces).  Limited to single-token operands - just enough
@@ -1896,6 +1931,7 @@ preprocessLaTeX[s_String] :=
     rewriteBareOver @
     rewriteInfixFractions @
     rewriteOldFontSwitches @
+    rewriteCDEnv @
     StringReplace[s, {
         (* \big and friends consume their next delimiter together. These
            are NOT guaranteed to come in matched pairs (e.g. \big( without
