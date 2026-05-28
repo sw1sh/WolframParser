@@ -727,10 +727,32 @@ Scan[
 Scan[
     (commandHandlers[#] = styleScopeHandler) &,
     {"\\textstyle", "\\displaystyle", "\\scriptstyle", "\\scriptscriptstyle",
-     "\\tiny", "\\scriptsize", "\\footnotesize", "\\small", "\\normalsize",
-     "\\large", "\\Large", "\\LARGE", "\\huge", "\\Huge",
      "\\it", "\\bf", "\\rm", "\\sf", "\\tt", "\\sl", "\\em"}
 ]
+
+(* TeX size switches.  The body comes via the greedy `{...}` arg the
+   command parser pulls (just like \displaystyle above); wrap it in
+   a StyleBox with an absolute pt size proportional to KaTeX's
+   sizing ratios assuming a 24pt base (matching our rasteriser).
+   When the switch lacks a following brace, req is empty and we
+   emit "" — same as the old noopHandler did. *)
+sizeHandler[pt_] := Function[{opt, req},
+    Which[
+        Length[req] === 0, "",
+        Length[req] === 1, StyleBox[First[req], FontSize -> pt],
+        True, StyleBox[RowBox[req], FontSize -> pt]
+    ]
+]
+commandHandlers["\\tiny"]         = sizeHandler[12]
+commandHandlers["\\scriptsize"]   = sizeHandler[17]
+commandHandlers["\\footnotesize"] = sizeHandler[20]
+commandHandlers["\\small"]        = sizeHandler[22]
+commandHandlers["\\normalsize"]   = sizeHandler[24]
+commandHandlers["\\large"]        = sizeHandler[29]
+commandHandlers["\\Large"]        = sizeHandler[35]
+commandHandlers["\\LARGE"]        = sizeHandler[42]
+commandHandlers["\\huge"]         = sizeHandler[50]
+commandHandlers["\\Huge"]         = sizeHandler[60]
 
 (* Re-pin entries that the no-op scan above would have stomped: \quad,
    \qquad, \tag-with-arg need their previous semantics. (Scan runs after
@@ -2161,6 +2183,68 @@ applyUserDefs[s_String] := Module[{defs, stripped},
     expandUserMacros[stripped, defs]
 ]
 
+(* TeX scopes size and style switches (\Huge, \rm, \displaystyle, ...)
+   to the enclosing brace group: `{\Huge body more body}` means
+   "the rest of THIS group is huge".  Our grammar treats those
+   switches as ordinary commands that eat exactly one `{...}` arg.
+   So `{\Huge body}` becomes `\Huge` (no arg → "") followed by
+   `body` (loose) and the size silently dropped.  Pre-scan: find
+   every `{<sizeOrStyleSwitch> <rest>}` and rewrite to
+   `{<switch>{<rest>}}` so the switch ends up with a single
+   brace-group arg carrying the whole rest of the group. *)
+$scopedSwitchNames = {
+    "tiny", "scriptsize", "footnotesize", "small", "normalsize",
+    "large", "Large", "LARGE", "huge", "Huge",
+    "textstyle", "displaystyle", "scriptstyle", "scriptscriptstyle",
+    "it", "bf", "rm", "sf", "tt", "sl", "em"
+}
+$scopedSwitchRegex = RegularExpression[
+    "\\\\(" <> StringRiffle[$scopedSwitchNames, "|"] <> ")(?![a-zA-Z])"
+]
+rewriteGroupScopedSwitches[s_String] := Module[{
+    n = StringLength[s], pos = 1, out = "",
+    depth, start, contents, j, m, sname, before, after, inner
+},
+    While[pos <= n,
+        If[ StringTake[s, {pos, pos}] =!= "{",
+            out = out <> StringTake[s, {pos, pos}]; pos++,
+            depth = 1; start = pos + 1; j = start;
+            While[j <= n && depth > 0,
+                Switch[StringTake[s, {j, j}], "{", depth++, "}", depth--];
+                j++
+            ];
+            If[ depth =!= 0,
+                out = out <> StringTake[s, {pos, n}]; pos = n + 1,
+                contents = StringTake[s, {start, j - 2}];
+                m = Null;
+                Module[{
+                    trimmed = StringDelete[contents,
+                        StartOfString ~~ WhitespaceCharacter ...],
+                    hit, restPos
+                },
+                    hit = StringPosition[trimmed, $scopedSwitchRegex, 1];
+                    If[ hit =!= {} && First[hit][[1]] === 1,
+                        sname = StringTake[trimmed, First[hit]];
+                        restPos = First[hit][[2]] + 1;
+                        inner = StringTrim @ StringDrop[trimmed, First[hit][[2]]];
+                        If[ inner === "",
+                            (* nothing to wrap; leave alone *)
+                            out = out <> "{" <> rewriteGroupScopedSwitches[contents] <> "}";
+                            pos = j,
+                            out = out <> "{" <> sname <> "{" <>
+                                rewriteGroupScopedSwitches[inner] <> "}}";
+                            pos = j
+                        ],
+                        out = out <> "{" <> rewriteGroupScopedSwitches[contents] <> "}";
+                        pos = j
+                    ]
+                ]
+            ]
+        ]
+    ];
+    out
+]
+
 preprocessLaTeX[s_String] :=
     expandShorthand @
     StringReplace[#,
@@ -2181,6 +2265,12 @@ preprocessLaTeX[s_String] :=
        with the `*` absorbed; commandHandlers["\\operatornamestar"]
        picks it up. *)
     StringReplace[#, RegularExpression["\\\\operatorname\\*"] -> "\\operatornamestar"] &@
+    (* TeX size / style switches scope to the END of the current
+       brace group, but our grammar treats them as commands that
+       eat just ONE following `{...}` arg.  Rewrite `{\Huge body}`
+       to `{\Huge{body}}` so the switch ends up with a single
+       brace-group argument carrying the whole rest of the group. *)
+    rewriteGroupScopedSwitches @
     StringReplace[s, {
         (* \big and friends consume their next delimiter together. These
            are NOT guaranteed to come in matched pairs (e.g. \big( without
