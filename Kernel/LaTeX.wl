@@ -1870,6 +1870,22 @@ rewriteOldFontSwitches[s_String] :=
         "\\math$1{$2}"
     ]
 
+(* Catch any `\over` that survived the brace-walker (e.g. `1\over2`
+   appearing directly between matrix cell separators, with no
+   enclosing braces).  Limited to single-token operands - just enough
+   for the corpus cases that show up.  Order: must run AFTER
+   rewriteInfixFractions so we only see leftovers. *)
+(* `\\over(?![a-zA-Z])` ensures we don't slice `\overrightarrow` /
+   `\overline` / etc. into `\over` + suffix.  Same lookahead for
+   `\atop`. *)
+rewriteBareOver[s_String] :=
+    StringReplace[s, {
+        RegularExpression["([a-zA-Z0-9])\\s*\\\\over(?![a-zA-Z])\\s*([a-zA-Z0-9])"] :>
+            "\\frac{$1}{$2}",
+        RegularExpression["([a-zA-Z0-9])\\s*\\\\atop(?![a-zA-Z])\\s*([a-zA-Z0-9])"] :>
+            "\\atopfrac{$1}{$2}"
+    }]
+
 preprocessLaTeX[s_String] :=
     expandShorthand @
     StringReplace[#,
@@ -1877,6 +1893,7 @@ preprocessLaTeX[s_String] :=
             x:$textAccentArg :> "\\" <> c <> "{" <> x <> "}"
     ] &@
     applyTextModeSubstitutions @
+    rewriteBareOver @
     rewriteInfixFractions @
     rewriteOldFontSwitches @
     StringReplace[s, {
