@@ -2022,23 +2022,38 @@ rewriteCDEnv[s_String] := StringReplace[
         "\\end{CD}"   -> "\\end{matrix}"
     }],
     {
-        (* Most-specific forms first (3-char arrows, then 2-char, etc.)
-           so `@>>b>` matches the "double-open" right-arrow shape before
-           the simpler `@>...>` form steals it. *)
+        (* Empty / bare-arrow forms first so they don't steal labelled
+           variants below.  Labelled variants use \xrightarrow /
+           \xleftarrow / OverscriptBox to keep the label visible. *)
         RegularExpression["@>>>"]              -> "\[LongRightArrow]",
         RegularExpression["@<<<"]              -> "\[LongLeftArrow]",
-        RegularExpression["@>>[^>]*>"]         -> "\[LongRightArrow]",
-        RegularExpression["@<<[^<]*<"]         -> "\[LongLeftArrow]",
-        RegularExpression["@>[^>]*>>"]         -> "\[LongRightArrow]",
-        RegularExpression["@<[^<]*<<"]         -> "\[LongLeftArrow]",
-        RegularExpression["@>[^>]*>"]          -> "\[LongRightArrow]",
-        RegularExpression["@<[^<]*<"]          -> "\[LongLeftArrow]",
-        RegularExpression["@VV[^V]*V"]         -> "\[DownArrow]",
-        RegularExpression["@AA[^A]*A"]         -> "\[UpArrow]",
-        RegularExpression["@V[^V]*VV"]         -> "\[DownArrow]",
-        RegularExpression["@A[^A]*AA"]         -> "\[UpArrow]",
-        RegularExpression["@V[^V]*V"]          -> "\[DownArrow]",
-        RegularExpression["@A[^A]*A"]          -> "\[UpArrow]",
+        (* `@>X>>` → label X above the right arrow *)
+        RegularExpression["@>([^>]+)>>"]       :> ("\\xrightarrow{" <> "$1" <> "}"),
+        (* `@>>X>` → label X below the right arrow *)
+        RegularExpression["@>>([^>]+)>"]       :> ("\\xrightarrow[" <> "$1" <> "]{}"),
+        (* `@<X<<` → label X above the left arrow *)
+        RegularExpression["@<([^<]+)<<"]       :> ("\\xleftarrow{" <> "$1" <> "}"),
+        (* `@<<X<` → label X below the left arrow *)
+        RegularExpression["@<<([^<]+)<"]       :> ("\\xleftarrow[" <> "$1" <> "]{}"),
+        (* bare arrows with no label *)
+        RegularExpression["@>>"]               -> "\[LongRightArrow]",
+        RegularExpression["@<<"]               -> "\[LongLeftArrow]",
+        RegularExpression["@>"]                -> "\[LongRightArrow]",
+        RegularExpression["@<"]                -> "\[LongLeftArrow]",
+        (* vertical arrows with labels: V<label>V (right), VV<label>V or
+           V<label>VV (left).  We don't have a vertical-arrow-with-side-
+           label box, so just stack the label above using OverscriptBox. *)
+        RegularExpression["@VV([^V]+)V"]       :> ("\\overset{" <> "$1" <> "}{\\downarrow}"),
+        RegularExpression["@AA([^A]+)A"]       :> ("\\overset{" <> "$1" <> "}{\\uparrow}"),
+        RegularExpression["@V([^V]+)VV"]       :> ("\\overset{" <> "$1" <> "}{\\downarrow}"),
+        RegularExpression["@A([^A]+)AA"]       :> ("\\overset{" <> "$1" <> "}{\\uparrow}"),
+        RegularExpression["@V([^V]+)V"]        :> ("\\overset{" <> "$1" <> "}{\\downarrow}"),
+        RegularExpression["@A([^A]+)A"]        :> ("\\overset{" <> "$1" <> "}{\\uparrow}"),
+        (* bare vertical arrows *)
+        RegularExpression["@VV"]               -> "\[DownArrow]",
+        RegularExpression["@AA"]               -> "\[UpArrow]",
+        RegularExpression["@V"]                -> "\[DownArrow]",
+        RegularExpression["@A"]                -> "\[UpArrow]",
         "@|" -> "\[DoubleVerticalBar]",
         "@=" -> "=",
         "@." -> ""
