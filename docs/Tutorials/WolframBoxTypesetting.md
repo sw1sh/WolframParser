@@ -390,6 +390,113 @@ in a box tree.
 
 ---
 
+## Part 9 - Controlling the front end's rendering: the levers
+
+Everything above is *what the boxes are*. This part is *how to make the FE
+render them the way you want* - the options and characters that tune fonts,
+spacing, and kerning. The findings below are cross-checked against the official
+references, the kernel's own usage strings, and community/blog sources (MaTeX's
+author, Wolfram Community, comp.soft-sys.math.mathematica); see References.
+
+The single most important distinction for a box producer is **scope**: some
+levers can be set *inline in the box tree* (a `StyleBox`/`AdjustmentBox` you
+emit), and some are only honored from a **Cell / stylesheet / front-end-session**
+context. A tool that only emits boxes (like `LaTeXMathParse`) gets the first set
+for free and must arrange notebook/stylesheet setup for the second.
+
+### Settable INLINE - what a box producer controls directly
+
+| Lever | Controls | Inline example | Notes |
+|-------|----------|----------------|-------|
+| `FontFamily` `FontWeight` `FontSlant` `FontSize` `FontColor` `Background` | the rendered face | `StyleBox["x", FontFamily -> "CMU Serif", FontSlant -> "Italic"]` | the FE builds a name from family+weight+slant+tracking(+size), then resolves it via `FontPostScriptName`/`FontNativeName` to a physical font. `StyleBox` takes the *same* options as `Style`. |
+| `AutoSpacing -> False` | the automatic operator-spacing engine | `StyleBox[row, AutoSpacing -> False]` | **highest-leverage spacing lever.** `True` (default) inserts extra space around lower-precedence operators; `False` gives equal spacing so you can place every gap yourself. Accepted and preserved on `StyleBox`/`Cell` even though `Options[StyleBox]` doesn't enumerate it. |
+| `AdjustmentBox[b, BoxMargins -> {{l,r},{btm,top}}, BoxBaselineShift -> n]` | fine kerning / shift | `AdjustmentBox["/", BoxMargins -> {{-0.4, 0}, {0, 0}}]` | **top kerning lever.** Horizontal margins are in **ems**, vertical margins and `BoxBaselineShift` in **x-heights**; both may be **negative** (negative kerning pulls neighbours in). |
+| named space chars (string leaves) | discrete horizontal space | `RowBox[{a, "\[ThinSpace]", b}]` | widths, widest→narrowest: `\[ThickSpace]` > `\[MediumSpace]` > `\[ThinSpace]` > `\[VeryThinSpace]`; the four `\[Negative…Space]` chars pull closer (verified by rasterized pixel widths). |
+| invisible / semantic chars | meaning without ink | `"\[InvisibleApplication]"`, `"\[ImplicitPlus]"` | `\[InvisibleSpace]`, `\[InvisibleComma]`, `\[ImplicitPlus]` (mixed fractions, binds tighter than `+`), `\[InvisibleApplication]` (`f x` → `f[x]`). |
+| `PrivateFontOptions` | font sub-options | `StyleBox[b, PrivateFontOptions -> {"OperatorSubstitution" -> True}]` | three sub-options: `"FontPostScriptName"`, `"OperatorSubstitution"` (**default `True`** - replaces `(` `[` `{` etc. with the Wolfram-font glyphs, which is *what lets delimiters stretch*; `False` disables both substitution and auto-growth), `"WindowsUseTrueTypeNames"`. |
+| `LimitsPositioning` | side vs stacked bounds | `UnderoverscriptBox[op, lo, hi, LimitsPositioning -> True]` | a box option on `Under/Over/UnderoverscriptBox` (Part 3). |
+| `FractionLine`, `MultilineFunction`, radical `MinSize`, `GridBox` `ColumnSpacings`/`RowSpacings`/`GridBoxItemSize`/`GridBoxSpacings` | fraction/grid/radical layout | `FractionBox[a, b, FractionLine -> 0]` | genuine box options (Parts 2-3); set inline. |
+
+### Requires CONTEXT - NOT honored on a bare `StyleBox`
+
+These are documented as options for `Style`/selections/cells, but a *bare*
+`StyleBox` in box output does not honor them (`Options[StyleBox,
+ScriptSizeMultipliers]` errors `optnf`). They need a Cell, a stylesheet, or the
+front-end session:
+
+| Lever | Controls | How to set |
+|-------|----------|-----------|
+| `ScriptSizeMultipliers`, `ScriptMinSize`, `ScriptBaselineShifts`, `ScriptLevel` | sub/superscript size + baseline | Cell option / stylesheet style |
+| `SpanMaxSize`, `SpanMinSize`, `SpanSymmetric`, `SpanCharacterRounding`, `SpanLineThickness` | **bounds on stretchy delimiter growth** (k × font size) | selection / Cell / stylesheet |
+| `DefaultFontProperties` | override a font family's properties; **`"WolframFont"` maps a body font → the Wolfram symbols font that draws math glyphs** | front-end-session global: `CurrentValue[$FrontEndSession, {DefaultFontProperties, "CMU Serif", "WolframFont"}] = …` |
+| `AutoOperatorRenderings`, `SingleLetterItalics`, `LineSpacing` | operator auto-render, single-letter italic, line spacing | Cell / notebook |
+
+So a pure box emitter cannot retune script sizes or delimiter-growth bounds
+per-expression - those belong in the consuming notebook's cell options or a
+shipped stylesheet.
+
+### How stretchy delimiters actually grow
+
+The FE auto-grows `( ) [ | ‖ ⟨ ⟩` around tall content (fractions, matrices)
+when **both**: (a) `PrivateFontOptions "OperatorSubstitution"` is `True` (the
+default - it swaps the plain char for the Wolfram-font spanning glyph), **and**
+(b) the delimiters are a **matched matchfix pair** inside a `RowBox`. Growth is
+bounded by `SpanMaxSize`/`SpanMinSize` (cell/stylesheet). The practical
+consequence for a box producer: emit `RowBox[{"(", tallContent, ")"}]` and the
+parens size themselves - you do *not* hand-size them. (This is why our
+`\left(\frac{a}{b}\right)` already measures ≈0.98 of LaTeX width.) A *fixed*
+size hint like `\big(` is different - it's content-independent, so approximating
+it with `Magnification` is correct, not auto-growth.
+
+### Fonts, end to end
+
+- **Resolution:** family+weight+slant+tracking → a constructed name → physical
+  font via `FontPostScriptName`/`FontNativeName` (+ FE substitution heuristics).
+- **`$FontFamilies`** lists available families but is **`{}` headless** (it
+  depends on the FE, not the kernel) - yet **rendering by name still works**,
+  because name resolution is independent of enumeration. (This is exactly why
+  this paclet detects an installed CM font by **file on disk**, not via
+  `$FontFamilies`, then sets `FontFamily -> "CMU Serif"` and it renders.)
+- **Math symbols** are drawn from a *separate* Wolfram symbols font, auto-paired
+  to the body font via `FontSerifed`/`FontMonospace` metadata; override the
+  pairing with `DefaultFontProperties "WolframFont"` (session global). This is
+  the deep lever for making math glyphs - not just letters - match a chosen
+  body font.
+
+### Highest-leverage levers for matching LaTeX / Computer Modern
+
+1. **Body font + `DefaultFontProperties "WolframFont"`** (session) - the glyph
+   shapes themselves.
+2. **`AutoSpacing -> False`** (inline) - take over operator spacing manually.
+3. **`AdjustmentBox`/`BoxMargins` + named space chars** (inline) - explicit
+   kerning where the FE's auto spacing disagrees with TeX.
+4. **Matched `RowBox` bracketing + `OperatorSubstitution -> True`** (inline) -
+   let delimiters auto-grow instead of shipping fixed glyphs.
+
+### What this parser already uses, and what it can't reach
+
+Already exploited inline: `AutoSpacing -> False` (inside `\text{}`),
+`AdjustmentBox` kerning (the `\not` slash, `|x|` bars), named `\[ThinSpace]`
+(`\,` and function application), `FontFamily` (CM when installed), and matchfix
+bracketing so `\left(…\right)` / `\langle…\rangle` auto-size. Out of reach for a
+pure box emitter (would need cell/stylesheet/session setup in the consuming
+notebook): `ScriptSizeMultipliers`/`ScriptBaselineShifts` tuning,
+`SpanMaxSize`/`SpanMinSize` bounds, and the `DefaultFontProperties "WolframFont"`
+math-glyph mapping - documented here so a future stylesheet or
+`MarkdownToNotebook` session-setup step can supply them.
+
+### Open questions (not settled by the research)
+
+- What `"TI"`/`"TR"`/`"TIR"` named styles set exactly (lives in the default
+  stylesheet's math styles; needs stylesheet inspection).
+- Whether a box producer can change an *operator's spacing class* (ord/op/bin/
+  rel/open/close/punct) per-operator, or whether `AutoSpacing -> False` +
+  manual spacing is the only override.
+- The exact end-to-end font recipe (which physical font + `WolframFont`/
+  `FontPostScriptName` settings) for a turnkey Latin-Modern/CMU pipeline.
+
+---
+
 ## References
 
 The authoritative (if scattered) Wolfram sources:
@@ -398,6 +505,16 @@ The authoritative (if scattered) Wolfram sources:
 - [String Representation of Boxes](https://reference.wolfram.com/language/tutorial/StringRepresentationOfBoxes.html) - the textual `\( ... \)` box syntax
 - [RowBox](https://reference.wolfram.com/language/ref/RowBox.html) · [GridBox](https://reference.wolfram.com/language/ref/GridBox.html) · [FractionBox](https://reference.wolfram.com/language/ref/FractionBox.html) - representative symbol pages
 - [Find the Underlying Box Structure of a Formatted Expression](https://reference.wolfram.com/language/workflow/FindTheUnderlyingBoxStructureOfAFormattedExpression.html) - the `ToBoxes` workflow
+
+For Part 9 (rendering control), the option pages and community/blog sources:
+
+- [Math Typesetting Options and Tweaking](https://reference.wolfram.com/language/guide/MathTypesettingOptionsAndTweaking.html) - the option hub
+- [AutoSpacing](https://reference.wolfram.com/language/ref/AutoSpacing.html) · [AdjustmentBox](https://reference.wolfram.com/language/ref/AdjustmentBox.html) · [BoxMargins](https://reference.wolfram.com/language/ref/BoxMargins.html)
+- [PrivateFontOptions](https://reference.wolfram.com/language/ref/PrivateFontOptions.html) · [DefaultFontProperties](https://reference.wolfram.com/language/ref/DefaultFontProperties.html) · [FontFamily](https://reference.wolfram.com/language/ref/FontFamily.html) · [$FontFamilies](https://reference.wolfram.com/language/ref/$FontFamilies.html)
+- [ScriptSizeMultipliers](https://reference.wolfram.com/language/ref/ScriptSizeMultipliers.html) · [ScriptBaselineShifts](https://reference.wolfram.com/language/ref/ScriptBaselineShifts.html) · [SpanMaxSize](https://reference.wolfram.com/language/ref/SpanMaxSize.html)
+- [Non-Printing Characters](https://reference.wolfram.com/language/guide/NonPrintingCharacters.html) · [Operator Input Forms](https://reference.wolfram.com/language/tutorial/OperatorInputForms.html)
+- Szabolcs Horvát (MaTeX author), [LaTeX typesetting in Mathematica](https://szhorvat.net/pelican/latex-typesetting-in-mathematica.html)
+- Wolfram Community: [math font control](https://community.wolfram.com/groups/-/m/t/1350218) · [operator spacing](https://community.wolfram.com/groups/-/m/t/2164751) · [stretchy delimiters](https://community.wolfram.com/groups/-/m/t/514789); meng6, [white-space characters in WL](https://meng6.net/pages/blog/white_space_characters_in_wolfram_language/)
 
 Related notes in this paclet: [LaTeXMathParserImplementation](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation)
 puts these boxes to work translating real TeX, and
