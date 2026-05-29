@@ -302,6 +302,23 @@ VerificationTest[
 ]
 
 
+(* === function application spacing === *)
+
+VerificationTest[
+    (* a named function gets TeX's thin application space before its
+       argument; plain juxtaposition (2x) does not. *)
+    LaTeXMathParse["\\sin x"],
+    RowBox[{StyleBox["sin", FontSlant -> "Plain"], "\[ThinSpace]", StyleBox["x", "TI"]}],
+    TestID -> "LaTeX: \\sin x function-application thin space"
+]
+
+VerificationTest[
+    LaTeXMathParse["2x"],
+    RowBox[{"2", StyleBox["x", "TI"]}],
+    TestID -> "LaTeX: plain juxtaposition stays tight (no function space)"
+]
+
+
 (* === unary signs === *)
 
 VerificationTest[

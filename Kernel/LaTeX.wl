@@ -1449,6 +1449,17 @@ Scan[
     functionNames
 ]
 
+(* True when a factor is a named function operator (`\sin`, `\log`,
+   `\lim`, ...), possibly carrying scripts (`\log_2`, `\sin^2`) or
+   sitting at the right edge of a juxtaposition chain (`2\sin`).  Used
+   to insert TeX's thin function-application space between the operator
+   and its argument (`\sin x` -> sin + thinspace + x), which the FE's
+   plain juxtaposition omits. *)
+funcAtomQ[StyleBox[n_String, FontSlant -> "Plain"]] := MemberQ[functionNames, n]
+funcAtomQ[(SubscriptBox | SuperscriptBox | SubsuperscriptBox)[base_, ___]] := funcAtomQ[base]
+funcAtomQ[RowBox[parts_List]] := parts =!= {} && funcAtomQ[Last[parts]]
+funcAtomQ[_] := False
+
 
 (* === precedence stratification: atom < factor < term < expr === *)
 
@@ -1637,7 +1648,10 @@ mulOp = ParseChoice[
         Function[op, Function[{a, b}, rowJoin[a, "\[Times]", b]]]],
     ParseAction[literal["*"],
         Function[op, Function[{a, b}, rowJoin[a, "*", b]]]],
-    ParseAction[ParseSucceed[Null], Function[op, Function[{a, b}, rowJoin[a, b]]]]
+    ParseAction[ParseSucceed[Null], Function[op, Function[{a, b},
+        (* function application gets a thin space (\sin x); other
+           juxtaposition (2x, x_i a) stays tight *)
+        If[funcAtomQ[a], rowJoin[a, "\[ThinSpace]", b], rowJoin[a, b]]]]]
 ]
 
 factorChain = ParseChainLeft[factor, mulOp]
