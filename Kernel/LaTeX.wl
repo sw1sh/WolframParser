@@ -2746,6 +2746,20 @@ suppressCommaSpaceBetweenDigits[boxes_] := boxes //. {
         ]
 }
 
+(* Commas inside sub/superscripts (`a_{i,j}`, `x^{m,n}`) should hug -
+   KaTeX sets a tight comma at script size.  Our math comma carries a
+   trailing thin space (right for a top-level tuple `(a, b, c)`), which
+   at script size reads as a wide gap.  Strip the thin space from comma
+   tokens that live inside a script argument only; top-level tuples keep
+   their spacing.  (//. reaches a fixed point in one rewrite since the
+   strip is idempotent.) *)
+tightenScriptCommas[boxes_] := boxes //. {
+    SubscriptBox[b_, s_] :> SubscriptBox[b, s /. $commaThinSpace -> ","],
+    SuperscriptBox[b_, s_] :> SuperscriptBox[b, s /. $commaThinSpace -> ","],
+    SubsuperscriptBox[b_, s1_, s2_] :>
+        SubsuperscriptBox[b, s1 /. $commaThinSpace -> ",", s2 /. $commaThinSpace -> ","]
+}
+
 (* Convert top-level / nested `\\` line breaks (carried as
    $lineBreakMark) into a stacked single-column GridBox, so multi-line
    display math like the BoldSymbol corpus case renders on separate
@@ -2768,7 +2782,7 @@ LaTeXMathParse[source_String] := Module[{r = Parse[LaTeXMathParser, preprocessLa
         (* `/. $lineBreakMark -> ""` is a safety net: a stray marker not
            inside a RowBox (e.g. the whole input was just `\\`) would
            otherwise leak the private symbol into output. *)
-        suppressCommaSpaceBetweenDigits @ stripEmptyRowChildren @
+        suppressCommaSpaceBetweenDigits @ tightenScriptCommas @ stripEmptyRowChildren @
             applyLineBreaks @ bigOpDisplayLimits[r] /. $lineBreakMark -> ""
     ]
 ]

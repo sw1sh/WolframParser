@@ -342,6 +342,14 @@ VerificationTest[
     TestID -> "LaTeX: function of two args"
 ]
 
+VerificationTest[
+    (* a comma INSIDE a script hugs (tight, no thin space) - the
+       top-level tuple above keeps its thin space. *)
+    LaTeXMathParse["a_{i,j}"],
+    SubscriptBox[StyleBox["a", "TI"], RowBox[{StyleBox["i", "TI"], ",", StyleBox["j", "TI"]}]],
+    TestID -> "LaTeX: comma in a subscript is tight"
+]
+
 
 (* === named symbols / commands added in the bugfix pass === *)
 
