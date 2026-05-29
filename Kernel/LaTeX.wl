@@ -1070,6 +1070,26 @@ lineBreakSegments[body_] := Module[{parts},
     ]
 ]
 
+(* Sized delimiters from \big / \Big / \bigg / \Bigg (and their l/r/m
+   variants).  preprocessLaTeX rewrites `\Big(` -> `\xbigII{(}` etc.,
+   routing the delimiter here so we can scale it.  KaTeX grows the
+   delimiter ~1.2 / 1.8 / 2.4 / 3.0x.  Magnification scales the glyph
+   uniformly (both dims) relative to the surrounding text, and - unlike
+   FontSize -> Scaled - resolves correctly inside a standalone
+   Rasterize (Scaled there blows up against the canvas size).  The `.`
+   null delimiter never reaches here - it's dropped upstream. *)
+$xbigRatio = <|"I" -> 1.2, "II" -> 1.8, "III" -> 2.4, "IV" -> 3.0|>
+Scan[
+    Function[lvl,
+        commandHandlers["\\xbig" <> lvl] = Function[{opt, req},
+            With[{d = First[req, ""]},
+                If[d === "", "", StyleBox[d, Magnification -> $xbigRatio[lvl]]]
+            ]
+        ]
+    ],
+    {"I", "II", "III", "IV"}
+]
+
 (* `\substack{a\\b\\c}`: small vertical stack used under summation /
    product limits.  Render as a single-column GridBox, one row per
    `\\`-separated segment. *)
@@ -2444,23 +2464,36 @@ preprocessLaTeX[s_String] :=
     rewriteGroupScopedSwitches @
     rewriteScopedColor @
     StringReplace[s, {
-        (* \big / \Big / \bigg / \bigl / \bigr / \middle ... are
-           delimiter-SIZING macros. We don't model the size, but the
-           delimiter itself has to stay visible - `\big|` is a bar,
-           `\Big\uparrow` an arrow, `\bigl(` a paren. So strip JUST the
-           sizing macro and keep the delimiter. The `.` null delimiter
-           maps to nothing. An unmatched opener (e.g. `\big(` alone in a
-           script) renders via the grammar's bare-delimiter fallback
-           (outerPuncToken). Pairs like `\bigl( .. \bigr)` reunite as a
-           normal balanced `( .. )`. *)
+        (* \big / \Big / \bigg / \Bigg (+ l/r/m variants) are
+           delimiter-SIZING macros.  Keep the delimiter AND its size:
+           rewrite `\Big(` -> `\xbigII{(}`, routed to the sized-delimiter
+           handler (ratios 1.2 / 1.8 / 2.4 / 3.0).  `\middle` keeps its
+           delimiter unsized.  The `.` null delimiter maps to nothing.
+           An unmatched opener like `\big(` alone in a script renders via
+           the grammar's bare-delimiter fallback (outerPuncToken); a
+           matched `\bigl( .. \bigr)` becomes two sized standalone
+           glyphs around the content.  Longer macro names backtrack
+           correctly because the delimiter class excludes letters. *)
         RegularExpression[
-            "\\\\(?:bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg|middle)\\s*\\."
+            "\\\\(?:big|bigl|bigr|bigm|Big|Bigl|Bigr|Bigm|bigg|biggl|biggr|biggm|Bigg|Biggl|Biggr|Biggm|middle)\\s*\\."
         ] -> "",
         RegularExpression[
-            "\\\\(?:bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg|middle)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/])"
+            "\\\\(?:big|bigl|bigr|bigm)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/])"
+        ] -> "\\xbigI{$1}",
+        RegularExpression[
+            "\\\\(?:Big|Bigl|Bigr|Bigm)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/])"
+        ] -> "\\xbigII{$1}",
+        RegularExpression[
+            "\\\\(?:bigg|biggl|biggr|biggm)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/])"
+        ] -> "\\xbigIII{$1}",
+        RegularExpression[
+            "\\\\(?:Bigg|Biggl|Biggr|Biggm)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/])"
+        ] -> "\\xbigIV{$1}",
+        RegularExpression[
+            "\\\\middle\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/])"
         ] -> "$1",
         RegularExpression[
-            "\\\\(?:bigl|bigr|biggl|biggr|Bigl|Bigr|Biggl|Biggr|bigm|Bigm|biggm|Biggm|big|Big|bigg|Bigg|middle)(?![a-zA-Z])"
+            "\\\\(?:big|bigl|bigr|bigm|Big|Bigl|Bigr|Bigm|bigg|biggl|biggr|biggm|Bigg|Biggl|Biggr|Biggm|middle)(?![a-zA-Z])"
         ] -> ""
     }]
 

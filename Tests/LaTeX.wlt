@@ -394,28 +394,31 @@ VerificationTest[
 ]
 
 VerificationTest[
-    (* \bigl / \bigr drop only the SIZING macro and keep the delimiter
-       glyph, so the parens stay visible (we just don't model the size).
-       A matched pair reunites as a normal balanced ( ... ); an
-       unmatched opener like \big( alone in a script renders as a bare
-       glyph via the grammar's outerPuncToken fallback. *)
+    (* \bigl / \bigr keep the delimiter glyph AND size it (1.2x for the
+       \big level). A matched pair is two sized standalone glyphs around
+       the content; an unmatched opener renders the same way via the
+       grammar's bare-delimiter fallback. *)
     LaTeXMathParse["\\bigl( a \\bigr)"],
-    RowBox[{"(", StyleBox["a", "TI"], ")"}],
-    TestID -> "KaTeX delimiters: \\bigl ... \\bigr keep their delim"
+    RowBox[{
+        StyleBox["(", Magnification -> 1.2],
+        StyleBox["a", "TI"],
+        StyleBox[")", Magnification -> 1.2]
+    }],
+    TestID -> "KaTeX delimiters: \\bigl ... \\bigr keep + size their delim"
 ]
 
 VerificationTest[
-    (* unmatched \big( in a superscript: paren stays visible *)
+    (* unmatched \big( in a superscript: sized paren stays visible *)
     LaTeXMathParse["x^{\\big(}"],
-    SuperscriptBox[StyleBox["x", "TI"], "("],
-    TestID -> "KaTeX delimiters: unmatched \\big( renders bare paren"
+    SuperscriptBox[StyleBox["x", "TI"], StyleBox["(", Magnification -> 1.2]],
+    TestID -> "KaTeX delimiters: unmatched \\big( renders sized paren"
 ]
 
 VerificationTest[
-    (* \Big\uparrow keeps the arrow glyph *)
+    (* \Big\uparrow: arrow glyph, sized up at the \Big level (1.8x) *)
     LaTeXMathParse["a_{\\Big\\uparrow}"],
-    SubscriptBox[StyleBox["a", "TI"], "\[UpArrow]"],
-    TestID -> "KaTeX delimiters: \\Big\\uparrow keeps the arrow"
+    SubscriptBox[StyleBox["a", "TI"], StyleBox["\[UpArrow]", Magnification -> 1.8]],
+    TestID -> "KaTeX delimiters: \\Big\\uparrow sizes the arrow"
 ]
 
 VerificationTest[
