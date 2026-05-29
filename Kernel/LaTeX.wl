@@ -751,15 +751,26 @@ Scan[
      "\\phantom", "\\hphantom", "\\vphantom",
      "\\rule", "\\includegraphics", "\\def", "\\renewcommand", "\\newcommand", "\\gdef",
      "\\kern", "\\mkern", "\\hskip", "\\mskip", "\\hspace", "\\vspace",
-     "\\thinspace", "\\negthinspace", "\\medspace", "\\negmedspace",
-     "\\thickspace", "\\negthickspace",
-     (* Plain-TeX one-char spacing primitives. They take no args and
-        their sole TeX effect is a glue adjustment; emit empty so they
-        don't clutter the output as literal "\;" / "\," tokens. *)
-     "\\,", "\\;", "\\!", "\\:", "\\>",
-     "\\enspace", "\\quad" (* \quad already in namedSymbolChars - this no-ops if no handler hit *)
+     (* Negative thin/med/thick spaces and `\!` would need a negative
+        kern we can't render cleanly, so drop them (least-wrong). *)
+     "\\negthinspace", "\\negmedspace", "\\negthickspace", "\\!",
+     "\\quad" (* \quad already in namedSymbolChars - this no-ops if no handler hit *)
     }
 ]
+
+(* Positive TeX spacing primitives render as visible space - KaTeX
+   shows them (e.g. the thin space before `dx` in `\int x\,dx`), so
+   dropping them, as we used to, loses real horizontal spacing.  Map to
+   the named-space glyphs whose widths line up with TeX's 3/4/5-eighteenths
+   of an em. *)
+commandHandlers["\\,"]          = Function[{opt, req}, "\[ThinSpace]"]
+commandHandlers["\\thinspace"]  = commandHandlers["\\,"]
+commandHandlers["\\:"]          = Function[{opt, req}, "\[MediumSpace]"]
+commandHandlers["\\>"]          = commandHandlers["\\:"]
+commandHandlers["\\medspace"]   = commandHandlers["\\:"]
+commandHandlers["\\;"]          = Function[{opt, req}, "\[ThickSpace]"]
+commandHandlers["\\thickspace"] = commandHandlers["\\;"]
+commandHandlers["\\enspace"]    = Function[{opt, req}, "\[ThickSpace]"]
 
 Scan[
     (commandHandlers[#] = styleScopeHandler) &,
