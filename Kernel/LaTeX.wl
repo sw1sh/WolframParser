@@ -632,6 +632,9 @@ commandHandlers["\\grave"]    = accentHandler[FromCharacterCode[96]]
 commandHandlers["\\mathring"] = accentHandler["\[SmallCircle]"]
 commandHandlers["\\overrightarrow"] = accentHandler["\[RightArrow]"]
 commandHandlers["\\overleftarrow"]  = accentHandler["\[LeftArrow]"]
+(* Overscript "_" renders a line above the base.  (`\[OverBar]` would
+   be the ideal sized overbar but is not a valid WL character; the
+   slight width overshoot from "_" is accepted.) *)
 commandHandlers["\\overline"] = accentHandler["_"]
 
 commandHandlers["\\underline"] = Function[{opt, req}, UnderscriptBox[First[req, ""], "_"]]
@@ -1518,7 +1521,18 @@ absAtom = ParseAction[
    standalone atom (-> double-bar glyph), so a matchfix inner sumExpr
    greedily swallows the closing `\|` as a juxtaposed glyph and the
    atom never closes.  `\|v\|` therefore renders as the plain row
-   ‖ v ‖ (correct content, just not kerned). *)
+   ‖ v ‖ (correct content, just not kerned).  The NAMED bracket pairs
+   below don't have that problem - their open/close tokens differ. *)
+
+(* (A matchfix atom for the named bracket pairs \langle..\rangle,
+   \lceil..\rceil, etc. is NOT viable with a topRow inner: unlike `)`,
+   the closing commands \rangle/\rceil/... are themselves standalone
+   glyph atoms, so the inner row swallows the closer before the matchfix
+   can see it - the same greedy-swallow that blocks a \|..\| norm atom.
+   A correct fix would guard those closers out of commandAtom the way
+   \left..\right guards \right, then route unmatched closers through
+   outerPuncToken.  Left as future work; for now the bracket glyphs
+   render as loose tokens.) *)
 
 atom = ParseChoice[
     numberAtom, environmentAtom, leftRightAtom, commandAtom,
@@ -1533,9 +1547,18 @@ atom = ParseChoice[
 postfix = ParseChoice[
     ParseAction[literal["_"] ~~ (bracedArgRef | atom), {"sub", #2} &],
     ParseAction[literal["^"] ~~ (bracedArgRef | atom), {"sup", #2} &],
+    (* Primes fold into a superscript.  Use the precomposed \[DoublePrime]
+       (single tight glyph ″) for 2 marks instead of two concatenated
+       \[Prime] glyphs, which render wider/looser than LaTeX (x'' was
+       ~1.12).  No valid precomposed triple-prime char exists, so 3+
+       marks stay as repeated \[Prime]. *)
     ParseAction[
         ParseSome[literal["'"]],
-        {"sup", StringJoin[ConstantArray["\[Prime]", Length[{##}]]]} &
+        {"sup", Switch[Length[{##}],
+            1, "\[Prime]",
+            2, "\[DoublePrime]",
+            _, StringJoin[ConstantArray["\[Prime]", Length[{##}]]]
+        ]} &
     ]
 ]
 

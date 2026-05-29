@@ -512,7 +512,7 @@ VerificationTest[
 
 VerificationTest[
     LaTeXMathParse["x''"],
-    SuperscriptBox[StyleBox["x", "TI"], "\[Prime]\[Prime]"],
+    SuperscriptBox[StyleBox["x", "TI"], "\[DoublePrime]"],
     TestID -> "KaTeX primes: x'' (double)"
 ]
 

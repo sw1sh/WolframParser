@@ -37,7 +37,7 @@ Quiet @ UsingFrontEnd[CurrentValue[$FrontEnd, LightDark] = "Light"];
 lp = Wolfram`Parser`LaTeXMathParse;
 $outDir = FileNameJoin[{$pacletDir, "dev", "matex-out"}];
 Quiet @ CreateDirectory[$outDir, CreateIntermediateDirectories -> True];
-$H = 70;
+$H = 120;  (* tile height; taller -> less downsampling -> crisper montage *)
 
 (* Prefer a Computer-Modern-family font when one is installed, so our
    render is compared to gold on spacing/structure rather than being
@@ -61,12 +61,12 @@ applyMathFont[box_] := If[$mathFont === None, box,
 
 tight[img_] := ImageResize[ImageCrop[img], {Automatic, $H}];
 goldR[src_] := Quiet @ Check[
-    tight @ Rasterize[MaTeX[src, FontSize -> 24], Background -> White, ImageResolution -> 144],
+    tight @ Rasterize[MaTeX[src, FontSize -> 24], Background -> White, ImageResolution -> 220],
     $Failed];
 ourR[src_] := Module[{r = Quiet @ Check[lp[src], $Failed]},
     If[ MatchQ[r, _Wolfram`Parser`ParseError | $Failed], $Failed,
         tight @ Rasterize[Style[DisplayForm[applyMathFont[r]], FontSize -> 24, Sequence @@ $fontOpt],
-            Background -> White, ImageResolution -> 144]]];
+            Background -> White, ImageResolution -> 220]]];
 pad[img_, w_] := ImagePad[img, {{0, w - ImageDimensions[img][[1]]}, {0, 0}}, White];
 
 (* Graded building-block corpus: tier 0 atoms -> tier 7 compositions.
@@ -123,8 +123,12 @@ rows = proc /@ $cases;
 montage = Grid[
     Prepend[rows, {"T", "source", "w-ratio", "imgdist", "gold (top) / ours (bottom)"}],
     Frame -> All, Alignment -> {Left, Center}];
+(* tiles are rendered at 220 DPI then cropped/resized to $H px tall (so
+   each tile is a crisp ~120px bitmap); the montage Grid itself is
+   rasterized at a moderate DPI so the 62-row image stays within raster
+   memory limits (200 DPI over all rows OOMs to a near-empty PNG). *)
 Export[FileNameJoin[{$outDir, "montage.png"}],
-    Rasterize[montage, Background -> White, ImageResolution -> 108]];
+    Rasterize[montage, Background -> White, ImageResolution -> 120]];
 
 metricRows = Select[rows, NumberQ[#[[3]]] &];
 meanWR = If[metricRows === {}, Missing[], N[Mean[metricRows[[All, 3]]], 3]];
