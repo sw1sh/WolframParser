@@ -256,6 +256,51 @@ VerificationTest[
     TestID -> "LaTeX: \\| ... \\| norm bars render (no error)"
 ]
 
+(* === named matchfix bracket pairs (kerned, content grouped inside) === *)
+
+VerificationTest[
+    (* \lceil..\rceil is a real matchfix group with kerned fences, not
+       loose ⌈ x ⌉ tokens (the closers are guarded out of commandAtom). *)
+    LaTeXMathParse["\\lceil x \\rceil"],
+    RowBox[{
+        AdjustmentBox["\[LeftCeiling]", BoxMargins -> {{0, -0.2}, {0, 0}}],
+        StyleBox["x", "TI"],
+        AdjustmentBox["\[RightCeiling]", BoxMargins -> {{-0.2, 0}, {0, 0}}]
+    }],
+    TestID -> "LaTeX: \\lceil ... \\rceil matchfix"
+]
+
+VerificationTest[
+    (* the comma list lives INSIDE the angle brackets (one group), not
+       bound to a single operand as before. *)
+    LaTeXMathParse["\\langle a, b \\rangle"],
+    RowBox[{
+        AdjustmentBox["\[LeftAngleBracket]", BoxMargins -> {{0, -0.2}, {0, 0}}],
+        RowBox[{StyleBox["a", "TI"], "," <> "\[ThinSpace]", StyleBox["b", "TI"]}],
+        AdjustmentBox["\[RightAngleBracket]", BoxMargins -> {{-0.2, 0}, {0, 0}}]
+    }],
+    TestID -> "LaTeX: \\langle ... \\rangle groups its content"
+]
+
+VerificationTest[
+    (* \lVert..\rVert is the proper norm: kerned double bars, grouped *)
+    LaTeXMathParse["\\lVert v \\rVert"],
+    RowBox[{
+        AdjustmentBox["\[DoubleVerticalBar]", BoxMargins -> {{0, -0.2}, {0, 0}}],
+        StyleBox["v", "TI"],
+        AdjustmentBox["\[DoubleVerticalBar]", BoxMargins -> {{-0.2, 0}, {0, 0}}]
+    }],
+    TestID -> "LaTeX: \\lVert ... \\rVert norm matchfix"
+]
+
+VerificationTest[
+    (* an unmatched closer still renders as its glyph (via outerPuncToken),
+       not a ParseError *)
+    MatchQ[LaTeXMathParse["a \\rangle"], _ParseError],
+    False,
+    TestID -> "LaTeX: unmatched \\rangle does not error"
+]
+
 
 (* === unary signs === *)
 

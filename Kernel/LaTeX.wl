@@ -142,12 +142,24 @@ exprRef = ParseRecursive[expr]
 wsBeforeArg = ParseAction[ws ~~ bracedArgRef, #2 &]
 wsBeforeOpt = ParseAction[ws ~~ bracketedArgRef, #2 &]
 
+(* The closing bracket commands \rangle / \rceil / \rfloor / \rvert /
+   \rVert are guarded out of commandAtom (like \right and \cr) so a
+   matchfix bracket atom's inner row stops at them instead of swallowing
+   them as standalone glyphs.  Unmatched closers are picked up by
+   outerPuncToken (mapped to their glyph), and the \left...\right path
+   matches them via literal[] (not commandAtom), so this guard doesn't
+   break \left\rangle. *)
 commandAtom = ParseAction[
     ParseNotFollowedBy[
         ParseAction[ParseLiteral["\\begin"] ~~ ws ~~ ParseLiteral["{"], Null &] |
         ParseAction[ParseLiteral["\\end"] ~~ ws ~~ ParseLiteral["{"], Null &] |
-        ParseAction[ParseLiteral["\\cr"]    ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &] |
-        ParseAction[ParseLiteral["\\right"] ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &]
+        ParseAction[ParseLiteral["\\cr"]     ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &] |
+        ParseAction[ParseLiteral["\\right"]  ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &] |
+        ParseAction[ParseLiteral["\\rangle"] ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &] |
+        ParseAction[ParseLiteral["\\rceil"]  ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &] |
+        ParseAction[ParseLiteral["\\rfloor"] ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &] |
+        ParseAction[ParseLiteral["\\rVert"]  ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &] |
+        ParseAction[ParseLiteral["\\rvert"]  ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], Null &]
     ] ~~
         commandName ~~ Optional[wsBeforeOpt] ~~ ParseMany[wsBeforeArg] ~~ ws,
     dispatchCommand[#2, #3, #4] &
@@ -250,9 +262,15 @@ puncToken = ParseAction[
    parenAtom's / bracketAtom's inner row - balanced `(x)` / `[x]` still
    win via expr (tried first); only a genuinely unmatched delimiter
    falls through to here and renders as a bare glyph. *)
-outerPuncToken = ParseAction[
-    literal[")"] | literal["]"] | literal["("] | literal["["],
-    #1 &
+outerPuncToken = ParseChoice[
+    ParseAction[literal[")"] | literal["]"] | literal["("] | literal["["], #1 &],
+    (* unmatched closing bracket commands (guarded out of commandAtom)
+       render as their bare glyph here, like an unmatched ) / ] *)
+    ParseAction[literal["\\rangle"], "\[RightAngleBracket]" &],
+    ParseAction[literal["\\rceil"],  "\[RightCeiling]" &],
+    ParseAction[literal["\\rfloor"], "\[RightFloor]" &],
+    ParseAction[literal["\\rVert"],  "\[DoubleVerticalBar]" &],
+    ParseAction[literal["\\rvert"],  "|" &]
 ]
 (* matrix cells use a slightly looser row that accepts the closing
    delimiters ) and ] as bare tokens, so `3\times)` or `[a]` typo
@@ -1524,18 +1542,29 @@ absAtom = ParseAction[
    ‖ v ‖ (correct content, just not kerned).  The NAMED bracket pairs
    below don't have that problem - their open/close tokens differ. *)
 
-(* (A matchfix atom for the named bracket pairs \langle..\rangle,
-   \lceil..\rceil, etc. is NOT viable with a topRow inner: unlike `)`,
-   the closing commands \rangle/\rceil/... are themselves standalone
-   glyph atoms, so the inner row swallows the closer before the matchfix
-   can see it - the same greedy-swallow that blocks a \|..\| norm atom.
-   A correct fix would guard those closers out of commandAtom the way
-   \left..\right guards \right, then route unmatched closers through
-   outerPuncToken.  Left as future work; for now the bracket glyphs
-   render as loose tokens.) *)
+(* Matchfix bracket pairs with distinct open/close commands.  Inner is
+   `topRow` (like parenAtom) so a comma list lives INSIDE the brackets
+   - `\langle a, b \rangle` is one group, not the loose tokens ⟨a , b⟩
+   with the bracket bound to one operand.  Works because the closers
+   (\rangle/\rceil/...) are guarded out of commandAtom above, so the
+   inner row stops at them and the matchfix `literal` closer matches.
+   Kern the fences toward content like absAtom.  Tried before commandAtom
+   so a matched pair wins; an unmatched OPENER falls through to the
+   bare-glyph command path (openers are not guarded). *)
+matchfixAtom[openTok_, closeTok_, og_, cg_] := ParseAction[
+    literal[openTok] ~~ ParseRecursive[topRow] ~~ literal[closeTok],
+    RowBox[{kernOpen[og], #2, kernClose[cg]}] &
+]
+angleAtom = matchfixAtom["\\langle", "\\rangle", "\[LeftAngleBracket]", "\[RightAngleBracket]"]
+ceilAtom  = matchfixAtom["\\lceil",  "\\rceil",  "\[LeftCeiling]", "\[RightCeiling]"]
+floorAtom = matchfixAtom["\\lfloor", "\\rfloor", "\[LeftFloor]", "\[RightFloor]"]
+lvertAtom = matchfixAtom["\\lvert",  "\\rvert",  "|", "|"]
+lVertAtom = matchfixAtom["\\lVert",  "\\rVert",  "\[DoubleVerticalBar]", "\[DoubleVerticalBar]"]
 
 atom = ParseChoice[
-    numberAtom, environmentAtom, leftRightAtom, commandAtom,
+    numberAtom, environmentAtom, leftRightAtom,
+    angleAtom, ceilAtom, floorAtom, lVertAtom, lvertAtom,
+    commandAtom,
     parenAtom, bracketAtom, absAtom,
     bracedArgRef, identAtom, unicodeAtom
 ]
