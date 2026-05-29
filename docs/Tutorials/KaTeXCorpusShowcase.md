@@ -59,16 +59,26 @@ katexReference[name_String] := Module[{cached, url, img},
 (* KaTeX renders in Computer Modern (its KaTeX_Math face).  Our boxes
    inherit the front end's default math font, which is Times-based, so
    the side-by-side glyph shapes differ even when the structure matches.
-   If a Computer-Modern-family font happens to be installed, prefer it
-   so the comparison is about content, not typeface; otherwise fall back
-   to the FE default (no FontFamily).  No font is installed by this
-   build - this is purely opportunistic. *)
-$mathFontCandidates = {
-    "Latin Modern Math", "Latin Modern Roman", "CMU Serif",
-    "STIX Two Math", "STIXGeneral"
-};
-$mathFont = SelectFirst[$mathFontCandidates, MemberQ[$FontFamilies, #] &, None];
+   Prefer an installed Computer-Modern-family font so the comparison is
+   about content, not typeface; fall back to the FE default otherwise.
+
+   Detection is by FONT FILE on disk, not $FontFamilies: a headless
+   build FE returns {} for $FontFamilies yet still RENDERS a family by
+   name.  `font-computer-modern` installs the CMU TrueType set
+   (cmun*.ttf); Latin Modern installs lmroman*/latinmodern*. *)
+$fontDirs = {FileNameJoin[{$HomeDirectory, "Library", "Fonts"}], "/Library/Fonts"};
+$mathFont = Which[
+    FileNames["lmroman*" | "latinmodern*", $fontDirs] =!= {}, "Latin Modern Roman",
+    FileNames["cmun*", $fontDirs] =!= {}, "CMU Serif",
+    True, None];
 $mathFontOpts = If[$mathFont === None, {}, {FontFamily -> $mathFont}];
+
+(* The parser tags italic identifiers StyleBox[c, "TI"]; that named
+   style pins its own face and ignores an outer FontFamily, so without
+   this rewrite the CM font reaches digits/operators but not the
+   letters.  Promote "TI" to explicit italic + the CM family. *)
+applyMathFont[box_] := If[$mathFont === None, box,
+    box /. StyleBox[a_, "TI", r___] :> StyleBox[a, FontSlant -> Italic, FontFamily -> $mathFont, r]];
 
 (* Rasterise our parse at a font size chosen to roughly match the
    visual scale of KaTeX's published screenshots (default WL math is
@@ -79,7 +89,7 @@ ourRender[src_String] := Module[{r = Quiet @ Check[LaTeXMathParse[src], $Failed]
     If[ MatchQ[r, _ParseError | $Failed],
         Style["ParseError", Red, FontSize -> 14],
         Rasterize[
-            Style[DisplayForm[r], FontSize -> 24, Sequence @@ $mathFontOpts],
+            Style[DisplayForm[applyMathFont[r]], FontSize -> 24, Sequence @@ $mathFontOpts],
             ImageResolution -> 144
         ]
     ]
