@@ -425,7 +425,9 @@ VerificationTest[
 
 VerificationTest[
     LaTeXMathParse["\\overline{AB}"],
-    OverscriptBox[RowBox[{StyleBox["A", "TI"], StyleBox["B", "TI"]}], "_"],
+    OverscriptBox[
+        StyleBox[RowBox[{StyleBox["A", "TI"], StyleBox["B", "TI"]}], AutoSpacing -> False],
+        "_"],
     TestID -> "KaTeX accents: \\overline spans its arg"
 ]
 

@@ -633,7 +633,19 @@ commandHandlers["\\not"] = Function[{opt, req},
    with the accent glyph on top. \overline / \underline / the wide
    accents span their whole argument. *)
 
-accentHandler[glyph_] := Function[{opt, req}, OverscriptBox[First[req, ""], glyph]]
+(* When the accented base is a multi-token run (\widehat{xy},
+   \overline{AB}), the FE gives it loose inter-letter math spacing
+   inside the OverscriptBox, so the construct renders wider than LaTeX
+   (\widehat{xy} ~1.35, \overline{AB} ~1.16).  Suppress that spacing on
+   a RowBox base with AutoSpacing -> False; single-glyph bases are
+   untouched. *)
+accentBase[RowBox[p_List]] := If[
+    AllTrue[p, MatchQ[#, StyleBox[_String, "TI"] | _String] &],
+    StyleBox[RowBox[p], AutoSpacing -> False],  (* pure letter/char run *)
+    RowBox[p]                                    (* has operators: keep spacing *)
+]
+accentBase[b_] := b
+accentHandler[glyph_] := Function[{opt, req}, OverscriptBox[accentBase[First[req, ""]], glyph]]
 
 commandHandlers["\\hat"]      = accentHandler["^"]
 commandHandlers["\\widehat"]  = accentHandler["^"]
