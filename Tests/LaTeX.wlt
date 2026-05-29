@@ -191,7 +191,7 @@ VerificationTest[
 (* === failures === *)
 
 VerificationTest[
-    MatchQ[LaTeXMathParse["{unclosed"], _ParseError],
+    MatchQ[LaTeXMathParse["{unclosed"], _Failure],
     True,
     TestID -> "LaTeX: unclosed brace returns ParseError"
 ]
@@ -296,7 +296,7 @@ VerificationTest[
 VerificationTest[
     (* an unmatched closer still renders as its glyph (via outerPuncToken),
        not a ParseError *)
-    MatchQ[LaTeXMathParse["a \\rangle"], _ParseError],
+    MatchQ[LaTeXMathParse["a \\rangle"], _Failure],
     False,
     TestID -> "LaTeX: unmatched \\rangle does not error"
 ]
@@ -402,7 +402,7 @@ VerificationTest[
             "|x + y|_p \\leq \\max(|x|_p, |y|_p)",
             "\\mathbb{Q}_p \\setminus \\mathbb{Z}_p"
         },
-        ! MatchQ[LaTeXMathParse[#], _ParseError] &
+        ! MatchQ[LaTeXMathParse[#], _Failure] &
     ],
     True,
     TestID -> "LaTeX: full PAdic corpus parses without error"
@@ -555,7 +555,7 @@ VerificationTest[
             "\\widetilde{xy}", "\\overrightarrow{AB}",
             "\\operatorname{lcm}(a, b)", "x \\simeq y", "a \\doteq b"
         },
-        ! MatchQ[LaTeXMathParse[#], _ParseError] &
+        ! MatchQ[LaTeXMathParse[#], _Failure] &
     ],
     True,
     TestID -> "KaTeX coverage: operators / relations / arrows / symbols parse clean"
@@ -589,7 +589,7 @@ VerificationTest[
 ]
 
 VerificationTest[
-    ! MatchQ[LaTeXMathParse["x'^2_3"], _ParseError],
+    ! MatchQ[LaTeXMathParse["x'^2_3"], _Failure],
     True,
     TestID -> "KaTeX primes: x'^2_3 (prime + super + sub interleaved)"
 ]
@@ -607,7 +607,7 @@ VerificationTest[
 (* === robustness: malformed input fails cleanly, never recurses === *)
 
 VerificationTest[
-    MatchQ[LaTeXMathParse["\\"], _ParseError],
+    MatchQ[LaTeXMathParse["\\"], _Failure],
     True,
     TestID -> "Robustness: lone backslash returns ParseError (no infinite recursion)"
 ]
@@ -628,7 +628,7 @@ VerificationTest[
        not recurse / segfault *)
     MatchQ[
         TimeConstrained[LaTeXMathParse["a \\smash{b} \\notarealmacro{"], 5, $TimedOut],
-        _ParseError
+        _Failure
     ],
     True,
     TestID -> "Robustness: malformed / unsupported input returns ParseError (no recursion)"
@@ -653,7 +653,7 @@ VerificationTest[
             FileNameJoin[{DirectoryName[$TestFileName], "katex-cases.json"}]
         ]
     },
-        Count[Values[cases], _ ? (! MatchQ[LaTeXMathParse[#], _ParseError] &)]
+        Count[Values[cases], _ ? (! MatchQ[LaTeXMathParse[#], _Failure] &)]
     ],
     126,
     TestID -> "KaTeX corpus: all 126 inline cases parse clean"
@@ -690,7 +690,7 @@ VerificationTest[
 ]
 
 VerificationTest[
-    ! MatchQ[LaTeXMathParse["\\begin{cases} 1 & x > 0 \\\\ 0 & x \\le 0 \\end{cases}"], _ParseError],
+    ! MatchQ[LaTeXMathParse["\\begin{cases} 1 & x > 0 \\\\ 0 & x \\le 0 \\end{cases}"], _Failure],
     True,
     TestID -> "Env: cases parses"
 ]
@@ -704,7 +704,7 @@ VerificationTest[
 
 VerificationTest[
     (* \begin{array}{cc} - the column spec is consumed and ignored *)
-    ! MatchQ[LaTeXMathParse["\\begin{array}{cc} a & b \\\\ c & d \\end{array}"], _ParseError],
+    ! MatchQ[LaTeXMathParse["\\begin{array}{cc} a & b \\\\ c & d \\end{array}"], _Failure],
     True,
     TestID -> "Env: array column spec consumed"
 ]
@@ -714,7 +714,7 @@ VerificationTest[
 
 VerificationTest[
     {
-        MatchQ[Parse[ParseCharacter["*"], "x"], _ParseError],
+        MatchQ[Parse[ParseCharacter["*"], "x"], _Failure],
         Parse[ParseCharacter["*"], "*"]
     },
     {True, "*"},

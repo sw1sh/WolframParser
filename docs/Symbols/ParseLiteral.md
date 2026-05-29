@@ -44,7 +44,7 @@ A mismatched input fails:
 Parse[ParseLiteral["foo"], "bar"]
 ```
 
-<!-- => ParseError[<|"Position" -> 1, "Expected" -> "foo", "Found" -> "b", "Rule" -> Literal["foo"]|>] -->
+<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "foo", "Found" -> "b", "Rule" -> Literal["foo"]|>] -->
 
 ## Scope
 
@@ -54,7 +54,7 @@ The empty literal succeeds on any input and consumes nothing:
 Parse[ParseLiteral[""], "anything"]
 ```
 
-<!-- => ParseError[<|"Position" -> 1, "Expected" -> "<end of input>", "Found" -> "a"|>] (Parse requires whole-input consumption; ParsePartial would return {"", "anything"}) -->
+<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<end of input>", "Found" -> "a"|>] (Parse requires whole-input consumption; ParsePartial would return {"", "anything"}) -->
 
 A multi-character literal:
 
@@ -82,7 +82,7 @@ Parse[ParseLiteral["hello "] ~~ ParseLiteral["world"], "hello world"]
 Parse[ParseLiteral["foo"] ~~ ParseLiteral["bar"], "foo bar"]
 ```
 
-<!-- => ParseError[<|"Position" -> 4, "Expected" -> "bar", "Found" -> " "|>] -->
+<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> "bar", "Found" -> " "|>] -->
 
 ## Neat Examples
 

@@ -13,9 +13,13 @@ RelatedGuides: [WolframParser]
 
 <code>[ParserCompile]()[parser]</code> compiles `parser` (a [ParserCombinator]() or a [GrammarRules]() declaration) to native code via [FunctionCompile](), returning a `ParserCombinator` with a [CompiledCodeFunction]() stored under the `"Code"` key of its options.
 
-<code>[ParserCompile]()[parser, opts]</code> accepts options - `"Memoize" -> True | False` (default `False`), `"InputType" -> "UTF8String" | "TokenList" | "ExpressionList"` (default inferred from the grammar).
+<code>[ParserCompile]()[parser, Method -> "PEGVM"]</code> uses the **PEG-VM backend** instead of [FunctionCompile](): the grammar is lowered to an integer instruction table run on a single, once-compiled LPEG-style parsing machine. This scales to large recursive grammars (LaTeX math, TPTP) that [FunctionCompile]() cannot compile in practical time, and runs 1-2 orders of magnitude faster than the interpreter. See [Possible Issues]().
+
+<code>[ParserCompile]()[parser, opts]</code> also accepts `"Memoize" -> True | False` (default `False`), `"InputType" -> "UTF8String" | "TokenList" | "ExpressionList"` (default inferred from the grammar).
 
 ## Details & Options
+
+- **Two backends.** `Method -> Automatic` (default) lowers the combinator tree to a single [FunctionCompile]()'d function - fast for small/medium grammars; recursive grammars need `"Recursive" -> True` and otherwise stay interpretive. `Method -> "PEGVM"` lowers the grammar to a flat integer instruction table interpreted by one native parsing machine (compiled once, shared by every grammar). Because the grammar is *data*, not code, the PEG-VM "compiles" any grammar of any size in milliseconds-to-seconds of plain Wolfram Language - no per-grammar [FunctionCompile]() - and handles arbitrary recursion via an explicit stack. Captures recorded during the native run are replayed by a Wolfram post-pass to rebuild the exact result (same actions as [Parse]()).
 
 - `ParserCompile` is the local analogue of cloud-deploying a [GrammarRules](): both turn a grammar declaration into a deployable callable, one ships it to the cloud, the other ships it through [FunctionCompile]() into the local kernel.
 - The result is a `ParserCombinator` of the *same head* as the input, with the compiled function folded into the options as `"Code" -> CompiledCodeFunction[...]`. No separate `"Compiled" -> True` flag - the presence of `"Code"` is the marker.
@@ -59,13 +63,15 @@ Compile a small expression grammar:
 expr = ParserCompile[
     ParseAction[
         ParseCharacter[DigitCharacter]..,
-        FromDigits @ StringJoin[#] &
+        FromDigits @ StringJoin[{##}] &
     ]
 ];
 expr["42"]
 ```
 
 <!-- => 42 -->
+
+The `ParseAction` callback is compiled in place via [KernelFunction]() - the whole parser, recogniser *and* semantic action, becomes one [CompiledCodeFunction](). The result is threaded through compiled code as an `"InertExpression"`, so an action may return *any* Wolfram expression.
 
 ## Properties and Relations
 
@@ -98,13 +104,45 @@ uncompiled = ParseLiteral["foo"];
 
 ## Possible Issues
 
-A grammar that uses [ParseAction]() with a function the compiler cannot type-infer may fail to compile - in which case `ParserCompile` falls back to the interpretive path and emits a [Message]() warning. The returned parser still works (interpretively); only the speed-up is lost.
+The compiled path covers the full non-recursive combinator algebra: every `Parse*` constructor except [ParseRecursive]() lowers to native code, with results threaded as `"InertExpression"` and [ParseAction]() callbacks run in place via [KernelFunction](). Because actions execute in the kernel, *any* action function compiles - there is no type-inference restriction on it.
+
+A parser built with [ParseRecursive]() (directly or mutually recursive) cannot be lowered to a single compiled function by the default backend; `ParserCompile` keeps it runnable on the interpretive path and emits a `ParserCompile::nocompile` warning. The returned parser still works (interpretively); only the speed-up is lost. **Use `Method -> "PEGVM"` to compile recursive grammars** (it has no such restriction).
 
 ```wl
-ParserCompile[ParseAction[ParseLiteral["foo"], SomeUserFunction]]
+ClearAll[expr];
+expr = ParseChoice[ParseBetween[ParseLiteral["("], ParseRecursive[expr], ParseLiteral[")"]], ParseLiteral["x"]];
+ParserCompile[expr]["((x))"]                      (* default: interpretive, ParserCompile::nocompile *)
+ParserCompile[expr, Method -> "PEGVM"]["((x))"]   (* PEG-VM: native *)
 ```
 
-<!-- => ParserCompile::nocompile message + a ParserCombinator without "Code" in its options -->
+<!-- => "x"  (both) -->
+
+A [ParseMany]() (or [ParseSome]()) over a parser that can succeed *without consuming input* would loop forever; the default backend refuses it outright:
+
+```wl
+ParserCompile[ParseMany[ParseSucceed["nothing"]]]
+```
+
+<!-- => ParserCompile::infloop message + $Failed -->
+
+### The PEG-VM backend (`Method -> "PEGVM"`)
+
+The PEG-VM lowers any grammar - recursive or not, of any size - to an integer instruction table run on a single native parsing machine. It is the backend for large grammars the FunctionCompile path cannot handle, and for compiled parsers you want to *serialize*:
+
+```wl
+latex = ParserCompile[LaTeXMathParser, Method -> "PEGVM"];   (* a 380k-instruction table, built in a couple of seconds *)
+Export["latex.wxf", latex];                                  (* compile once, save *)
+(* in a fresh kernel: *)
+Needs["Wolfram`Parser`"];
+latex = Import["latex.wxf"];                                  (* reloads instantly, no recompile *)
+latex["\\frac{a^2+b^2}{c}"]
+```
+
+Limitations of the PEG-VM backend, relative to the interpreter:
+
+- **Generic failure messages.** On a parse failure it returns a `Failure["ParseError", ...]` with `"Expected" -> "<parse failed>"` rather than the full expected-token set (the native run does not track the expected set). Successful parses are bit-identical to [Parse]().
+- **ASCII character classes.** [ParseCharacter]() classes are matched against code points ≤ 128; [ParseLiteral]() handles full Unicode. Fine for ASCII-source grammars (LaTeX, TPTP, EBNF).
+- **`ParseChoiceLongest`** is handled with true longest-match (each alternative is measured and the furthest-reaching one is committed), so prefix-sharing alternatives - e.g. TPTP's `a` vs `a = b` - parse correctly.
 
 ## Neat Examples
 
@@ -121,4 +159,4 @@ identifier = ParserCompile[
 identifier /@ {"foo", "bar1", "baz_qux"}
 ```
 
-<!-- => {"foo", "bar1", ParseError[<|"Position" -> 4, "Expected" -> "<letter or digit>", "Found" -> "_", ...|>]} -->
+<!-- => {"foo", "bar1", Failure["ParseError", <|"Position" -> 4, "Expected" -> "<letter or digit>", "Found" -> "_", ...|>]} -->

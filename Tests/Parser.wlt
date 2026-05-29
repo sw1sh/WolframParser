@@ -265,37 +265,37 @@ VerificationTest[
 (* === Parse: failures === *)
 
 VerificationTest[
-    MatchQ[Parse[ParseLiteral["foo"], "xyz"], _ParseError],
+    MatchQ[Parse[ParseLiteral["foo"], "xyz"], _Failure],
     True,
     TestID -> "Parse Failure: literal mismatch returns ParseError"
 ]
 
 VerificationTest[
-    MatchQ[Parse[ParseLiteral["foo"], "foobar"], _ParseError],
+    MatchQ[Parse[ParseLiteral["foo"], "foobar"], _Failure],
     True,
     TestID -> "Parse Failure: partial match returns ParseError"
 ]
 
 VerificationTest[
-    MatchQ[Parse[ParseSome[ParseCharacter[DigitCharacter]], ""], _ParseError],
+    MatchQ[Parse[ParseSome[ParseCharacter[DigitCharacter]], ""], _Failure],
     True,
     TestID -> "Parse Failure: ParseSome on empty input"
 ]
 
 VerificationTest[
-    Parse[ParseLiteral["foo"], "xyz"][[1]]["Position"],
+    Parse[ParseLiteral["foo"], "xyz"]["Position"],
     1,
     TestID -> "ParseError: Position field"
 ]
 
 VerificationTest[
-    Parse[ParseLiteral["foo"], "xyz"][[1]]["Expected"],
+    Parse[ParseLiteral["foo"], "xyz"]["Expected"],
     "foo",
     TestID -> "ParseError: Expected field"
 ]
 
 VerificationTest[
-    Parse[ParseLiteral["foo"], "xyz"][[1]]["Found"],
+    Parse[ParseLiteral["foo"], "xyz"]["Found"],
     "x",
     TestID -> "ParseError: Found field"
 ]
@@ -363,6 +363,271 @@ VerificationTest[
     ],
     {"a", "a"},
     TestID -> "ParserCompile: same result as Parse"
+]
+
+
+(* === ParserCompile : value-threading codegen ===
+   The compiled function returns the actual parse result (not just a
+   recognised position), threading values as InertExpression and running
+   actions via KernelFunction. Each case asserts compiled === interpreted
+   over the full non-recursive algebra. *)
+
+(* helper: a parser is genuinely compiled (vs interpreter fallback) iff
+   its "Code" closure carries a CompiledCodeFunction. *)
+ClearAll[nativeCompiledQ];
+nativeCompiledQ[p_ParserCombinator] := !FreeQ[p[[3]]["Code"], _CompiledCodeFunction];
+
+VerificationTest[
+    nativeCompiledQ[ParserCompile[ParseSequence[ParseLiteral["a"], ParseLiteral["b"]]]],
+    True,
+    TestID -> "ParserCompile: sequence compiles to native code"
+]
+
+VerificationTest[
+    nativeCompiledQ[ParserCompile[
+        ParseAction[ParseSome[ParseCharacter[DigitCharacter]], FromDigits @ StringJoin[{##}] &]]],
+    True,
+    TestID -> "ParserCompile: action-bearing grammar compiles to native code"
+]
+
+(* compiled === interpreted across the algebra *)
+With[{
+    suite = {
+        {"literal", ParseLiteral["foo"], "foo"},
+        {"sequence", ParseSequence[ParseLiteral["a"], ParseLiteral["b"]], "ab"},
+        {"choice-2nd", ParseLiteral["a"] | ParseLiteral["b"], "b"},
+        {"some-digits", ParseSome[ParseCharacter[DigitCharacter]], "42"},
+        {"many-empty-leftover", ParseMany[ParseCharacter[DigitCharacter]], "x"},
+        {"optional-present", ParseOptional[ParseLiteral["a"]], "a"},
+        {"optional-absent", ParseSequence[ParseOptional[ParseLiteral["a"]], ParseLiteral["b"]], "b"},
+        {"action-fromdigits", ParseAction[ParseSome[ParseCharacter[DigitCharacter]], FromDigits @ StringJoin[{##}] &], "42"},
+        {"identifier", ParseAction[ParseSequence[ParseCharacter[LetterCharacter],
+            ParseMany[ParseCharacter[LetterCharacter] | ParseCharacter[DigitCharacter]]], StringJoin], "bar1"},
+        {"between", ParseBetween[ParseLiteral["("], ParseSome[ParseCharacter[DigitCharacter]], ParseLiteral[")"]], "(42)"},
+        {"choice-fail", ParseLiteral["a"] | ParseLiteral["b"], "c"},
+        {"charrange", ParseSome[ParseCharacter[CharacterRange["a", "z"]]], "abc"},
+        {"alt-class", ParseSome[ParseCharacter[LetterCharacter | DigitCharacter | "_"]], "a_9"},
+        {"lookahead", ParseSequence[ParseLookahead[ParseLiteral["a"]], ParseLiteral["ab"]], "ab"},
+        {"notfollowedby", ParseSequence[ParseLiteral["a"], ParseNotFollowedBy[ParseLiteral["b"]], ParseLiteral["c"]], "ac"},
+        {"sepby", ParseSepBy[ParseCharacter[DigitCharacter], ParseLiteral[","]], "1,2,3"},
+        {"sepby-empty", ParseSepBy[ParseCharacter[DigitCharacter], ParseLiteral[","]], ""},
+        {"sepby-trailing", ParseSequence[ParseSepBy[ParseCharacter[DigitCharacter], ParseLiteral[","]], ParseLiteral[";"]], "1,2;"},
+        {"sepby1-ok", ParseSepBy1[ParseCharacter[DigitCharacter], ParseLiteral[","]], "7,8"},
+        {"sepby1-fail", ParseSepBy1[ParseCharacter[DigitCharacter], ParseLiteral[","]], ""},
+        {"chainleft", ParseChainLeft[ParseAction[ParseCharacter[DigitCharacter], FromDigits], ParseAction[ParseLiteral["+"], Plus &]], "1+2+3"},
+        {"chainright", ParseChainRight[ParseAction[ParseCharacter[DigitCharacter], FromDigits], ParseAction[ParseLiteral["^"], Power &]], "2^3^2"},
+        {"choicelongest", ParseChoiceLongest[ParseLiteral["ab"], ParseLiteral["abc"]], "abc"}
+    }},
+    Scan[
+        Function[case,
+            VerificationTest[
+                ParserCompile[case[[2]]][case[[3]]],
+                Parse[case[[2]], case[[3]]],
+                TestID -> "ParserCompile-vs-Parse: " <> case[[1]]
+            ]
+        ],
+        suite
+    ]
+]
+
+(* GrammarRules compiles to native code and parses (the local CloudDeploy
+   analogue). *)
+VerificationTest[
+    With[{g = GrammarRules[{"the weather in <city>" -> city}]},
+        {nativeCompiledQ[ParserCompile[g]], ParserCompile[g]["the weather in NYC"]}
+    ],
+    {True, "NYC"},
+    TestID -> "ParserCompile: GrammarRules compiles and parses"
+]
+
+(* the doc's identifier example, mapped over inputs *)
+VerificationTest[
+    With[{identifier = ParserCompile[ParseAction[
+        ParseCharacter[LetterCharacter] ~~
+            (ParseCharacter[LetterCharacter] | ParseCharacter[DigitCharacter])...,
+        StringJoin]]},
+        identifier /@ {"foo", "bar1"}
+    ],
+    {"foo", "bar1"},
+    TestID -> "ParserCompile: identifier example, mapped"
+]
+
+(* a parser using ParseRecursive cannot compile to native code, but still
+   runs (interpreter fallback) and matches Parse. *)
+VerificationTest[
+    Module[{expr, compiled},
+        ClearAll[expr];
+        expr = ParseChoice[
+            ParseBetween[ParseLiteral["("], ParseRecursive[expr], ParseLiteral[")"]],
+            ParseLiteral["x"]];
+        compiled = ParserCompile[expr];
+        {nativeCompiledQ[compiled], compiled["((x))"], Parse[expr, "((x))"]}
+    ],
+    {False, "x", "x"},
+    TestID -> "ParserCompile: recursive parser falls back to interpreter"
+]
+
+(* a ParseMany over a non-consuming parser is refused at compile time. *)
+VerificationTest[
+    ParserCompile[ParseMany[ParseSucceed["nothing"]]],
+    $Failed,
+    {ParserCompile::infloop},
+    TestID -> "ParserCompile: infinite-loop repetition refused"
+]
+
+
+(* === ParserCompile : PEG-VM backend (Method -> "PEGVM") ===
+   Lowers the grammar to an integer instruction table run on a single
+   once-compiled parsing machine; scales to large recursive grammars and
+   produces the same result as the interpreter. *)
+
+(* the PEG-VM is a single shared compiled function referenced by the
+   "Code" closure (not embedded), so just check the parser is compiled and
+   runs - behavioural fidelity is covered by the suite below. *)
+VerificationTest[
+    With[{p = ParserCompile[ParseLiteral["foo"], Method -> "PEGVM"]},
+        {KeyExistsQ[p[[3]], "Code"], p["foo"]}],
+    {True, "foo"},
+    TestID -> "ParserCompile PEGVM: compiles and runs"
+]
+
+(* compiled === interpreted across the algebra, including recursion and
+   the derived combinators the FunctionCompile backend can't lower at scale *)
+With[{
+    suite = {
+        {"literal", ParseLiteral["foo"], "foo"},
+        {"sequence", ParseSequence[ParseLiteral["a"], ParseLiteral["b"]], "ab"},
+        {"choice", ParseLiteral["a"] | ParseLiteral["b"], "b"},
+        {"some-digits", ParseSome[ParseCharacter[DigitCharacter]], "42"},
+        {"action", ParseAction[ParseSome[ParseCharacter[DigitCharacter]], FromDigits @ StringJoin[{##}] &], "42"},
+        {"identifier", ParseAction[ParseSequence[ParseCharacter[LetterCharacter],
+            ParseMany[ParseCharacter[LetterCharacter] | ParseCharacter[DigitCharacter]]], StringJoin], "bar1"},
+        {"between", ParseBetween[ParseLiteral["("], ParseSome[ParseCharacter[DigitCharacter]], ParseLiteral[")"]], "(42)"},
+        {"sepby", ParseSepBy[ParseCharacter[DigitCharacter], ParseLiteral[","]], "1,2,3"},
+        {"chainleft", ParseChainLeft[ParseAction[ParseCharacter[DigitCharacter], FromDigits], ParseAction[ParseLiteral["+"], Plus &]], "1+2+3"},
+        {"choicelongest", ParseChoiceLongest[ParseLiteral["ab"], ParseLiteral["abc"]], "abc"},
+        {"choicelongest-prefix", ParseChoiceLongest[ParseLiteral["a"],
+            ParseSequence[ParseLiteral["a"], ParseLiteral["="], ParseLiteral["b"]]], "a=b"}
+    }},
+    Scan[
+        Function[case,
+            VerificationTest[
+                ParserCompile[case[[2]], Method -> "PEGVM"][case[[3]]],
+                Parse[case[[2]], case[[3]]],
+                TestID -> "ParserCompile-PEGVM-vs-Parse: " <> case[[1]]
+            ]
+        ],
+        suite
+    ]
+]
+
+(* a recursive grammar compiles natively on the PEG-VM (unlike the default
+   backend, which keeps recursion interpretive) and matches Parse *)
+VerificationTest[
+    Module[{expr, compiled},
+        ClearAll[expr];
+        expr = ParseChoice[
+            ParseBetween[ParseLiteral["("], ParseRecursive[expr], ParseLiteral[")"]],
+            ParseLiteral["x"]];
+        compiled = ParserCompile[expr, Method -> "PEGVM"];
+        {KeyExistsQ[compiled[[3]], "Code"], compiled["((x))"], Parse[expr, "((x))"]}
+    ],
+    {True, "x", "x"},
+    TestID -> "ParserCompile PEGVM: recursive grammar compiles and matches Parse"
+]
+
+(* invalid input is rejected (a ParseError, like the interpreter - though
+   the PEG-VM reports a generic message rather than the expected-set). *)
+VerificationTest[
+    Head @ ParserCompile[ParseLiteral["a"] | ParseLiteral["b"], Method -> "PEGVM"]["c"],
+    Failure,
+    TestID -> "ParserCompile PEGVM: rejects invalid input with a ParseError"
+]
+
+(* a PEG-VM-compiled parser survives serialization (compile once, reuse):
+   Export to WXF and re-Import yields the same results without recompiling *)
+VerificationTest[
+    Module[{p, file, reloaded},
+        p = ParserCompile[
+            ParseAction[ParseSome[ParseCharacter[DigitCharacter]], FromDigits @ StringJoin[{##}] &],
+            Method -> "PEGVM"];
+        file = FileNameJoin[{$TemporaryDirectory, "wparser-pegvm-test.wxf"}];
+        Export[file, p];
+        reloaded = Import[file];
+        DeleteFile[file];
+        {reloaded["42"], reloaded["100"]}
+    ],
+    {42, 100},
+    TestID -> "ParserCompile PEGVM: Export/Import round-trip preserves behavior"
+]
+
+
+(* === Information[ParserCombinator, ...] === *)
+
+VerificationTest[
+    Information[ParseSequence[ParseLiteral["a"], ParseLiteral["b"]], "Type"],
+    "Sequence",
+    TestID -> "Information: Type"
+]
+
+VerificationTest[
+    {Information[ParseLiteral["foo"], "Compiled"],
+     Information[ParserCompile[ParseLiteral["foo"]], "Compiled"]},
+    {False, True},
+    TestID -> "Information: Compiled predicate"
+]
+
+VerificationTest[
+    Head @ Information[ParserCompile[ParseLiteral["foo"]], "CompiledFunction"],
+    CompiledCodeFunction,
+    TestID -> "Information: CompiledFunction extracts the CompiledCodeFunction"
+]
+
+VerificationTest[
+    {Information[ParserCompile[ParseLiteral["foo"]], "Backend"],
+     Information[ParserCompile[ParseLiteral["foo"], Method -> "PEGVM"], "Backend"],
+     Information[ParseLiteral["foo"], "Backend"]},
+    {"FunctionCompile", "PEGVM", Missing["NotCompiled"]},
+    TestID -> "Information: Backend"
+]
+
+VerificationTest[
+    MemberQ[Information[ParseLiteral["x"], "Properties"], "CompiledFunction"],
+    True,
+    TestID -> "Information: Properties lists CompiledFunction"
+]
+
+
+(* === ParseError is a Failure["ParseError", ...] (Confirm-usable) === *)
+
+VerificationTest[
+    Head @ Parse[ParseLiteral["foo"], "xyz"],
+    Failure,
+    TestID -> "Failure: parse failure is a Failure object"
+]
+
+VerificationTest[
+    FailureQ @ Parse[ParseLiteral["foo"], "xyz"],
+    True,
+    TestID -> "Failure: FailureQ on a parse failure"
+]
+
+VerificationTest[
+    Parse[ParseLiteral["foo"], "xyz"][["Tag"]],
+    "ParseError",
+    TestID -> "Failure: tag is ParseError"
+]
+
+VerificationTest[
+    Enclose[Confirm[Parse[ParseLiteral["foo"], "xyz"]]; "no-throw", "caught" &],
+    "caught",
+    TestID -> "Failure: Confirm throws on a parse failure"
+]
+
+VerificationTest[
+    Enclose[Confirm[Parse[ParseLiteral["foo"], "foo"]], "threw" &],
+    "foo",
+    TestID -> "Failure: Confirm passes a successful parse through"
 ]
 
 
@@ -450,7 +715,7 @@ VerificationTest[
 ]
 
 VerificationTest[
-    MatchQ[Parse[ParseSepBy1[ParseCharacter[DigitCharacter], ParseLiteral[","]], ""], _ParseError],
+    MatchQ[Parse[ParseSepBy1[ParseCharacter[DigitCharacter], ParseLiteral[","]], ""], _Failure],
     True,
     TestID -> "ParseSepBy1: empty input fails"
 ]
@@ -510,7 +775,7 @@ VerificationTest[
 ]
 
 VerificationTest[
-    MatchQ[Parse[ParseLookahead[ParseLiteral["foo"]] ~~ ParseLiteral["foo"], "bar"], _ParseError],
+    MatchQ[Parse[ParseLookahead[ParseLiteral["foo"]] ~~ ParseLiteral["foo"], "bar"], _Failure],
     True,
     TestID -> "ParseLookahead: propagates failure"
 ]
@@ -522,7 +787,7 @@ VerificationTest[
 ]
 
 VerificationTest[
-    MatchQ[Parse[ParseLiteral["foo"] ~~ ParseNotFollowedBy[ParseLiteral["bar"]] ~~ ParseLiteral["bar"], "foobar"], _ParseError],
+    MatchQ[Parse[ParseLiteral["foo"] ~~ ParseNotFollowedBy[ParseLiteral["bar"]] ~~ ParseLiteral["bar"], "foobar"], _Failure],
     True,
     TestID -> "ParseNotFollowedBy: fails when next thing present"
 ]
@@ -593,7 +858,7 @@ VerificationTest[
             GrammarRules[{"hello" -> "greeting"}],
             "xyz"
         ],
-        _ParseError
+        _Failure
     ],
     True,
     TestID -> "GrammarRules: no matching rule returns ParseError"

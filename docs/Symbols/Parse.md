@@ -5,13 +5,13 @@ Context: Wolfram`Parser`
 Paclet: Wolfram/WolframParser
 URI: Wolfram/WolframParser/ref/Parse
 Keywords: [parser, parse, run, entry point]
-SeeAlso: [ParserCompile, ParserCombinator, ParsePartial, ParseError, Interpreter]
+SeeAlso: [ParserCompile, ParserCombinator, ParsePartial, Interpreter]
 RelatedGuides: [WolframParser]
 ---
 
 ## Usage
 
-<code>[Parse]()[parser, input]</code> runs a parser (a [ParserCombinator]() or a [GrammarRules]() declaration) against an input (a [String](), a [List]() of tokens, or a [List]() of Wolfram expressions). Returns the parse result on success, or a [ParseError]() object on failure.
+<code>[Parse]()[parser, input]</code> runs a parser (a [ParserCombinator]() or a [GrammarRules]() declaration) against an input (a [String](), a [List]() of tokens, or a [List]() of Wolfram expressions). Returns the parse result on success, or a [Failure]() object (tagged `"ParseError"`) on failure.
 
 ## Details & Options
 
@@ -19,7 +19,7 @@ RelatedGuides: [WolframParser]
 - A `GrammarRules` declaration is lowered to a `ParserCombinator` (and JIT-compiled the first time it is seen) before being run; the lowering result is cached so a second `Parse[grammar, ...]` call against the same grammar reuses the work.
 - For a `ParserCombinator` *without* a `"Code"` entry in its options, `Parse` runs the **interpretive** path. For a parser already passed through [ParserCompile](), `Parse` invokes the compiled function directly. Either way, `parser[input]` and `Parse[parser, input]` are equivalent ([ParserCombinator]() carries a SubValue rule that routes one to the other).
 - On success the return value is the structured result the combinator built - usually a string, a list of children, or an action's return value.
-- On failure the return value is a `ParseError[<|"Position" -> _, "Expected" -> _, "Found" -> _, ...|>]` association carrying the position of the furthest-advanced failure, the set of expected tokens at that position, and what was found instead.
+- On failure the return value is a `Failure["ParseError", <|"Position" -> _, "Expected" -> _, "Found" -> _, ...|>]` association carrying the position of the furthest-advanced failure, the set of expected tokens at that position, and what was found instead.
 
 ## Basic Examples
 
@@ -92,7 +92,7 @@ Parse[
 Parse[ParseLiteral["foo"], "foobar"]
 ```
 
-<!-- => ParseError[<|"Position" -> 4, "Expected" -> "<end of input>", "Found" -> "b", "Rule" -> Literal["foo"]|>] -->
+<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> "<end of input>", "Found" -> "b", "Rule" -> Literal["foo"]|>] -->
 
 [ParsePartial]() relaxes this and returns the leftover:
 
@@ -104,19 +104,19 @@ ParsePartial[ParseLiteral["foo"], "foobar"]
 
 ## Possible Issues
 
-A complete-input mismatch returns a `ParseError` rather than throwing - the error is a value, easy to pattern-match on:
+A complete-input mismatch returns a `Failure["ParseError", ...]` rather than throwing - the error is a value, easy to pattern-match on:
 
 ```wl
 Parse[ParseLiteral["foo"], "xyz"]
 ```
 
-<!-- => ParseError[<|"Position" -> 1, "Expected" -> "foo", "Found" -> "x", "Rule" -> Literal["foo"]|>] -->
+<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "foo", "Found" -> "x", "Rule" -> Literal["foo"]|>] -->
 
 Use [MatchQ]() to branch on success vs failure:
 
 ```wl
 res = Parse[ParseLiteral["foo"], "xyz"];
-If[MatchQ[res, _ParseError], "failed: " <> res["Found"], "ok: " <> res]
+If[FailureQ[res], "failed: " <> res["Found"], "ok: " <> res]
 ```
 
 <!-- => "failed: x" -->

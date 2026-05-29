@@ -11,7 +11,7 @@ RelatedGuides: [WolframParser]
 
 ## Usage
 
-<code>[LaTeXMathParse]()[$s$]</code> parses a LaTeX math-mode source string $s$ into a tree of Wolfram boxes ([FractionBox](), [SubsuperscriptBox](), [RadicalBox](), [GridBox](), [RowBox](), [StyleBox]()). Returns a [ParseError]() if the input is not parseable.
+<code>[LaTeXMathParse]()[$s$]</code> parses a LaTeX math-mode source string $s$ into a tree of Wolfram boxes ([FractionBox](), [SubsuperscriptBox](), [RadicalBox](), [GridBox](), [RowBox](), [StyleBox]()). Returns a [Failure]() (tagged `"ParseError"`) if the input is not parseable.
 
 ## Details & Options
 
@@ -142,7 +142,7 @@ End-to-end: count how many of KaTeX's own test cases parse cleanly:
 cases = Association @ Import[
     FileNameJoin[{PacletObject["Wolfram/WolframParser"]["Location"], "Tests", "katex-cases.json"}]
 ];
-Count[Values[cases], _ ? (! MatchQ[LaTeXMathParse[#], _ParseError] &)]
+Count[Values[cases], _ ? (! FailureQ[LaTeXMathParse[#]] &)]
 ```
 
 <!-- => 126  (out of 126 total) -->

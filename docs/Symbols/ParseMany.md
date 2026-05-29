@@ -72,7 +72,7 @@ ParsePartial[ParseMany[ParseCharacter[DigitCharacter]], "12x"]
 {Parse[ParseMany[ParseLiteral["x"]], ""], Parse[ParseSome[ParseLiteral["x"]], ""]}
 ```
 
-<!-- => {{}, ParseError[<|"Position" -> 1, "Expected" -> "x", "Found" -> "<end of input>"|>]} -->
+<!-- => {{}, Failure["ParseError", <|"Position" -> 1, "Expected" -> "x", "Found" -> "<end of input>"|>]} -->
 
 Combined with [StringJoin]() / [ParseAction]() to flatten a string lex:
 

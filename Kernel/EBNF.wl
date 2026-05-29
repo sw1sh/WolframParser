@@ -526,7 +526,7 @@ regexBodyRef := ParseRecursive[regexBody]
 regexCompile[body_String, sm_Association, ov_Association] :=
     Block[{regexSymMap = sm, regexOverrides = ov},
         With[{r = Parse[regexBody, body]},
-            If[ MatchQ[r, _ParseError],
+            If[ FailureQ[r],
                 ParseFail["regex body did not compile: " <> body],
                 r
             ]
@@ -553,7 +553,7 @@ EBNFParse[source_String, OptionsPattern[]] :=
         overrides = OptionValue["PrimitiveOverrides"];
         actions   = OptionValue["Actions"];
         rules = EBNFRules[source];
-        If[ MatchQ[rules, _ParseError],
+        If[ FailureQ[rules],
             Return[rules]
         ];
         (* `::=` and `:==` rules carry the structured body; `::-` and

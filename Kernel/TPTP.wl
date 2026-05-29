@@ -345,7 +345,7 @@ parseFileRaw[path_String] := Block[
     ensureTptpParser[];
     text   = stripTypeDecls @ stripComments @ Import[path, "Text"];
     parsed = Quiet @ Parse[$tptpParser, StringTrim @ text];
-    If[ MatchQ[parsed, _ParseError],
+    If[ FailureQ[parsed],
         Message[TPTPImport::badparse, path, parsed];
         Return[$Failed]
     ];
@@ -357,7 +357,7 @@ parseTextRaw[text_String] := Block[
     ensureTptpParser[];
     stripped = stripTypeDecls @ stripComments @ text;
     parsed   = Quiet @ Parse[$tptpParser, StringTrim @ stripped];
-    If[ MatchQ[parsed, _ParseError],
+    If[ FailureQ[parsed],
         Message[TPTPImport::badparse, "(text)", parsed];
         Return[$Failed]
     ];

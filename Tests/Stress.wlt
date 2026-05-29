@@ -125,13 +125,13 @@ VerificationTest[
 (* === empty / trivial === *)
 
 VerificationTest[
-    MatchQ[LaTeXMathParse[""], _ParseError],
+    MatchQ[LaTeXMathParse[""], _Failure],
     True,
     TestID -> "Stress: empty string returns ParseError"
 ]
 
 VerificationTest[
-    MatchQ[LaTeXMathParse["   "], _ParseError],
+    MatchQ[LaTeXMathParse["   "], _Failure],
     True,
     TestID -> "Stress: whitespace-only returns ParseError"
 ]

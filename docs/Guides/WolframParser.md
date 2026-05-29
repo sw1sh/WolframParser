@@ -20,7 +20,7 @@ Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_co
 
 ### Running a parser
 
-- [Parse]() apply a parser to an input; returns its value or a [ParseError]()
+- [Parse]() apply a parser to an input; returns its value or a [Failure]()
 - [ParsePartial]() return `{result, leftover-suffix}` instead of requiring whole-input match
 - [ParserCompile]() materialize the [FunctionCompile]()d form
 
@@ -65,7 +65,7 @@ Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_co
 
 ### Diagnostics
 
-- [ParseError]() structured failure with `"Position"`, `"Expected"`, `"Found"` keys
+- `Failure["ParseError", ...]` structured failure with `"Position"`, `"Expected"`, `"Found"` keys
 
 ### LaTeX math
 

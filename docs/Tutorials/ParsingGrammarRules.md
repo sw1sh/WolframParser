@@ -163,7 +163,7 @@ Out[]= 43
 
 ```wl
 In[]:= Parse[GrammarRules[{"hello" -> "hi"}], "hello there"]
-Out[]= ParseError[<|"Position" -> 6, "Expected" -> "<end of input>", "Found" -> " "|>]
+Out[]= Failure["ParseError", <|"Position" -> 6, "Expected" -> "<end of input>", "Found" -> " "|>]
 ```
 
 Use [ParsePartial](paclet:Wolfram/WolframParser/ref/Parse) when you want a prefix match.

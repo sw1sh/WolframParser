@@ -228,7 +228,7 @@ The benchmark assertion in [``Tests/LaTeX.wlt``](paclet:Wolfram/WolframParser/tu
 ```
 VerificationTest[
     With[{cases = Association @ Import[FileNameJoin[{DirectoryName[$TestFileName], "katex-cases.json"}]]},
-        Count[Values[cases], _ ? (! MatchQ[LaTeXMathParse[#], _ParseError] &)]
+        Count[Values[cases], _ ? (! FailureQ[LaTeXMathParse[#]] &)]
     ],
     126,
     TestID -> "KaTeX corpus: all 126 inline cases parse clean"

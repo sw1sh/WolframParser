@@ -243,7 +243,7 @@ benchOne[file_] := Block[{src = loadClean[file], r, t},
       "Time" -> AbsoluteTime[] - t,
       "Status" -> Which[
           r === "TO", "TIMEOUT",
-          MatchQ[r, _ParseError], "ERROR",
+          FailureQ[r], "ERROR",
           True, "OK"],
       "Clauses" -> If[ListQ[r], Length[r], 0]|>
 ];

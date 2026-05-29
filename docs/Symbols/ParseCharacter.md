@@ -94,13 +94,13 @@ Parse[
 
 ## Possible Issues
 
-The wrong character class produces a `ParseError`:
+The wrong character class produces a `Failure`:
 
 ```wl
 Parse[ParseCharacter[DigitCharacter], "x"]
 ```
 
-<!-- => ParseError[<|"Position" -> 1, "Expected" -> "<digit>", "Found" -> "x", "Rule" -> Character[DigitCharacter]|>] -->
+<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<digit>", "Found" -> "x", "Rule" -> Character[DigitCharacter]|>] -->
 
 `ParseCharacter` consumes *exactly one* character. To match a multi-character literal, use [ParseLiteral]() instead.
 

@@ -161,7 +161,7 @@ The library provides:
 - **Token shape.** The library always tokenises first via `ToTokens`. Operating directly on a string (without explicit tokenisation) or on a list of Wolfram expressions (e.g. a `CodeParser` AST) is not idiomatic.
 - **Diagnostics.** Failure is a missing match - you get `{}` back. There is no positional error message of the form "expected `)` at line 3 col 12, saw `]`".
 
-`WolframParser` aims to share the combinator vocabulary, but add an operator surface, a token-or-string-or-expression-uniform input model, and structured `ParseError` diagnostics.
+`WolframParser` aims to share the combinator vocabulary, but add an operator surface, a token-or-string-or-expression-uniform input model, and structured parse-failure diagnostics.
 
 ### Other paclet-repository entries
 
@@ -244,7 +244,7 @@ The survey above defines the niche by exclusion. Concretely, the paclet aims to 
 
 3. **A uniform input model**: a parser runs on a string (chars as tokens), on a list of tagged tokens (`Token[type, value, pos]`), or on a list of Wolfram expressions (so the same combinators that lex a string can walk a [CodeParser]() AST, an XML tree, or any other expression).
 
-4. **Structured `ParseError` diagnostics**: a failure carries the position, the rule that was being matched, and the set of expected tokens. `ExplainParseError` renders it as a "expected X at line L col C, saw Y" message - the bare minimum to make a parser library usable for end users, conspicuously missing from `FunctionalParsers`.
+4. **Structured parse-failure diagnostics**: a failure carries the position, the rule that was being matched, and the set of expected tokens. `ExplainParseError` renders it as a "expected X at line L col C, saw Y" message - the bare minimum to make a parser library usable for end users, conspicuously missing from `FunctionalParsers`.
 
 5. **A `FunctionCompile`-based compilation path for hot loops**: simple parsers (terminals, character classes, regex-equivalent shapes) fall through to `StringExpression` under the hood; richer grammars are lowered to a typed first-order representation and shipped through [FunctionCompile]() for LLVM codegen. No C dependency.
 

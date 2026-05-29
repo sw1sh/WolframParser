@@ -105,7 +105,7 @@ Parse[
 ]
 ```
 
-<!-- => ParseError[<|"Position" -> 3, "Expected" -> ")", "Found" -> "<end of input>"|>] -->
+<!-- => Failure["ParseError", <|"Position" -> 3, "Expected" -> ")", "Found" -> "<end of input>"|>] -->
 
 ## Neat Examples
 

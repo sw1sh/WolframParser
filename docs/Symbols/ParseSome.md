@@ -44,7 +44,7 @@ The empty input fails:
 Parse[ParseSome[ParseCharacter[DigitCharacter]], ""]
 ```
 
-<!-- => ParseError[<|"Position" -> 1, "Expected" -> "<digit>", "Found" -> "<end of input>"|>] -->
+<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<digit>", "Found" -> "<end of input>"|>] -->
 
 ## Scope
 

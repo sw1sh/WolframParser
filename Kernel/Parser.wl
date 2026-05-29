@@ -28,17 +28,15 @@
 
 BeginPackage["Wolfram`Parser`"]
 
-Parse::usage = "Parse[parser, input] runs parser against input. Returns the parse result on success or a ParseError on failure. Requires the parser to consume the entire input; use ParsePartial to accept a leftover."
+Parse::usage = "Parse[parser, input] runs parser against input. Returns the parse result on success or a Failure[\"ParseError\", ...] on failure (usable with Confirm / Enclose). Requires the parser to consume the entire input; use ParsePartial to accept a leftover."
 
-ParsePartial::usage = "ParsePartial[parser, input] runs parser against input and returns {result, leftover} on success, or a ParseError on failure."
+ParsePartial::usage = "ParsePartial[parser, input] runs parser against input and returns {result, leftover} on success, or a Failure[\"ParseError\", ...] on failure."
 
-ParserCompile::usage = "ParserCompile[parser] returns a ParserCombinator with a \"Code\" entry in its options that, when called, runs the parser. v0.2: stubbed via the interpreter; the real FunctionCompile lowering lands later."
+ParserCompile::usage = "ParserCompile[parser] returns a ParserCombinator with a \"Code\" entry in its options that, when called, runs the parser. The default backend lowers the combinator tree to a single FunctionCompile'd function (fast for small/medium grammars; recursive grammars need \"Recursive\" -> True and stay interpretive otherwise). ParserCompile[parser, Method -> \"PEGVM\"] uses an LPEG-style parsing machine instead: the grammar is lowered to an integer instruction table run on a once-compiled native VM, which scales to large recursive grammars (LaTeX, TPTP) that FunctionCompile cannot. The returned object can be Export'd and re-Import'd without recompiling."
 
 ParserCombinator::usage = "ParserCombinator[type, args, opts] is the single computable wrapper every parser is represented as. Build one by calling a Parse* constructor, never by hand. Carries operator UpValues (Alternatives | StringExpression | Repeated | RepeatedNull | Optional) and a SubValues rule that makes pc[input] equivalent to Parse[pc, input]."
 
 ParserCombinatorQ::usage = "ParserCombinatorQ[expr] tests whether expr is a normalised ParserCombinator."
-
-ParseError::usage = "ParseError[<|\"Position\" -> _, \"Expected\" -> _, \"Found\" -> _|>] is the structured failure value returned by Parse / ParsePartial."
 
 ParseLiteral::usage = "ParseLiteral[s] returns the ParserCombinator that matches the exact string s."
 
@@ -201,6 +199,42 @@ ParserCombinator /: (pc : ParserCombinator[_, _, _])[input_List] :=
     Parse[pc, input]
 
 
+(* === Information ===
+   Information[pc, "prop"] exposes the wrapper's structure without the
+   user reaching into the (opaque) ParserCombinator[type, args, opts]
+   layout by hand. "CompiledFunction" pulls the underlying
+   CompiledCodeFunction out of a FunctionCompile-backed parser (or the
+   instruction table out of a PEG-VM one); "Code" is the raw callable. *)
+
+$parserCombinatorProperties = {"Type", "Arity", "Children", "Options",
+    "Compiled", "Backend", "CompiledFunction", "Code", "Properties"};
+
+parserProperty[ParserCombinator[type_, _, _], "Type"] := type
+parserProperty[ParserCombinator[_, args_, _], "Arity"] := arity[args]
+parserProperty[ParserCombinator[_, args_, _], "Children"] := args
+parserProperty[ParserCombinator[_, _, opts_], "Options"] := KeyDrop[opts, "Code"]
+parserProperty[ParserCombinator[_, _, opts_], "Compiled"] := KeyExistsQ[opts, "Code"]
+parserProperty[ParserCombinator[_, _, opts_], "Code"] := Lookup[opts, "Code", Missing["NotCompiled"]]
+parserProperty[ParserCombinator[_, _, opts_], "Backend"] :=
+    Which[! KeyExistsQ[opts, "Code"], Missing["NotCompiled"],
+        ! FreeQ[opts["Code"], _CompiledCodeFunction], "FunctionCompile",
+        ! FreeQ[opts["Code"], HoldPattern[pegMachine]], "PEGVM",
+        True, "Interpretive"]
+(* the compiled function: the embedded CompiledCodeFunction for the
+   FunctionCompile backend (it appears applied, cf[input, pos], so match
+   it as a head), or the callable "Code" closure otherwise. *)
+parserProperty[ParserCombinator[_, _, opts_], "CompiledFunction"] :=
+    If[! KeyExistsQ[opts, "Code"], Missing["NotCompiled"],
+        FirstCase[opts["Code"], (h : _CompiledCodeFunction)[___] :> h, opts["Code"], Infinity]]
+parserProperty[_, "Properties"] := $parserCombinatorProperties
+parserProperty[_, other_] := Missing["UnknownProperty", other]
+
+ParserCombinator /: Information[pc : ParserCombinator[_, _, _], prop_String] := parserProperty[pc, prop]
+ParserCombinator /: Information[pc : ParserCombinator[_, _, _], props_List] := parserProperty[pc, #] & /@ props
+ParserCombinator /: Information[pc : ParserCombinator[_, _, _]] :=
+    Association[# -> parserProperty[pc, #] & /@ DeleteCases[$parserCombinatorProperties, "Properties"]]
+
+
 (* === top-level Parse / ParsePartial ===
    $RecursionLimit is capped at a deliberately modest value: the
    recursive-descent interpreter nests several frames per grammar
@@ -222,20 +256,13 @@ Parse[pc_ParserCombinator, input_String] :=
         r = Block[{$RecursionLimit = $maxParseRecursion}, interpret[pc, input, 1]];
         Which[
             MatchQ[r, _TerminatedEvaluation],
-                ParseError[<|
-                    "Position" -> 1, "Expected" -> "<input within nesting limit>",
-                    "Found" -> "<input nested too deeply>"
-                |>]
+                makeFailure[1, "<input within nesting limit>", "<input nested too deeply>"]
             ,
             MatchQ[r, _parseErr],
-                errToParseError[r]
+                errToFailure[r]
             ,
             r[[2]] != len + 1,
-                ParseError[<|
-                    "Position" -> r[[2]],
-                    "Expected" -> "<end of input>",
-                    "Found" -> safeChar[input, r[[2]]]
-                |>]
+                makeFailure[r[[2]], "<end of input>", safeChar[input, r[[2]]]]
             ,
             True,
                 r[[1]]
@@ -247,12 +274,9 @@ ParsePartial[pc_ParserCombinator, input_String] :=
         r = Block[{$RecursionLimit = $maxParseRecursion}, interpret[pc, input, 1]];
         Which[
             MatchQ[r, _TerminatedEvaluation],
-                ParseError[<|
-                    "Position" -> 1, "Expected" -> "<input within nesting limit>",
-                    "Found" -> "<input nested too deeply>"
-                |>],
+                makeFailure[1, "<input within nesting limit>", "<input nested too deeply>"],
             MatchQ[r, _parseErr],
-                errToParseError[r],
+                errToFailure[r],
             True,
                 {r[[1]], StringDrop[input, r[[2]] - 1]}
         ]
@@ -268,8 +292,16 @@ ParsePartial[g : HoldPattern[GrammarRules[_List, ___]], input_String] :=
 ParserCompile[g : HoldPattern[GrammarRules[_List, ___]], opts___] :=
     ParserCompile[lowerGrammarRules[g], opts]
 
-errToParseError[parseErr[pos_, expected_, found_]] :=
-    ParseError[<|"Position" -> pos, "Expected" -> expected, "Found" -> found|>]
+(* All parse failures surface as a Failure["ParseError", ...] so the
+   built-in Confirm / ConfirmBy / Enclose machinery treats them as
+   failures, while still carrying the structured "Position"/"Expected"/
+   "Found" fields (accessible as f["Position"], etc.). *)
+makeFailure[pos_, expected_, found_] := Failure["ParseError", <|
+    "MessageTemplate" -> "Parse failed at position `Position`: expected `Expected`, found `Found`.",
+    "MessageParameters" -> <|"Position" -> pos, "Expected" -> expected, "Found" -> found|>,
+    "Position" -> pos, "Expected" -> expected, "Found" -> found|>]
+
+errToFailure[parseErr[pos_, expected_, found_]] := makeFailure[pos, expected, found]
 
 safeChar[input_, pos_] :=
     If[ pos > StringLength[input],
@@ -859,199 +891,657 @@ charPatName[s_String] := s
 charPatName[other_] := ToString[other, InputForm]
 
 
-(* === ParserCompile ===
-   For a "regular-grammar" subset (Literal, Character, Sequence, Choice,
-   Optional, Many, Some - the parsers whose results are substrings of
-   the input), generate a single fused Function via FunctionCompile.
-   The compiled function returns the new position (or -1 on failure);
-   the Parse driver checks the return value and reconstructs the result
-   by re-walking the tree interpretively (cheap when the match is
-   known to succeed).
+(* === ParserCompile : value-threading codegen ===
+   Lowers a ParserCombinator tree to a SINGLE FunctionCompile'd function
 
-   For trees that include Action / Capture / Recursive / Lookahead /
-   NotFollowedBy / Try / SepBy / ChainLeft / ChainRight or any unknown
-   node, the stub Function fallback runs the interpreter - same shape
-   the user gets back, just no speedup. *)
+       (cgInput :: "String", cgPos :: "MachineInteger") -> {finalPos, value}
 
-ParserCompile[pc_ParserCombinator, OptionsPattern[]] :=
-    If[ compilableQ[pc],
-        compileParser[pc],
-        ParserCombinator[
-            pc[[1]], pc[[2]],
-            Append[
-                pc[[3]],
-                "Code" -> Function[{input, pos},
-                    interpretCompiledShim[pc, input, pos]
+   threading the position natively (MachineInteger, the fast lexing path)
+   and the *result* as an "InertExpression" built once per matched node
+   via KernelFunction callbacks. finalPos = -1 marks failure; on failure
+   the shim re-walks the interpreter once to recover the exact ParseError
+   (failure is the rare path). Recursion (ParseRecursive) and any node the
+   codegen does not handle fall back to the interpreter, as before.
+
+   This replaces the earlier recognition-only codegen (which returned a
+   bare position and rebuilt the result interpretively even on success);
+   the compiled function now returns the actual result directly. *)
+
+(* kernel-side inert value builders, invoked from compiled code via
+   Typed[KernelFunction[..]]. They run in the kernel, so an action f can
+   be ANY Wolfram function - hence action-bearing grammars now compile. *)
+cgStr = Identity;
+cgListN = (List[##] &);
+cgAppend = Append;
+cgMissing = (Missing["NoMatch"] &);
+cgNull = (Null &);
+cgAction = Function[{f, v}, If[ListQ[v], f @@ v, f[v]]];
+cgApplyOp = Function[{op, a, b}, op[a, b]];
+cgChainRight = Function[{vals, ops},
+    Fold[Function[{acc, idx}, ops[[idx]][vals[[idx]], acc]], Last[vals], Reverse[Range[Length[ops]]]]];
+
+cgInertT = "InertExpression";
+cgKF[f_, at_List, ret_] := Typed[KernelFunction[f], at -> ret]
+cgNullInert[] := cgKF[cgNull, {}, cgInertT][]
+
+(* held-AST kit: conditions with SameQ and all Set/If/While/CompoundExpr
+   must be built held (they would evaluate eagerly against the value-free
+   data symbols cgInput/cgPP/cgOK and the fresh cgV/cgI locals). Inert
+   value expressions are safe to build eagerly and injected via With. *)
+cgIf3[Hold[c_], Hold[t_], Hold[e_]] := Hold[If[c, t, e]]
+cgIf2[Hold[c_], Hold[t_]] := Hold[If[c, t]]
+cgWhile[Hold[c_], Hold[b_]] := Hold[While[c, b]]
+cgSeq[h_Hold] := h
+cgSeq[Hold[a___], Hold[b___]] := Hold[a; b]
+cgSeq[h1_, h2_, hs__] := cgSeq[cgSeq[h1, h2], hs]
+cgSet[sym_, rhs_] := With[{s = sym, r = rhs}, Hold[s = r]]
+cgCond[c_] := With[{cc = c}, Hold[cc]]
+cgOkk := Hold[cgOK]
+
+cgCtr = 0; cgVsyms = {}; cgIsyms = {};
+cgFreshV[] := With[{s = Symbol["Wolfram`Parser`Private`cgV" <> ToString[cgCtr++]]}, AppendTo[cgVsyms, s]; s]
+cgFreshI[] := With[{s = Symbol["Wolfram`Parser`Private`cgI" <> ToString[cgCtr++]]}, AppendTo[cgIsyms, s]; s]
+
+(* cgEmit[pc] -> {Hold[statements], valueSym}. Throws cgFail[node] on a
+   node the codegen does not handle (e.g. Recursive), or cgInfloop[node]
+   for a Many/Some over a nullable parser. *)
+cgEmit[other_] := Throw[other, cgFail]
+
+cgEmit[ParserCombinator["Literal", s_String, _]] := With[{v = cgFreshV[], len = StringLength[s], lit = s},
+    {cgIf3[
+        Hold[cgPP + len - 1 <= StringLength[cgInput] && StringTake[cgInput, {cgPP, cgPP + len - 1}] === lit],
+        cgSeq[cgSet[v, cgKF[cgStr, {"String"}, cgInertT][lit]], cgSet[cgPP, cgPP + len]],
+        cgSet[cgOK, False]], v}]
+
+cgEmit[ParserCombinator["Character", pat_, _]] := With[{v = cgFreshV[]},
+    {cgIf3[
+        cgCharCond[pat],
+        cgSeq[cgSet[v, cgKF[cgStr, {"String"}, cgInertT][StringTake[cgInput, {cgPP, cgPP}]]], cgSet[cgPP, cgPP + 1]],
+        cgSet[cgOK, False]], v}]
+
+(* native tests (DigitQ, ToCharacterCode ranges) inline to fast code; any
+   other class falls back to a KernelFunction wrapping the interpreter's
+   own charMatchesQ, so the compiled test matches Parse exactly. *)
+cgCharCond[pat_] := With[{t = cgCharTest[pat]}, Hold[cgPP <= StringLength[cgInput] && t]]
+cgCharTest[pat_] := With[{nt = cgNativeCharTest[pat]},
+    If[nt === $cgNoNative,
+        cgKF[(charMatchesQ[#, pat] &), {"String"}, "Boolean"][StringTake[cgInput, {cgPP, cgPP}]],
+        nt]]
+cgNativeCharTest[DigitCharacter] := DigitQ[StringTake[cgInput, {cgPP, cgPP}]]
+cgNativeCharTest[s_String] /; StringLength[s] === 1 :=
+    With[{cc = First @ ToCharacterCode[s]}, First[ToCharacterCode[StringTake[cgInput, {cgPP, cgPP}]]] == cc]
+cgNativeCharTest[HoldPattern[CharacterRange[a_String, b_String]]] :=
+    With[{lo = First @ ToCharacterCode[a], hi = First @ ToCharacterCode[b]},
+        lo <= First[ToCharacterCode[StringTake[cgInput, {cgPP, cgPP}]]] <= hi]
+cgNativeCharTest[Verbatim[Alternatives][ps__]] :=
+    With[{sub = cgNativeCharTest /@ {ps}}, If[FreeQ[sub, $cgNoNative], Fold[Or, sub], $cgNoNative]]
+cgNativeCharTest[_] := $cgNoNative
+
+cgEmit[ParserCombinator["Succeed", val_, _]] := With[{v = cgFreshV[]},
+    {cgSet[v, cgKF[(val &), {}, cgInertT][]], v}]
+
+cgEmit[ParserCombinator["Fail", _, _]] := With[{v = cgFreshV[]},
+    {cgSet[cgOK, False], v}]
+
+cgEmit[ParserCombinator["Sequence", pcs_List, _]] := Module[{parts = cgEmit /@ pcs, vs, v = cgFreshV[], n = Length[pcs]},
+    vs = parts[[All, 2]];
+    {cgSeq[
+        Fold[Function[{acc, part}, cgSeq[acc, cgIf2[cgOkk, part[[1]]]]],
+            First[parts][[1]], Rest[parts]],
+        cgIf2[cgOkk, cgSet[v, cgKF[cgListN, ConstantArray[cgInertT, n], cgInertT] @@ vs]]], v}]
+
+cgEmit[ParserCombinator["Choice", pcs_List, _]] := Module[{parts = cgEmit /@ pcs, v = cgFreshV[], st = cgFreshI[]},
+    {cgSeq[
+        cgSet[st, cgPP],
+        Fold[
+            Function[{elseAcc, part},
+                cgSeq[cgSet[cgOK, True], cgSet[cgPP, st], part[[1]],
+                    cgIf3[cgOkk, cgSet[v, part[[2]]], elseAcc]]],
+            cgSet[cgOK, False],
+            Reverse[parts]]], v}]
+
+cgEmit[ParserCombinator["ChoiceLongest", pcs_List, _]] := Module[
+    {parts = cgEmit /@ pcs, v = cgFreshV[], st = cgFreshI[], best = cgFreshI[], any = cgFreshI[]},
+    {cgSeq[
+        cgSet[st, cgPP], cgSet[best, -1], cgSet[any, 0],
+        cgSeq @@ Map[
+            Function[part,
+                cgSeq[cgSet[cgPP, st], cgSet[cgOK, True], part[[1]],
+                    cgIf2[cgCond[cgOK && cgPP > best],
+                        cgSeq[cgSet[best, cgPP], cgSet[v, part[[2]]], cgSet[any, 1]]]]],
+            parts],
+        cgIf3[cgCond[any > 0],
+            cgSeq[cgSet[cgOK, True], cgSet[cgPP, best]],
+            cgSet[cgOK, False]]], v}]
+
+cgEmit[ParserCombinator["Optional", p_, _]] := Module[{part = cgEmit[p], v = cgFreshV[], st = cgFreshI[]},
+    {cgSeq[cgSet[st, cgPP], part[[1]],
+        cgIf3[cgOkk, cgSet[v, part[[2]]],
+            cgSeq[cgSet[cgOK, True], cgSet[cgPP, st], cgSet[v, cgKF[cgMissing, {}, cgInertT][]]]]], v}]
+
+cgEmit[ParserCombinator["Many", p_, _]] := (cgInfloopCheck["Many", p];
+    Module[{part = cgEmit[p], v = cgFreshV[], st = cgFreshI[], loop = cgFreshI[]},
+    {cgSeq[
+        cgSet[v, cgKF[cgListN, {}, cgInertT][]],
+        cgSet[loop, 1],
+        cgWhile[cgCond[loop > 0],
+            cgSeq[cgSet[st, cgPP], cgSet[cgOK, True], part[[1]],
+                cgIf3[cgCond[cgOK && cgPP > st],
+                    cgSet[v, cgKF[cgAppend, {cgInertT, cgInertT}, cgInertT][v, part[[2]]]],
+                    cgSeq[cgSet[cgOK, True], cgSet[cgPP, st], cgSet[loop, 0]]]]]], v}])
+
+cgEmit[ParserCombinator["Some", p_, _]] := (cgInfloopCheck["Some", p];
+    Module[{part = cgEmit[p], v = cgFreshV[], st = cgFreshI[], loop = cgFreshI[], cnt = cgFreshI[]},
+    {cgSeq[
+        cgSet[v, cgKF[cgListN, {}, cgInertT][]],
+        cgSet[loop, 1], cgSet[cnt, 0],
+        cgWhile[cgCond[loop > 0],
+            cgSeq[cgSet[st, cgPP], cgSet[cgOK, True], part[[1]],
+                cgIf3[cgCond[cgOK && cgPP > st],
+                    cgSeq[cgSet[v, cgKF[cgAppend, {cgInertT, cgInertT}, cgInertT][v, part[[2]]]], cgSet[cnt, cnt + 1]],
+                    cgSeq[cgSet[cgOK, True], cgSet[cgPP, st], cgSet[loop, 0]]]]],
+        cgSet[cgOK, cnt > 0]], v}])
+
+cgEmit[ParserCombinator["Between", {o_, p_, c_}, _]] := Module[{po = cgEmit[o], pm = cgEmit[p], pc2 = cgEmit[c], v = cgFreshV[]},
+    {cgSeq[po[[1]], cgIf2[cgOkk, pm[[1]]], cgIf2[cgOkk, pc2[[1]]],
+        cgIf2[cgOkk, cgSet[v, pm[[2]]]]], v}]
+
+cgEmit[ParserCombinator["Action", {p_, f_}, _]] := Module[{part = cgEmit[p], v = cgFreshV[]},
+    {cgSeq[part[[1]],
+        cgIf2[cgOkk, cgSet[v, cgKF[cgAction, {cgInertT, cgInertT}, cgInertT][cgKF[(f &), {}, cgInertT][], part[[2]]]]]], v}]
+
+cgEmit[ParserCombinator["Lookahead", p_, _]] := Module[{part = cgEmit[p], v = cgFreshV[], st = cgFreshI[]},
+    {cgSeq[cgSet[st, cgPP], part[[1]],
+        cgIf2[cgOkk, cgSeq[cgSet[cgPP, st], cgSet[v, cgKF[cgNull, {}, cgInertT][]]]]], v}]
+
+cgEmit[ParserCombinator["NotFollowedBy", p_, _]] := Module[{part = cgEmit[p], v = cgFreshV[], st = cgFreshI[]},
+    {cgSeq[cgSet[st, cgPP], part[[1]], cgSet[cgPP, st],
+        cgIf3[cgOkk, cgSet[cgOK, False], cgSeq[cgSet[cgOK, True], cgSet[v, cgKF[cgNull, {}, cgInertT][]]]]], v}]
+
+cgEmit[ParserCombinator["Try", p_, _]] := cgEmit[p]
+
+(* sepBy / sepBy1 - result is the list of p-results; a trailing separator
+   is not consumed (rolled back to the last fully-matched p). *)
+cgSepLoop[firstPart_, sepPart_, loopPart_, v_, cur_, loop_] :=
+    cgSeq[
+        cgSet[v, cgKF[cgListN, {}, cgInertT][]],
+        cgSet[v, cgKF[cgAppend, {cgInertT, cgInertT}, cgInertT][v, firstPart[[2]]]],
+        cgSet[cur, cgPP], cgSet[loop, 1],
+        cgWhile[cgCond[loop > 0],
+            cgSeq[cgSet[cgPP, cur], cgSet[cgOK, True], sepPart[[1]],
+                cgIf3[cgOkk,
+                    cgSeq[loopPart[[1]],
+                        cgIf3[cgCond[cgOK && cgPP > cur],
+                            cgSeq[cgSet[v, cgKF[cgAppend, {cgInertT, cgInertT}, cgInertT][v, loopPart[[2]]]], cgSet[cur, cgPP]],
+                            cgSet[loop, 0]]],
+                    cgSet[loop, 0]]]],
+        cgSet[cgOK, True], cgSet[cgPP, cur]]
+
+cgEmit[ParserCombinator["SepBy", {p_, sep_}, _]] := Module[
+    {fp = cgEmit[p], sp = cgEmit[sep], lp = cgEmit[p], v = cgFreshV[], st = cgFreshI[], cur = cgFreshI[], loop = cgFreshI[]},
+    {cgSeq[
+        cgSet[st, cgPP], cgSet[cgOK, True], fp[[1]],
+        cgIf3[cgOkk,
+            cgSepLoop[fp, sp, lp, v, cur, loop],
+            cgSeq[cgSet[cgOK, True], cgSet[cgPP, st], cgSet[v, cgKF[cgListN, {}, cgInertT][]]]]], v}]
+
+cgEmit[ParserCombinator["SepBy1", {p_, sep_}, _]] := Module[
+    {fp = cgEmit[p], sp = cgEmit[sep], lp = cgEmit[p], v = cgFreshV[], cur = cgFreshI[], loop = cgFreshI[]},
+    {cgSeq[
+        cgSet[cgOK, True], fp[[1]],
+        cgIf2[cgOkk, cgSepLoop[fp, sp, lp, v, cur, loop]]], v}]
+
+cgEmit[ParserCombinator["ChainLeft", {p_, op_}, _]] := Module[
+    {fp = cgEmit[p], opp = cgEmit[op], np = cgEmit[p], v = cgFreshV[], cur = cgFreshI[], loop = cgFreshI[]},
+    {cgSeq[
+        cgSet[cgOK, True], fp[[1]],
+        cgIf2[cgOkk,
+            cgSeq[cgSet[v, fp[[2]]], cgSet[cur, cgPP], cgSet[loop, 1],
+                cgWhile[cgCond[loop > 0],
+                    cgSeq[cgSet[cgPP, cur], cgSet[cgOK, True], opp[[1]],
+                        cgIf3[cgOkk,
+                            cgSeq[np[[1]],
+                                cgIf3[cgOkk,
+                                    cgSeq[cgSet[v, cgKF[cgApplyOp, {cgInertT, cgInertT, cgInertT}, cgInertT][opp[[2]], v, np[[2]]]], cgSet[cur, cgPP]],
+                                    cgSet[loop, 0]]],
+                            cgSet[loop, 0]]]],
+                cgSet[cgOK, True], cgSet[cgPP, cur]]]], v}]
+
+cgEmit[ParserCombinator["ChainRight", {p_, op_}, _]] := Module[
+    {fp = cgEmit[p], opp = cgEmit[op], np = cgEmit[p], v = cgFreshV[], vals = cgFreshV[], ops = cgFreshV[], cur = cgFreshI[], loop = cgFreshI[]},
+    {cgSeq[
+        cgSet[cgOK, True], fp[[1]],
+        cgIf2[cgOkk,
+            cgSeq[
+                cgSet[vals, cgKF[cgListN, {}, cgInertT][]], cgSet[ops, cgKF[cgListN, {}, cgInertT][]],
+                cgSet[vals, cgKF[cgAppend, {cgInertT, cgInertT}, cgInertT][vals, fp[[2]]]],
+                cgSet[cur, cgPP], cgSet[loop, 1],
+                cgWhile[cgCond[loop > 0],
+                    cgSeq[cgSet[cgPP, cur], cgSet[cgOK, True], opp[[1]],
+                        cgIf3[cgOkk,
+                            cgSeq[np[[1]],
+                                cgIf3[cgCond[cgOK && cgPP > cur],
+                                    cgSeq[
+                                        cgSet[ops, cgKF[cgAppend, {cgInertT, cgInertT}, cgInertT][ops, opp[[2]]]],
+                                        cgSet[vals, cgKF[cgAppend, {cgInertT, cgInertT}, cgInertT][vals, np[[2]]]],
+                                        cgSet[cur, cgPP]],
+                                    cgSet[loop, 0]]],
+                            cgSet[loop, 0]]]],
+                cgSet[v, cgKF[cgChainRight, {cgInertT, cgInertT}, cgInertT][vals, ops]],
+                cgSet[cgOK, True], cgSet[cgPP, cur]]]], v}]
+
+(* nullable check for infloop diagnosis *)
+cgNullableQ[ParserCombinator["Succeed", _, _]] := True
+cgNullableQ[ParserCombinator["Fail", _, _]] := False
+cgNullableQ[ParserCombinator["Literal", s_String, _]] := s === ""
+cgNullableQ[ParserCombinator["Character", _, _]] := False
+cgNullableQ[ParserCombinator["Optional" | "Many" | "Lookahead" | "NotFollowedBy" | "SepBy", _, _]] := True
+cgNullableQ[ParserCombinator["Some" | "Try" | "Action" | "SepBy1" | "ChainLeft" | "ChainRight", {p_, ___}, _]] := cgNullableQ[p]
+cgNullableQ[ParserCombinator["Some" | "Try" | "Action", p : ParserCombinator[__], _]] := cgNullableQ[p]
+cgNullableQ[ParserCombinator["Sequence", pcs_List, _]] := AllTrue[pcs, cgNullableQ]
+cgNullableQ[ParserCombinator["Choice" | "ChoiceLongest", pcs_List, _]] := AnyTrue[pcs, cgNullableQ]
+cgNullableQ[ParserCombinator["Between", {o_, p_, c_}, _]] := AllTrue[{o, p, c}, cgNullableQ]
+cgNullableQ[_] := False
+
+cgInfloopCheck[which_, p_] := If[cgNullableQ[p], Throw[ParserCombinator[which, p, <||>], cgInfloop]]
+
+(* driver: assemble the held Function and feed to FunctionCompile *)
+(* Build Hold[{cgPP=cgPos, cgOK=True, v=ni..., i=0...}] in one O(n) pass.
+   (A per-symbol ReplaceAll into a growing Vars[...] is O(n^2) and chokes
+   on large grammars - the inlined non-terminal bodies run to tens of
+   thousands of locals.) *)
+cgMkVarBlock[vsyms_List, isyms_List] := With[{ni = cgNullInert[]},
+    Module[{vh, ih, allh},
+        vh = (With[{s = #}, Hold[s = ni]] &) /@ vsyms;
+        ih = (With[{s = #}, Hold[s = 0]] &) /@ isyms;
+        allh = Join[{Hold[cgPP = cgPos], Hold[cgOK = True]}, vh, ih];
+        Replace[Flatten[Hold @@ allh, 1, Hold], Hold[xs___] :> Hold[{xs}]]]]
+
+cgMkModule[Hold[vars_], Hold[body_]] := Hold[Module[vars, body]]
+cgMkFunction[Hold[mb_]] := Hold[Function[{Typed[cgInput, "String"], Typed[cgPos, "MachineInteger"]}, mb]]
+
+(* Quiet wraps the whole assembly: building char-class tests and length
+   guards evaluates StringTake/StringLength/DigitQ/CharacterRange over the
+   value-free codegen symbols cgInput/cgPP, which emit harmless ::strse /
+   ::string / ::argtype messages. No user code runs here (actions are
+   wrapped in KernelFunction, not executed), so suppressing is safe. *)
+cgAssemble[pc_] := Quiet @ Module[{er, stmts, rootV, bodyHold, retH, varBlk},
+    cgCtr = 0; cgVsyms = {}; cgIsyms = {};
+    er = cgEmit[pc];
+    stmts = er[[1]]; rootV = er[[2]];
+    retH = With[{rv = rootV, ni = cgNullInert[]}, Hold[If[cgOK, {cgPP, rv}, {-1, ni}]]];
+    bodyHold = cgSeq[stmts, retH];
+    varBlk = cgMkVarBlock[cgVsyms, cgIsyms];
+    ReleaseHold[cgMkFunction[cgMkModule[varBlk, bodyHold]]]]
+
+(* shim bridging the compiled {finalPos, value} to the parseOk/parseErr
+   internal contract that interpretDispatch's "Code" path expects. The
+   stripped tree is baked into the closure so the failure re-walk works
+   even after the compiled parser is serialized and reloaded in a fresh
+   kernel; if that re-walk can't run (e.g. a recursive grammar whose
+   ParseRecursive symbol bindings are absent after reload) it degrades to
+   a generic-but-valid ParseError rather than leaking a malformed result. *)
+cgShim[pc_, cf_CompiledCodeFunction] :=
+    With[{stripped = ParserCombinator[pc[[1]], pc[[2]], KeyDrop[pc[[3]], "Code"]],
+          recursiveQ = ! FreeQ[pc, ParserCombinator["Recursive", _, _]]},
+        Function[{input, pos},
+            Module[{r = cf[input, pos]},
+                Which[
+                    r[[1]] >= 0, parseOk[r[[2]], r[[1]]],
+                    (* non-recursive: a clean interpreter re-walk recovers
+                       the exact ParseError (works in-session and after
+                       serialization - the stripped tree is self-contained). *)
+                    ! recursiveQ, interpret[stripped, input, pos],
+                    (* recursive: the re-walk would need ParseRecursive
+                       symbol bindings that may be gone after a reload, so
+                       report a self-contained generic failure instead. *)
+                    True, parseErr[pos, "<parse failed>", safeChar[input, pos]]
                 ]
             ]
         ]
     ]
 
-(* Predicate: is this combinator tree in the *recognition* subset that
-   the current string-codegen lowers to a position-advancing
-   CompiledCodeFunction? This is the v0.3 fast path: terminals,
-   sequence, choice, repetition, between - all of whose results are
-   substrings of the input.
+(* === Recursive grammars ===
+   A grammar that uses ParseRecursive can't be lowered to a single flat
+   function. Instead each non-terminal becomes a typed FunctionDeclaration
+   returning an inert parse-state cgOkState[value, newPos] / cgFailState,
+   and a ParseRecursive[s] reference compiles to a call to that
+   declaration; the whole set goes through FunctionCompile together via
+   mutual recursion. The root function still returns the {finalPos, value}
+   tuple the shim expects.
 
-   Action / Capture are NOT in this set yet, but NOT because the
-   compiler can't run their callbacks: a Wolfram action *can* go
-   through FunctionCompile via Typed[KernelFunction[f], {types} -> ret]
-   (see Tests/compile-feasibility, which compiles ParseAction end to
-   end). Threading those callback results requires every parser to
-   return an "InertExpression" value rather than a bare position - a
-   uniform-result-type redesign of the codegen that is the v0.4 work.
-   Until then, Action-bearing grammars run interpretively. *)
-compilableQ[ParserCombinator["Literal", _String, _]] := True
-compilableQ[ParserCombinator["Character", pat_, _]] := compilableCharPatQ[pat]
-compilableQ[ParserCombinator["Sequence", pcs_List, _]] := AllTrue[pcs, compilableQ]
-compilableQ[ParserCombinator["Choice", pcs_List, _]] := AllTrue[pcs, compilableQ]
-compilableQ[ParserCombinator["Optional", p_, _]] := compilableQ[p]
-compilableQ[ParserCombinator["Many", p_, _]] := compilableQ[p]
-compilableQ[ParserCombinator["Some", p_, _]] := compilableQ[p]
-compilableQ[ParserCombinator["Between", {open_, p_, close_}, _]] :=
-    compilableQ[open] && compilableQ[p] && compilableQ[close]
-compilableQ[_] := False
+   NOTE: this path is correct but the Wolfram Compiler is slow on it -
+   even a one-non-terminal grammar takes tens of seconds, and a grammar
+   whose non-recursive references inline into one huge function (LaTeX)
+   can exceed any practical budget. It is therefore invoked only on
+   explicit "Recursive" -> True, and the result is meant to be compiled
+   once and serialized (Export/Import of the returned ParserCombinator). *)
 
-compilableCharPatQ[DigitCharacter | LetterCharacter | WhitespaceCharacter |
-    WordCharacter | HexadecimalCharacter | PunctuationCharacter] := True
-compilableCharPatQ[_String] := True
-compilableCharPatQ[HoldPattern[CharacterRange[_String, _String]]] := True
-compilableCharPatQ[Alternatives[args__]] := AllTrue[{args}, compilableCharPatQ]
-compilableCharPatQ[_] := False
+cgMkOk = Function[{v, p}, cgOkState[v, p]];
+cgMkFail = (cgFailState &);
+cgPosOf = Function[st, If[Head[st] === cgOkState, st[[2]], -1]];
+cgValOf = Function[st, If[Head[st] === cgOkState, st[[1]], Null]];
 
-(* === Codegen (string-based) ===
-   Each emitCheck returns a string of WL source code that, when read,
-   evaluates to a MachineInteger (the new position, or -1 on failure).
-   The source uses bare symbols `input` and `pos` for the (yet-
-   unbound) Function parameters; compileParser wraps the assembled
-   source in a typed Function and feeds it through FunctionCompile.
+cgEmit[ParserCombinator["Recursive", h : Hold[_Symbol], _]] :=
+    If[KeyExistsQ[cgNtNameMap, h],
+        With[{v = cgFreshV[], stTmp = cgFreshV[], fn = cgNtNameMap[h]},
+            {cgSeq[
+                cgSet[stTmp, fn[cgInput, cgPP]],
+                cgSet[cgPP, cgKF[cgPosOf, {cgInertT}, "MachineInteger"][stTmp]],
+                cgSet[cgOK, cgPP >= 0],
+                cgSet[v, cgKF[cgValOf, {cgInertT}, cgInertT][stTmp]]], v}],
+        Throw[ParserCombinator["Recursive", h, <||>], cgFail]]
+cgNtNameMap = <||>;
 
-   String codegen is verbose but avoids any of the held-expression
-   evaluation pitfalls of expression-based composition - each combinator
-   just splices subparser source-strings together. *)
+(* collect all Hold[sym] reachable through Recursive nodes *)
+cgCollectNts[rootPc_] := Module[{seen = {}, queue, cur, found},
+    found[x_] := Cases[x, ParserCombinator["Recursive", hh_Hold, _] :> hh, Infinity];
+    queue = found[rootPc];
+    While[queue =!= {},
+        cur = First[queue]; queue = Rest[queue];
+        If[! MemberQ[seen, cur],
+            AppendTo[seen, cur];
+            queue = Join[queue, found[ReleaseHold[cur]]]]];
+    seen]
 
-emitCheck[ParserCombinator["Literal", s_String, _]] :=
-    With[{len = StringLength[s], lit = ToString[s, InputForm]},
-        "If[ StringLength[input] - pos + 1 >= " <> ToString[len] <>
-        " && StringTake[input, {pos, pos + " <> ToString[len - 1] <> "}] === " <> lit <>
-        ", pos + " <> ToString[len] <> ", -1]"
-    ]
+(* one function body; asTuple=True for the root (returns {finalPos,value}),
+   False for a non-terminal (returns inert state). Snapshots the fresh-var
+   lists so each compiled function gets its own locals. *)
+cgEmitFnBody[pc_, asTuple_] := Module[{v0 = Length[cgVsyms], i0 = Length[cgIsyms], er, stmts, rootV, retH, varBlk},
+    er = cgEmit[pc];
+    stmts = er[[1]]; rootV = er[[2]];
+    retH = If[asTuple,
+        With[{rv = rootV, ni = cgNullInert[]}, Hold[If[cgOK, {cgPP, rv}, {-1, ni}]]],
+        With[{rv = rootV, mkOk = cgKF[cgMkOk, {cgInertT, "MachineInteger"}, cgInertT],
+              mkFail = cgKF[cgMkFail, {}, cgInertT]},
+            Hold[If[cgOK, mkOk[rv, cgPP], mkFail[]]]]];
+    varBlk = cgMkVarBlock[cgVsyms[[v0 + 1 ;;]], cgIsyms[[i0 + 1 ;;]]];
+    cgMkModule[varBlk, cgSeq[stmts, retH]]]
 
-emitCheck[ParserCombinator["Character", pat_, _]] :=
-    "If[ pos <= StringLength[input] && (" <> emitCharTest[pat] <>
-    "), pos + 1, -1]"
+cgMkDecl[Hold[fnsym_], Hold[mb_]] :=
+    Hold[FunctionDeclaration[fnsym, Typed[{"String", "MachineInteger"} -> "InertExpression"]@
+        Function[{Typed[cgInput, "String"], Typed[cgPos, "MachineInteger"]}, mb]]]
 
-emitCharTest[DigitCharacter] := "DigitQ[StringTake[input, {pos, pos}]]"
-emitCharTest[LetterCharacter] := "LetterQ[StringTake[input, {pos, pos}]]"
-emitCharTest[WhitespaceCharacter] :=
-    "StringMatchQ[StringTake[input, {pos, pos}], WhitespaceCharacter]"
-emitCharTest[WordCharacter] :=
-    "StringMatchQ[StringTake[input, {pos, pos}], WordCharacter]"
-emitCharTest[HexadecimalCharacter] :=
-    "StringMatchQ[StringTake[input, {pos, pos}], HexadecimalCharacter]"
-emitCharTest[PunctuationCharacter] :=
-    "StringMatchQ[StringTake[input, {pos, pos}], PunctuationCharacter]"
-emitCharTest[s_String] /; StringLength[s] === 1 :=
-    "StringTake[input, {pos, pos}] === " <> ToString[s, InputForm]
-emitCharTest[HoldPattern[CharacterRange[a_String, b_String]]] :=
-    "MemberQ[" <> ToString[CharacterRange[a, b], InputForm] <>
-    ", StringTake[input, {pos, pos}]]"
-emitCharTest[Verbatim[Alternatives][args__]] :=
-    "(" <> StringRiffle[emitCharTest /@ {args}, " || "] <> ")"
+cgJoinDecls[declHolds_List, Hold[rootFn_]] :=
+    With[{dd = declHolds /. Hold[d_] :> d, rf = rootFn}, Hold[{dd, rf}]]
 
-emitCheck[ParserCombinator["Sequence", pcs_List, _]] :=
-    Fold[
-        Function[{accSrc, nextSrc},
-            "Block[{p2 = " <> accSrc <> "}, If[p2 < 0, -1, Block[{pos = p2}, " <>
-                nextSrc <> "]]]"
-        ],
-        emitCheck[First[pcs]],
-        emitCheck /@ Rest[pcs]
-    ]
+cgAssembleRec[rootPc_] := Quiet @ Module[{nts, declHolds, rootFnHold},
+    cgCtr = 0; cgVsyms = {}; cgIsyms = {};
+    nts = cgCollectNts[rootPc];
+    cgNtNameMap = Association @ MapIndexed[
+        #1 -> Symbol["Wolfram`Parser`Private`cgNT" <> ToString[#2[[1]]]] &, nts];
+    declHolds = (With[{fnsym = cgNtNameMap[#], body = cgEmitFnBody[ReleaseHold[#], False]},
+        cgMkDecl[Hold[fnsym], body]] &) /@ nts;
+    rootFnHold = cgMkFunction[cgEmitFnBody[rootPc, True]];
+    ReleaseHold[cgJoinDecls[declHolds, rootFnHold]]]
 
-emitCheck[ParserCombinator["Choice", pcs_List, _]] :=
-    Fold[
-        Function[{accSrc, nextSrc},
-            "Block[{r = " <> accSrc <> "}, If[r >= 0, r, " <> nextSrc <> "]]"
-        ],
-        emitCheck[First[pcs]],
-        emitCheck /@ Rest[pcs]
-    ]
 
-emitCheck[ParserCombinator["Optional", p_, _]] :=
-    "Block[{r = " <> emitCheck[p] <> "}, If[r >= 0, r, pos]]"
+(* ============================================================
+   PEG-VM backend ("Method" -> "PEGVM")
+   ------------------------------------------------------------
+   The Wolfram Compiler is too slow to FunctionCompile a large
+   recursive grammar (LaTeX is one ~24k-node function) and old Compile
+   cannot compile recursion natively. The PEG-VM sidesteps both: a single
+   LPEG-style parsing machine is compiled ONCE (native, recursion via an
+   explicit stack), and each grammar is lowered to an integer instruction
+   table - DATA, not code - so any grammar of any size "compiles" in plain
+   WL in milliseconds-to-seconds and runs on the one native VM. Captures
+   record (nodeId, position) events during the native run; a WL post-pass
+   rebuilds the exact result (same actions as the interpreter).
 
-emitCheck[ParserCombinator["Many", p_, _]] :=
-    With[{inner = emitCheck[p]},
-        "Module[{cur = pos, prev = pos - 1, r}, " <>
-            "While[True, r = Block[{pos = cur}, " <> inner <> "]; " <>
-                "If[r < 0 || r <= prev, Break[]]; prev = cur; cur = r]; cur]"
-    ]
+   Opcodes (3 ints/instruction, ip steps by 3):
+     1 Char a | 2 Any | 3 Range a b | 17 Set a(classRow)  - terminals
+     4 Jump | 5 Choice | 6 Call | 7 Return | 8 Commit
+     13 PartialCommit | 14 BackCommit | 15 FailTwice | 9 Fail | 10 End
+     18 OpenCap a(nodeId) | 19 CloseCap
+   ============================================================ *)
 
-emitCheck[ParserCombinator["Some", p_, _]] :=
-    With[{inner = emitCheck[p]},
-        "Module[{r1 = " <> inner <> ", cur, prev, r}, " <>
-            "If[r1 < 0, -1, cur = r1; prev = pos; " <>
-                "While[True, r = Block[{pos = cur}, " <> inner <> "]; " <>
-                    "If[r < 0 || r <= prev, Break[]]; prev = cur; cur = r]; cur]]"
-    ]
+(* the VM, compiled once and memoised on first use *)
+pegMachine := pegMachine = Compile[
+    {{prog, _Integer, 1}, {codes, _Integer, 1}, {classes, _Integer, 2},
+     {start, _Integer}, {stackMax, _Integer}, {capMax, _Integer}},
+    Module[{ip = 1, sp = start, n = Length[codes], top = 0, op, a, fail, result = -1, halt = 0, c,
+            stkIp = Table[0, {stackMax}], stkSp = Table[0, {stackMax}], stkCap = Table[0, {stackMax}],
+            capTop = 0, capTag = Table[0, {capMax}], capSp = Table[0, {capMax}],
+            lgTop = 0, lgSp = Table[0, {stackMax}], lgBest = Table[0, {stackMax}],
+            lgAlt = Table[0, {stackMax}], lgCap = Table[0, {stackMax}]},
+        While[halt == 0,
+            op = prog[[ip]]; a = prog[[ip + 1]]; fail = 0;
+            Which[
+                (* longest-match (ChoiceLongest): 20 LStart, 21 LMeasure altIdx,
+                   22 LDispatch nAlts (followed by an inline address table).
+                   capTop is saved/restored because measurement re-enters
+                   capture-emitting non-terminal blocks via Call. *)
+                op == 20, lgTop++; lgSp[[lgTop]] = sp; lgCap[[lgTop]] = capTop; lgBest[[lgTop]] = -1; lgAlt[[lgTop]] = -1; ip += 3,
+                op == 21, If[sp > lgBest[[lgTop]], lgBest[[lgTop]] = sp; lgAlt[[lgTop]] = a]; sp = lgSp[[lgTop]]; capTop = lgCap[[lgTop]]; ip += 3,
+                op == 22, If[lgBest[[lgTop]] < 0, lgTop--; fail = 1, sp = lgSp[[lgTop]]; capTop = lgCap[[lgTop]]; ip = prog[[ip + 3 + 3*lgAlt[[lgTop]] + 1]]; lgTop--],
+                op == 1, If[sp <= n && codes[[sp]] == a, sp++; ip += 3, fail = 1],
+                op == 3, If[sp <= n && a <= codes[[sp]] <= prog[[ip + 2]], sp++; ip += 3, fail = 1],
+                op == 2, If[sp <= n, sp++; ip += 3, fail = 1],
+                op == 17, If[sp <= n && (c = codes[[sp]]) <= 128 && classes[[a, c]] == 1, sp++; ip += 3, fail = 1],
+                op == 4, ip = a,
+                op == 5, top++; stkIp[[top]] = a; stkSp[[top]] = sp; stkCap[[top]] = capTop; ip += 3,
+                op == 6, top++; stkIp[[top]] = ip + 3; stkSp[[top]] = -1; stkCap[[top]] = capTop; ip = a,
+                op == 7, ip = stkIp[[top]]; top--,
+                op == 8, top--; ip = a,
+                op == 13, stkSp[[top]] = sp; stkCap[[top]] = capTop; ip = a,
+                op == 14, sp = stkSp[[top]]; capTop = stkCap[[top]]; top--; ip = a,
+                op == 15, top--; fail = 1,
+                op == 18, capTop++; capTag[[capTop]] = a; capSp[[capTop]] = sp; ip += 3,
+                op == 19, capTop++; capTag[[capTop]] = 0; capSp[[capTop]] = sp; ip += 3,
+                op == 9, fail = 1,
+                op == 10, result = sp; halt = 1,
+                True, halt = 1
+            ];
+            If[fail == 1,
+                While[top > 0 && stkSp[[top]] == -1, top--];
+                If[top == 0, result = -1; halt = 1,
+                    sp = stkSp[[top]]; ip = stkIp[[top]]; capTop = stkCap[[top]]; top--]]
+        ];
+        Join[{result, capTop}, Take[capTag, capTop], Take[capSp, capTop]]]];
 
-emitCheck[ParserCombinator["Between", {open_, p_, close_}, _]] :=
-    emitCheck[ParserCombinator["Sequence", {open, p, close}, <||>]]
+(* lower for the PEG backend: keep Action/derived; ChoiceLongest -> Choice *)
+pegLower[ParserCombinator[t : ("Sequence" | "Choice" | "ChoiceLongest"), ps_List, o_]] := ParserCombinator[t, pegLower /@ ps, o]
+pegLower[ParserCombinator["Action", {p_, f_}, o_]] := ParserCombinator["Action", {pegLower[p], f}, o]
+pegLower[ParserCombinator[t : ("Many" | "Some" | "Optional" | "Lookahead" | "NotFollowedBy" | "Try"), p_ParserCombinator, o_]] := ParserCombinator[t, pegLower[p], o]
+pegLower[ParserCombinator[t : ("SepBy" | "SepBy1" | "ChainLeft" | "ChainRight"), {p_, q_}, o_]] := ParserCombinator[t, {pegLower[p], pegLower[q]}, o]
+pegLower[ParserCombinator["Between", {a_, b_, c_}, o_]] := ParserCombinator["Between", {pegLower[a], pegLower[b], pegLower[c]}, o]
+pegLower[other_] := other
 
-(* compileParser: assemble the source, wrap in a typed Function, and
-   feed to FunctionCompile. *)
-compileParser[pc_ParserCombinator] :=
-    Module[{src, fnSrc, fn, cf},
-        src = emitCheck[pc];
-        fnSrc = "Function[{Typed[input, \"String\"], Typed[pos, \"MachineInteger\"]}, " <>
-            src <> "]";
-        fn = ToExpression[fnSrc];
-        cf = Quiet @ Check[FunctionCompile[fn], $Failed];
-        If[ MatchQ[cf, _CompiledCodeFunction],
-            ParserCombinator[pc[[1]], pc[[2]],
-                Append[pc[[3]], "Code" -> compiledShim[pc, cf]]
-            ],
-            Message[ParserCompile::nocompile, pc];
-            ParserCombinator[pc[[1]], pc[[2]],
-                Append[pc[[3]],
-                    "Code" -> Function[{input, pos},
-                        interpretCompiledShim[pc, input, pos]
-                    ]
-                ]
-            ]
-        ]
-    ]
+(* lower a grammar to <|"Prog","Classes","Spec"|>; throws pegFail on a
+   node the backend doesn't handle. Recognition-only sub-emit (eRec) is
+   used for separators so they don't pollute the capture tree. *)
+pegCompile[root_] := Module[
+    {lblCtr = 0, nodeCtr = 0, ntLbl = <||>, ntQueue = {}, classMap = <||>, classRows = {}, specTable = <||>,
+     fresh, classIdx, getNtLbl, reg, eNode, eRaw, eRec, eRawChoiceTail, instrs, rootLbl, blocks, h},
+    fresh[] := (++lblCtr);
+    classIdx[pat_] := Lookup[classMap, Key[pat], (
+        AppendTo[classRows, Boole[charMatchesQ[FromCharacterCode[#], pat]] & /@ Range[128]];
+        classMap[pat] = Length[classRows])];
+    getNtLbl[hh_Hold] := If[KeyExistsQ[ntLbl, hh], ntLbl[hh],
+        With[{lb = fresh[]}, ntLbl[hh] = lb; AppendTo[ntQueue, hh]; lb]];
+    reg[pc_] := (++nodeCtr; specTable[nodeCtr] = pc; nodeCtr);
+
+    (* longest-match: measure each alt with eRec, remember the furthest, then
+       re-run only that alt with commitEmit (eNode carries its captures). *)
+    emitLongest[ps_, commitEmit_] := Module[{k = Length[ps], marks, clbls, lend = fresh[], meas, tbl, blocks},
+        marks = Table[fresh[], {k + 1}]; clbls = Table[fresh[], {k}];
+        meas = Join @@ Table[With[{mi = fresh[]},
+            Join[{Mark[marks[[i]]], {5, Lbl[marks[[i + 1]]], 0}}, eRec[ps[[i]]],
+                {{8, Lbl[mi], 0}, Mark[mi], {21, i - 1, 0}}]], {i, k}];
+        tbl = Table[{0, Lbl[clbls[[j]]], 0}, {j, k}];
+        blocks = Join @@ Table[Join[{Mark[clbls[[j]]]}, commitEmit[ps[[j]]], {{4, Lbl[lend], 0}}], {j, k}];
+        Join[{{20, 0, 0}}, meas, {Mark[marks[[k + 1]]], {22, k, 0}}, tbl, blocks, {Mark[lend]}]];
+
+    eRec[ParserCombinator["Literal", s_, _]] := ({1, #, 0} & /@ ToCharacterCode[s]);
+    eRec[ParserCombinator["Character", pat_, _]] := {{17, classIdx[pat], 0}};
+    eRec[ParserCombinator["Succeed", _, _]] := {}; eRec[ParserCombinator["Fail", _, _]] := {{9, 0, 0}};
+    eRec[ParserCombinator["Sequence", ps_, _]] := Join @@ (eRec /@ ps);
+    eRec[ParserCombinator["Choice", {p_}, _]] := eRec[p];
+    eRec[ParserCombinator["Choice", ps_, _]] := Module[{a = fresh[], b = fresh[]},
+        Join[{{5, Lbl[a], 0}}, eRec[First[ps]], {{8, Lbl[b], 0}, Mark[a]}, eRec[ParserCombinator["Choice", Rest[ps], <||>]], {Mark[b]}]];
+    eRec[ParserCombinator["Many", p_, _]] := Module[{a = fresh[], b = fresh[]},
+        Join[{{5, Lbl[b], 0}, Mark[a]}, eRec[p], {{13, Lbl[a], 0}, Mark[b]}]];
+    eRec[ParserCombinator["Some", p_, _]] := Join[eRec[p], eRec[ParserCombinator["Many", p, <||>]]];
+    eRec[ParserCombinator["Optional", p_, _]] := Module[{a = fresh[]}, Join[{{5, Lbl[a], 0}}, eRec[p], {{8, Lbl[a], 0}, Mark[a]}]];
+    eRec[ParserCombinator["Between", {o_, p_, c_}, _]] := Join[eRec[o], eRec[p], eRec[c]];
+    eRec[ParserCombinator["Recursive", hh_Hold, _]] := {{6, Lbl[getNtLbl[hh]], 0}};
+    eRec[ParserCombinator["Lookahead", p_, _]] := Module[{a = fresh[], b = fresh[]},
+        Join[{{5, Lbl[a], 0}}, eRec[p], {{14, Lbl[b], 0}, Mark[a], {9, 0, 0}, Mark[b]}]];
+    eRec[ParserCombinator["NotFollowedBy", p_, _]] := Module[{a = fresh[]}, Join[{{5, Lbl[a], 0}}, eRec[p], {{15, 0, 0}, Mark[a]}]];
+    eRec[ParserCombinator["Action", {p_, _}, _]] := eRec[p];
+    eRec[ParserCombinator["Try", p_, _]] := eRec[p];
+    eRec[ParserCombinator[t : ("SepBy" | "SepBy1"), {p_, sep_}, _]] := Module[{a = fresh[], b = fresh[], c = fresh[]},
+        With[{core = Join[eRec[p], {{5, Lbl[b], 0}, Mark[a]}, eRec[sep], eRec[p], {{13, Lbl[a], 0}, Mark[b]}]},
+            If[t === "SepBy", Join[{{5, Lbl[c], 0}}, core, {{8, Lbl[c], 0}, Mark[c]}], core]]];
+    eRec[ParserCombinator[("ChainLeft" | "ChainRight"), {p_, op_}, _]] := eRec[ParserCombinator["Sequence", {p, ParserCombinator["Many", ParserCombinator["Sequence", {op, p}, <||>], <||>]}, <||>]];
+    eRec[ParserCombinator["ChoiceLongest", ps_, _]] := emitLongest[ps, eRec];
+    eRec[other_] := Throw[other, pegFail];
+
+    eNode[r : ParserCombinator["Recursive", _, _]] := eRaw[r];
+    eNode[pc_] := With[{id = reg[pc]}, Join[{{18, id, 0}}, eRaw[pc], {{19, 0, 0}}]];
+
+    eRaw[ParserCombinator["Literal", s_, _]] := ({1, #, 0} & /@ ToCharacterCode[s]);
+    eRaw[ParserCombinator["Character", pat_, _]] := {{17, classIdx[pat], 0}};
+    eRaw[ParserCombinator["Succeed", _, _]] := {}; eRaw[ParserCombinator["Fail", _, _]] := {{9, 0, 0}};
+    eRaw[ParserCombinator["Sequence", ps_, _]] := Join @@ (eNode /@ ps);
+    eRaw[ParserCombinator["Choice", {p_}, _]] := eNode[p];
+    eRaw[ParserCombinator["Choice", ps_, _]] := Module[{a = fresh[], b = fresh[]},
+        Join[{{5, Lbl[a], 0}}, eNode[First[ps]], {{8, Lbl[b], 0}, Mark[a]}, eRawChoiceTail[Rest[ps]], {Mark[b]}]];
+    eRawChoiceTail[{p_}] := eNode[p];
+    eRawChoiceTail[ps_] := Module[{a = fresh[], b = fresh[]},
+        Join[{{5, Lbl[a], 0}}, eNode[First[ps]], {{8, Lbl[b], 0}, Mark[a]}, eRawChoiceTail[Rest[ps]], {Mark[b]}]];
+    eRaw[ParserCombinator["Many", p_, _]] := Module[{a = fresh[], b = fresh[]},
+        Join[{{5, Lbl[b], 0}, Mark[a]}, eNode[p], {{13, Lbl[a], 0}, Mark[b]}]];
+    eRaw[ParserCombinator["Some", p_, _]] := Module[{a = fresh[], b = fresh[]},
+        Join[eNode[p], {{5, Lbl[b], 0}, Mark[a]}, eNode[p], {{13, Lbl[a], 0}, Mark[b]}]];
+    eRaw[ParserCombinator["Optional", p_, _]] := Module[{a = fresh[]}, Join[{{5, Lbl[a], 0}}, eNode[p], {{8, Lbl[a], 0}, Mark[a]}]];
+    eRaw[ParserCombinator["Between", {o_, p_, c_}, _]] := Join[eNode[o], eNode[p], eNode[c]];
+    eRaw[ParserCombinator["Recursive", hh_Hold, _]] := {{6, Lbl[getNtLbl[hh]], 0}};
+    eRaw[ParserCombinator["Lookahead", p_, _]] := Module[{a = fresh[], b = fresh[]},
+        Join[{{5, Lbl[a], 0}}, eRec[p], {{14, Lbl[b], 0}, Mark[a], {9, 0, 0}, Mark[b]}]];
+    eRaw[ParserCombinator["NotFollowedBy", p_, _]] := Module[{a = fresh[]}, Join[{{5, Lbl[a], 0}}, eRec[p], {{15, 0, 0}, Mark[a]}]];
+    eRaw[ParserCombinator["Action", {p_, _}, _]] := eNode[p];
+    eRaw[ParserCombinator["Try", p_, _]] := eNode[p];
+    eRaw[ParserCombinator[t : ("SepBy" | "SepBy1"), {p_, sep_}, _]] := Module[{a = fresh[], b = fresh[], c = fresh[]},
+        With[{core = Join[eNode[p], {{5, Lbl[b], 0}, Mark[a]}, eRec[sep], eNode[p], {{13, Lbl[a], 0}, Mark[b]}]},
+            If[t === "SepBy", Join[{{5, Lbl[c], 0}}, core, {{8, Lbl[c], 0}, Mark[c]}], core]]];
+    eRaw[ParserCombinator[("ChainLeft" | "ChainRight"), {p_, op_}, _]] := Module[{a = fresh[], b = fresh[]},
+        Join[eNode[p], {{5, Lbl[b], 0}, Mark[a]}, eNode[op], eNode[p], {{13, Lbl[a], 0}, Mark[b]}]];
+    eRaw[ParserCombinator["ChoiceLongest", ps_, _]] := emitLongest[ps, eNode];
+    eRaw[other_] := Throw[other, pegFail];
+
+    rootLbl = fresh[];
+    blocks = Join[{{6, Lbl[rootLbl], 0}, {10, 0, 0}}, {Mark[rootLbl]}, eNode[pegLower[root]], {{7, 0, 0}}];
+    While[ntQueue =!= {},
+        h = First[ntQueue]; ntQueue = Rest[ntQueue];
+        blocks = Join[blocks, {Mark[ntLbl[h]]}, eNode[pegLower[ReleaseHold[h]]], {{7, 0, 0}}]];
+    instrs = blocks;
+    Module[{ip = 1, labelIp = <||>, real},
+        Scan[If[MatchQ[#, Mark[_]], labelIp[#[[1]]] = ip, ip += 3] &, instrs];
+        real = DeleteCases[instrs, Mark[_]] /. Lbl[id_] :> labelIp[id];
+        <|"Prog" -> Flatten[real], "Classes" -> If[classRows === {}, {Table[0, {128}]}, classRows], "Spec" -> specTable|>]
+];
+
+(* events -> capture tree *)
+pegBuildTree[events_] := Module[{stack = {<|"id" -> 0, "start" -> 0, "end" -> 0, "ch" -> {}|>}, node},
+    Do[If[e[[1]] > 0,
+        AppendTo[stack, <|"id" -> e[[1]], "start" -> e[[2]], "ch" -> {}|>],
+        node = Last[stack]; stack = Most[stack]; node["end"] = e[[2]];
+        stack = MapAt[Append[#, node] &, stack, {-1, "ch"}]],
+        {e, events}];
+    First[stack[[1]]["ch"]]];
+
+(* rebuild the result from the capture tree - same shaping as the interpreter *)
+pegRebuild[node_, input_, spec_] := Module[{pc = spec[node["id"]], type, ch = node["ch"], r},
+    type = pc[[1]];
+    Switch[type,
+        "Literal", pc[[2]],
+        "Character", StringTake[input, {node["start"], node["end"] - 1}],
+        "Sequence", pegRebuild[#, input, spec] & /@ ch,
+        "Choice" | "ChoiceLongest", pegRebuild[First[ch], input, spec],
+        "Many" | "Some", pegRebuild[#, input, spec] & /@ ch,
+        "Optional", If[ch === {}, Missing["NoMatch"], pegRebuild[First[ch], input, spec]],
+        "Between", pegRebuild[ch[[2]], input, spec],
+        "Action", (r = pegRebuild[First[ch], input, spec]; With[{f = pc[[2, 2]]}, If[ListQ[r], f @@ r, f[r]]]),
+        "Try", pegRebuild[First[ch], input, spec],
+        "Lookahead" | "NotFollowedBy", Null,
+        "Succeed", pc[[2]],
+        "SepBy" | "SepBy1", pegRebuild[#, input, spec] & /@ ch,
+        "ChainLeft", Fold[Function[{acc, k}, (pegRebuild[ch[[k]], input, spec])[acc, pegRebuild[ch[[k + 1]], input, spec]]],
+            pegRebuild[ch[[1]], input, spec], Range[2, Length[ch], 2]],
+        "ChainRight", Module[{vals = pegRebuild[#, input, spec] & /@ ch[[1 ;; ;; 2]], ops = pegRebuild[#, input, spec] & /@ ch[[2 ;; ;; 2]]},
+            Fold[Function[{acc, i}, ops[[i]][vals[[i]], acc]], Last[vals], Reverse@Range[Length[ops]]]],
+        _, pc]];
+
+(* the runnable "Code" closure for a PEG-VM-compiled parser. compiledData
+   is <|Prog, Classes, Spec|>; returns parseOk/parseErr. *)
+pegCodeFn[compiledData_] := Function[{input, pos},
+    Module[{codes = ToCharacterCode[input], len, out, fp, nc, events},
+        len = Length[codes];
+        out = pegMachine[compiledData["Prog"], codes, compiledData["Classes"], pos,
+            Max[2000, 4 len], Max[8000, 24 len]];
+        fp = out[[1]];
+        If[ fp < 0,
+            parseErr[pos, "<parse failed>", safeChar[input, pos]],
+            nc = out[[2]];
+            events = Transpose[{out[[3 ;; 2 + nc]], out[[3 + nc ;; 2 + 2 nc]]}];
+            parseOk[pegRebuild[pegBuildTree[events], input, compiledData["Spec"]], fp]]]];
+
+pegParserCompile[pc_] := Module[{data = Catch[pegCompile[pc], pegFail, $pegUnsupported &]},
+    If[ data === $pegUnsupported,
+        Message[ParserCompile::nopeg, pc]; cgInterpFallback[pc],
+        ParserCombinator[pc[[1]], pc[[2]], Append[pc[[3]], "Code" -> pegCodeFn[data]]]]];
+
+ParserCompile::nopeg = "Parser `` uses a node the PEG-VM backend does not support; falling back to interpretive evaluation.";
+
 
 ParserCompile::nocompile = "Failed to FunctionCompile parser ``; falling back to interpretive evaluation."
+ParserCompile::infloop = "Parser `` loops forever (repetition of a parser that can succeed without consuming input); not compilable.";
 
-(* compiledShim: the bridge between the integer-only compiled function
-   and the parseOk / parseErr internal contract. Calls the compiled
-   function for the position-advancing predicate; reconstructs the
-   result via the interpreter (which is guaranteed to succeed when the
-   predicate says so) when newPos is non-negative. *)
-compiledShim[pc_, cf_CompiledCodeFunction] :=
-    Function[{input, pos},
-        Block[{newPos = cf[input, pos]},
-            If[ newPos < 0,
-                parseErr[pos, "<compiled-predicate failure>", safeChar[input, pos]],
-                (* re-walk the original tree interpretively to build the result *)
-                interpretCompiledShim[
-                    ParserCombinator[pc[[1]], pc[[2]], KeyDrop[pc[[3]], "Code"]],
-                    input, pos
-                ]
-            ]
+Options[ParserCompile] = {"Recursive" -> Automatic, Method -> Automatic};
+
+ParserCompile[pc_ParserCombinator, OptionsPattern[]] :=
+    Module[{recOpt = OptionValue["Recursive"], method = OptionValue[Method], isRec, fn, cf},
+        isRec = ! FreeQ[pc, ParserCombinator["Recursive", _, _]];
+        Which[
+            (* PEG-VM backend: lowers to an integer instruction table run on
+               the once-compiled parsing machine. Scales to any grammar size
+               (LaTeX/TPTP), unlike the FunctionCompile backend. *)
+            method === "PEGVM",
+                pegParserCompile[pc],
+            (* recursive grammar: only attempt the (slow) mutual-recursion
+               codegen when explicitly asked; otherwise stay interpretive. *)
+            isRec && recOpt =!= True,
+                cgInterpFallback[pc],
+            isRec,
+                fn = Catch[Catch[cgAssembleRec[pc], cgFail, $cgUnsupported &], cgInfloop, $cgInfloopHit &];
+                cgFinishCompile[pc, fn, FunctionCompile @@ # &],
+            True,
+                fn = Catch[Catch[cgAssemble[pc], cgFail, $cgUnsupported &], cgInfloop, $cgInfloopHit &];
+                cgFinishCompile[pc, fn, FunctionCompile]
         ]
     ]
 
-(* The fallback / re-walker: just calls interpret. Kept as a named
-   helper so the stub-fallback path and the post-success rebuild path
-   share the same name. *)
-interpretCompiledShim[pc_, input_, pos_] :=
-    interpret[
-        ParserCombinator[pc[[1]], pc[[2]], KeyDrop[pc[[3]], "Code"]],
-        input, pos
-    ]
+(* shared tail: turn an assembled spec into a compiled ParserCombinator,
+   or fall back / message as appropriate. compileFn applies FunctionCompile
+   in the shape the spec needs (a function, or {decls, root}). *)
+cgFinishCompile[pc_, fn_, compileFn_] := Module[{cf},
+    Which[
+        fn === $cgInfloopHit, Message[ParserCompile::infloop, pc]; $Failed,
+        fn === $cgUnsupported, cgInterpFallback[pc],
+        True,
+            cf = Quiet @ Check[compileFn[fn], $Failed];
+            If[ MatchQ[cf, _CompiledCodeFunction],
+                ParserCombinator[pc[[1]], pc[[2]], Append[pc[[3]], "Code" -> cgShim[pc, cf]]],
+                Message[ParserCompile::nocompile, pc];
+                cgInterpFallback[pc]
+            ]
+    ]]
+
+cgInterpFallback[pc_] := ParserCombinator[pc[[1]], pc[[2]],
+    Append[pc[[3]], "Code" -> Function[{input, pos},
+        interpret[ParserCombinator[pc[[1]], pc[[2]], KeyDrop[pc[[3]], "Code"]], input, pos]]]]
 
 
 (* === SummaryBox formatter ===

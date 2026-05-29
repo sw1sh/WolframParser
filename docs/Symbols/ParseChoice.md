@@ -44,7 +44,7 @@ PEG-ordered - the first matching branch wins:
 Parse[ParseLiteral["foo"] | ParseLiteral["foobar"], "foobar"]
 ```
 
-<!-- => ParseError[<|"Position" -> 4, "Expected" -> "<end of input>", "Found" -> "b"|>] -->
+<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> "<end of input>", "Found" -> "b"|>] -->
 
 (The `ParseLiteral["foo"]` branch matched, then `Parse` rejected the leftover `"bar"`. Swap the order to make `ParseLiteral["foobar"]` the first try.)
 
@@ -88,7 +88,7 @@ The failure diagnostic accumulates across branches:
 Parse[ParseLiteral["foo"] | ParseLiteral["bar"], "xyz"]
 ```
 
-<!-- => ParseError[<|"Position" -> 1, "Expected" -> {"foo", "bar"}, "Found" -> "x"|>] -->
+<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> {"foo", "bar"}, "Found" -> "x"|>] -->
 
 ## Possible Issues
 
@@ -99,7 +99,7 @@ PEG ordering matters. The classic pitfall is putting a shorter literal before a 
 Parse[ParseLiteral["fo"] | ParseLiteral["foo"], "foo"]
 ```
 
-<!-- => ParseError[<|"Position" -> 3, "Expected" -> "<end of input>", "Found" -> "o"|>] -->
+<!-- => Failure["ParseError", <|"Position" -> 3, "Expected" -> "<end of input>", "Found" -> "o"|>] -->
 
 The fix is to order longest-first:
 

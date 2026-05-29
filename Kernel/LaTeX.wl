@@ -29,7 +29,7 @@
 
 BeginPackage["Wolfram`Parser`"]
 
-LaTeXMathParse::usage = "LaTeXMathParse[texSource] parses LaTeX math notation and returns a box expression. Returns a ParseError on failure."
+LaTeXMathParse::usage = "LaTeXMathParse[texSource] parses LaTeX math notation and returns a box expression. Returns a Failure[\"ParseError\", ...] on failure."
 
 LaTeXMathParser::usage = "LaTeXMathParser is the underlying ParserCombinator. Use it via Parse[LaTeXMathParser, source] when you want the same parser applied to many inputs."
 
@@ -2778,7 +2778,7 @@ applyLineBreaks[boxes_] := boxes //. {
 }
 
 LaTeXMathParse[source_String] := Module[{r = Parse[LaTeXMathParser, preprocessLaTeX[source]]},
-    If[MatchQ[r, _ParseError], r,
+    If[FailureQ[r], r,
         (* `/. $lineBreakMark -> ""` is a safety net: a stray marker not
            inside a RowBox (e.g. the whole input was just `\\`) would
            otherwise leak the private symbol into output. *)
