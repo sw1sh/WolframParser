@@ -4,3 +4,4 @@ Documentation/
 *.nb
 *.paclet
 tmp/
+dev/matex-out/
