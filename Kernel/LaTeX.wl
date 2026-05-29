@@ -111,7 +111,7 @@ commandName = ParseChoice[
     ParseAction[
         ParseLiteral["\\"] ~~ ParseCharacter[
             "{" | "}" | "$" | "%" | "&" | "#" | "_" | "," | ";" | ":" | " " | "!" |
-                "'" | "." | "`" | "\"" | "="
+                "'" | "." | "`" | "\"" | "=" | "|"
         ],
         Function[{slash, c}, slash <> c]
     ]
@@ -1259,6 +1259,7 @@ namedSymbolChars = <|
     "\\aleph"   -> "\[Aleph]",        "\\hbar"  -> "\[HBar]",
     "\\Re"      -> "\[GothicCapitalR]", "\\Im"  -> "\[GothicCapitalI]",
     "\\{"       -> "{",               "\\}"     -> "}",
+    "\\|"       -> "\[DoubleVerticalBar]",
     "\\$"       -> "$",               "\\%"     -> "%",
     "\\&"       -> "&",               "\\#"     -> "#",
     "\\_"       -> "_",               "\\ "     -> " ",
@@ -2546,6 +2547,21 @@ $underDecoChars = {
     "~", "_"
 }
 
+(* Named operators that stack their bounds in display style, exactly
+   like the big-op chars: \lim, \max, \sup, \det, ... (but NOT \sin,
+   \cos, \log, ... which keep side scripts).  These reach the box tree
+   as StyleBox[name, FontSlant -> "Plain"] from the upright-operator
+   handler; promote their Sub/Super/Subsuper to Under/Over/Underover so
+   `\lim_{x\to0}` stacks the bound underneath instead of trailing it to
+   the side (which rendered ~2x too wide vs. real LaTeX). *)
+$limitsOpNames = {
+    "lim", "limsup", "liminf", "max", "min", "sup", "inf",
+    "det", "gcd", "Pr", "arg", "injlim", "projlim",
+    "varlimsup", "varliminf", "varinjlim", "varprojlim"
+}
+limitsOpQ[StyleBox[n_String, FontSlant -> "Plain"]] := MemberQ[$limitsOpNames, n]
+limitsOpQ[_] := False
+
 bigOpDisplayLimits[boxes_] := boxes //. {
     SubsuperscriptBox[c_String /; MemberQ[$bigOpChars, c], lo_, hi_] :>
         UnderoverscriptBox[c, lo, hi],
@@ -2553,6 +2569,10 @@ bigOpDisplayLimits[boxes_] := boxes //. {
         UnderscriptBox[c, lo],
     SuperscriptBox[c_String /; MemberQ[$bigOpChars, c], hi_] :>
         OverscriptBox[c, hi],
+    (* limits-operator names: same stacking promotion *)
+    SubsuperscriptBox[op_ /; limitsOpQ[op], lo_, hi_] :> UnderoverscriptBox[op, lo, hi],
+    SubscriptBox[op_ /; limitsOpQ[op], lo_] :> UnderscriptBox[op, lo],
+    SuperscriptBox[op_ /; limitsOpQ[op], hi_] :> OverscriptBox[op, hi],
     (* `\overbrace{X}^Y`: stack Y above the brace above X. *)
     SuperscriptBox[OverscriptBox[x_, deco_String], hi_] /;
         MemberQ[$overDecoChars, deco] :>
