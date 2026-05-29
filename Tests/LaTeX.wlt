@@ -148,8 +148,9 @@ VerificationTest[
 VerificationTest[
     LaTeXMathParse["\\sum_{n=0}^{\\infty} \\frac{1}{n^2}"],
     RowBox[{
-        (* big-op characters get the limits stacked (display-style),
-           matching KaTeX's default rendering for `\sum`, `\int`, ... *)
+        (* limits-stacking operators (\sum, \prod, \bigcup, ...) get
+           their bounds stacked above/below in display style, matching
+           KaTeX.  Integrals are the exception - they keep side bounds. *)
         UnderoverscriptBox["\[Sum]",
             RowBox[{StyleBox["n", "TI"], "=", "0"}],
             "\[Infinity]"

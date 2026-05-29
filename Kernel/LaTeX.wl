@@ -320,11 +320,20 @@ buildEnv[name_String, rowsIn_List] :=
             "Vmatrix" | "Vmatrix*", RowBox[{"\[DoubleVerticalBar]", grid, "\[DoubleVerticalBar]"}],
             "cases" | "dcases" | "rcases" | "drcases",
                 RowBox[{"{", GridBox[padded, ColumnAlignments -> Left]}],
-            (* matrix / matrix* / smallmatrix / array / align(ed)(at) /
-               equation / gather(ed) / split / multline / eqnarray / CD
-               all render as a bare grid - they exist in TeX only to
-               control numbering, alignment, or surrounding whitespace,
-               none of which is meaningful for a doc-math renderer. *)
+            (* align / aligned / split / eqnarray / alignat / flalign:
+               TeX alternates right- then left-aligned columns so the
+               relation (the part after each `&`, e.g. `&= b`) lines up
+               down the block.  PadRight cycles {Right, Left} to the
+               column count. Without this the cells center and the `=`
+               signs drift. *)
+            "align" | "align*" | "aligned" | "split" |
+            "eqnarray" | "eqnarray*" | "alignat" | "alignat*" |
+            "alignedat" | "flalign" | "flalign*",
+                GridBox[padded, ColumnAlignments -> PadRight[{}, width, {Right, Left}]],
+            (* matrix / matrix* / smallmatrix / array / gather(ed) /
+               equation / multline / CD render as a plain centred grid -
+               they exist in TeX only for numbering or surrounding
+               whitespace, not column alignment. *)
             _, grid
         ]
     ]
@@ -2462,8 +2471,13 @@ preprocessLaTeX[s_String] :=
    the indices to the right - matching `\nolimits` behaviour but not
    what KaTeX shows on screen. Convert to `UnderoverscriptBox` so
    the FE stacks them. *)
+(* Integrals (∫ ∮ ∬ ...) are deliberately NOT here: KaTeX (like TeX)
+   uses \nolimits for the integral family even in display style, so
+   their bounds sit to the side as ordinary sub/superscripts, not
+   stacked above/below.  Only the genuinely limits-stacking operators
+   belong in this set. *)
 $bigOpChars = {
-    "\[Sum]", "\[Product]", "\[Integral]", "\[ContourIntegral]",
+    "\[Sum]", "\[Product]",
     "\[Coproduct]", "\[Union]", "\[Intersection]", "\[Vee]", "\[Wedge]",
     "\[CirclePlus]", "\[CircleTimes]", "\[SquareUnion]"
 }
