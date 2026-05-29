@@ -1500,10 +1500,25 @@ leftRightAtom = ParseAction[
 
 (* absolute-value / norm bars: |expr| renders the bars visibly. The
    inner is the relation-free sumExpr so a stray | terminates it. *)
+(* The FE adds relation/separator spacing on both sides of bar
+   delimiters, so `|x|` / `\|v\|` render noticeably looser than LaTeX
+   (which hugs the bars to the content).  Pull each bar toward the
+   content with a small negative AdjustmentBox margin (em units): the
+   opener loses right margin, the closer loses left margin.  ~0.2em
+   roughly cancels the FE's added gap without overlapping the content. *)
+$delimKern = 0.2
+kernOpen[g_] := AdjustmentBox[g, BoxMargins -> {{0, -$delimKern}, {0, 0}}]
+kernClose[g_] := AdjustmentBox[g, BoxMargins -> {{-$delimKern, 0}, {0, 0}}]
+
 absAtom = ParseAction[
     literal["|"] ~~ ParseRecursive[sumExpr] ~~ literal["|"],
-    RowBox[{"|", #2, "|"}] &
+    RowBox[{kernOpen["|"], #2, kernClose["|"]}] &
 ]
+(* No matchfix normAtom for `\|...\|`: unlike `|`, `\|` is also a valid
+   standalone atom (-> double-bar glyph), so a matchfix inner sumExpr
+   greedily swallows the closing `\|` as a juxtaposed glyph and the
+   atom never closes.  `\|v\|` therefore renders as the plain row
+   ‖ v ‖ (correct content, just not kerned). *)
 
 atom = ParseChoice[
     numberAtom, environmentAtom, leftRightAtom, commandAtom,

@@ -223,15 +223,37 @@ VerificationTest[
 (* === absolute-value / norm bars === *)
 
 VerificationTest[
+    (* the bars are kerned toward the content (AdjustmentBox negative
+       margin) so they hug it the way LaTeX does, instead of getting the
+       FE's looser relation spacing. *)
     LaTeXMathParse["|x|"],
-    RowBox[{"|", StyleBox["x", "TI"], "|"}],
+    RowBox[{
+        AdjustmentBox["|", BoxMargins -> {{0, -0.2}, {0, 0}}],
+        StyleBox["x", "TI"],
+        AdjustmentBox["|", BoxMargins -> {{-0.2, 0}, {0, 0}}]
+    }],
     TestID -> "LaTeX: absolute-value bars"
 ]
 
 VerificationTest[
     LaTeXMathParse["|x|_p"],
-    SubscriptBox[RowBox[{"|", StyleBox["x", "TI"], "|"}], StyleBox["p", "TI"]],
+    SubscriptBox[
+        RowBox[{
+            AdjustmentBox["|", BoxMargins -> {{0, -0.2}, {0, 0}}],
+            StyleBox["x", "TI"],
+            AdjustmentBox["|", BoxMargins -> {{-0.2, 0}, {0, 0}}]
+        }],
+        StyleBox["p", "TI"]],
     TestID -> "LaTeX: norm bars with subscript"
+]
+
+VerificationTest[
+    (* \| renders a double-bar glyph; \|v\| is a plain row (no matchfix
+       grouping - see the note in Kernel/LaTeX.wl on why norm isn't an
+       atom). The point of this test is that \| no longer ParseErrors. *)
+    LaTeXMathParse["\\|v\\|"],
+    RowBox[{"\[DoubleVerticalBar]", StyleBox["v", "TI"], "\[DoubleVerticalBar]"}],
+    TestID -> "LaTeX: \\| ... \\| norm bars render (no error)"
 ]
 
 
