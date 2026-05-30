@@ -625,7 +625,7 @@ commandHandlers["\\not"] = Function[{opt, req},
     With[{a = First[req, ""]},
         Which[
             (* Precomposed Unicode for the common negated relations
-               (≠, ⊄, ⊀, ...) — the typesetter actually renders them
+               (≠, ⊄, ⊀, ...) - the typesetter actually renders them
                with a single solid stroke, which is what readers see
                in math. *)
             StringQ[a] && KeyExistsQ[$notMap, a], $notMap[a],
@@ -838,7 +838,7 @@ Scan[
    a StyleBox with an absolute pt size proportional to KaTeX's
    sizing ratios assuming a 24pt base (matching our rasteriser).
    When the switch lacks a following brace, req is empty and we
-   emit "" — same as the old noopHandler did. *)
+   emit "" - same as the old noopHandler did. *)
 sizeHandler[pt_] := Function[{opt, req},
     Which[
         Length[req] === 0, "",
@@ -913,8 +913,8 @@ commandHandlers["\\tag"] = Function[{opt, req},
    an unparseable arg, falls back to "" - same as the old noop. *)
 texLengthToPt[s_String] := Module[{m},
     m = StringCases[StringTrim[s],
-        StartOfString ~~ num:NumberString ~~ unit:LetterCharacter.. ~~ EndOfString
-            :> {num, unit}, 1];
+        StartOfString ~~ num:NumberString ~~ unit:LetterCharacter.. ~~ EndOfString :> {num, unit},
+        1];
     If[ m === {}, Missing[],
         With[{n = ToExpression[m[[1, 1]]], u = m[[1, 2]]},
             n * Switch[u,
@@ -968,7 +968,7 @@ commandHandlers["\\htmlId"]    = Function[{opt, req}, Last[req, ""]]
 commandHandlers["\\htmlClass"] = Function[{opt, req}, Last[req, ""]]
 (* `\htmlStyle{css}{body}`: parse the CSS arg for `color:<value>` and
    render the body in that colour.  Other CSS properties (background,
-   font-weight, ...) are dropped — we only pick up the visible-text
+   font-weight, ...) are dropped - we only pick up the visible-text
    colour, since that's what the KaTeX corpus exercises.  Unknown
    colour values fall back to plain body. *)
 commandHandlers["\\htmlStyle"] = Function[{opt, req},
@@ -1542,27 +1542,27 @@ delimMacro = ParseChoice[
     literal["\\Uparrow"], literal["\\Downarrow"], literal["\\Updownarrow"]
 ]
 
-delimGlyph["."] = "";
-delimGlyph["\\{"] = "{";
-delimGlyph["\\}"] = "}";
-delimGlyph["\\langle"]  = "\[LeftAngleBracket]";
-delimGlyph["\\rangle"]  = "\[RightAngleBracket]";
-delimGlyph["\\lceil"]   = "\[LeftCeiling]";
-delimGlyph["\\rceil"]   = "\[RightCeiling]";
-delimGlyph["\\lfloor"]  = "\[LeftFloor]";
-delimGlyph["\\rfloor"]  = "\[RightFloor]";
-delimGlyph["\\lvert"]   = "|";
-delimGlyph["\\rvert"]   = "|";
-delimGlyph["\\lVert"]   = "\[DoubleVerticalBar]";
-delimGlyph["\\rVert"]   = "\[DoubleVerticalBar]";
-delimGlyph["\\|"]       = "\[DoubleVerticalBar]";
-delimGlyph["\\backslash"] = "\\";
-delimGlyph["\\uparrow"]     = "\[UpArrow]";
-delimGlyph["\\downarrow"]   = "\[DownArrow]";
-delimGlyph["\\updownarrow"] = "\[UpDownArrow]";
-delimGlyph["\\Uparrow"]     = "\[DoubleUpArrow]";
-delimGlyph["\\Downarrow"]   = "\[DoubleDownArrow]";
-delimGlyph["\\Updownarrow"] = "\[DoubleUpDownArrow]";
+delimGlyph["."] = ""
+delimGlyph["\\{"] = "{"
+delimGlyph["\\}"] = "}"
+delimGlyph["\\langle"]  = "\[LeftAngleBracket]"
+delimGlyph["\\rangle"]  = "\[RightAngleBracket]"
+delimGlyph["\\lceil"]   = "\[LeftCeiling]"
+delimGlyph["\\rceil"]   = "\[RightCeiling]"
+delimGlyph["\\lfloor"]  = "\[LeftFloor]"
+delimGlyph["\\rfloor"]  = "\[RightFloor]"
+delimGlyph["\\lvert"]   = "|"
+delimGlyph["\\rvert"]   = "|"
+delimGlyph["\\lVert"]   = "\[DoubleVerticalBar]"
+delimGlyph["\\rVert"]   = "\[DoubleVerticalBar]"
+delimGlyph["\\|"]       = "\[DoubleVerticalBar]"
+delimGlyph["\\backslash"] = "\\"
+delimGlyph["\\uparrow"]     = "\[UpArrow]"
+delimGlyph["\\downarrow"]   = "\[DownArrow]"
+delimGlyph["\\updownarrow"] = "\[UpDownArrow]"
+delimGlyph["\\Uparrow"]     = "\[DoubleUpArrow]"
+delimGlyph["\\Downarrow"]   = "\[DoubleDownArrow]"
+delimGlyph["\\Updownarrow"] = "\[DoubleUpDownArrow]"
 delimGlyph[s_String] := s
 
 (* \left|..\right| and \left\|..\right\| use the matchfix bracketing-bar
@@ -1772,7 +1772,7 @@ expr = ParseChainLeft[sumExpr, relOp]
    a trailing thin space for readability). *)
 mathToken = ParseChoice[
     expr,
-    (* `,` keeps a thin space after — list-separator look in
+    (* `,` keeps a thin space after - list-separator look in
        `(a, b, c)`.  `;` and `:` emit the bare glyph; both classify
        as relations in TeX math so the FE inserts the right gap. *)
     ParseAction[literal[","], "," <> "\[ThinSpace]" &],
@@ -2240,13 +2240,13 @@ rewriteCDEnv[s_String] := StringReplace[
            \xleftarrow / OverscriptBox to keep the label visible. *)
         RegularExpression["@>>>"]              -> "\[LongRightArrow]",
         RegularExpression["@<<<"]              -> "\[LongLeftArrow]",
-        (* `@>X>>` → label X above the right arrow *)
+        (* `@>X>>` -> label X above the right arrow *)
         RegularExpression["@>([^>]+)>>"]       :> ("\\xrightarrow{" <> "$1" <> "}"),
-        (* `@>>X>` → label X below the right arrow *)
+        (* `@>>X>` -> label X below the right arrow *)
         RegularExpression["@>>([^>]+)>"]       :> ("\\xrightarrow[" <> "$1" <> "]{}"),
-        (* `@<X<<` → label X above the left arrow *)
+        (* `@<X<<` -> label X above the left arrow *)
         RegularExpression["@<([^<]+)<<"]       :> ("\\xleftarrow{" <> "$1" <> "}"),
-        (* `@<<X<` → label X below the left arrow *)
+        (* `@<<X<` -> label X below the left arrow *)
         RegularExpression["@<<([^<]+)<"]       :> ("\\xleftarrow[" <> "$1" <> "]{}"),
         (* bare arrows with no label *)
         RegularExpression["@>>"]               -> "\[LongRightArrow]",
@@ -2292,7 +2292,7 @@ rewriteBareOver[s_String] :=
 (* `\above<dim>` is a custom-thickness variant of `\over`; FractionBox
    has no thickness knob so drop the dimension and treat as `\over`.
    Similarly `\abovewithdelims<l><r><dim>` and `\atopwithdelims<l><r>`
-   — discard the delimiters and the dimen, keep the structure.  Done
+   - discard the delimiters and the dimen, keep the structure.  Done
    as a pre-pass before rewriteInfixFractions so the existing infix
    walker handles the result.  Dimen format covers the common units. *)
 rewriteAboveAtopVariants[s_String] :=
@@ -2428,7 +2428,7 @@ applyUserDefs[s_String] := Module[{defs, stripped},
 ]
 
 (* TeX `\color{X}` switches the current group's color for the
-   REST of the group — it's a scoping switch, not a 2-arg command.
+   REST of the group - it's a scoping switch, not a 2-arg command.
    Our grammar treats it as zero/one/two-arg form via the greedy
    command parser, which loses the scope.  Walk every balanced
    `{...}`, find the first top-level `\color{...}`, and rewrite
@@ -2504,7 +2504,7 @@ rewriteScopedColor[s_String] := Module[{
    to the enclosing brace group: `{\Huge body more body}` means
    "the rest of THIS group is huge".  Our grammar treats those
    switches as ordinary commands that eat exactly one `{...}` arg.
-   So `{\Huge body}` becomes `\Huge` (no arg → "") followed by
+   So `{\Huge body}` becomes `\Huge` (no arg -> "") followed by
    `body` (loose) and the size silently dropped.  Pre-scan: find
    every `{<sizeOrStyleSwitch> <rest>}` and rewrite to
    `{<switch>{<rest>}}` so the switch ends up with a single
@@ -2594,11 +2594,11 @@ preprocessLaTeX[s_String] :=
         ] :> ("\\" <> "$1" <> "{" <> "$2" <> "}")
     ] &@
     (* `\verb<delim>content<delim>` and `\verb*<delim>content<delim>`
-       are verbatim macros — the next non-letter, non-space, non-asterisk
+       are verbatim macros - the next non-letter, non-space, non-asterisk
        character after `\verb` or `\verb*` becomes the delimiter, and
        content is read raw until the matching delimiter.  Approximate
        by rewriting to `\texttt{content}`.  Only handle a fixed set
-       of common delimiters (`|`, `!`, `+`, `=`, `/`) — the
+       of common delimiters (`|`, `!`, `+`, `=`, `/`) - the
        space-delimited form would interact with whitespace-stripping
        elsewhere, so we leave it as a literal.  Done as a preprocess
        so the rest of the pipeline sees a regular `\texttt{...}`. *)
@@ -2728,7 +2728,7 @@ bigOpDisplayLimits[boxes_] := boxes //. {
    `1,000,000` (or its `\!`-bridged variant) the thin space looks
    like literal whitespace between digit runs.  Walk every RowBox and
    drop the thin space whenever the comma sits between digit-only
-   runs — skipping any empty-string siblings between them so the
+   runs - skipping any empty-string siblings between them so the
    `\!` no-op doesn't break the detection. *)
 $commaThinSpace = "," <> FromCharacterCode[8201]
 digitRunQ[s_String] := s =!= "" && StringMatchQ[s, DigitCharacter ..]
@@ -2832,7 +2832,7 @@ applyLineBreaks[boxes_] := boxes //. {
    ignored and we fall back to the interpreter. Rebuild with
    BuildLaTeXParserAsset[]. *)
 
-$latexDir = DirectoryName[$InputFileName];
+$latexDir = DirectoryName[$InputFileName]
 
 compiledLatexAssetPath[] := Module[{p},
     p = Quiet @ Check[
@@ -2846,7 +2846,7 @@ compiledLatexAssetPath[] := Module[{p},
    here with the current pegCodeFn, so changes to the VM/codegen never
    staleify a shipped asset - only a grammar change (caught by the hash)
    invalidates it. *)
-$compiledLatexCache = "unset";   (* cache var (not a memoised downvalue, so it can be reset without deleting the definition) *)
+$compiledLatexCache = "unset"   (* cache var (not a memoised downvalue, so it can be reset without deleting the definition) *)
 loadCompiledLatexParser[] := (
     If[$compiledLatexCache === "unset",
         $compiledLatexCache = Module[{path = compiledLatexAssetPath[], stored, lpc = LaTeXMathParser},
@@ -2881,8 +2881,8 @@ BuildLaTeXParserAsset[] := Module[{data, path},
    So route any input carrying a non-ASCII codepoint to the interpreter; the
    common pure-ASCII case keeps the fast compiled path.  (A faithful PEGVM
    Unicode char-class lowering would let this fall away.) *)
-$nonASCIIQ = StringContainsQ[#, RegularExpression["[^\\x00-\\x7F]"]] &;
-latexParserFor[pre_String] := If[$nonASCIIQ[pre], LaTeXMathParser, activeLatexParser[]];
+$nonASCIIQ = StringContainsQ[#, RegularExpression["[^\\x00-\\x7F]"]] &
+latexParserFor[pre_String] := If[$nonASCIIQ[pre], LaTeXMathParser, activeLatexParser[]]
 
 LaTeXMathParse[source_String] := Module[
     {pre = preprocessLaTeX[source], r},
