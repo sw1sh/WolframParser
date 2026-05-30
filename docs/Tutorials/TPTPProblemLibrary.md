@@ -12,7 +12,7 @@ RelatedTutorials: [ParsingTPTP, ParsingBNFGrammars]
 
 ## What this note covers
 
-The full [TPTP v9.2.1](https://tptp.org/TPTP/) distribution ships 26,264 problems across 57 mathematical domains, spanning all six TPTP clause heads (CNF, FOF, TFF, TCF, THF, NCF). This note shows how to index the corpus and parse problems on demand using [TPTPImport](paclet:Wolfram/WolframParser/ref/TPTPImport) - the EBNFParse-driven parser the [Parsing TPTP](paclet:Wolfram/WolframParser/tutorial/ParsingTPTP) tutorial builds piece by piece.
+The full [TPTP v9.2.1](https://tptp.org/TPTP/) distribution ships 26,264 problems across 57 mathematical domains, spanning all six TPTP clause heads (CNF, FOF, TFF, TCF, THF, NCF). This note shows how to index the corpus and parse problems on demand using [TPTPImport]() - the EBNFParse-driven parser the [Parsing TPTP](paclet:Wolfram/WolframParser/tutorial/ParsingTPTP) tutorial builds piece by piece.
 
 The pattern is two-step:
 
@@ -168,4 +168,4 @@ With[{grp = Select[Values[tptpProblems],
 
 ## Acknowledgements
 
-The TPTP library is the work of Geoff Sutcliffe and Christian Suttner, 1993 onward. See [Sutcliffe (2017)](https://link.springer.com/article/10.1007/s10817-017-9407-7), *The TPTP Problem Library and Associated Infrastructure: From CNF and DPLL to TFF0 and TPI*, Journal of Automated Reasoning, 59(4):483-502. The published BNF lives at the [TPTPWorld/SyntaxBNF](https://github.com/TPTPWorld/SyntaxBNF) repository; this note's parser is generated mechanically from that BNF by [EBNFParse](paclet:Wolfram/WolframParser/ref/EBNFParse) - see the [Parsing TPTP](paclet:Wolfram/WolframParser/tutorial/ParsingTPTP) sibling tutorial.
+The TPTP library is the work of Geoff Sutcliffe and Christian Suttner, 1993 onward. See [Sutcliffe (2017)](https://link.springer.com/article/10.1007/s10817-017-9407-7), *The TPTP Problem Library and Associated Infrastructure: From CNF and DPLL to TFF0 and TPI*, Journal of Automated Reasoning, 59(4):483-502. The published BNF lives at the [TPTPWorld/SyntaxBNF](https://github.com/TPTPWorld/SyntaxBNF) repository; this note's parser is generated mechanically from that BNF by [EBNFParse]() - see the [Parsing TPTP](paclet:Wolfram/WolframParser/tutorial/ParsingTPTP) sibling tutorial.

@@ -98,7 +98,7 @@ Parse[parsers["cnf_annotated"], "cnf(test, axiom, p)."]
 (* {"cnf", "(", "test", ",", "axiom", ",", "p", Null, ")."} *)
 ```
 
-The output is the raw parse tree - a list of matched literals and sub-parser results. Turning it into the WL-term shape (`<|"Axioms" -> {phi1, ...}, "Conjecture" -> phi|>` with atoms as `String`-headed compounds) is the *semantic action* layer. Each rule needs a `ParseAction` that lifts the raw tree to the right WL value. The paclet ships the result as [TPTPImport](paclet:Wolfram/WolframParser/ref/TPTPImport); see [Parsing TPTP](paclet:Wolfram/WolframParser/tutorial/ParsingTPTP) for the ~50-entry action map.
+The output is the raw parse tree - a list of matched literals and sub-parser results. Turning it into the WL-term shape (`<|"Axioms" -> {phi1, ...}, "Conjecture" -> phi|>` with atoms as `String`-headed compounds) is the *semantic action* layer. Each rule needs a `ParseAction` that lifts the raw tree to the right WL value. The paclet ships the result as [TPTPImport](); see [Parsing TPTP](paclet:Wolfram/WolframParser/tutorial/ParsingTPTP) for the ~50-entry action map.
 
 ---
 
@@ -174,7 +174,7 @@ The [TPTPImport](https://github.com/sw1sh/thvm) (a sibling project, ~1100 lines)
 
 What the EBNF approach gives you:
 
-- **The recogniser, done.** 338 rules parsed, 280 lowered, the two PEG-vs-CFG rewrites applied automatically. Real TPTP problems with quantifiers, function application, equality, and multi-term boolean connectives parse end to end - the action layer that lifts the raw tree to canonical Wolfram-Language terms ships as [TPTPImport](paclet:Wolfram/WolframParser/ref/TPTPImport).
+- **The recogniser, done.** 338 rules parsed, 280 lowered, the two PEG-vs-CFG rewrites applied automatically. Real TPTP problems with quantifiers, function application, equality, and multi-term boolean connectives parse end to end - the action layer that lifts the raw tree to canonical Wolfram-Language terms ships as [TPTPImport]().
 - **Vendored grammar tracking.** When the upstream TPTP grammar updates (the `v9.2.1.x` version numbers in the comment header), the auto-generated parser updates with it - re-run `EBNFParse` on the new file. The handwritten parser has to be diffed line-by-line against the new grammar.
 - **Single source of truth.** The grammar IS the parser definition; you can't end up with a parser that disagrees with the published grammar.
 

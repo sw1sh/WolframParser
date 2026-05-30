@@ -14,7 +14,7 @@ RelatedTutorials: [LaTeXMathParserImplementation]
 
 `LaTeXMathParse` turns LaTeX math into a Wolfram box tree that the front end then typesets. The natural question is: *how close is that to what LaTeX itself would draw?* This note answers it directly, with [MaTeX](https://github.com/szhorvat/MaTeX) as the gold standard.
 
-MaTeX shells out to a real LaTeX installation and returns genuine Computer Modern output as resolution-independent **vector graphics** - the actual LaTeX rendering, not an approximation, and not a screenshot. For each expression below it appears in the **MaTeX (gold)** column; the **LaTeXMathParse** column is the front end's own live typesetting of the parser's boxes, rendered in the same Computer-Modern face so the two differ only in *layout*, never in typeface. Read each row as gold-versus-ours.
+MaTeX shells out to a real LaTeX installation and returns genuine Computer Modern output as resolution-independent **vector graphics** - the actual LaTeX rendering, not an approximation, and not a screenshot. For each expression below it appears in the **MaTeX (gold)** column. The **ImportString** column is Wolfram's stock `ImportString[…, "LaTeX"]` importer - what you get *without* this paclet - shown in the front end's **own default math font**, exactly as it comes (we deliberately do *not* restyle it to Computer Modern, so its typeface is part of the contrast too). The **LaTeXMathParse** column is the front end's own live typesetting of *this* paclet's boxes, restyled into the same Computer-Modern face as gold, so it differs from gold only in *layout*, never in typeface. Read each row left to right: LaTeX, then gold, then stock Wolfram, then ours.
 
 The corpus is graded - atoms, operators, sub/superscripts, fractions and radicals, large operators, delimiters, functions, accents, environments, full real-world formulas, double-struck blackboard, and quantum / bra-ket notation - so you can see where the parser tracks LaTeX exactly and where the front end's math engine spaces or sizes things a little differently. Every entry both parses to a non-[ParseError]() box tree **and** renders in real LaTeX, so each row is an honest apples-to-apples read.
 
@@ -128,6 +128,35 @@ ours[src_String] := Module[{r = Quiet @ Check[LaTeXMathParse[src], $Failed]},
         Style[RawBoxes[StyleBox[applyMathFont[r], ScriptLevel -> 0]],
             FontSize -> 18, LineBreakWithin -> False, Sequence @@ $mathFontOpts]]];
 
+(* The stock Wolfram LaTeX importer, for contrast - what you get WITHOUT this
+   paclet.  ImportString[..., "LaTeX"] needs math-mode delimiters (bare "x^2"
+   returns $Failed), so wrap each source in $...$; it returns a whole Notebook,
+   from which we pull the math FormBox and strip the importer's nested
+   Cell / TextData / BoxData / FormBox wrappers (its grid cells are wrapped
+   Cells that won't render as bare boxes otherwise).  Rendered in the front
+   end's OWN default math font (we do NOT restyle it to Computer Modern the way
+   the gold/ours columns are matched) - this is the stock importer exactly as it
+   comes.  Watch where it falls short of LaTeXMathParse: \mathbb{R} comes back a
+   plain R (no blackboard), \begin{cases} loses its brace, \overrightarrow
+   misfires, Greek is left upright. *)
+cleanBuiltin[b_] := b //. {
+    Cell[BoxData[x_], ___] :> x, Cell[TextData[x_List], ___] :> RowBox[x],
+    Cell[TextData[x_], ___] :> x, Cell[x_, ___] :> x, BoxData[x_] :> x,
+    TextData[x_List] :> RowBox[x], TextData[x_] :> x, FormBox[x_, ___] :> x};
+builtinBoxes[src_String] := Module[{nb, b},
+    nb = Quiet @ Check[ImportString["$" <> src <> "$", "LaTeX"], $Failed];
+    If[! MatchQ[nb, _Notebook], Return[$Failed]];
+    b = FirstCase[nb, FormBox[box_, ___] :> box, $Failed, Infinity];
+    If[b === $Failed, $Failed, cleanBuiltin[b]]];
+builtin[src_String] := Module[{b = builtinBoxes[src]},
+    If[ b === $Failed,
+        Style["(no import)", $mutedText, FontSize -> 10],
+        (* render in the FE's OWN default math font - NOT restyled to Computer
+           Modern like the gold/ours columns - so this shows the stock
+           importer's true appearance, typeface and all. *)
+        Style[RawBoxes[StyleBox[b, ScriptLevel -> 0]],
+            FontSize -> 18, LineBreakWithin -> False]]];
+
 (* Graded corpus: atoms -> full compositions.  Extend freely - add a string
    to any tier and the row appears automatically. *)
 $corpus = {
@@ -212,15 +241,15 @@ srcCell[s_String] := Pane[
     {190, Automatic}, Alignment -> {Left, Center}];
 tierRow[name_String] := {
     Item[Style[name, Bold, 11], Background -> GrayLevel[0.5, 0.13]],
-    SpanFromLeft, SpanFromLeft, SpanFromLeft};
+    SpanFromLeft, SpanFromLeft, SpanFromLeft, SpanFromLeft};
 
 Grid[
     Join[
-        {Style[#, Bold] & /@ {"LaTeX source", "MaTeX (gold)", "LaTeXMathParse", "Boxes"}},
+        {Style[#, Bold] & /@ {"LaTeX source", "MaTeX (gold)", "ImportString", "LaTeXMathParse", "Boxes"}},
         Flatten[
             Function[grp,
                 Prepend[
-                    Function[s, {srcCell[s], gold[s], ours[s], boxes[s]}] /@ grp[[2]],
+                    Function[s, {srcCell[s], gold[s], builtin[s], ours[s], boxes[s]}] /@ grp[[2]],
                     tierRow[grp[[1]]]
                 ]
             ] /@ $corpus,
@@ -240,7 +269,8 @@ Grid[
 - **Display style is forced on both sides.** MaTeX typesets *display* math, so the parser column is rendered at `ScriptLevel -> 0` to match: ``\sum`` / ``\prod`` / ``\bigcup`` / ``\lim`` carry their limits stacked **above and below** (the parser emits [UnderoverscriptBox]() / [UnderscriptBox](); the front end only stacks them in display style, putting them to the side inline), ``\int`` keeps its side limits, and fractions render full size. The same boxes in an inline ``$…$`` context would correctly show side-set limits and smaller fractions.
 - **Typeface is matched in shape.** Italic letters use **Latin Modern Math** - the OpenType math font whose italics are the very `cmmi` letterforms MaTeX renders, reached by remapping each `"TI"` letter to its math-alphanumeric codepoint (so variable *shapes* match, not just the upright glyphs). Double-struck `\mathbb` uses **`MSBM10`** - the AMS `msbm` font (what MaTeX's `\mathbb` is) converted to OpenType and remapped to the Unicode double-struck codepoints - so the blackboard letters match gold's exactly rather than the FE's own design.
 - **Stroke weight is the one thing that can't match, and it's the render engine, not the font.** Measured at identical size and resolution, the front-end column carries ~1.5× (italics) to ~1.8× (dense upright caps) the ink of the LaTeX column - and that ratio is *identical* whether the FE font is Latin Modern Math or the FE default, so no font choice changes it. MaTeX is a resolution-independent LaTeX vector; the parser column is front-end-rasterized text, which is simply heavier. Equalizing it would mean rendering both columns through the same engine - which would make them identical and defeat the comparison. It reads closest in light appearance.
-- **The fourth column is the raw box tree** `LaTeXMathParse` produced (InputForm), so you can read the structure that drives the rendering - `FractionBox`, `UnderoverscriptBox`, the bracketing-bar characters, the `"TI"` italic tags, and so on.
+- **The ImportString column is the stock Wolfram importer**, shown for contrast - it is what `ImportString[…, "LaTeX"]` gives without this paclet (math-wrapped in `$…$`, since bare snippets return `$Failed`), drawn in the front end's **own default math font** rather than restyled to Computer Modern, so you see it exactly as it comes - typeface included. It handles the easy structural cases - superscripts, fractions, radicals, sums - but watch where it diverges from both gold and ours: `\mathbb{R}` comes back a **plain `R`** with no blackboard, `\begin{cases}` **loses its enclosing brace**, `\overrightarrow{AB}` misfires into a stray ring, and Greek letters are left **upright** rather than math-italic. That gap is the reason `LaTeXMathParse` exists.
+- **The fifth column is the raw box tree** `LaTeXMathParse` produced (InputForm), so you can read the structure that drives the rendering - `FractionBox`, `UnderoverscriptBox`, the bracketing-bar characters, the `"TI"` italic tags, and so on.
 - **Where the two diverge** is the front end's automatic math-spacing engine versus TeX's: the gaps around binary operators and relations, and how aggressively a delimiter grows around tall content. Those are rendering-side, not parse-side - the box tree is faithful; the FE just spaces it by its own rules. See [WolframBoxTypesetting](paclet:Wolfram/WolframParser/tutorial/WolframBoxTypesetting) for the levers that tighten this.
 
 > The code cell that builds this table is collapsed by default (``#| collapse: true``) so only the comparison shows; click the closed group's bracket to reveal the code. The MaTeX column is recolored with ``LightDarkSwitched[Black, White]`` so it stays legible in both light and dark front-end appearances.
@@ -249,5 +279,5 @@ Grid[
 
 - [LaTeXMathParserImplementation](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation) - design and implementation notes, and the KaTeX-corpus coverage benchmark
 - [WolframBoxTypesetting](paclet:Wolfram/WolframParser/tutorial/WolframBoxTypesetting) - how the front end renders boxes, and how to control its math spacing/fonts
-- [LaTeXMathParse](paclet:Wolfram/WolframParser/ref/LaTeXMathParse) - the symbol reference page
+- [LaTeXMathParse]() - the symbol reference page
 - [MaTeX](https://github.com/szhorvat/MaTeX) - the gold-standard LaTeX-to-graphics package used here

@@ -16,27 +16,27 @@ Keywords: [parser, parsing, grammar, combinator, GrammarRules, FunctionCompile]
 ## Symbols
 
 ### The wrapper
-- [ParserCombinator](paclet:Wolfram/WolframParser/ref/ParserCombinator)
+- [ParserCombinator]()
 
 ### Run a parser
-- [Parse](paclet:Wolfram/WolframParser/ref/Parse)
-- [ParserCompile](paclet:Wolfram/WolframParser/ref/ParserCompile)
+- [Parse]()
+- [ParserCompile]()
 
 ### Terminals
-- [ParseLiteral](paclet:Wolfram/WolframParser/ref/ParseLiteral)
-- [ParseCharacter](paclet:Wolfram/WolframParser/ref/ParseCharacter)
+- [ParseLiteral]()
+- [ParseCharacter]()
 
 ### Composition
-- [ParseSequence](paclet:Wolfram/WolframParser/ref/ParseSequence)
-- [ParseChoice](paclet:Wolfram/WolframParser/ref/ParseChoice)
-- [ParseBetween](paclet:Wolfram/WolframParser/ref/ParseBetween)
+- [ParseSequence]()
+- [ParseChoice]()
+- [ParseBetween]()
 - `ParseSepBy`, `ParseSepBy1`
 - `ParseChainLeft`, `ParseChainRight`
 
 ### Repetition
-- [ParseMany](paclet:Wolfram/WolframParser/ref/ParseMany)
-- [ParseSome](paclet:Wolfram/WolframParser/ref/ParseSome)
-- [ParseOptional](paclet:Wolfram/WolframParser/ref/ParseOptional)
+- [ParseMany]()
+- [ParseSome]()
+- [ParseOptional]()
 
 ### Lookahead, backtracking, recursion
 - `ParseLookahead`, `ParseNotFollowedBy`
@@ -44,7 +44,7 @@ Keywords: [parser, parsing, grammar, combinator, GrammarRules, FunctionCompile]
 - `ParseRecursive` - lazy symbol-ref for cyclic / mutually-recursive grammars
 
 ### Action and declarative grammars
-- [ParseAction](paclet:Wolfram/WolframParser/ref/ParseAction)
+- [ParseAction]()
 - `Parse[GrammarRules[{...}], input]` - the [GrammarRules]() declarative DSL is accepted as input and lowered locally (no [CloudDeploy]() round-trip)
 
 ### LaTeX math

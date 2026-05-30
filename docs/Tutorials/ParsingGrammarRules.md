@@ -12,11 +12,11 @@ RelatedTutorials: [DesignAndCompilationStrategy, LaTeXMathParserImplementation]
 
 ## What this note covers
 
-[`GrammarRules`](paclet:ref/GrammarRules) is the Wolfram Language's declarative grammar DSL. The built-in implementation only runs after a [CloudDeploy](paclet:ref/CloudDeploy): you write a `GrammarRules[...]` expression, ship it to a cloud object, then call [GrammarApply](paclet:ref/GrammarApply) (or [Interpreter](paclet:ref/Interpreter)) on the URL. Local kernels have no way to evaluate a `GrammarRules` expression directly - the symbol exists but is inert. `Wolfram\`Parser\`` takes the same `GrammarRules` head, lowers it to a [ParserCombinator](paclet:Wolfram/WolframParser/ref/ParserCombinator), and runs it on the local kernel - so the same grammar that backed your `CloudObject` can be parsed without a network round-trip.
+[GrammarRules]() is the Wolfram Language's declarative grammar DSL. The built-in implementation only runs after a [CloudDeploy](): you write a <code>[GrammarRules]()[...]</code> expression, ship it to a cloud object, then call [GrammarApply]() (or [Interpreter]()) on the URL. Local kernels have no way to evaluate a [GrammarRules]() expression directly - the symbol exists but is inert. <code>Wolfram\`Parser\`</code> takes the same [GrammarRules]() head, lowers it to a [ParserCombinator](), and runs it on the local kernel - so the same grammar that backed your [CloudObject]() can be parsed without a network round-trip.
 
 This note has four parts:
 
-1. **What the built-in supports** - the full pattern vocabulary `GrammarRules` accepts, verified against `CloudDeploy["TestGrammar_N"]` deployments.
+1. **What the built-in supports** - the full pattern vocabulary [GrammarRules]() accepts, verified against <code>[CloudDeploy]()["TestGrammar_N"]</code> deployments.
 2. **What the local implementation supports today** - the subset of that vocabulary that `Parse[GrammarRules[...], input]` handles in v0.2.5, with side-by-side examples.
 3. **The gap** - which built-in features are NOT yet ported, the workarounds, and what would be needed to close each one.
 4. **When to use which** - decision guide.
@@ -30,7 +30,7 @@ Deployed and verified against the cloud:
 | Cloud test name           | Pattern shape                                                  | Result                              |
 |---------------------------|----------------------------------------------------------------|-------------------------------------|
 | `TestGrammar_1`           | `"hello" -> "greeting"`                                        | literal string match                |
-| `TestGrammar_2`           | `FixedOrder["add", a:GrammarToken["SemanticNumber"], "and", b:GrammarToken["SemanticNumber"]] :> a+b` | named slot with type via `GrammarToken` |
+| `TestGrammar_2`           | <code>[FixedOrder]()["add", a:[GrammarToken]()["SemanticNumber"], "and", b:[GrammarToken]()["SemanticNumber"]] :> a+b</code> | named slot with type via <code>[GrammarToken]()</code> |
 | `TestGrammar_3`           | `FixedOrder["turn", OptionalElement["the"], appl:("stove"|"oven"|"fridge"), state:("on"|"off")] :> {appl, state}` | alternatives, optional elements, `AllowLooseGrammar` trims trailing fluff |
 | `TestGrammar_4`           | `nums:DelimitedSequence[GrammarToken["SemanticNumber"], ","|"and"] :> Total[nums]` | one-or-more with delimiter |
 | `TestGrammar_5`           | `GrammarRules[{rules}, {defs}]` with subsidiary `"MyCity" -> ...` definitions | named-domain definitions |
@@ -39,7 +39,7 @@ Deployed and verified against the cloud:
 | `TestGrammar_10loose`     | `AllowLooseGrammar -> True` (default)                          | matches inside arbitrary surrounding text |
 | `TestGrammar_12`          | `CaseSensitive["Hello"] -> ...`                                | per-rule case sensitivity |
 
-The pattern shapes accepted, as documented in [`GrammarRules`](paclet:ref/GrammarRules):
+The pattern shapes accepted, as documented in [GrammarRules]():
 
 ```
 "string"                       literal string
@@ -67,13 +67,13 @@ Built-in `GrammarToken` types that resolved in cloud tests (more exist):
 
 ---
 
-## Part 2 - What `Wolfram\`Parser\`` supports locally today
+## Part 2 - What <code>Wolfram\`Parser\`</code> supports locally today
 
 `Parse[GrammarRules[{...}], input]` accepts two surface shapes for the rule LHS, both lowered on the same code path:
 
 ### (a) The string-template form
 
-The simpler shape (which the cloud's built-in does *not* accept, but [Interpreter](paclet:ref/Interpreter)`["..."]` and [FormFunction](paclet:ref/FormFunction) do): a string with `<name:Type>` slots, like `"add <a:Number> and <b:Number>"`. Each template is split into literal segments and slot recognizers, sequenced into a `ParseSequence`, and the slot bindings flow into the rule body via [ReplaceAll](paclet:ref/ReplaceAll) on the named symbols.
+The simpler shape (which the cloud's built-in does *not* accept, but [Interpreter]()`["..."]` and [FormFunction]() do): a string with `<name:Type>` slots, like `"add <a:Number> and <b:Number>"`. Each template is split into literal segments and slot recognizers, sequenced into a `ParseSequence`, and the slot bindings flow into the rule body via [ReplaceAll]() on the named symbols.
 
 Slot types supported:
 
@@ -98,7 +98,7 @@ Out[]= {"eat", "sushi"}
 
 ### (b) The pattern form (matches the built-in's surface syntax)
 
-The same shapes the cloud-deployed [GrammarRules](paclet:ref/GrammarRules) accepts - `FixedOrder`, `Alternatives` (`form1 | form2`), `OptionalElement`, `DelimitedSequence`, `Repeated` (`form..`), `CaseSensitive`, `GrammarToken["Name"]`, and the `x : form` capture form (`Pattern[name, form]`). The same `GrammarRules[...]` expression you would `CloudDeploy` runs locally without modification.
+The same shapes the cloud-deployed [GrammarRules]() accepts - `FixedOrder`, `Alternatives` (`form1 | form2`), `OptionalElement`, `DelimitedSequence`, `Repeated` (`form..`), `CaseSensitive`, `GrammarToken["Name"]`, and the `x : form` capture form (`Pattern[name, form]`). The same `GrammarRules[...]` expression you would `CloudDeploy` runs locally without modification.
 
 Each pattern node lowers to a `ParserCombinator`; the captures collected by `Pattern[name, _]` nodes bubble up as an `Association` of bindings, which then substitute into the rule body via the same `ReplaceAll` machinery the template form uses.
 
@@ -170,7 +170,7 @@ Use [ParsePartial](paclet:Wolfram/WolframParser/ref/Parse) when you want a prefi
 
 ### The same rules through `ParserCompile`
 
-A `GrammarRules` lowers to a `ParserCombinator`; `ParserCompile` then materializes the [FunctionCompile](paclet:ref/FunctionCompile)d form:
+A `GrammarRules` lowers to a `ParserCombinator`; `ParserCompile` then materializes the [FunctionCompile]()d form:
 
 ```wl
 In[]:= cf = ParserCompile[GrammarRules[{"<n:Integer>" :> n^2}]];
@@ -196,7 +196,7 @@ What the local lowering does *not* cover yet, with the workarounds:
 
 ### Not yet lowered: semantic `GrammarToken` types
 
-`GrammarToken["City"]`, `GrammarToken["Color"]`, `GrammarToken["Date"]`, `GrammarToken["SemanticNumber"]`, ... resolve via [Interpreter](paclet:ref/Interpreter) in the cloud. Locally, only the digit-and-letter classes (`Number`, `Integer`, `Word`, the default any-word slot) are wired up.
+`GrammarToken["City"]`, `GrammarToken["Color"]`, `GrammarToken["Date"]`, `GrammarToken["SemanticNumber"]`, ... resolve via [Interpreter]() in the cloud. Locally, only the digit-and-letter classes (`Number`, `Integer`, `Word`, the default any-word slot) are wired up.
 
 **Workaround:** capture the slot as a `Word` and call `Interpreter[type]` yourself in the rule body:
 
@@ -216,7 +216,7 @@ Adding `Interpreter[type]` as the implementation of `slotParser[type]` for unsup
 
 The cloud's default `AllowLooseGrammar -> True` lets `GrammarApply[g, "could you please tell me the weather in Boston"]` match a `"weather <c:City>"` rule by ignoring surrounding fluff. The local parser is strict-PEG: every character must match. Same for case insensitivity (`IgnoreCase -> True` by default in the cloud, no equivalent locally) and diacritic stripping.
 
-**Workaround:** for loose-grammar behavior, scan with [StringPosition](paclet:ref/StringPosition) for a candidate substring and run the rule on that; for case insensitivity, lowercase the input before parsing. Both are awkward; honoring the `GrammarRules` options at lowering time is the eventual fix.
+**Workaround:** for loose-grammar behavior, scan with [StringPosition]() for a candidate substring and run the rule on that; for case insensitivity, lowercase the input before parsing. Both are awkward; honoring the `GrammarRules` options at lowering time is the eventual fix.
 
 ---
 
@@ -228,7 +228,7 @@ The cloud's default `AllowLooseGrammar -> True` lets `GrammarApply[g, "could you
 | You need a structured template like `"add <a:Number> and <b:Number>"` for digit/word patterns, no NLP | `Parse[GrammarRules[...]]` locally - no network, no auth, no rate limits |
 | You're parsing a formal grammar (a DSL, a math expression, a file format) | Skip `GrammarRules` entirely - the bare `Parse*` combinators in [`Wolfram\`Parser\``](paclet:Wolfram/WolframParser/guide/WolframParser) are the right tool |
 | You want to test offline what would deploy to the cloud later | `Parse[GrammarRules[...]]` accepts the same `FixedOrder` / `OptionalElement` / `DelimitedSequence` / `x : GrammarToken[...]` shapes the cloud does, modulo the semantic-token gap above |
-| You want maximum speed for a fixed grammar | `ParserCompile[GrammarRules[...]]` - same shape, returns a [CompiledCodeFunction](paclet:ref/CompiledCodeFunction) |
+| You want maximum speed for a fixed grammar | `ParserCompile[GrammarRules[...]]` - same shape, returns a [CompiledCodeFunction]() |
 
 The two-tier story behind the design: `GrammarRules` is the *declarative* layer; `Parse*` is the *combinator* layer. Anything you can write declaratively, you can also write as combinators; the declarative form lowers down. For the common subset, the local declarative layer is *symmetric* with the cloud one - same `GrammarRules[...]` expression, different deployment target.
 
