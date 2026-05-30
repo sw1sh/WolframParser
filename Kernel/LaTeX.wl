@@ -33,6 +33,8 @@ LaTeXMathParse::usage = "LaTeXMathParse[texSource] parses LaTeX math notation an
 
 LaTeXMathParser::usage = "LaTeXMathParser is the underlying ParserCombinator. Use it via Parse[LaTeXMathParser, source] when you want the same parser applied to many inputs."
 
+LaTeXMathStyle::usage = "LaTeXMathStyle[boxes] restyles LaTeXMathParse output into a Computer-Modern look, matching LaTeX/MaTeX: italic letters become their math-italic (cmmi) codepoints in an installed Latin Modern Math font and \\mathbb letters render in the MSBM10 blackboard font, with everything wrapped in the chosen family. With no font it auto-detects the best installed CM font (Latin Modern Math > Latin Modern Roman > CMU Serif) and returns the boxes unchanged if none is found. LaTeXMathStyle[boxes, font] forces a specific family."
+
 
 Begin["`LaTeXPrivate`"]
 
@@ -95,6 +97,20 @@ unicodeAtom = ParseAction[
     token[ParseCharacter[_ ? (! unicodeReservedQ[#] &)]],
     StyleBox[#, "TI"] &
 ]
+
+(* unicodeAtom italicises EVERY non-reserved char as a math variable, but only
+   plain Latin/Greek letters should be italic.  A pasted SYMBOL (∂ ⇒ ∞ ×) or a
+   PRE-STYLED letter (blackboard ℝ, math-alphanumeric 𝐀, fraktur 𝔊) must render
+   upright to match its \macro form (\partial, \mathbb{R}, ...) - else typing
+   \partial and pasting ∂ disagree.  uprightUnicodeSymbols (a post-parse pass in
+   LaTeXMathParse, NOT in the grammar, so it leaves Hash[LaTeXMathParser] and
+   the compiled asset untouched) unwraps those back to bare glyphs.  No effect
+   on the ASCII path: there every StyleBox[_,"TI"] holds a plain letter.
+   Pre-styled = the two Unicode blocks that already encode their own style. *)
+preStyledLetterQ[c_String] := With[{cc = First @ ToCharacterCode[c]},
+    (16^^1D400 <= cc <= 16^^1D7FF) || (16^^2100 <= cc <= 16^^214F)]
+bareUnicodeAtomQ[c_String] := StringLength[c] == 1 && (! LetterQ[c] || preStyledLetterQ[c])
+uprightUnicodeSymbols[boxes_] := boxes /. StyleBox[s_String, "TI"] /; bareUnicodeAtomQ[s] :> s
 
 
 (* === command (\name, optional [bracketed] arg, any number of {braced} args) ===
@@ -334,8 +350,8 @@ buildEnv[name_String, rowsIn_List] :=
             "pmatrix" | "pmatrix*", RowBox[{"(", grid, ")"}],
             "bmatrix" | "bmatrix*", RowBox[{"[", grid, "]"}],
             "Bmatrix" | "Bmatrix*", RowBox[{"{", grid, "}"}],
-            "vmatrix" | "vmatrix*", RowBox[{"|", grid, "|"}],
-            "Vmatrix" | "Vmatrix*", RowBox[{"\[DoubleVerticalBar]", grid, "\[DoubleVerticalBar]"}],
+            "vmatrix" | "vmatrix*", RowBox[{"\[LeftBracketingBar]", grid, "\[RightBracketingBar]"}],
+            "Vmatrix" | "Vmatrix*", RowBox[{"\[LeftDoubleBracketingBar]", grid, "\[RightDoubleBracketingBar]"}],
             "cases" | "dcases" | "rcases" | "drcases",
                 RowBox[{"{", GridBox[padded, ColumnAlignments -> Left]}],
             (* align / aligned / split / eqnarray / alignat / flalign:
@@ -784,9 +800,6 @@ Scan[
      "\\phantom", "\\hphantom", "\\vphantom",
      "\\rule", "\\includegraphics", "\\def", "\\renewcommand", "\\newcommand", "\\gdef",
      "\\kern", "\\mkern", "\\hskip", "\\mskip", "\\hspace", "\\vspace",
-     (* Negative thin/med/thick spaces and `\!` would need a negative
-        kern we can't render cleanly, so drop them (least-wrong). *)
-     "\\negthinspace", "\\negmedspace", "\\negthickspace", "\\!",
      "\\quad" (* \quad already in namedSymbolChars - this no-ops if no handler hit *)
     }
 ]
@@ -804,6 +817,15 @@ commandHandlers["\\medspace"]   = commandHandlers["\\:"]
 commandHandlers["\\;"]          = Function[{opt, req}, "\[ThickSpace]"]
 commandHandlers["\\thickspace"] = commandHandlers["\\;"]
 commandHandlers["\\enspace"]    = Function[{opt, req}, "\[ThickSpace]"]
+
+(* Negative TeX spaces - the named negative-space glyphs DO kern cleanly in the
+   FE (verified: letters pull together, no visible artifact), the negative
+   mirror of \, \: \; above.  KaTeX renders \! as a real -3mu kern (e.g. the
+   tightened d in \!\!\int, or \left( \! ... \! \right) hugging). *)
+commandHandlers["\\!"]             = Function[{opt, req}, "\[NegativeThinSpace]"]
+commandHandlers["\\negthinspace"]  = commandHandlers["\\!"]
+commandHandlers["\\negmedspace"]   = Function[{opt, req}, "\[NegativeMediumSpace]"]
+commandHandlers["\\negthickspace"] = Function[{opt, req}, "\[NegativeThickSpace]"]
 
 Scan[
     (commandHandlers[#] = styleScopeHandler) &,
@@ -1336,10 +1358,20 @@ namedSymbolChars = <|
     "\\Longrightarrow" -> "\[DoubleLongRightArrow]",
     "\\Longleftarrow"  -> "\[DoubleLongLeftArrow]",
     "\\Longleftrightarrow" -> "\[DoubleLongLeftRightArrow]",
-    "\\hookrightarrow" -> "\[RightArrow]", "\\hookleftarrow" -> "\[LeftArrow]",
+    "\\hookrightarrow" -> "\:21aa", "\\hookleftarrow" -> "\:21a9",
     "\\longmapsto"  -> "\[Function]",  "\\implies" -> "\[DoubleLongRightArrow]",
     "\\impliedby"   -> "\[DoubleLongLeftArrow]", "\\iff" -> "\[DoubleLongLeftRightArrow]",
-    "\\rightsquigarrow" -> "\[RightArrow]",
+    "\\rightsquigarrow" -> "\:21dd",   "\\leadsto" -> "\:21dd",
+    (* diagonal arrows *)
+    "\\nearrow"  -> "\[UpperRightArrow]", "\\searrow" -> "\[LowerRightArrow]",
+    "\\swarrow"  -> "\[LowerLeftArrow]",  "\\nwarrow" -> "\[UpperLeftArrow]",
+    (* harpoons (LaTeX \...harpoon... = Wolfram vector glyphs) *)
+    "\\leftharpoonup"     -> "\[LeftVector]",   "\\leftharpoondown"   -> "\[DownLeftVector]",
+    "\\rightharpoonup"    -> "\[RightVector]",  "\\rightharpoondown"  -> "\[DownRightVector]",
+    "\\rightleftharpoons" -> "\[Equilibrium]",  "\\leftrightharpoons" -> "\[ReverseEquilibrium]",
+    (* two-headed / dashed arrows (no Wolfram named char - raw Unicode) *)
+    "\\twoheadrightarrow" -> "\:21a0", "\\twoheadleftarrow" -> "\:219e",
+    "\\dashrightarrow"    -> "\:21e2", "\\dashleftarrow"    -> "\:21e0",
     (* logic / misc symbols *)
     "\\nexists" -> "\[NotExists]",     "\\top" -> "\[UpTee]",
     "\\bot"     -> "\[DownTee]",       "\\therefore" -> "\[Therefore]",
@@ -1533,30 +1565,44 @@ delimGlyph["\\Downarrow"]   = "\[DoubleDownArrow]";
 delimGlyph["\\Updownarrow"] = "\[DoubleUpDownArrow]";
 delimGlyph[s_String] := s
 
+(* \left|..\right| and \left\|..\right\| use the matchfix bracketing-bar
+   characters (distinct left vs right), which hug and stretch like LaTeX;
+   every other delimiter keeps the symmetric glyph delimGlyph returns. *)
+barDelimL[g_] := g /. {"|" -> "\[LeftBracketingBar]", "\[DoubleVerticalBar]" -> "\[LeftDoubleBracketingBar]"}
+barDelimR[g_] := g /. {"|" -> "\[RightBracketingBar]", "\[DoubleVerticalBar]" -> "\[RightDoubleBracketingBar]"}
 leftRightAtom = ParseAction[
     ParseLiteral["\\left"] ~~ ws ~~ delimMacro ~~ ws ~~
         ParseRecursive[topRow] ~~
         ParseLiteral["\\right"] ~~ ws ~~ delimMacro,
-    With[{l = delimGlyph[#3], r = delimGlyph[#8]},
+    With[{l = barDelimL[delimGlyph[#3]], r = barDelimR[delimGlyph[#8]]},
         RowBox[Select[{l, #5, r}, # =!= "" &]]
     ] &
 ]
 
 (* absolute-value / norm bars: |expr| renders the bars visibly. The
    inner is the relation-free sumExpr so a stray | terminates it. *)
-(* The FE adds relation/separator spacing on both sides of bar
-   delimiters, so `|x|` / `\|v\|` render noticeably looser than LaTeX
-   (which hugs the bars to the content).  Pull each bar toward the
-   content with a small negative AdjustmentBox margin (em units): the
-   opener loses right margin, the closer loses left margin.  ~0.2em
-   roughly cancels the FE's added gap without overlapping the content. *)
-$delimKern = 0.2
-kernOpen[g_] := AdjustmentBox[g, BoxMargins -> {{0, -$delimKern}, {0, 0}}]
-kernClose[g_] := AdjustmentBox[g, BoxMargins -> {{-$delimKern, 0}, {0, 0}}]
+(* Emit the front end's matchfix bracketing-bar characters, not a plain
+   "|": \[LeftBracketingBar] / \[RightBracketingBar] are *delimiters*, so
+   the FE hugs them to the content the way LaTeX does and stretches them
+   to tall content - exactly what ToBoxes[Abs[x], TraditionalForm] emits.
+   A plain "|" instead gets the FE's looser relation/separator spacing.
+   (An earlier version pulled plain bars in with negative AdjustmentBox
+   margins, but that kern landed asymmetrically on "|" and made the proper
+   bracket characters below overlap their content.) *)
+(* Italic correction.  An italic glyph leans right, so its ink sits flush
+   against a following closing delimiter while the opener has a wide gap to the
+   ink - `|x|` then reads as pushed toward the right bar (an upright `|2|` is
+   already symmetric).  When the content ends in an italic letter, insert a
+   1-mu VeryThinSpace before the closer, exactly as TeX's italic correction
+   does; upright content is left untouched. *)
+endsItalicQ[StyleBox[_, "TI", ___]] := True
+endsItalicQ[RowBox[parts_List]] := parts =!= {} && endsItalicQ[Last[parts]]
+endsItalicQ[_] := False
+italicCorr[content_] := If[endsItalicQ[content], "\[VeryThinSpace]", Nothing]
 
 absAtom = ParseAction[
     literal["|"] ~~ ParseRecursive[sumExpr] ~~ literal["|"],
-    RowBox[{kernOpen["|"], #2, kernClose["|"]}] &
+    RowBox[{"\[LeftBracketingBar]", #2, italicCorr[#2], "\[RightBracketingBar]"}] &
 ]
 (* No matchfix normAtom for `\|...\|`: unlike `|`, `\|` is also a valid
    standalone atom (-> double-bar glyph), so a matchfix inner sumExpr
@@ -1571,18 +1617,19 @@ absAtom = ParseAction[
    with the bracket bound to one operand.  Works because the closers
    (\rangle/\rceil/...) are guarded out of commandAtom above, so the
    inner row stops at them and the matchfix `literal` closer matches.
-   Kern the fences toward content like absAtom.  Tried before commandAtom
-   so a matched pair wins; an unmatched OPENER falls through to the
-   bare-glyph command path (openers are not guarded). *)
+   The fences are matchfix delimiter characters, so the FE spaces and
+   grows them correctly with no kern.  Tried before commandAtom so a
+   matched pair wins; an unmatched OPENER falls through to the bare-glyph
+   command path (openers are not guarded). *)
 matchfixAtom[openTok_, closeTok_, og_, cg_] := ParseAction[
     literal[openTok] ~~ ParseRecursive[topRow] ~~ literal[closeTok],
-    RowBox[{kernOpen[og], #2, kernClose[cg]}] &
+    RowBox[{og, #2, italicCorr[#2], cg}] &
 ]
 angleAtom = matchfixAtom["\\langle", "\\rangle", "\[LeftAngleBracket]", "\[RightAngleBracket]"]
 ceilAtom  = matchfixAtom["\\lceil",  "\\rceil",  "\[LeftCeiling]", "\[RightCeiling]"]
 floorAtom = matchfixAtom["\\lfloor", "\\rfloor", "\[LeftFloor]", "\[RightFloor]"]
-lvertAtom = matchfixAtom["\\lvert",  "\\rvert",  "|", "|"]
-lVertAtom = matchfixAtom["\\lVert",  "\\rVert",  "\[DoubleVerticalBar]", "\[DoubleVerticalBar]"]
+lvertAtom = matchfixAtom["\\lvert",  "\\rvert",  "\[LeftBracketingBar]", "\[RightBracketingBar]"]
+lVertAtom = matchfixAtom["\\lVert",  "\\rVert",  "\[LeftDoubleBracketingBar]", "\[RightDoubleBracketingBar]"]
 
 atom = ParseChoice[
     numberAtom, environmentAtom, leftRightAtom,
@@ -2844,9 +2891,61 @@ LaTeXMathParse[source_String] := Module[
         (* `/. $lineBreakMark -> ""` is a safety net: a stray marker not
            inside a RowBox (e.g. the whole input was just `\\`) would
            otherwise leak the private symbol into output. *)
-        suppressCommaSpaceBetweenDigits @ tightenScriptCommas @ stripEmptyRowChildren @
-            applyLineBreaks @ bigOpDisplayLimits[r] /. $lineBreakMark -> ""
+        uprightUnicodeSymbols @ suppressCommaSpaceBetweenDigits @ tightenScriptCommas @
+            stripEmptyRowChildren @ applyLineBreaks @ bigOpDisplayLimits[r] /. $lineBreakMark -> ""
     ]
+]
+
+
+(* === LaTeXMathStyle: give parser output a Computer-Modern look ===
+   The parser is font-agnostic - identifiers are tagged StyleBox[_, "TI"] (the
+   FE's default Times-based math italic).  This restyles that into the
+   Computer-Modern look LaTeX/MaTeX produces.  An OpenType *math* font (Latin
+   Modern Math) carries the cmmi math-italic letterforms at the
+   math-alphanumeric codepoints, not via FontSlant, so for it each italic letter
+   is remapped to its codepoint; a text font (Latin Modern Roman / CMU Serif)
+   just gets FontSlant -> Italic.  Double-struck \mathbb has its own font: when
+   MSBM10.otf is installed (AMS msbm converted to OpenType, see dev/
+   make-msbm-otf.py) blackboard letters render in it to match real LaTeX. *)
+$cmFontDirs := {FileNameJoin[{$HomeDirectory, "Library", "Fonts"}], "/Library/Fonts", "/System/Library/Fonts"}
+(* memoized - installed fonts don't change within a session *)
+detectMathFont[] := detectMathFont[] = Which[
+    FileNames["latinmodern-math*" | "lmmath*", $cmFontDirs] =!= {}, "Latin Modern Math",
+    FileNames["lmroman*" | "latinmodern*", $cmFontDirs] =!= {}, "Latin Modern Roman",
+    FileNames["cmun*", $cmFontDirs] =!= {}, "CMU Serif",
+    True, None]
+detectMSBMFont[] := detectMSBMFont[] = If[FileNames["MSBM10.otf", $cmFontDirs] =!= {}, "MSBM10", None]
+
+mathItalicChar[c_String] := With[{cc = First @ ToCharacterCode[c]},
+    FromCharacterCode @ Which[
+        cc == 104, 16^^210E,                                      (* h -> Planck constant *)
+        97 <= cc <= 122, cc + (16^^1D44E - 97),                   (* a-z *)
+        65 <= cc <= 90, cc + (16^^1D434 - 65),                    (* A-Z *)
+        16^^03B1 <= cc <= 16^^03C9, cc + (16^^1D6FC - 16^^03B1),  (* alpha-omega *)
+        True, cc]]
+toMathItalicStr[s_String] := StringJoin[mathItalicChar /@ Characters[s]]
+dblStruckCharQ[c_String] := With[{cc = First @ ToCharacterCode[c]},
+    MemberQ[{16^^2102, 16^^210D, 16^^2115, 16^^2119, 16^^211A, 16^^211D, 16^^2124}, cc] ||
+    (16^^1D538 <= cc <= 16^^1D56B) || (16^^1D7D8 <= cc <= 16^^1D7E1)]
+
+LaTeXMathStyle[f_Failure, ___] := f
+LaTeXMathStyle[$Failed, ___] := $Failed
+LaTeXMathStyle[boxes_] := LaTeXMathStyle[boxes, detectMathFont[]]
+LaTeXMathStyle[boxes_, None] := boxes
+LaTeXMathStyle[boxes_, font_String] := Module[
+    {useMI = StringContainsQ[font, "Math"], msbm = detectMSBMFont[], r},
+    r = boxes /. {
+        StyleBox[c_, "TBI", rest___] :> StyleBox[c, FontWeight -> Bold, FontSlant -> Italic, rest],
+        StyleBox[c_, "TB", rest___] :> StyleBox[c, FontWeight -> Bold, rest],
+        StyleBox[c_String, "TI", rest___] :>
+            If[useMI, StyleBox[toMathItalicStr[c], rest], StyleBox[c, FontSlant -> Italic, rest]],
+        StyleBox[c_, "TI", rest___] :> StyleBox[c, FontSlant -> Italic, rest],
+        StyleBox[c_, "TR", rest___] :> StyleBox[c, rest]
+    };
+    If[msbm =!= None,
+        r = r /. s_String /; s =!= "" && AllTrue[Characters[s], dblStruckCharQ] :>
+            StyleBox[s, FontFamily -> msbm]];
+    StyleBox[r, FontFamily -> font]
 ]
 
 

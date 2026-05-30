@@ -80,6 +80,48 @@ VerificationTest[
 ]
 
 
+(* === raw Unicode atoms (pasted, not \macro) ===
+   The PEGVM-compiled parser matches char classes (LetterCharacter, the
+   unicodeAtom predicate) as ASCII only, so a pasted Unicode letter/symbol
+   fails to match there. LaTeXMathParse detects non-ASCII input and routes it
+   to the interpreted grammar, which handles it via identAtom / unicodeAtom -
+   this is what lifts the KaTeX corpus from 117 to 126. *)
+VerificationTest[
+    LaTeXMathParse["\[Alpha]"],
+    StyleBox["\[Alpha]", "TI"],
+    TestID -> "LaTeX: raw Unicode Greek alpha -> italic atom"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\frac{\[Alpha]\[Beta]}{\[Gamma]}"],
+    FractionBox[
+        RowBox[{StyleBox["\[Alpha]", "TI"], StyleBox["\[Beta]", "TI"]}],
+        StyleBox["\[Gamma]", "TI"]
+    ],
+    TestID -> "LaTeX: raw Unicode Greek inside \\frac"
+]
+
+VerificationTest[
+    MatchQ[LaTeXMathParse[FromCharacterCode[16^^3F5]], _Failure],
+    False,
+    TestID -> "LaTeX: variant epsilon (U+03F5) parses, no ParseError"
+]
+
+(* A pasted Unicode SYMBOL or pre-styled letter must render upright, exactly
+   as its \macro form does - not italicised like a variable. *)
+VerificationTest[
+    LaTeXMathParse[FromCharacterCode[16^^2202]],
+    LaTeXMathParse["\\partial"],
+    TestID -> "LaTeX: pasted symbol == its macro (raw \[PartialD] == \\partial, upright)"
+]
+
+VerificationTest[
+    LaTeXMathParse[FromCharacterCode[16^^211D]],
+    LaTeXMathParse["\\mathbb{R}"],
+    TestID -> "LaTeX: pasted pre-styled letter == its macro (raw double-struck R == \\mathbb{R})"
+]
+
+
 (* === fractions, roots, sub/super === *)
 
 VerificationTest[
@@ -223,26 +265,20 @@ VerificationTest[
 (* === absolute-value / norm bars === *)
 
 VerificationTest[
-    (* the bars are kerned toward the content (AdjustmentBox negative
-       margin) so they hug it the way LaTeX does, instead of getting the
-       FE's looser relation spacing. *)
+    (* the bars are the FE's matchfix bracketing-bar characters, which hug
+       and stretch to the content like LaTeX instead of getting "|"'s looser
+       relation spacing.  The trailing VeryThinSpace is italic correction -
+       an italic x leans into the right bar, so a 1-mu space rebalances it
+       (upright content gets none; see endsItalicQ in Kernel/LaTeX.wl). *)
     LaTeXMathParse["|x|"],
-    RowBox[{
-        AdjustmentBox["|", BoxMargins -> {{0, -0.2}, {0, 0}}],
-        StyleBox["x", "TI"],
-        AdjustmentBox["|", BoxMargins -> {{-0.2, 0}, {0, 0}}]
-    }],
+    RowBox[{"\[LeftBracketingBar]", StyleBox["x", "TI"], "\[VeryThinSpace]", "\[RightBracketingBar]"}],
     TestID -> "LaTeX: absolute-value bars"
 ]
 
 VerificationTest[
     LaTeXMathParse["|x|_p"],
     SubscriptBox[
-        RowBox[{
-            AdjustmentBox["|", BoxMargins -> {{0, -0.2}, {0, 0}}],
-            StyleBox["x", "TI"],
-            AdjustmentBox["|", BoxMargins -> {{-0.2, 0}, {0, 0}}]
-        }],
+        RowBox[{"\[LeftBracketingBar]", StyleBox["x", "TI"], "\[VeryThinSpace]", "\[RightBracketingBar]"}],
         StyleBox["p", "TI"]],
     TestID -> "LaTeX: norm bars with subscript"
 ]
@@ -259,14 +295,11 @@ VerificationTest[
 (* === named matchfix bracket pairs (kerned, content grouped inside) === *)
 
 VerificationTest[
-    (* \lceil..\rceil is a real matchfix group with kerned fences, not
-       loose ⌈ x ⌉ tokens (the closers are guarded out of commandAtom). *)
+    (* \lceil..\rceil is a real matchfix group, not loose ⌈ x ⌉ tokens (the
+       closers are guarded out of commandAtom).  The bracket chars are
+       matchfix delimiters, so they hug the content with no kern. *)
     LaTeXMathParse["\\lceil x \\rceil"],
-    RowBox[{
-        AdjustmentBox["\[LeftCeiling]", BoxMargins -> {{0, -0.2}, {0, 0}}],
-        StyleBox["x", "TI"],
-        AdjustmentBox["\[RightCeiling]", BoxMargins -> {{-0.2, 0}, {0, 0}}]
-    }],
+    RowBox[{"\[LeftCeiling]", StyleBox["x", "TI"], "\[VeryThinSpace]", "\[RightCeiling]"}],
     TestID -> "LaTeX: \\lceil ... \\rceil matchfix"
 ]
 
@@ -275,21 +308,18 @@ VerificationTest[
        bound to a single operand as before. *)
     LaTeXMathParse["\\langle a, b \\rangle"],
     RowBox[{
-        AdjustmentBox["\[LeftAngleBracket]", BoxMargins -> {{0, -0.2}, {0, 0}}],
+        "\[LeftAngleBracket]",
         RowBox[{StyleBox["a", "TI"], "," <> "\[ThinSpace]", StyleBox["b", "TI"]}],
-        AdjustmentBox["\[RightAngleBracket]", BoxMargins -> {{-0.2, 0}, {0, 0}}]
+        "\[VeryThinSpace]",
+        "\[RightAngleBracket]"
     }],
     TestID -> "LaTeX: \\langle ... \\rangle groups its content"
 ]
 
 VerificationTest[
-    (* \lVert..\rVert is the proper norm: kerned double bars, grouped *)
+    (* \lVert..\rVert is the proper norm: matchfix double bracketing bars *)
     LaTeXMathParse["\\lVert v \\rVert"],
-    RowBox[{
-        AdjustmentBox["\[DoubleVerticalBar]", BoxMargins -> {{0, -0.2}, {0, 0}}],
-        StyleBox["v", "TI"],
-        AdjustmentBox["\[DoubleVerticalBar]", BoxMargins -> {{-0.2, 0}, {0, 0}}]
-    }],
+    RowBox[{"\[LeftDoubleBracketingBar]", StyleBox["v", "TI"], "\[VeryThinSpace]", "\[RightDoubleBracketingBar]"}],
     TestID -> "LaTeX: \\lVert ... \\rVert norm matchfix"
 ]
 
@@ -316,6 +346,24 @@ VerificationTest[
     LaTeXMathParse["2x"],
     RowBox[{"2", StyleBox["x", "TI"]}],
     TestID -> "LaTeX: plain juxtaposition stays tight (no function space)"
+]
+
+
+(* === negative spaces (the negative mirror of \, \: \;) === *)
+
+VerificationTest[
+    LaTeXMathParse["a\\!b"],
+    RowBox[{StyleBox["a", "TI"], "\[NegativeThinSpace]", StyleBox["b", "TI"]}],
+    TestID -> "LaTeX: \\! negative thin space"
+]
+
+VerificationTest[
+    {LaTeXMathParse["x\\negmedspace y"], LaTeXMathParse["x\\negthickspace y"]},
+    {
+        RowBox[{StyleBox["x", "TI"], "\[NegativeMediumSpace]", StyleBox["y", "TI"]}],
+        RowBox[{StyleBox["x", "TI"], "\[NegativeThickSpace]", StyleBox["y", "TI"]}]
+    },
+    TestID -> "LaTeX: \\negmedspace / \\negthickspace"
 ]
 
 
@@ -562,6 +610,28 @@ VerificationTest[
 ]
 
 
+(* === diagonal arrows, harpoons, hook / squiggle / two-headed / dashed ===
+   Diagonal arrows and harpoons map to Wolfram named chars; the rest have no
+   named char and use the raw Unicode arrow codepoint. *)
+VerificationTest[
+    LaTeXMathParse /@ {
+        "\\nearrow", "\\searrow", "\\swarrow", "\\nwarrow",
+        "\\leftharpoonup", "\\leftharpoondown", "\\rightharpoonup", "\\rightharpoondown",
+        "\\rightleftharpoons", "\\leftrightharpoons",
+        "\\hookrightarrow", "\\hookleftarrow", "\\rightsquigarrow", "\\leadsto",
+        "\\twoheadrightarrow", "\\twoheadleftarrow", "\\dashrightarrow", "\\dashleftarrow"
+    },
+    {
+        "\[UpperRightArrow]", "\[LowerRightArrow]", "\[LowerLeftArrow]", "\[UpperLeftArrow]",
+        "\[LeftVector]", "\[DownLeftVector]", "\[RightVector]", "\[DownRightVector]",
+        "\[Equilibrium]", "\[ReverseEquilibrium]",
+        "\:21aa", "\:21a9", "\:21dd", "\:21dd",
+        "\:21a0", "\:219e", "\:21e2", "\:21e0"
+    },
+    TestID -> "KaTeX arrows: diagonal / harpoon / hook / squiggle / two-head / dashed glyphs"
+]
+
+
 (* === sub/superscript order + primes (KaTeX Exponents / Prime cases) === *)
 
 VerificationTest[
@@ -685,7 +755,7 @@ VerificationTest[
 
 VerificationTest[
     LaTeXMathParse["\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}"],
-    RowBox[{"|", GridBox[{{StyleBox["a", "TI"], StyleBox["b", "TI"]}, {StyleBox["c", "TI"], StyleBox["d", "TI"]}}], "|"}],
+    RowBox[{"\[LeftBracketingBar]", GridBox[{{StyleBox["a", "TI"], StyleBox["b", "TI"]}, {StyleBox["c", "TI"], StyleBox["d", "TI"]}}], "\[RightBracketingBar]"}],
     TestID -> "Env: vmatrix -> bar-delimited GridBox"
 ]
 
@@ -719,4 +789,35 @@ VerificationTest[
     },
     {True, "*"},
     TestID -> "Regression: ParseCharacter[\"*\"] matches literal * only (not wildcard)"
+]
+
+
+(* === LaTeXMathStyle: Computer-Modern restyling of parser output === *)
+
+VerificationTest[
+    (* a text font: "TI" letters get FontSlant -> Italic, all wrapped in the family *)
+    LaTeXMathStyle[StyleBox["x", "TI"], "CMU Serif"],
+    StyleBox[StyleBox["x", FontSlant -> Italic], FontFamily -> "CMU Serif"],
+    TestID -> "LaTeXMathStyle: text font uses FontSlant"
+]
+
+VerificationTest[
+    (* an OpenType *math* font: "TI" letters become their math-italic codepoint *)
+    LaTeXMathStyle[StyleBox["x", "TI"], "Latin Modern Math"],
+    StyleBox[StyleBox[FromCharacterCode[16^^1D465]], FontFamily -> "Latin Modern Math"],
+    TestID -> "LaTeXMathStyle: math font remaps to math-italic codepoint"
+]
+
+VerificationTest[
+    (* None (no CM font) leaves the boxes untouched *)
+    LaTeXMathStyle[StyleBox["x", "TI"], None],
+    StyleBox["x", "TI"],
+    TestID -> "LaTeXMathStyle: None is a no-op"
+]
+
+VerificationTest[
+    (* a parse Failure passes straight through *)
+    With[{f = LaTeXMathParse["{unclosed"]}, LaTeXMathStyle[f, "Latin Modern Math"] === f],
+    True,
+    TestID -> "LaTeXMathStyle: Failure passes through"
 ]
