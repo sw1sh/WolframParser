@@ -42,6 +42,8 @@ ParseLiteral::usage = "ParseLiteral[s] returns the ParserCombinator that matches
 
 ParseCharacter::usage = "ParseCharacter[pat] returns the ParserCombinator that matches a single character against the character-class pattern pat."
 
+ParseRegex::usage = "ParseRegex[regex] returns the ParserCombinator that matches as much input as the regex consumes from the current position, returning the matched string.  regex is a string (PCRE-style, the same shape `RegularExpression` takes)."
+
 ParseSucceed::usage = "ParseSucceed[val] returns the ParserCombinator that always succeeds with val, consuming nothing."
 
 ParseFail::usage = "ParseFail[msg] returns the ParserCombinator that always fails with msg."
@@ -78,8 +80,6 @@ ParseRecursive::usage = "ParseRecursive[symbol] is a lazy reference to a parser 
 
 ParseAction::usage = "ParseAction[p, f] runs p and applies f to its result; f is splatted across the elements when p's result is a list."
 
-GrammarRules::usage = "GrammarRules is the built-in declarative grammar head. Parse[GrammarRules[{...}], input] lowers each rule to a ParserCombinator and runs it locally (no CloudDeploy)."
-
 
 Begin["`Private`"]
 
@@ -99,6 +99,8 @@ ParserCombinatorQ[_] := False
 ParseLiteral[s_String] := ParserCombinator["Literal", s, <||>]
 
 ParseCharacter[pat_] := ParserCombinator["Character", pat, <||>]
+
+ParseRegex[r_String] := ParserCombinator["Regex", r, <||>]
 
 ParseSucceed[val_] := ParserCombinator["Succeed", val, <||>]
 
@@ -363,6 +365,48 @@ interpretDispatch[ParserCombinator["Character", pat_, _], input_, pos_] :=
         ]
     ]
 
+(* Regex match anchored at the current position.  StringCases with
+   StartOfString anchors the regex to the start of `remaining` (the
+   un-consumed suffix), and the default greedy semantics give the longest
+   match the regex allows.  Returns the matched substring and advances
+   the position by its length; failure is a per-cell parseErr with the
+   regex as the expected token. *)
+interpretDispatch[ParserCombinator["Regex", r_String, _], input_, pos_] :=
+    Block[{remaining, m},
+        remaining = If[ pos > StringLength[input], "", StringTake[input, {pos, -1}] ];
+        m = Quiet @ StringCases[remaining, StartOfString ~~ RegularExpression[r], 1];
+        If[ MatchQ[m, {_String}],
+            parseOk[First[m], pos + StringLength[First[m]]],
+            parseErr[pos, "regex /" <> r <> "/", safeChar[input, pos]]
+        ]
+    ]
+
+(* Semantic GrammarToken[type] dispatch: consume a word-ish run from the
+   current position and feed it to Interpreter[type].  Letters, digits,
+   hyphens, apostrophes, periods are part of the run; whitespace ends it.
+   On interpretation failure the parser fails so PEG alternatives can
+   continue.  Multi-word entities aren't handled here - compose them with
+   FixedOrder or DelimitedSequence at the rule level. *)
+interpretDispatch[ParserCombinator["InterpreterSlot", type_String, _], input_, pos_] :=
+    Block[{remaining, m, value},
+        remaining = If[ pos > StringLength[input], "", StringTake[input, {pos, -1}] ];
+        m = Quiet @ StringCases[
+            remaining,
+            StartOfString ~~ RegularExpression["[A-Za-z0-9][A-Za-z0-9_'.\\-]*"],
+            1
+        ];
+        If[ ! MatchQ[m, {_String}],
+            parseErr[pos, "GrammarToken[\"" <> type <> "\"]", safeChar[input, pos]],
+            Block[{s = First[m], r},
+                r = Quiet @ Check[Interpreter[type][s], $Failed];
+                If[ FailureQ[r] || r === $Failed,
+                    parseErr[pos, "GrammarToken[\"" <> type <> "\"] (no match for " <> s <> ")", s],
+                    parseOk[r, pos + StringLength[s]]
+                ]
+            ]
+        ]
+    ]
+
 (* Match a single character against a class. Literal-string classes
    compare by equality (NOT StringMatchQ - that treats "*", "@", "\\"
    as wildcards / metacharacters, so e.g. ParseCharacter["*"] would
@@ -623,12 +667,36 @@ interpretDispatch[ParserCombinator["Recursive", Hold[s_Symbol], _], input_, pos_
    ParseAction that binds the captured slot values to the slot names in
    the action body. *)
 
-lowerGrammarRules[HoldPattern[GrammarRules[rules_List, ___]]] :=
+(* Subsidiary-domain definitions (the second arg to GrammarRules).
+   A `GrammarToken[name]` whose `name` is a key in this association lowers
+   by re-lowering the looked-up form, so any pattern shape lowerPat knows
+   (`Alternatives`, `Pattern`, nested `GrammarToken`, ...) is reusable as
+   a named domain.  Set per top-level lowering via the Block below; the
+   default empty value means the existing slotParser fallback still picks
+   up `Word` / `Number` / `Integer` / `Automatic` for the no-defs case. *)
+$grammarDefs = <||>
+
+parseGrammarDefs[defs_List] :=
+    Association @@ Cases[defs, (Rule | RuleDelayed)[name_String, form_] :> (name -> form)]
+parseGrammarDefs[_] := <||>
+
+lowerGrammarRules[HoldPattern[GrammarRules[rules_List]]] :=
     Block[{ps = lowerGrammarRule /@ rules},
         Switch[Length[ps],
             0, ParseFail["empty grammar"],
             1, First[ps],
             _, ParseChoice @@ ps
+        ]
+    ]
+
+lowerGrammarRules[HoldPattern[GrammarRules[rules_List, defs_List, ___]]] :=
+    Block[{$grammarDefs = parseGrammarDefs[defs]},
+        Block[{ps = lowerGrammarRule /@ rules},
+            Switch[Length[ps],
+                0, ParseFail["empty grammar"],
+                1, First[ps],
+                _, ParseChoice @@ ps
+            ]
         ]
     ]
 
@@ -677,23 +745,7 @@ lowerGrammarRule[template_String, held : HoldComplete[_]] :=
        <name:Type>      (e.g. Number, Word, Integer)
    Type is read as a single bareword - more elaborate Restricted[...]
    etc. forms will lower to v0.3+ Interpreter-backed parsers. *)
-parseGrammarTemplate[s_String] :=
-    Block[{lits, rest},
-        lits = StringSplit[s,
-            RegularExpression["<([A-Za-z][A-Za-z0-9_]*)(?::([^>]+))?>"]
-                :> Function[Null, grammarSlot["$1", "$2"], HoldFirst]
-        ];
-        (* StringSplit gives interleaved {literal, capture, literal, ...} *)
-        Map[
-            Switch[#,
-                "" | _String, grammarLit[#],
-                _, #
-            ] &,
-            DeleteCases[lits, ""]
-        ]
-    ]
-
-(* StringSplit's :> Function form is fiddly; do it iteratively instead. *)
+(* Done iteratively: StringSplit's :> Function form is fiddly. *)
 parseGrammarTemplate[s_String] :=
     Block[{result = {}, rest = s, m},
         While[
@@ -733,10 +785,27 @@ slotParser["Number"] :=
 
 slotParser["Integer"] := slotParser["Number"]
 
+(* Anything else (semantic types: City, Color, Date, SemanticNumber, ...)
+   falls through to Interpreter at parse time.  We consume a word-ish run
+   from the current position and feed it to Interpreter[type]; if the
+   interpretation fails, the parser fails so the next PEG alternative gets
+   a chance.  Multi-word entities (City "New York", DateString "March 5
+   2026") need richer slot consumption - the cloud's GrammarRules has
+   that ability via private NLP, the local fallback consumes a single
+   word run. *)
+slotParser[other_String] := interpreterSlot[other]
+
 slotParser[other_] :=
     ParseFail[
         "Slot type " <> ToString[other, InputForm] <> " not supported"
     ]
+
+(* private "Interpreter-backed" slot: consume a word-ish run, hand it to
+   Interpreter[type], parser-fail if the interpretation fails.
+   Implemented as a small ParserCombinator with its own dispatch (the
+   ParseAction mechanism cannot fail the parse based on the action's
+   return value). *)
+interpreterSlot[type_String] := ParserCombinator["InterpreterSlot", type, <||>]
 
 (* Build the binding { slotName -> value, ... } and substitute into the
    held body, then release. Uses ReplaceAll on the bare symbols, scoped
@@ -792,6 +861,25 @@ lowerPat[FixedOrder[fs__]] :=
         ]
     ]
 
+(* AnyOrder[f1, f2, ...] matches the elements in any permutation.  Lowered
+   as a ParseChoice over every permutation of the FixedOrder lowering -
+   correct but combinatorial in N (N! alternatives).  Captured bindings
+   bubble up by name so `r : "red"` resolves to "red" regardless of which
+   slot of the input string carried it; the returned VALUE list is in the
+   MATCHED order (`AnyOrder["a","b"]` on "b a" yields {"b","a"}). *)
+lowerPat[AnyOrder[fs__]] :=
+    With[{lowered = lowerPat /@ {fs}},
+        ParseChoice @@ Map[
+            perm |-> ParseAction[
+                ParseSequence @@ Riffle[perm, grammarWs],
+                Function[Block[{parts = {##}[[Range[1, Length[{##}], 2]]]},
+                    {parts[[All, 1]], Join @@ parts[[All, 2]]}
+                ]]
+            ],
+            Permutations[lowered]
+        ]
+    ]
+
 (* Verbatim[Alternatives] - bare Alternatives in pattern position means
    pattern-OR, which would swallow every call. Pin it to the literal. *)
 lowerPat[Verbatim[Alternatives][fs__]] :=
@@ -841,10 +929,23 @@ lowerPat[DelimitedSequence[form_, sep_]] :=
    so this is a no-op wrapper. *)
 lowerPat[CaseSensitive[form_]] := lowerPat[form]
 
-(* GrammarToken["Name"] - look up the local slot parser. Unsupported
-   types fail through slotParser's catchall. *)
-lowerPat[GrammarToken[name_String]] :=
+(* RegularExpression[r] - lower to a ParseRegex primitive that anchors the
+   regex to the current position via StringCases[..., StartOfString ~~ ...].
+   The matched string is the captured value; no nested bindings. *)
+lowerPat[Verbatim[RegularExpression][r_String]] :=
+    ParseAction[ParseRegex[r], {#, <||>} &]
+
+(* GrammarToken["Name"] - first look in the subsidiary-domain definitions
+   passed as `GrammarRules[rules, defs]`'s second arg; if the name is bound
+   there, re-lower the looked-up form so the user's definition behaves
+   exactly like an inline pattern.  Otherwise fall back to the built-in
+   slot parsers (Word / Number / Integer / Automatic); other types fail
+   through slotParser's catchall. *)
+lowerPat[GrammarToken[name_String]] := If[
+    KeyExistsQ[$grammarDefs, name],
+    lowerPat[$grammarDefs[name]],
     ParseAction[slotParser[name], {#, <||>} &]
+]
 
 lowerPat[other_] :=
     ParseFail[
@@ -861,13 +962,9 @@ lowerGrammarRulePattern[pattern_, held : HoldComplete[_]] :=
     With[{p = lowerPat[pattern]},
         ParseAction[
             p,
-            Function[{value, bindings},
-                evalBoundBody[
-                    held,
-                    Keys[bindings],
-                    Values[bindings]
-                ]
-            ]
+            (* the action is called with (value, bindings); evaluating the rule
+               body needs only the bindings (slot #2), not the matched value *)
+            Function[evalBoundBody[held, Keys[#2], Values[#2]]]
         ]
     ]
 
@@ -910,17 +1007,17 @@ charPatName[other_] := ToString[other, InputForm]
 (* kernel-side inert value builders, invoked from compiled code via
    Typed[KernelFunction[..]]. They run in the kernel, so an action f can
    be ANY Wolfram function - hence action-bearing grammars now compile. *)
-cgStr = Identity;
-cgListN = (List[##] &);
-cgAppend = Append;
-cgMissing = (Missing["NoMatch"] &);
-cgNull = (Null &);
-cgAction = Function[{f, v}, If[ListQ[v], f @@ v, f[v]]];
-cgApplyOp = Function[{op, a, b}, op[a, b]];
+cgStr = Identity
+cgListN = (List[##] &)
+cgAppend = Append
+cgMissing = (Missing["NoMatch"] &)
+cgNull = (Null &)
+cgAction = Function[{f, v}, If[ListQ[v], f @@ v, f[v]]]
+cgApplyOp = Function[{op, a, b}, op[a, b]]
 cgChainRight = Function[{vals, ops},
     Fold[Function[{acc, idx}, ops[[idx]][vals[[idx]], acc]], Last[vals], Reverse[Range[Length[ops]]]]];
 
-cgInertT = "InertExpression";
+cgInertT = "InertExpression"
 cgKF[f_, at_List, ret_] := Typed[KernelFunction[f], at -> ret]
 cgNullInert[] := cgKF[cgNull, {}, cgInertT][]
 
@@ -938,7 +1035,7 @@ cgSet[sym_, rhs_] := With[{s = sym, r = rhs}, Hold[s = r]]
 cgCond[c_] := With[{cc = c}, Hold[cc]]
 cgOkk := Hold[cgOK]
 
-cgCtr = 0; cgVsyms = {}; cgIsyms = {};
+cgCtr = 0; cgVsyms = {}; cgIsyms = {}
 cgFreshV[] := With[{s = Symbol["Wolfram`Parser`Private`cgV" <> ToString[cgCtr++]]}, AppendTo[cgVsyms, s]; s]
 cgFreshI[] := With[{s = Symbol["Wolfram`Parser`Private`cgI" <> ToString[cgCtr++]]}, AppendTo[cgIsyms, s]; s]
 
@@ -1217,10 +1314,10 @@ cgShim[pc_, cf_CompiledCodeFunction] :=
    explicit "Recursive" -> True, and the result is meant to be compiled
    once and serialized (Export/Import of the returned ParserCombinator). *)
 
-cgMkOk = Function[{v, p}, cgOkState[v, p]];
-cgMkFail = (cgFailState &);
-cgPosOf = Function[st, If[Head[st] === cgOkState, st[[2]], -1]];
-cgValOf = Function[st, If[Head[st] === cgOkState, st[[1]], Null]];
+cgMkOk = Function[{v, p}, cgOkState[v, p]]
+cgMkFail = (cgFailState &)
+cgPosOf = Function[st, If[MatchQ[st, _cgOkState], st[[2]], -1]]
+cgValOf = Function[st, If[MatchQ[st, _cgOkState], st[[1]], Null]]
 
 cgEmit[ParserCombinator["Recursive", h : Hold[_Symbol], _]] :=
     If[KeyExistsQ[cgNtNameMap, h],
@@ -1231,7 +1328,7 @@ cgEmit[ParserCombinator["Recursive", h : Hold[_Symbol], _]] :=
                 cgSet[cgOK, cgPP >= 0],
                 cgSet[v, cgKF[cgValOf, {cgInertT}, cgInertT][stTmp]]], v}],
         Throw[ParserCombinator["Recursive", h, <||>], cgFail]]
-cgNtNameMap = <||>;
+cgNtNameMap = <||>
 
 (* collect all Hold[sym] reachable through Recursive nodes *)
 cgCollectNts[rootPc_] := Module[{seen = {}, queue, cur, found},
@@ -1396,14 +1493,14 @@ pegCompile[root_] := Module[
 
     (* longest-match: measure each alt with eRec, remember the furthest, then
        re-run only that alt with commitEmit (eNode carries its captures). *)
-    emitLongest[ps_, commitEmit_] := Module[{k = Length[ps], marks, clbls, lend = fresh[], meas, tbl, blocks},
+    emitLongest[ps_, commitEmit_] := Module[{k = Length[ps], marks, clbls, lend = fresh[], meas, tbl, blks},
         marks = Table[fresh[], {k + 1}]; clbls = Table[fresh[], {k}];
         meas = Join @@ Table[With[{mi = fresh[]},
             Join[{Mark[marks[[i]]], {5, Lbl[marks[[i + 1]]], 0}}, eRec[ps[[i]]],
                 {{8, Lbl[mi], 0}, Mark[mi], {21, i - 1, 0}}]], {i, k}];
         tbl = Table[{0, Lbl[clbls[[j]]], 0}, {j, k}];
-        blocks = Join @@ Table[Join[{Mark[clbls[[j]]]}, commitEmit[ps[[j]]], {{4, Lbl[lend], 0}}], {j, k}];
-        Join[{{20, 0, 0}}, meas, {Mark[marks[[k + 1]]], {22, k, 0}}, tbl, blocks, {Mark[lend]}]];
+        blks = Join @@ Table[Join[{Mark[clbls[[j]]]}, commitEmit[ps[[j]]], {{4, Lbl[lend], 0}}], {j, k}];
+        Join[{{20, 0, 0}}, meas, {Mark[marks[[k + 1]]], {22, k, 0}}, tbl, blks, {Mark[lend]}]];
 
     eRec[ParserCombinator["Literal", s_, _]] := ({1, #, 0} & /@ ToCharacterCode[s]);
     eRec[ParserCombinator["Character", pat_, _]] := {{17, classIdx[pat], 0}};
@@ -1477,7 +1574,7 @@ pegCompile[root_] := Module[
         real = DeleteCases[instrs, Mark[_]] /. Lbl[id_] :> labelIp[id];
         <|"Prog" -> Flatten[real], "Classes" -> If[classRows === {}, {Table[0, {128}]}, classRows],
           "ClassPats" -> classPats, "Spec" -> specTable|>]
-];
+]
 
 (* events -> capture tree, via a single O(n) recursive descent over the
    balanced open/close event list (an earlier MapAt-per-close version was
@@ -1545,16 +1642,16 @@ pegParserCompile[pc_] := Module[{data = Catch[pegCompile[pc], pegFail, $pegUnsup
         Message[ParserCompile::nopeg, pc]; cgInterpFallback[pc],
         ParserCombinator[pc[[1]], pc[[2]], Append[pc[[3]], "Code" -> pegCodeFn[data]]]]];
 
-ParserCompile::nopeg = "Parser `` uses a node the PEG-VM backend does not support; falling back to interpretive evaluation.";
+ParserCompile::nopeg = "Parser `` uses a node the PEG-VM backend does not support; falling back to interpretive evaluation."
 
 
 ParserCompile::nocompile = "Failed to FunctionCompile parser ``; falling back to interpretive evaluation."
-ParserCompile::infloop = "Parser `` loops forever (repetition of a parser that can succeed without consuming input); not compilable.";
+ParserCompile::infloop = "Parser `` loops forever (repetition of a parser that can succeed without consuming input); not compilable."
 
-Options[ParserCompile] = {"Recursive" -> Automatic, Method -> Automatic};
+Options[ParserCompile] = {"Recursive" -> Automatic, Method -> Automatic}
 
 ParserCompile[pc_ParserCombinator, OptionsPattern[]] :=
-    Module[{recOpt = OptionValue["Recursive"], method = OptionValue[Method], isRec, fn, cf},
+    Module[{recOpt = OptionValue["Recursive"], method = OptionValue[Method], isRec, fn},
         isRec = ! FreeQ[pc, ParserCombinator["Recursive", _, _]];
         Which[
             (* PEG-VM backend: lowers to an integer instruction table run on
@@ -1664,3 +1761,4 @@ EndPackage[]
 Get[FileNameJoin[{DirectoryName[$InputFileName], "LaTeX.wl"}]];
 Get[FileNameJoin[{DirectoryName[$InputFileName], "EBNF.wl"}]];
 Get[FileNameJoin[{DirectoryName[$InputFileName], "TPTP.wl"}]];
+Get[FileNameJoin[{DirectoryName[$InputFileName], "Markdown.wl"}]];

@@ -144,10 +144,10 @@ altSeq = ParseAction[
 
 pipe = ParseAction[ParseLiteral["|"] ~~ wsc, Null &]
 
-alts = ParseSepBy1[altSeq, pipe]
+altsRule = ParseSepBy1[altSeq, pipe]
 
 ruleP = ParseAction[
-    nonTerm ~~ wsc ~~ arrow ~~ wsc ~~ alts,
+    nonTerm ~~ wsc ~~ arrow ~~ wsc ~~ altsRule,
     With[{name = #1[[1]], kind = #3, body = #5},
         EBNFRule[name, kind, body]
     ] &
@@ -385,7 +385,7 @@ ccOctalDigit = ParseCharacter[CharacterRange["0", "7"]]
 
 ccOctalEscapeChar = ParseAction[
     ParseLiteral["\\"] ~~ ccOctalDigit ~~ ParseMany[ccOctalDigit],
-    FromCharacterCode[ToExpression["8^^" <> #2 <> StringJoin @ #3]] &
+    FromCharacterCode[ToExpression["8^^" <> #2 <> StringJoin[#3]]] &
 ]
 
 ccNamedEscapeChar = ParseAction[
