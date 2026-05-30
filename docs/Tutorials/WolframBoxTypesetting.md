@@ -210,9 +210,38 @@ option; the ones that matter for math:
 | `ShowStringCharacters` | `False` hides the quotes around string leaves |
 
 The named-style form, `StyleBox[boxes, "TI"]`, pulls the option settings for a
-stylesheet style ("TI" = TraditionalForm italic) instead of spelling out
-directives. The parser tags every identifier `StyleBox["x", "TI"]` so a single
-stylesheet switch could restyle all math at once.
+stylesheet style instead of spelling out directives. From the default stylesheet
+(`Core.nb`), the math letterform styles are literally Times faces:
+
+```wl
+StyleData["TR"]                → FontFamily->"Times", FontWeight->"Plain", FontSlant->"Plain"
+StyleData["TI" inherits "TR"]  → FontSlant->"Italic"          (* Times Italic *)
+StyleData["TB"] / "TBI"        → +Bold / +Bold+Italic
+StyleData["MR"/"MO"/...]       → CodeFont (monospace) Roman / variants
+StyleData["SR"/...]            → sans (\textsf) Roman / variants
+```
+
+So `"TI"` is **Times Italic and it hard-pins `FontFamily->"Times"`** - which is
+why an *outer* `FontFamily` directive does not reach a `StyleBox["x","TI"]`
+letter (the named style wins) and why this parser's math renders in Times
+unless the style is overridden. The parser tags every identifier
+`StyleBox["x","TI"]` precisely so a **single stylesheet redefinition** -
+`Cell[StyleData["TR"], FontFamily -> "CMU Serif"]` in the consuming notebook's
+`StyleDefinitions` - restyles *all* math (letters included) to Computer Modern
+at once, with no per-box rewriting. This is the intended control point when the
+output is consumed by `MarkdownToNotebook`, where the stylesheet is ours.
+
+> **Headless caveat (measured):** an explicit `StyleBox[c, FontSlant ->
+> Italic, FontFamily -> "CMU Serif"]` renders in CM under a standalone
+> `Rasterize` (each `FontFamily` resolves to a distinct physical font -
+> verified by differing ink widths: default 188 / Times 148 / CMU Serif
+> 156 / Courier 194 px for the same string). But a `StyleData["TR"] ->
+> FontFamily -> "CMU Serif"` *stylesheet* override did **not** propagate
+> to `"TI"` letters under `Rasterize[Notebook[…, StyleDefinitions ->
+> …]]` - headless raster doesn't fully resolve the named-style
+> inheritance chain. So for headless rendering, rewrite `"TI"` to the
+> explicit font form; the stylesheet override is the right mechanism for
+> a *live* notebook / built doc opened in the front end.
 
 ### Sizing: `Magnification`, not `FontSize -> Scaled`
 
@@ -487,7 +516,10 @@ math-glyph mapping - documented here so a future stylesheet or
 
 ### Open questions (not settled by the research)
 
-- What `"TI"`/`"TR"`/`"TIR"` named styles set exactly (lives in the default
+- ~~What `"TI"`/`"TR"` set~~ **(answered, see Part 4):** `TR` = Times
+  Plain, `TI` = Times Italic - both pin `FontFamily->"Times"`; override
+  `StyleData["TR"]` in the consuming stylesheet to restyle all math.
+- (was) What `"TIR"` sets exactly (lives in the default
   stylesheet's math styles; needs stylesheet inspection).
 - Whether a box producer can change an *operator's spacing class* (ord/op/bin/
   rel/open/close/punct) per-operator, or whether `AutoSpacing -> False` +
