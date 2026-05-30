@@ -1299,13 +1299,25 @@ cgAssembleRec[rootPc_] := Quiet @ Module[{nts, declHolds, rootFnHold},
 (* the VM, compiled once and memoised on first use *)
 pegMachine := pegMachine = Compile[
     {{prog, _Integer, 1}, {codes, _Integer, 1}, {classes, _Integer, 2},
-     {start, _Integer}, {stackMax, _Integer}, {capMax, _Integer}},
-    Module[{ip = 1, sp = start, n = Length[codes], top = 0, op, a, fail, result = -1, halt = 0, c,
+     {start, _Integer}, {stackMax, _Integer}, {capMax, _Integer}, {maxSteps, _Integer}},
+    Module[{ip = 1, sp = start, n = Length[codes], top = 0, op, a, fail, result = -1, halt = 0, c, steps = 0,
             stkIp = Table[0, {stackMax}], stkSp = Table[0, {stackMax}], stkCap = Table[0, {stackMax}],
             capTop = 0, capTag = Table[0, {capMax}], capSp = Table[0, {capMax}],
+            csTop = 0, csStk = Table[0, {stackMax}], stkCs = Table[0, {stackMax}],   (* capTop save-stack (sep captures) + its backtrack record *)
             lgTop = 0, lgSp = Table[0, {stackMax}], lgBest = Table[0, {stackMax}],
-            lgAlt = Table[0, {stackMax}], lgCap = Table[0, {stackMax}]},
+            lgAlt = Table[0, {stackMax}], lgCap = Table[0, {stackMax}],
+            cw = Length[classes[[1]]]},   (* char-class table width (>=128; wider when the input has non-ASCII codes remapped in) *)
+        (* maxSteps bounds total work: without packrat memoisation a PEG can
+           backtrack super-linearly on adversarial input, and a native loop
+           is not TimeConstrained-interruptible, so we abort to a failure
+           (result stays -1) - matching the interpreter's bounded behaviour. *)
         While[halt == 0,
+            steps++;
+            (* bail on a runaway: too many steps (catastrophic backtracking)
+               or the frame stack nearing its bound (deep nesting). Both
+               abort to a failure, like the interpreter's depth guard, so a
+               native loop can't run away / overflow its arrays. *)
+            If[steps > maxSteps || top >= stackMax - 16, halt = 1; result = -1,
             op = prog[[ip]]; a = prog[[ip + 1]]; fail = 0;
             Which[
                 (* longest-match (ChoiceLongest): 20 LStart, 21 LMeasure altIdx,
@@ -1318,17 +1330,25 @@ pegMachine := pegMachine = Compile[
                 op == 1, If[sp <= n && codes[[sp]] == a, sp++; ip += 3, fail = 1],
                 op == 3, If[sp <= n && a <= codes[[sp]] <= prog[[ip + 2]], sp++; ip += 3, fail = 1],
                 op == 2, If[sp <= n, sp++; ip += 3, fail = 1],
-                op == 17, If[sp <= n && (c = codes[[sp]]) <= 128 && classes[[a, c]] == 1, sp++; ip += 3, fail = 1],
+                op == 17, If[sp <= n && (c = codes[[sp]]) <= cw && classes[[a, c]] == 1, sp++; ip += 3, fail = 1],
                 op == 4, ip = a,
-                op == 5, top++; stkIp[[top]] = a; stkSp[[top]] = sp; stkCap[[top]] = capTop; ip += 3,
-                op == 6, top++; stkIp[[top]] = ip + 3; stkSp[[top]] = -1; stkCap[[top]] = capTop; ip = a,
+                op == 5, top++; stkIp[[top]] = a; stkSp[[top]] = sp; stkCap[[top]] = capTop; stkCs[[top]] = csTop; ip += 3,
+                op == 6, top++; stkIp[[top]] = ip + 3; stkSp[[top]] = -1; stkCap[[top]] = capTop; stkCs[[top]] = csTop; ip = a,
                 op == 7, ip = stkIp[[top]]; top--,
                 op == 8, top--; ip = a,
-                op == 13, stkSp[[top]] = sp; stkCap[[top]] = capTop; ip = a,
-                op == 14, sp = stkSp[[top]]; capTop = stkCap[[top]]; top--; ip = a,
+                (* PartialCommit with a progress guard: if the loop body
+                   advanced, update the frame and iterate; if it matched
+                   without consuming (nullable body), discard its captures
+                   and exit the loop instead of spinning forever. *)
+                op == 13, If[sp > stkSp[[top]],
+                    stkSp[[top]] = sp; stkCap[[top]] = capTop; stkCs[[top]] = csTop; ip = a,
+                    capTop = stkCap[[top]]; csTop = stkCs[[top]]; top--; ip += 3],
+                op == 14, sp = stkSp[[top]]; capTop = stkCap[[top]]; csTop = stkCs[[top]]; top--; ip = a,
                 op == 15, top--; fail = 1,
                 op == 18, capTop++; capTag[[capTop]] = a; capSp[[capTop]] = sp; ip += 3,
                 op == 19, capTop++; capTag[[capTop]] = 0; capSp[[capTop]] = sp; ip += 3,
+                op == 23, csTop++; csStk[[csTop]] = capTop; ip += 3,   (* CapPush: save capTop *)
+                op == 24, capTop = csStk[[csTop]]; csTop--; ip += 3,    (* CapPop: discard captures since the CapPush *)
                 op == 9, fail = 1,
                 op == 10, result = sp; halt = 1,
                 True, halt = 1
@@ -1336,7 +1356,8 @@ pegMachine := pegMachine = Compile[
             If[fail == 1,
                 While[top > 0 && stkSp[[top]] == -1, top--];
                 If[top == 0, result = -1; halt = 1,
-                    sp = stkSp[[top]]; ip = stkIp[[top]]; capTop = stkCap[[top]]; top--]]
+                    sp = stkSp[[top]]; ip = stkIp[[top]]; capTop = stkCap[[top]]; csTop = stkCs[[top]]; top--]]
+            ]   (* close If[steps > maxSteps, abort, dispatch] *)
         ];
         Join[{result, capTop}, Take[capTag, capTop], Take[capSp, capTop]]]];
 
@@ -1352,15 +1373,26 @@ pegLower[other_] := other
    node the backend doesn't handle. Recognition-only sub-emit (eRec) is
    used for separators so they don't pollute the capture tree. *)
 pegCompile[root_] := Module[
-    {lblCtr = 0, nodeCtr = 0, ntLbl = <||>, ntQueue = {}, classMap = <||>, classRows = {}, specTable = <||>,
+    {lblCtr = 0, nodeCtr = 0, ntLbl = <||>, ntQueue = {}, classMap = <||>, classRows = {}, classPats = {}, specTable = <||>,
      fresh, classIdx, getNtLbl, reg, eNode, eRaw, eRec, eRawChoiceTail, instrs, rootLbl, blocks, h},
     fresh[] := (++lblCtr);
+    (* a class is an ASCII (1..128) membership row; the pattern itself is
+       kept too so non-ASCII input codes can be classified at parse time. *)
     classIdx[pat_] := Lookup[classMap, Key[pat], (
         AppendTo[classRows, Boole[charMatchesQ[FromCharacterCode[#], pat]] & /@ Range[128]];
+        AppendTo[classPats, pat];
         classMap[pat] = Length[classRows])];
     getNtLbl[hh_Hold] := If[KeyExistsQ[ntLbl, hh], ntLbl[hh],
         With[{lb = fresh[]}, ntLbl[hh] = lb; AppendTo[ntQueue, hh]; lb]];
-    reg[pc_] := (++nodeCtr; specTable[nodeCtr] = pc; nodeCtr);
+    (* store a COMPACT per-node record: rebuild only needs the type, plus
+       the action function / literal string / succeed value. Keeping the
+       whole ParserCombinator (with its child subtrees) per node blows the
+       serialized size up by orders of magnitude. *)
+    reg[pc_] := (++nodeCtr; specTable[nodeCtr] = Switch[pc[[1]],
+        "Literal", {"Literal", pc[[2]]},
+        "Action", {"Action", pc[[2, 2]]},
+        "Succeed", {"Succeed", pc[[2]]},
+        _, {pc[[1]]}]; nodeCtr);
 
     (* longest-match: measure each alt with eRec, remember the furthest, then
        re-run only that alt with commitEmit (eNode carries its captures). *)
@@ -1424,7 +1456,10 @@ pegCompile[root_] := Module[
     eRaw[ParserCombinator["Action", {p_, _}, _]] := eNode[p];
     eRaw[ParserCombinator["Try", p_, _]] := eNode[p];
     eRaw[ParserCombinator[t : ("SepBy" | "SepBy1"), {p_, sep_}, _]] := Module[{a = fresh[], b = fresh[], c = fresh[]},
-        With[{core = Join[eNode[p], {{5, Lbl[b], 0}, Mark[a]}, eRec[sep], eNode[p], {{13, Lbl[a], 0}, Mark[b]}]},
+        (* the separator is recognition-only (its value is dropped), but its
+           recursive calls hit capture-emitting blocks; CapPush/CapPop (23/24)
+           discard those so they don't leak into the SepBy result. *)
+        With[{core = Join[eNode[p], {{5, Lbl[b], 0}, Mark[a], {23, 0, 0}}, eRec[sep], {{24, 0, 0}}, eNode[p], {{13, Lbl[a], 0}, Mark[b]}]},
             If[t === "SepBy", Join[{{5, Lbl[c], 0}}, core, {{8, Lbl[c], 0}, Mark[c]}], core]]];
     eRaw[ParserCombinator[("ChainLeft" | "ChainRight"), {p_, op_}, _]] := Module[{a = fresh[], b = fresh[]},
         Join[eNode[p], {{5, Lbl[b], 0}, Mark[a]}, eNode[op], eNode[p], {{13, Lbl[a], 0}, Mark[b]}]];
@@ -1440,47 +1475,64 @@ pegCompile[root_] := Module[
     Module[{ip = 1, labelIp = <||>, real},
         Scan[If[MatchQ[#, Mark[_]], labelIp[#[[1]]] = ip, ip += 3] &, instrs];
         real = DeleteCases[instrs, Mark[_]] /. Lbl[id_] :> labelIp[id];
-        <|"Prog" -> Flatten[real], "Classes" -> If[classRows === {}, {Table[0, {128}]}, classRows], "Spec" -> specTable|>]
+        <|"Prog" -> Flatten[real], "Classes" -> If[classRows === {}, {Table[0, {128}]}, classRows],
+          "ClassPats" -> classPats, "Spec" -> specTable|>]
 ];
 
-(* events -> capture tree *)
-pegBuildTree[events_] := Module[{stack = {<|"id" -> 0, "start" -> 0, "end" -> 0, "ch" -> {}|>}, node},
-    Do[If[e[[1]] > 0,
-        AppendTo[stack, <|"id" -> e[[1]], "start" -> e[[2]], "ch" -> {}|>],
-        node = Last[stack]; stack = Most[stack]; node["end"] = e[[2]];
-        stack = MapAt[Append[#, node] &, stack, {-1, "ch"}]],
-        {e, events}];
-    First[stack[[1]]["ch"]]];
+(* events -> capture tree, via a single O(n) recursive descent over the
+   balanced open/close event list (an earlier MapAt-per-close version was
+   O(n*depth) and slow on the large grammars). *)
+pegBuildTree[events_] := Module[{i = 1, parse},
+    parse[] := Module[{id = events[[i, 1]], start = events[[i, 2]], kids = Internal`Bag[]},
+        i++;
+        While[events[[i, 1]] > 0, Internal`StuffBag[kids, parse[]]];
+        With[{node = <|"id" -> id, "start" -> start, "end" -> events[[i, 2]],
+                       "ch" -> Internal`BagPart[kids, All]|>}, i++; node]];
+    parse[]];
 
 (* rebuild the result from the capture tree - same shaping as the interpreter *)
-pegRebuild[node_, input_, spec_] := Module[{pc = spec[node["id"]], type, ch = node["ch"], r},
-    type = pc[[1]];
+pegRebuild[node_, input_, spec_] := Module[{rec = spec[node["id"]], type, ch = node["ch"], r},
+    type = rec[[1]];
     Switch[type,
-        "Literal", pc[[2]],
+        "Literal", rec[[2]],
         "Character", StringTake[input, {node["start"], node["end"] - 1}],
         "Sequence", pegRebuild[#, input, spec] & /@ ch,
         "Choice" | "ChoiceLongest", pegRebuild[First[ch], input, spec],
         "Many" | "Some", pegRebuild[#, input, spec] & /@ ch,
         "Optional", If[ch === {}, Missing["NoMatch"], pegRebuild[First[ch], input, spec]],
         "Between", pegRebuild[ch[[2]], input, spec],
-        "Action", (r = pegRebuild[First[ch], input, spec]; With[{f = pc[[2, 2]]}, If[ListQ[r], f @@ r, f[r]]]),
+        "Action", (r = pegRebuild[First[ch], input, spec]; With[{f = rec[[2]]}, If[ListQ[r], f @@ r, f[r]]]),
         "Try", pegRebuild[First[ch], input, spec],
         "Lookahead" | "NotFollowedBy", Null,
-        "Succeed", pc[[2]],
+        "Succeed", rec[[2]],
         "SepBy" | "SepBy1", pegRebuild[#, input, spec] & /@ ch,
         "ChainLeft", Fold[Function[{acc, k}, (pegRebuild[ch[[k]], input, spec])[acc, pegRebuild[ch[[k + 1]], input, spec]]],
             pegRebuild[ch[[1]], input, spec], Range[2, Length[ch], 2]],
         "ChainRight", Module[{vals = pegRebuild[#, input, spec] & /@ ch[[1 ;; ;; 2]], ops = pegRebuild[#, input, spec] & /@ ch[[2 ;; ;; 2]]},
             Fold[Function[{acc, i}, ops[[i]][vals[[i]], acc]], Last[vals], Reverse@Range[Length[ops]]]],
-        _, pc]];
+        _, rec]];
 
 (* the runnable "Code" closure for a PEG-VM-compiled parser. compiledData
-   is <|Prog, Classes, Spec|>; returns parseOk/parseErr. *)
+   is <|Prog, Classes, ClassPats, Spec|>; returns parseOk/parseErr.
+
+   The char-class table only covers ASCII (1..128). When the input has
+   non-ASCII codes we extend it at parse time: classify each distinct
+   non-ASCII code with the interpreter's own charMatchesQ (so it stays
+   exactly equivalent), append those columns, and remap the codes to the
+   new column indices. Safe because the grammar's Char/Range opcodes are
+   all ASCII (they never compare a code > 128). *)
 pegCodeFn[compiledData_] := Function[{input, pos},
-    Module[{codes = ToCharacterCode[input], len, out, fp, nc, events},
+    Module[{codes = ToCharacterCode[input], classes = compiledData["Classes"],
+            pats = Lookup[compiledData, "ClassPats", {}], highs, len, out, fp, nc, events},
+        highs = DeleteDuplicates[Select[codes, # > 128 &]];
+        If[highs =!= {} && pats =!= {},
+            Module[{nh = Length[highs], extra},
+                extra = Outer[Boole[charMatchesQ[FromCharacterCode[#2], #1]] &, pats, highs, 1];
+                classes = Join[classes, extra, 2];
+                codes = codes /. Thread[highs -> (128 + Range[nh])]]];
         len = Length[codes];
-        out = pegMachine[compiledData["Prog"], codes, compiledData["Classes"], pos,
-            Max[2000, 4 len], Max[8000, 24 len]];
+        out = pegMachine[compiledData["Prog"], codes, classes, pos,
+            Max[2000, 4 len], Max[8000, 24 len], Max[5000000, 30000 len]];
         fp = out[[1]];
         If[ fp < 0,
             parseErr[pos, "<parse failed>", safeChar[input, pos]],

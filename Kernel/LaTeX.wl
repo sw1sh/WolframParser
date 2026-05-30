@@ -2777,7 +2777,69 @@ applyLineBreaks[boxes_] := boxes //. {
         ]
 }
 
-LaTeXMathParse[source_String] := Module[{r = Parse[LaTeXMathParser, preprocessLaTeX[source]]},
+(* ===== precompiled-parser asset =====
+   ParserCompile[LaTeXMathParser, Method -> "PEGVM"] is shipped as a paclet
+   Asset (<|"Hash" -> Hash[LaTeXMathParser], "Parser" -> compiled|>). On
+   first use LaTeXMathParse loads it IF the stored hash matches the current
+   grammar's hash - so a stale asset (grammar changed since it was built) is
+   ignored and we fall back to the interpreter. Rebuild with
+   BuildLaTeXParserAsset[]. *)
+
+$latexDir = DirectoryName[$InputFileName];
+
+compiledLatexAssetPath[] := Module[{p},
+    p = Quiet @ Check[
+        PacletObject["Wolfram/WolframParser"]["AssetLocation", "CompiledLaTeXParser"], $Failed];
+    If[StringQ[p] && FileExistsQ[p], p,
+        FileNameJoin[{ParentDirectory[$latexDir], "Assets", "LaTeXMathParserCompiled.wxf"}]]]
+
+(* memoised: the compiled parser when the asset is present and current,
+   else $Failed (interpretive fallback). The asset stores only the grammar
+   hash and the PEG-VM instruction data; the runnable "Code" is rebuilt
+   here with the current pegCodeFn, so changes to the VM/codegen never
+   staleify a shipped asset - only a grammar change (caught by the hash)
+   invalidates it. *)
+$compiledLatexCache = "unset";   (* cache var (not a memoised downvalue, so it can be reset without deleting the definition) *)
+loadCompiledLatexParser[] := (
+    If[$compiledLatexCache === "unset",
+        $compiledLatexCache = Module[{path = compiledLatexAssetPath[], stored, lpc = LaTeXMathParser},
+            If[StringQ[path] && FileExistsQ[path],
+                stored = Quiet @ Check[Uncompress[Import[path]], $Failed];
+                If[AssociationQ[stored] && stored["Hash"] === Hash[lpc],
+                    ParserCombinator[lpc[[1]], lpc[[2]],
+                        Append[lpc[[3]], "Code" -> Wolfram`Parser`Private`pegCodeFn[stored["Data"]]]],
+                    $Failed],
+                $Failed]]];
+    $compiledLatexCache)
+
+activeLatexParser[] := With[{c = loadCompiledLatexParser[]}, If[c === $Failed, LaTeXMathParser, c]]
+
+(* build (or rebuild) the asset from the current grammar: just the grammar
+   hash + the PEG-VM instruction data (Prog/Classes/ClassPats/Spec),
+   Compress'd (the tables are large but compress well). *)
+BuildLaTeXParserAsset[] := Module[{data, path},
+    data = Wolfram`Parser`Private`pegCompile[LaTeXMathParser];
+    path = FileNameJoin[{ParentDirectory[$latexDir], "Assets", "LaTeXMathParserCompiled.wxf"}];
+    If[! DirectoryQ[DirectoryName[path]], CreateDirectory[DirectoryName[path]]];
+    Export[path, Compress[<|"Hash" -> Hash[LaTeXMathParser], "Data" -> data|>], "WXF"];
+    $compiledLatexCache = "unset";   (* reset cache so the next call reloads *)
+    path]
+
+(* The PEGVM-compiled parser lowers char classes (LetterCharacter, the
+   unicodeReservedQ predicate behind unicodeAtom) to ASCII-only ranges, so a
+   raw non-ASCII atom - Unicode Greek (alpha, the variant forms epsilon/theta/
+   phi), math symbols (\[DoubleRightArrow], \[PartialD], \[Ellipsis]),
+   math-alphanumerics, accented or CJK letters - makes the whole parse fail
+   even though the *interpreted* grammar (identAtom / unicodeAtom) handles it.
+   So route any input carrying a non-ASCII codepoint to the interpreter; the
+   common pure-ASCII case keeps the fast compiled path.  (A faithful PEGVM
+   Unicode char-class lowering would let this fall away.) *)
+$nonASCIIQ = StringContainsQ[#, RegularExpression["[^\\x00-\\x7F]"]] &;
+latexParserFor[pre_String] := If[$nonASCIIQ[pre], LaTeXMathParser, activeLatexParser[]];
+
+LaTeXMathParse[source_String] := Module[
+    {pre = preprocessLaTeX[source], r},
+    r = Parse[latexParserFor[pre], pre];
     If[FailureQ[r], r,
         (* `/. $lineBreakMark -> ""` is a safety net: a stray marker not
            inside a RowBox (e.g. the whole input was just `\\`) would

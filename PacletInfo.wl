@@ -20,7 +20,6 @@ PacletObject[<|
                 "Wolfram`Parser`ParserCompile",
                 "Wolfram`Parser`ParserCombinator",
                 "Wolfram`Parser`ParserCombinatorQ",
-                "Wolfram`Parser`ParseError",
                 "Wolfram`Parser`ParseLiteral",
                 "Wolfram`Parser`ParseCharacter",
                 "Wolfram`Parser`ParseSucceed",
@@ -45,6 +44,13 @@ PacletObject[<|
                 "Wolfram`Parser`EBNFParse",
                 "Wolfram`Parser`EBNFRules",
                 "Wolfram`Parser`TPTPImport"
+            }
+        },
+        {
+            "Asset",
+            "Root" -> "Assets",
+            "Assets" -> {
+                {"CompiledLaTeXParser", "LaTeXMathParserCompiled.wxf"}
             }
         },
         {
