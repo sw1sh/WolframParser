@@ -19,15 +19,15 @@ RelatedResources: [Wolfram/MarkdownToNotebook]
 
 ## Details & Options
 
-- The library reuses the [GrammarRules]() declarative slot-syntax DSL, but compiles each grammar to a local parser via [FunctionCompile]() instead of round-tripping through [CloudDeploy](). The supported subset of `GrammarRules` is mapped in the [Parsing GrammarRules Locally](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules) tech note.
-- A Parsec-style combinator core (`Parse*` constructors) covers grammars that don't fit the declarative shape: LaTeX math, custom DSLs with backtracking / lookahead, recursive descent over [CodeParser]() ASTs.
-- [LaTeXMathParse]() is a working LaTeX math-mode parser at 126 / 126 coverage of [KaTeX's own screenshotter test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml). Output is a tree of Wolfram boxes ([FractionBox](), [SubsuperscriptBox](), [RadicalBox](), [GridBox](), ...) ready to drop into a notebook cell or wrap with [DisplayForm](paclet:ref/DisplayForm) for kernel-side rendering.
-- Operates uniformly on strings, on lists of tagged tokens, and on lists of Wolfram expressions (so the same combinators that lex a string can walk a [CodeParser]() AST).
-- The kernel is dependency-free and has no C library; performance comes from [FunctionCompile]()'s LLVM backend.
+- The library reuses the [GrammarRules](paclet:ref/GrammarRules) declarative slot-syntax DSL, but compiles each grammar to a local parser via [FunctionCompile](paclet:ref/FunctionCompile) instead of round-tripping through [CloudDeploy](paclet:ref/CloudDeploy). The supported subset of `GrammarRules` is mapped in the [Parsing GrammarRules Locally](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules) tech note.
+- A Parsec-style combinator core (`Parse*` constructors) covers grammars that don't fit the declarative shape: LaTeX math, custom DSLs with backtracking / lookahead, recursive descent over [CodeParser](paclet:ref/CodeParser) ASTs.
+- [LaTeXMathParse](paclet:Wolfram/WolframParser/ref/LaTeXMathParse) is a working LaTeX math-mode parser at 126 / 126 coverage of [KaTeX's own screenshotter test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml). Output is a tree of Wolfram boxes ([FractionBox](paclet:ref/FractionBox), [SubsuperscriptBox](paclet:ref/SubsuperscriptBox), [RadicalBox](paclet:ref/RadicalBox), [GridBox](paclet:ref/GridBox), ...) ready to drop into a notebook cell or wrap with [DisplayForm](paclet:ref/DisplayForm) for kernel-side rendering.
+- Operates uniformly on strings, on lists of tagged tokens, and on lists of Wolfram expressions (so the same combinators that lex a string can walk a [CodeParser](paclet:ref/CodeParser) AST).
+- The kernel is dependency-free and has no C library; performance comes from [FunctionCompile](paclet:ref/FunctionCompile)'s LLVM backend.
 
 ## Usage
 
-The package provides [Parse]() and [ParserCompile]() as the entry points, [ParserCombinator]() as the single computable head every constructor returns, and the `Parse*` family of constructors - [ParseLiteral](), [ParseCharacter](), [ParseSequence](), [ParseChoice](), [ParseMany](), [ParseSome](), [ParseOptional](), [ParseBetween](), [ParseAction](), [ParseRecursive](), [ParseLookahead](), [ParseNotFollowedBy](), [ParseTry](). [GrammarRules]() is accepted as input to `Parse` and lowered locally. [LaTeXMathParse]() parses LaTeX math-mode source to a tree of Wolfram boxes.
+The package provides [Parse](paclet:Wolfram/WolframParser/ref/Parse) and [ParserCompile](paclet:Wolfram/WolframParser/ref/ParserCompile) as the entry points, [ParserCombinator](paclet:Wolfram/WolframParser/ref/ParserCombinator) as the single computable head every constructor returns, and the `Parse*` family of constructors - [ParseLiteral](paclet:Wolfram/WolframParser/ref/ParseLiteral), [ParseCharacter](paclet:Wolfram/WolframParser/ref/ParseCharacter), [ParseSequence](paclet:Wolfram/WolframParser/ref/ParseSequence), [ParseChoice](paclet:Wolfram/WolframParser/ref/ParseChoice), [ParseMany](paclet:Wolfram/WolframParser/ref/ParseMany), [ParseSome](paclet:Wolfram/WolframParser/ref/ParseSome), [ParseOptional](paclet:Wolfram/WolframParser/ref/ParseOptional), [ParseBetween](paclet:Wolfram/WolframParser/ref/ParseBetween), [ParseAction](paclet:Wolfram/WolframParser/ref/ParseAction), [ParseRecursive](paclet:Wolfram/WolframParser/ref/ParseRecursive), [ParseLookahead](paclet:Wolfram/WolframParser/ref/ParseLookahead), [ParseNotFollowedBy](paclet:Wolfram/WolframParser/ref/ParseNotFollowedBy), [ParseTry](paclet:Wolfram/WolframParser/ref/ParseTry). [GrammarRules](paclet:ref/GrammarRules) is accepted as input to `Parse` and lowered locally. [LaTeXMathParse](paclet:Wolfram/WolframParser/ref/LaTeXMathParse) parses LaTeX math-mode source to a tree of Wolfram boxes.
 
 ## Basic Examples
 
@@ -77,24 +77,30 @@ LaTeXMathParse["\\frac{x^2}{y^2} = z^2"]
 
 ## Hero Image
 
-The parser in action: a raw LaTeX source string on top, an arrow, and
-the tree of Wolfram boxes `LaTeXMathParse` produces below it (the
-front end renders those boxes as typeset math).
+The parser in action on a real-world formula (one of Maxwell's
+equations): the raw LaTeX source on top, and below it the typeset result
+`LaTeXMathParse` produces. The boxes are restyled with [LaTeXMathStyle](paclet:Wolfram/WolframParser/ref/LaTeXMathStyle)
+into the same Computer-Modern face LaTeX itself uses, so the rendering is
+faithful to the source - vector bold (`\mathbf`), Greek subscripts, and a
+stacked partial-derivative fraction all land where TeX would put them.
 
 ```wl
-With[{src = "\\sum_{n=1}^{\\infty} \\frac{1}{n^2}"},
+With[{src = "\\nabla \\times \\mathbf{B} = \\mu_0 \\mathbf{J} + \\mu_0 \\epsilon_0 \\frac{\\partial \\mathbf{E}}{\\partial t}"},
     Rasterize[
         Framed[
             Column[{
-                Style[src, FontFamily -> "Source Code Pro", FontSize -> 22, GrayLevel[0.45]],
-                Spacer[{0, 20}],
-                Style["\[DownArrow]", FontSize -> 32, GrayLevel[0.7]],
-                Spacer[{0, 20}],
-                Style[DisplayForm @ LaTeXMathParse[src], FontSize -> 64, FontColor -> GrayLevel[0.15]]
+                Style[src, FontFamily -> "Source Code Pro", FontSize -> 17, GrayLevel[0.55]],
+                Spacer[{0, 14}],
+                Style["LaTeXMathParse  \[LongRightArrow]", FontFamily -> "Source Code Pro", FontSize -> 13, GrayLevel[0.62]],
+                Spacer[{0, 26}],
+                Style[
+                    RawBoxes @ StyleBox[LaTeXMathStyle @ LaTeXMathParse[src], ScriptLevel -> 0],
+                    FontSize -> 52, FontColor -> GrayLevel[0.1]
+                ]
             }, Alignment -> Center],
-            Background -> GrayLevel[0.98], FrameMargins -> 80,
-            FrameStyle -> GrayLevel[0.9], RoundingRadius -> 20,
-            ImageSize -> {700, 500}
+            Background -> GrayLevel[0.985], FrameMargins -> 64,
+            FrameStyle -> GrayLevel[0.88], RoundingRadius -> 22,
+            ImageSize -> {940, 460}
         ],
         ImageResolution -> 144, Background -> None
     ]
