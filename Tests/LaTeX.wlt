@@ -214,7 +214,7 @@ VerificationTest[
 VerificationTest[
     LaTeXMathParse["f(x) = x^2 + 1"],
     RowBox[{
-        StyleBox["f", "TI"], "(", StyleBox["x", "TI"], ")",
+        StyleBox["f", "TI"], StyleBox["(", SpanMaxSize -> 1], StyleBox["x", "TI"], StyleBox[")", SpanMaxSize -> 1],
         "=", SuperscriptBox[StyleBox["x", "TI"], "2"], "+", "1"
     }],
     TestID -> "LaTeX: f(x) = x^2 + 1"
@@ -299,7 +299,7 @@ VerificationTest[
        closers are guarded out of commandAtom).  The bracket chars are
        matchfix delimiters, so they hug the content with no kern. *)
     LaTeXMathParse["\\lceil x \\rceil"],
-    RowBox[{"\[LeftCeiling]", StyleBox["x", "TI"], "\[VeryThinSpace]", "\[RightCeiling]"}],
+    RowBox[{StyleBox["\[LeftCeiling]", SpanMaxSize -> 1], StyleBox["x", "TI"], "\[VeryThinSpace]", StyleBox["\[RightCeiling]", SpanMaxSize -> 1]}],
     TestID -> "LaTeX: \\lceil ... \\rceil matchfix"
 ]
 
@@ -308,10 +308,10 @@ VerificationTest[
        bound to a single operand as before. *)
     LaTeXMathParse["\\langle a, b \\rangle"],
     RowBox[{
-        "\[LeftAngleBracket]",
+        StyleBox["\[LeftAngleBracket]", SpanMaxSize -> 1],
         RowBox[{StyleBox["a", "TI"], "," <> "\[ThinSpace]", StyleBox["b", "TI"]}],
         "\[VeryThinSpace]",
-        "\[RightAngleBracket]"
+        StyleBox["\[RightAngleBracket]", SpanMaxSize -> 1]
     }],
     TestID -> "LaTeX: \\langle ... \\rangle groups its content"
 ]
@@ -319,8 +319,30 @@ VerificationTest[
 VerificationTest[
     (* \lVert..\rVert is the proper norm: matchfix double bracketing bars *)
     LaTeXMathParse["\\lVert v \\rVert"],
-    RowBox[{"\[LeftDoubleBracketingBar]", StyleBox["v", "TI"], "\[VeryThinSpace]", "\[RightDoubleBracketingBar]"}],
+    RowBox[{StyleBox["\[LeftDoubleBracketingBar]", SpanMaxSize -> 1], StyleBox["v", "TI"], "\[VeryThinSpace]", StyleBox["\[RightDoubleBracketingBar]", SpanMaxSize -> 1]}],
     TestID -> "LaTeX: \\lVert ... \\rVert norm matchfix"
+]
+
+(* A bare (un-\left'd) fence is pinned to natural size (SpanMaxSize -> 1) so it
+   doesn't stretch to a tall sibling: the ket's `|` and `\rangle` stay
+   psi-height next to a fraction, and `(x)` stays small next to a matrix. *)
+VerificationTest[
+    LaTeXMathParse["\\lvert\\psi\\rangle"],
+    RowBox[{
+        RowBox[{StyleBox["|", SpanMaxSize -> 1], StyleBox["\[Psi]", "TI"]}],
+        StyleBox["\[RightAngleBracket]", SpanMaxSize -> 1]
+    }],
+    TestID -> "LaTeX: bare bra-ket fences pinned fixed-size (no stretch)"
+]
+
+(* Integral bounds stack above/below the sign in display style, like sums. *)
+VerificationTest[
+    LaTeXMathParse["\\int_a^b f"],
+    RowBox[{
+        UnderoverscriptBox["\[Integral]", StyleBox["a", "TI"], StyleBox["b", "TI"]],
+        StyleBox["f", "TI"]
+    }],
+    TestID -> "LaTeX: integral bounds stack above/below"
 ]
 
 VerificationTest[
@@ -371,7 +393,7 @@ VerificationTest[
 
 VerificationTest[
     LaTeXMathParse["v(0) = +\\infty"],
-    RowBox[{StyleBox["v", "TI"], "(", "0", ")", "=", "+", "\[Infinity]"}],
+    RowBox[{StyleBox["v", "TI"], StyleBox["(", SpanMaxSize -> 1], "0", StyleBox[")", SpanMaxSize -> 1], "=", "+", "\[Infinity]"}],
     TestID -> "LaTeX: unary + after relation"
 ]
 
@@ -380,13 +402,13 @@ VerificationTest[
 
 VerificationTest[
     LaTeXMathParse["(a, b, c)"],
-    RowBox[{"(", RowBox[{StyleBox["a", "TI"], "," <> "\[ThinSpace]", StyleBox["b", "TI"], "," <> "\[ThinSpace]", StyleBox["c", "TI"]}], ")"}],
+    RowBox[{StyleBox["(", SpanMaxSize -> 1], RowBox[{StyleBox["a", "TI"], "," <> "\[ThinSpace]", StyleBox["b", "TI"], "," <> "\[ThinSpace]", StyleBox["c", "TI"]}], StyleBox[")", SpanMaxSize -> 1]}],
     TestID -> "LaTeX: comma-separated tuple in parens"
 ]
 
 VerificationTest[
     LaTeXMathParse["f(x, y)"],
-    RowBox[{StyleBox["f", "TI"], "(", RowBox[{StyleBox["x", "TI"], "," <> "\[ThinSpace]", StyleBox["y", "TI"]}], ")"}],
+    RowBox[{StyleBox["f", "TI"], StyleBox["(", SpanMaxSize -> 1], RowBox[{StyleBox["x", "TI"], "," <> "\[ThinSpace]", StyleBox["y", "TI"]}], StyleBox[")", SpanMaxSize -> 1]}],
     TestID -> "LaTeX: function of two args"
 ]
 

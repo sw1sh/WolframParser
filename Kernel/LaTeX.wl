@@ -261,9 +261,12 @@ cellLeadingOp = ParseAction[
    instead of a tilde glyph. *)
 tildeToken = ParseAction[literal["~"], "\[NonBreakingSpace]" &]
 
-puncToken = ParseAction[
+(* `|` (a bare bar - bra-ket separator, "divides", set-builder, conditional)
+   is pinned to fixed size (fixedFence, defined below) so it doesn't stretch to
+   a tall sibling; LaTeX keeps an un-\left'd bar fixed. *)
+puncToken = ParseAction[literal["|"], fixedFence["|"] &] | ParseAction[
     literal["?"] | literal["!"] | literal["*"] | literal["#"] |
-        literal["."] | literal["|"] | literal["/"] |
+        literal["."] | literal["/"] |
         literal["+"] | literal["-"] | literal["="] |
         literal["<"] | literal[">"] |
         literal["^"] | literal["_"] |
@@ -282,11 +285,14 @@ outerPuncToken = ParseChoice[
     ParseAction[literal[")"] | literal["]"] | literal["("] | literal["["], #1 &],
     (* unmatched closing bracket commands (guarded out of commandAtom)
        render as their bare glyph here, like an unmatched ) / ] *)
-    ParseAction[literal["\\rangle"], "\[RightAngleBracket]" &],
-    ParseAction[literal["\\rceil"],  "\[RightCeiling]" &],
-    ParseAction[literal["\\rfloor"], "\[RightFloor]" &],
-    ParseAction[literal["\\rVert"],  "\[DoubleVerticalBar]" &],
-    ParseAction[literal["\\rvert"],  "|" &]
+    (* fixedFence (defined below, evaluated lazily): a bare closer doesn't
+       stretch to a tall sibling - e.g. the \rangle in the ket
+       `\lvert\psi\rangle` next to a fraction. *)
+    ParseAction[literal["\\rangle"], fixedFence["\[RightAngleBracket]"] &],
+    ParseAction[literal["\\rceil"],  fixedFence["\[RightCeiling]"] &],
+    ParseAction[literal["\\rfloor"], fixedFence["\[RightFloor]"] &],
+    ParseAction[literal["\\rVert"],  fixedFence["\[DoubleVerticalBar]"] &],
+    ParseAction[literal["\\rvert"],  fixedFence["|"] &]
 ]
 (* matrix cells use a slightly looser row that accepts the closing
    delimiters ) and ] as bare tokens, so `3\times)` or `[a]` typo
@@ -1433,6 +1439,20 @@ Scan[
     Keys[namedSymbolChars]
 ]
 
+(* A standalone fence command - `\lvert` / `\rangle` used WITHOUT
+   \left...\right, as in the bra-ket `\lvert\psi\rangle` - emits a FIXED-size
+   glyph (like parenAtom / matchfixAtom), so it won't stretch to a tall sibling
+   such as a fraction in the same row.  `\left\langle...` takes the stretchy
+   delimGlyph path instead, so it is unaffected.  fixedFence is defined below;
+   the handler bodies evaluate lazily, so the forward reference is fine. *)
+Scan[
+    Function[name,
+        commandHandlers[name] = Function[{opt, req}, fixedFence[namedSymbolChars[name]]]
+    ],
+    {"\\langle", "\\rangle", "\\lvert", "\\rvert", "\\lVert", "\\rVert",
+     "\\lceil", "\\rceil", "\\lfloor", "\\rfloor"}
+]
+
 
 (* === Greek letter macros ===
    The escapes below resolve at *load* time to single named characters
@@ -1514,14 +1534,23 @@ funcAtomQ[_] := False
    groups. The recursive inner ROW must be topRow (not outerRow) so
    the closing ) is still available for our literal[")"] to consume,
    rather than being eaten as outerPuncToken. *)
+(* A bare fence (one the user typed directly, not via \left...\right) is
+   FIXED-size in LaTeX - it never grows to its content.  The front end, though,
+   auto-stretches a bracket character to the tallest thing in its RowBox, so a
+   bare `(x)` sitting in a row with a matrix or fraction balloons to the row
+   height.  SpanMaxSize -> 1 pins the glyph to its natural size, matching
+   LaTeX.  \left...\right and matrix fences are emitted WITHOUT this, so they
+   still stretch. *)
+fixedFence[c_] := StyleBox[c, SpanMaxSize -> 1]
+
 parenAtom = ParseAction[
     literal["("] ~~ ParseRecursive[topRow] ~~ literal[")"],
-    RowBox[{"(", #2, ")"}] &
+    RowBox[{fixedFence["("], #2, fixedFence[")"]}] &
 ]
 
 bracketAtom = ParseAction[
     literal["["] ~~ ParseRecursive[topRow] ~~ literal["]"],
-    RowBox[{"[", #2, "]"}] &
+    RowBox[{fixedFence["["], #2, fixedFence["]"]}] &
 ]
 
 (* \left X content \right Y - any X, Y delimiter pair, including the
@@ -1623,7 +1652,7 @@ absAtom = ParseAction[
    command path (openers are not guarded). *)
 matchfixAtom[openTok_, closeTok_, og_, cg_] := ParseAction[
     literal[openTok] ~~ ParseRecursive[topRow] ~~ literal[closeTok],
-    RowBox[{og, #2, italicCorr[#2], cg}] &
+    RowBox[{fixedFence[og], #2, italicCorr[#2], fixedFence[cg]}] &
 ]
 angleAtom = matchfixAtom["\\langle", "\\rangle", "\[LeftAngleBracket]", "\[RightAngleBracket]"]
 ceilAtom  = matchfixAtom["\\lceil",  "\\rceil",  "\[LeftCeiling]", "\[RightCeiling]"]
@@ -2656,15 +2685,18 @@ preprocessLaTeX[s_String] :=
    the indices to the right - matching `\nolimits` behaviour but not
    what KaTeX shows on screen. Convert to `UnderoverscriptBox` so
    the FE stacks them. *)
-(* Integrals (∫ ∮ ∬ ...) are deliberately NOT here: KaTeX (like TeX)
-   uses \nolimits for the integral family even in display style, so
-   their bounds sit to the side as ordinary sub/superscripts, not
-   stacked above/below.  Only the genuinely limits-stacking operators
-   belong in this set. *)
+(* Integrals (∫ ∮ ∬ ...) stack their bounds above/below here too.  TeX/KaTeX
+   default to side bounds (\nolimits) for the integral family, but stacked
+   bounds read better in this paclet's display output, so the integral glyphs
+   are included.  The multi-integral strings (\iint -> two glyphs, etc.) are
+   listed explicitly since the rule matches the SubsuperscriptBox base string. *)
 $bigOpChars = {
     "\[Sum]", "\[Product]",
     "\[Coproduct]", "\[Union]", "\[Intersection]", "\[Vee]", "\[Wedge]",
-    "\[CirclePlus]", "\[CircleTimes]", "\[SquareUnion]"
+    "\[CirclePlus]", "\[CircleTimes]", "\[SquareUnion]",
+    "\[Integral]", "\[ContourIntegral]",
+    "\[Integral]\[Integral]", "\[Integral]\[Integral]\[Integral]",
+    "\[ContourIntegral]\[ContourIntegral]", "\[ContourIntegral]\[ContourIntegral]\[ContourIntegral]"
 }
 
 (* Chars that get used as the "decoration" overscript for `\overbrace`,
