@@ -388,7 +388,7 @@ interpretDispatch[ParserCombinator["Regex", r_String, _], input_, pos_] :=
    continue.  Multi-word entities aren't handled here - compose them with
    FixedOrder or DelimitedSequence at the rule level. *)
 interpretDispatch[ParserCombinator["InterpreterSlot", type_String, _], input_, pos_] :=
-    Block[{remaining, m, value},
+    Block[{remaining, m},
         remaining = If[ pos > StringLength[input], "", StringTake[input, {pos, -1}] ];
         m = Quiet @ StringCases[
             remaining,
@@ -1255,7 +1255,12 @@ cgMkVarBlock[vsyms_List, isyms_List] := With[{ni = cgNullInert[]},
         Replace[Flatten[Hold @@ allh, 1, Hold], Hold[xs___] :> Hold[{xs}]]]]
 
 cgMkModule[Hold[vars_], Hold[body_]] := Hold[Module[vars, body]]
+(* cgInput/cgPos are the compiled function's ABI: the (opaque) module body `mb`
+   reads them at runtime, so CodeInspector can't see the use and flags them. *)
+(* :!CodeAnalysis::BeginBlock:: *)
+(* :!CodeAnalysis::Disable::UnusedParameter:: *)
 cgMkFunction[Hold[mb_]] := Hold[Function[{Typed[cgInput, "String"], Typed[cgPos, "MachineInteger"]}, mb]]
+(* :!CodeAnalysis::EndBlock:: *)
 
 (* Quiet wraps the whole assembly: building char-class tests and length
    guards evaluates StringTake/StringLength/DigitQ/CharacterRange over the
@@ -1355,9 +1360,13 @@ cgEmitFnBody[pc_, asTuple_] := Module[{v0 = Length[cgVsyms], i0 = Length[cgIsyms
     varBlk = cgMkVarBlock[cgVsyms[[v0 + 1 ;;]], cgIsyms[[i0 + 1 ;;]]];
     cgMkModule[varBlk, cgSeq[stmts, retH]]]
 
+(* cgInput/cgPos are the compiled function's ABI (read by the opaque body mb). *)
+(* :!CodeAnalysis::BeginBlock:: *)
+(* :!CodeAnalysis::Disable::UnusedParameter:: *)
 cgMkDecl[Hold[fnsym_], Hold[mb_]] :=
     Hold[FunctionDeclaration[fnsym, Typed[{"String", "MachineInteger"} -> "InertExpression"]@
         Function[{Typed[cgInput, "String"], Typed[cgPos, "MachineInteger"]}, mb]]]
+(* :!CodeAnalysis::EndBlock:: *)
 
 cgJoinDecls[declHolds_List, Hold[rootFn_]] :=
     With[{dd = declHolds /. Hold[d_] :> d, rf = rootFn}, Hold[{dd, rf}]]
