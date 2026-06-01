@@ -121,6 +121,30 @@ returns a `ContainerNode[String, {CallNode[LeafNode[Symbol, "SetDelayed", ...], 
 
 `WolframParser` does not try to compete with `CodeParser` for WL source - on the contrary, it interoperates: you can feed a `CodeParser` AST into a `WolframParser` grammar that walks the tree and extracts higher-level structure (e.g. "find all `Module` definitions with a particular shape"). That dual-mode of "string parser" + "expression-tree parser" is what the *token-oriented* design enables.
 
+### `ResourceFunction["CodeStructure"]` - the `CodeAnalysis` paclet
+
+The `CodeParser` story, one language over: a first-party parser for **C/C++** source, delivered through the Function Repository. `ResourceFunction["CodeStructure"]` is itself only a *loader shim* - its entire definition is three lines that install and load the `CodeAnalysis` paclet on first use, then hand every call off to `CodeAnalysis`CodeStructure`:
+
+```wl
+CodeStructure[args___]  := (getCodeAnalysis[]; Symbol["CodeAnalysis`CodeStructure"][args])
+getCodeAnalysis[]       := getCodeAnalysis[] = (installCodeAnalysis[]; Block[{$ContextPath}, Needs["CodeAnalysis`"]])
+installCodeAnalysis[]   := PacletInstall["CodeAnalysis"] /; PacletFind["CodeAnalysis"] === {}
+```
+
+The real engine is the `CodeAnalysis` paclet (v0.9.6 at writing), which parses C by **shelling out to Clang** and post-processing its AST dump into a Wolfram expression tree. The options give the backend away: `ClangBinariesDirectory`, `CommandLineArguments`, `BinaryLocation`, `ShellProlog` (plus the `$BuildError` / `$ExtractError` / `$OptError` channels for the three external stages).
+
+```wl
+ResourceFunction["CodeStructure"]["int main(void){ return 41+1; }"]
+```
+
+<!-- => CodeElement[{CodeElement[{CodeElementToken["int","Keyword","SourceRange"->{0,3}], CodeElementToken["main","Identifier",...], ... CodeElement[{...},"ReturnStmt",...]}, "FunctionDecl","SourceRange"->{0,30}]}, "TranslationUnit","SourceRange"->{0,30}] -->
+
+The tree mirrors Clang's AST node names - `TranslationUnit`, `FunctionDecl`, `CompoundStmt`, `ReturnStmt`, `BinaryOperator`, `IntegerLiteral` - with a byte `SourceRange` on every node. Internal nodes are `CodeElement[{children}, type, opts]`; leaves are `CodeElementToken[text, class, opts]` with `class` one of `"Keyword"`, `"Identifier"`, `"Punctuation"`, `"Literal"`, etc. A second argument picks an alternative representation - `"SyntaxTree"`, `"SyntaxAnnotation"`, `"SourceAnnotation"`, `"TokenAnnotation"`, `"CallGraph"`, `"FileCallGraph"` - and the companion `CodeCases` walks a `CodeElement` tree the way `Cases` walks any expression.
+
+**What it does well.** A precise, source-accurate C/C++ AST with zero Clang plumbing on your part - the paclet handles the install, the compiler invocation, and the AST-dump parsing. The right tool for "find every function that calls `malloc`", call-graph extraction, and source-to-source tooling over C.
+
+**Where it stops.** It parses *C* and only C, through an external Clang it shells out to: you cannot retarget it, add productions, or run it on a machine with no Clang on the path. Like `CodeParser`, it is an analyzer for one fixed language rather than a construction kit - and, as with `CodeParser`, the part that matters to this survey is the structured-AST *output*. A `CodeElement` tree is exactly what `WolframParser`'s expression-tree input mode is built to walk: the same combinators that lex a string can match `CodeElement[_, "FunctionDecl", _]` nodes to pull out higher-level structure without re-parsing the C.
+
 ### `XMLObject`, `JSON`, `ImportString`
 
 `ImportString[text, "XML"]`, `ImportString[text, "JSON"]`, and friends cover the cases where someone else has already done the parsing work for a well-known format. They are not really parsers in the construction sense - they are *importers*. Useful when applicable, irrelevant when you have a format that doesn't already have an importer.
