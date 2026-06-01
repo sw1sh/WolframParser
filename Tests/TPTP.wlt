@@ -212,3 +212,91 @@ VerificationTest[
     {4, True},
     TestID -> "TPTP: file roundtrip on abelian-group skeleton"
 ]
+
+
+(* ===== SZS-output / derivation parsing ===== *)
+
+szsBlock = "% SZS status Unsatisfiable for GRP001-4
+% SZS output start CNFRefutation for GRP001-4
+cnf(associativity, axiom, multiply(multiply(X,Y),Z) = multiply(X,multiply(Y,Z)), file('GRP001-4.p', associativity)).
+cnf(left_identity, axiom, multiply(identity,X) = X, file('GRP001-4.p', left_identity)).
+cnf(c7, plain, multiply(a,b) = c, inference(superposition, [status(thm)], [associativity, left_identity])).
+cnf(c12, plain, $false, inference(cr, [status(thm)], [c7, prove_goal])).
+% SZS output end CNFRefutation for GRP001-4
+";
+
+VerificationTest[
+    Module[{r = TPTPImport[szsBlock, "SZS"]},
+        {r["Status"], r["Problem"], r["OutputForm"], Length[r["Derivation"]]}
+    ],
+    {"Unsatisfiable", "GRP001-4", "CNFRefutation", 4},
+    TestID -> "TPTP: SZS framing (status / problem / dataform / step count)"
+]
+
+VerificationTest[
+    Module[{r = TPTPImport[szsBlock, "SZS"], step},
+        step = SelectFirst[r["Derivation"], #["Name"] === "c7" &];
+        {step["Rule"], step["Status"], step["Parents"]}
+    ],
+    {"superposition", "thm", {"associativity", "left_identity"}},
+    TestID -> "TPTP: SZS inference rule / status / parents"
+]
+
+VerificationTest[
+    Module[{r = TPTPImport[szsBlock, "SZS"]},
+        {Last[r["Derivation"]]["Formula"], Last[r["Derivation"]]["Rule"]}
+    ],
+    {False, "cr"},
+    TestID -> "TPTP: SZS empty clause $false -> False"
+]
+
+VerificationTest[
+    Module[{r = TPTPImport[szsBlock, "SZS"], ax},
+        ax = SelectFirst[r["Derivation"], #["Name"] === "associativity" &];
+        {ax["Rule"], Head[ax["Formula"]], FreeQ[ax["Formula"], _Missing],
+         ! FreeQ[ax["Formula"], "multiply"]}
+    ],
+    {"file", Equal, True, True},
+    TestID -> "TPTP: SZS file source + parsed formula"
+]
+
+VerificationTest[
+    Module[{r = TPTPImport[
+        "cnf(c7, plain, p(a) != b, inference(resolution, [status(thm)], [3, 5])).", "SZS"]},
+        {MissingQ[r["Status"]], Length[r["Derivation"]], r["Derivation"][[1]]["Parents"]}
+    ],
+    {True, 1, {"3", "5"}},
+    TestID -> "TPTP: SZS bare-derivation fallback (no framing)"
+]
+
+
+(* ===== SZS-output emission (TPTPExport) + round-trip ===== *)
+
+VerificationTest[
+    Module[{r1 = TPTPImport[szsBlock, "SZS"], r2},
+        r2 = TPTPImport[TPTPExport[r1], "SZS"];
+        {r1["Status"], r1["Problem"], r1["OutputForm"]} ===
+            {r2["Status"], r2["Problem"], r2["OutputForm"]} &&
+        r1["Derivation"] === r2["Derivation"]
+    ],
+    True,
+    TestID -> "TPTP: SZS read/emit round-trip (Import[Export[r]] === r)"
+]
+
+VerificationTest[
+    Module[{txt = TPTPExport[TPTPImport[szsBlock, "SZS"]]},
+        {StringContainsQ[txt, "% SZS status Unsatisfiable for GRP001-4"],
+         StringContainsQ[txt, "inference(superposition, [status(thm)], [associativity, left_identity])"],
+         StringContainsQ[txt, "$false"]}
+    ],
+    {True, True, True},
+    TestID -> "TPTP: SZS emit renders framing + inference + empty clause"
+]
+
+VerificationTest[
+    TPTPExport[<|"Derivation" -> {<|"Head" -> "cnf", "Name" -> "d", "Role" -> "plain",
+        "Formula" -> Or["p"[Global`X_], "q"[Global`X_], Not["r"[Global`X_]]],
+        "Rule" -> "split", "Status" -> "thm", "Parents" -> {"c1"}|>}|>],
+    "cnf(d, plain, p(X) | q(X) | ~r(X), inference(split, [status(thm)], [c1])).\n",
+    TestID -> "TPTP: SZS emit cnf disjunction with negative literal"
+]

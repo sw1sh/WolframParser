@@ -54,7 +54,18 @@ TPTPImport::usage =
     "symbols come back as String-headed terms (\"and\"[X_, Y_] etc.); " <>
     "variables as Pattern[Symbol[name], Blank[]].  Handles cnf, fof, " <>
     "tff, tcf, thf clause heads plus `include` with optional " <>
-    "clause-name selectors."
+    "clause-name selectors.  TPTPImport[src, \"SZS\"] instead reads an " <>
+    "SZS-output derivation, returning <|\"Status\" -> ..., \"Problem\" -> " <>
+    "..., \"OutputForm\" -> ..., \"Derivation\" -> {<|\"Name\", \"Role\", " <>
+    "\"Formula\", \"Rule\", \"Status\", \"Parents\"|>, ...}|>."
+
+TPTPExport::usage =
+    "TPTPExport[<|\"Status\" -> ..., \"OutputForm\" -> ..., \"Derivation\" -> " <>
+    "{step1, ...}|>] renders an SZS-output derivation back to SZS-framed " <>
+    "TPTP text - the inverse of TPTPImport[src, \"SZS\"].  Each step is an " <>
+    "<|\"Head\", \"Name\", \"Role\", \"Formula\", \"Rule\", \"Status\", " <>
+    "\"Parents\"|> record; inference steps re-render from their fields, " <>
+    "other sources from the retained \"RawSource\"."
 
 TPTPImport::badparse =
     "TPTP parse failed in `1`: `2`"
@@ -63,7 +74,7 @@ TPTPImport::badinclude =
     "Could not resolve TPTP include path `1` (searched relative to `2` " <>
     "and the $TPTP / $TPTP/Problems env-var roots)."
 
-Begin["`TPTPPrivate`"]
+Begin["`Private`"]
 
 
 (* ===== BNF + parser construction (memoized once per kernel) ===== *)
@@ -229,12 +240,11 @@ annotated[head_String][args__] := Block[{a = {args}},
 (* TPTP_file action: partition annotated clauses into includes,
    {Name, Formula} axiom pairs, conjecture.  negated_conjecture flips
    through Not so the returned Conjecture is the positive goal. *)
-tptpFile[cs__] := Block[
-    {
-        clauses = {cs},
-        c, nc
-    },
-    c  = FirstCase[clauses, KeyValuePattern["Role" -> "conjecture"], None];
+tptpFile[cs__] := Block[{
+    clauses = {cs},
+    c, nc
+},
+    c = FirstCase[clauses, KeyValuePattern["Role" -> "conjecture"], None];
     nc = FirstCase[clauses, KeyValuePattern["Role" -> "negated_conjecture"], None];
     <|"Includes"   -> Cases[clauses,
                         kv : KeyValuePattern["Head" -> "include"] :> kv],
@@ -278,11 +288,10 @@ absolutePathQ[path_String] :=
     StringStartsQ[path, "/"] ||
     StringMatchQ[path, RegularExpression["^[A-Za-z]:.*"]]
 
-resolveIncludePath[path_String, baseDir_String] := Block[
-    {
-        tptpRoot = Environment["TPTP"],
-        candidates
-    },
+resolveIncludePath[path_String, baseDir_String] := Block[{
+    tptpRoot = Environment["TPTP"],
+    candidates
+},
     candidates = Join[
         {path},
         If[absolutePathQ[path], {}, {FileNameJoin[{baseDir, path}]}],
@@ -292,8 +301,7 @@ resolveIncludePath[path_String, baseDir_String] := Block[
     SelectFirst[candidates, FileExistsQ, $Failed]
 ]
 
-expandIncludes[parsed_Association, baseDir_String] := Block[
-    {extra},
+expandIncludes[parsed_Association, baseDir_String] := Block[{extra},
     extra = Flatten @ Map[
         spec |-> includeAxioms[spec, baseDir],
         Lookup[parsed, "Includes", {}]];
@@ -301,11 +309,10 @@ expandIncludes[parsed_Association, baseDir_String] := Block[
       "Conjecture" -> parsed["Conjecture"]|>
 ]
 
-includeAxioms[spec_Association, baseDir_String] := Block[
-    {
-        resolved = resolveIncludePath[spec["File"], baseDir],
-        sub
-    },
+includeAxioms[spec_Association, baseDir_String] := Block[{
+    resolved = resolveIncludePath[spec["File"], baseDir],
+    sub
+},
     If[ resolved === $Failed,
         Message[TPTPImport::badinclude, spec["File"], baseDir];
         Return[{}]
@@ -340,10 +347,9 @@ stripTypeDecls[text_String] := StringReplace[text,
 
 (* ===== entry points ===== *)
 
-parseFileRaw[path_String] := Block[
-    {text, parsed},
+parseFileRaw[path_String] := Block[{text, parsed},
     ensureTptpParser[];
-    text   = stripTypeDecls @ stripComments @ Import[path, "Text"];
+    text = stripTypeDecls @ stripComments @ Import[path, "Text"];
     parsed = Quiet @ Parse[$tptpParser, StringTrim @ text];
     If[ FailureQ[parsed],
         Message[TPTPImport::badparse, path, parsed];
@@ -352,11 +358,10 @@ parseFileRaw[path_String] := Block[
     parsed
 ]
 
-parseTextRaw[text_String] := Block[
-    {stripped, parsed},
+parseTextRaw[text_String] := Block[{stripped, parsed},
     ensureTptpParser[];
     stripped = stripTypeDecls @ stripComments @ text;
-    parsed   = Quiet @ Parse[$tptpParser, StringTrim @ stripped];
+    parsed = Quiet @ Parse[$tptpParser, StringTrim @ stripped];
     If[ FailureQ[parsed],
         Message[TPTPImport::badparse, "(text)", parsed];
         Return[$Failed]
@@ -369,26 +374,232 @@ flattenAxioms[parsed_Association] := <|
     "Conjecture" -> parsed["Conjecture"]
 |>
 
-End[]
 
+(* ===== public entry points ===== *)
 
-TPTPImport[File[path_String]] := Block[
-    {raw = `TPTPPrivate`parseFileRaw[path]},
+TPTPImport[File[path_String]] := Block[{raw = parseFileRaw[path]},
     If[ !AssociationQ[raw], Return[$Failed] ];
-    `TPTPPrivate`flattenAxioms @ `TPTPPrivate`expandIncludes[raw,
-        DirectoryName[AbsoluteFileName[path]]]
+    flattenAxioms @ expandIncludes[raw, DirectoryName[AbsoluteFileName[path]]]
 ]
 
 TPTPImport[s_String] /; FileExistsQ[s] && ! StringContainsQ[s,
         "cnf(" | "fof(" | "tff(" | "tcf(" | "thf(" | "ncf(" | "tpi("] :=
     TPTPImport[File[s]]
 
-TPTPImport[text_String] := Block[
-    {raw = `TPTPPrivate`parseTextRaw[text]},
+TPTPImport[text_String] := Block[{raw = parseTextRaw[text]},
     If[ !AssociationQ[raw], Return[$Failed] ];
-    `TPTPPrivate`flattenAxioms @ `TPTPPrivate`expandIncludes[raw,
-        Directory[]]
+    flattenAxioms @ expandIncludes[raw, Directory[]]
 ]
 
+
+(* ===== SZS-output / derivation parsing ===== *)
+
+(* The SZS status / output markers are TPTP *comments*, not part of the
+   BNF, so the default importer's stripComments deletes them; the
+   `inference(...)` source (the 4th annotated-formula field) it parses
+   but discards.  `TPTPImport[src, "SZS"]` adds both back as a thin layer
+   ON TOP of the existing parser: scan the SZS framing out-of-band,
+   split the derivation into clauses (paren/quote aware), reparse each
+   step's formula through the grammar, and lift the inference source into
+   a {Rule, Status, Parents} record.  The base parser is untouched. *)
+
+$tptpHeads = {"cnf", "fof", "tff", "tcf", "thf", "tpi"}
+
+(* Split `str` on any single-char separator in `seps`, but only at
+   paren/bracket depth 0 and outside single quotes - so a `.` inside a
+   real number or a `,` inside a formula does not split.  Pieces are
+   accumulated as a binary-nested char list (O(1) append) and rendered
+   with StringJoin @ Flatten at each break, so the whole scan is O(n). *)
+splitTopLevel[str_String, seps_List] := Block[{step, final},
+    step[{out_, piece_, depth_, inq_}, c_] := Which[
+        inq && c === "'",                {out, {piece, c}, depth, False},
+        inq,                             {out, {piece, c}, depth, True},
+        c === "'",                       {out, {piece, c}, depth, True},
+        c === "(" || c === "[",          {out, {piece, c}, depth + 1, inq},
+        c === ")" || c === "]",          {out, {piece, c}, depth - 1, inq},
+        depth === 0 && MemberQ[seps, c], {Append[out, StringJoin @ Flatten @ {piece}], {}, depth, inq},
+        True,                            {out, {piece, c}, depth, inq}
+    ];
+    final = Fold[step, {{}, {}, 0, False}, Characters[str]];
+    DeleteCases[
+        StringTrim /@ Append[final[[1]], StringJoin @ Flatten @ {final[[2]]}],
+        ""
+    ]
+]
+
+(* tokens of a parent list `[a, b, ...]` (outer brackets stripped) *)
+szsTokens[s_String] := Select[
+    splitTopLevel[
+        StringReplace[StringTrim[s], {StartOfString ~~ "[" -> "", "]" ~~ EndOfString -> ""}],
+        {","}
+    ],
+    # =!= "" &
+]
+
+(* lift an annotation source string into {Rule, Status, Parents};
+   handles the canonical inference(rule, useful_info, parents) record and
+   the file(...) / introduced(...) forms, plus a bare name / [list]
+   dag-source.  Exotic general_term sources keep the raw string. *)
+szsSource[src_String] := Block[{fn, inner, args, statusStr},
+    fn = StringCases[src, StartOfString ~~ f : (WordCharacter ..) ~~ "(" :> f, 1];
+    If[ fn === {},
+        Return[<|"Rule" -> Missing["NoRule"], "Status" -> Missing["NoStatus"],
+            "Parents" -> szsTokens[src], "RawSource" -> src|>]
+    ];
+    inner = StringTake[src, {First[First[StringPosition[src, "(", 1]]] + 1, -2}];
+    args = splitTopLevel[inner, {","}];
+    statusStr = StringCases[src, "status(" ~~ s : (WordCharacter ..) ~~ ")" :> s, 1];
+    (* an `inference(rule, useful_info, parents)` record carries the real
+       inference rule as its first argument; the bare functor "inference"
+       is just the wrapper, so report the inner rule.  Other source forms
+       (file, introduced, ...) report the functor itself. *)
+    <|"Rule"      -> If[fn[[1]] === "inference" && Length[args] >= 1, args[[1]], fn[[1]]],
+      "Status"    -> If[statusStr === {}, Missing["NoStatus"], statusStr[[1]]],
+      "Parents"   -> If[Length[args] >= 3, szsTokens[Last[args]], {}],
+      "RawSource" -> src|>
+]
+
+(* reparse one step's formula text through the grammar (as an axiom so it
+   lands in "Axioms"), falling back to the raw string on a parse miss *)
+szsFormula[fText_String] := Block[{raw},
+    raw = Quiet @ parseTextRaw["cnf(szsStep, axiom, " <> fText <> ")."];
+    If[ AssociationQ[raw] && Length[Lookup[raw, "Axioms", {}]] >= 1,
+        raw["Axioms"][[1]]["Formula"],
+        fText
+    ]
+]
+
+szsClauseRecord[clause_String] := Block[{op, head, inner, fields},
+    op = StringPosition[clause, "(", 1];
+    If[ op === {}, Return[Missing["NotClause"]] ];
+    head = StringTrim @ StringTake[clause, op[[1, 1]] - 1];
+    If[ ! MemberQ[$tptpHeads, head], Return[Missing["NotClause"]] ];
+    inner = StringTake[clause, {op[[1, 1]] + 1, -2}];
+    fields = splitTopLevel[inner, {","}];
+    If[ Length[fields] < 3, Return[Missing["BadClause"]] ];
+    Join[
+        <|"Head" -> head, "Name" -> fields[[1]], "Role" -> fields[[2]],
+          "Formula" -> szsFormula[fields[[3]]]|>,
+        If[ Length[fields] >= 4, szsSource[fields[[4]]], <||>]
+    ]
+]
+
+(* scan the SZS status line and the SZS output start/end block (raw text,
+   before comment stripping); fall back to the whole text as the
+   derivation body when no output block is present. *)
+szsScan[text_String] := Block[{st, blk},
+    st = StringCases[text,
+        "SZS status " ~~ s : (WordCharacter ..) ~~ " for " ~~ p : (Except[WhitespaceCharacter] ..) :> {s, p}, 1];
+    blk = StringCases[text,
+        "SZS output start " ~~ f : (WordCharacter ..) ~~ Shortest[___] ~~ "\n" ~~
+            b : Shortest[___] ~~ "SZS output end" :> {f, b}, 1];
+    <|"Status"     -> If[st === {}, Missing["NoStatus"], st[[1, 1]]],
+      "Problem"    -> If[st === {}, Missing["NoProblem"], st[[1, 2]]],
+      "OutputForm" -> If[blk === {}, Missing["NoOutputBlock"], blk[[1, 1]]],
+      "Body"       -> If[blk === {}, text, blk[[1, 2]]]|>
+]
+
+szsImport[rawText_String] := Block[{scan, clauseStrs, deriv},
+    ensureTptpParser[];
+    scan = szsScan[rawText];
+    clauseStrs = Select[
+        splitTopLevel[stripComments[scan["Body"]], {"."}],
+        clause |-> AnyTrue[$tptpHeads, StringStartsQ[clause, # ~~ ("(" | " " | "\t" | "\n")] &]
+    ];
+    deriv = DeleteMissing[szsClauseRecord /@ clauseStrs];
+    <|"Status"     -> scan["Status"],
+      "Problem"    -> scan["Problem"],
+      "OutputForm" -> scan["OutputForm"],
+      "Derivation" -> deriv|>
+]
+
+TPTPImport[File[path_String], "SZS"] := szsImport[Import[path, "Text"]]
+
+TPTPImport[s_String, "SZS"] := szsImport[If[FileExistsQ[s], Import[s, "Text"], s]]
+
+
+(* ===== SZS-output / derivation emission ===== *)
+
+(* The inverse of TPTPImport[..., "SZS"]: render a derivation (the
+   association that mode returns) back to SZS-framed TPTP text.
+   formulaToTPTP is the inverse of the action map - it prints the
+   parser's canonical term shape ("f"[...] functors, "c"[] constants,
+   X_ variables, Equal/Unequal/And/Or/Not/.../ForAll/Exists). *)
+
+tptpTerm[Verbatim[Pattern][v_Symbol, Verbatim[Blank][]]] := SymbolName[v]
+tptpTerm[(h_String)[args___]] := With[{as = {args}},
+    If[ as === {}, h, h <> "(" <> StringRiffle[tptpTerm /@ as, ", "] <> ")"]]
+tptpTerm[s_Symbol] := SymbolName[s]
+tptpTerm[x_] := ToString[x]
+
+(* parenthesize a subformula only when it is a compound connective; Not
+   binds tightly and stays bare (a parenthesized literal is not a valid
+   cnf literal). *)
+ftSub[x_] := If[
+    MatchQ[x, _And | _Or | _Implies | _Equivalent | _Xor | _ForAll | _Exists],
+    "(" <> formulaToTPTP[x] <> ")",
+    formulaToTPTP[x]
+]
+
+formulaToTPTP[True]               := "$true"
+formulaToTPTP[False]              := "$false"
+formulaToTPTP[Equal[a_, b_]]      := tptpTerm[a] <> " = " <> tptpTerm[b]
+formulaToTPTP[Unequal[a_, b_]]    := tptpTerm[a] <> " != " <> tptpTerm[b]
+formulaToTPTP[Not[a_]]            := "~" <> ftSub[a]
+formulaToTPTP[e_And]              := StringRiffle[ftSub /@ Apply[List, e], " & "]
+formulaToTPTP[e_Or]               := StringRiffle[ftSub /@ Apply[List, e], " | "]
+formulaToTPTP[Implies[a_, b_]]    := ftSub[a] <> " => " <> ftSub[b]
+formulaToTPTP[Equivalent[a_, b_]] := ftSub[a] <> " <=> " <> ftSub[b]
+formulaToTPTP[Xor[a_, b_]]        := ftSub[a] <> " <~> " <> ftSub[b]
+formulaToTPTP[ForAll[vs_, b_]]    :=
+    "! [" <> StringRiffle[tptpTerm /@ Flatten[{vs}], ", "] <> "] : " <> ftSub[b]
+formulaToTPTP[Exists[vs_, b_]]    :=
+    "? [" <> StringRiffle[tptpTerm /@ Flatten[{vs}], ", "] <> "] : " <> ftSub[b]
+formulaToTPTP[atom_]              := tptpTerm[atom]
+
+(* an inference step re-renders from its {Rule, Status, Parents} fields
+   (round-trips); any other source is reproduced from its RawSource. *)
+renderSource[step_Association] := Block[{
+    rule = Lookup[step, "Rule", Missing[]],
+    parents = Lookup[step, "Parents", {}],
+    status = Lookup[step, "Status", Missing[]],
+    raw = Lookup[step, "RawSource", Missing[]]
+},
+    Which[
+        ! MissingQ[rule] && rule =!= "file" && Length[parents] > 0,
+            ", inference(" <> rule <> ", [" <>
+                If[MissingQ[status], "", "status(" <> status <> ")"] <>
+                "], [" <> StringRiffle[parents, ", "] <> "])",
+        ! MissingQ[raw],
+            ", " <> raw,
+        True,
+            ""
+    ]
+]
+
+renderClause[step_Association] := StringJoin[
+    step["Head"], "(", step["Name"], ", ", step["Role"], ", ",
+    formulaToTPTP[step["Formula"]], renderSource[step], ")."
+]
+
+TPTPExport[a_Association] := Block[{
+    prob = Replace[Lookup[a, "Problem", Missing[]], _Missing -> "unknown"],
+    form = Replace[Lookup[a, "OutputForm", Missing[]], _Missing -> "Derivation"],
+    hasStatus = StringQ[Lookup[a, "Status", Missing[]]],
+    hasForm = StringQ[Lookup[a, "OutputForm", Missing[]]]
+},
+    StringRiffle[
+        Join[
+            If[hasStatus, {"% SZS status " <> a["Status"] <> " for " <> prob}, {}],
+            If[hasForm, {"% SZS output start " <> form <> " for " <> prob}, {}],
+            renderClause /@ Lookup[a, "Derivation", {}],
+            If[hasForm, {"% SZS output end " <> form <> " for " <> prob}, {}]
+        ],
+        "\n"
+    ] <> "\n"
+]
+
+
+End[]
 
 EndPackage[]
