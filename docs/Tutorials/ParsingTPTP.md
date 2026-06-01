@@ -14,7 +14,7 @@ RelatedTutorials: [ParsingBNFGrammars, DesignAndCompilationStrategy]
 
 [TPTP](https://tptp.org/) (Thousands of Problems for Theorem Provers) is the standard cross-prover benchmark corpus for automated reasoning - 26,264 problems across 57 mathematical domains, used by Vampire, E, Twee, Waldmeister, and every modern ATP system. Every problem is a `.p` file with one of six clause heads: `cnf`, `fof`, `tff`, `tcf`, `thf`, `ncf`. The [TPTPWorld project](https://github.com/TPTPWorld/SyntaxBNF) publishes the formal grammar as a 735-line BNF file (`SyntaxBNF-v9.2.1.4`, 338 rules).
 
-The paclet ships the result of this construction as [TPTPImport]() - `TPTPImport[File["p.p"]]` (or `TPTPImport["cnf(...)"]`) returns the canonical `<|"Axioms" -> {phi1, ...}, "Conjecture" -> phi|>` shape directly. The corpus-walking sibling tutorial [TPTPProblemLibrary](paclet:Wolfram/WolframParser/tutorial/TPTPProblemLibrary) shows it driving the full 26K-problem distribution. This note tells the story of how the parser is *built* - the BNF + action map that `TPTPImport` reuses internally. It works in two steps:
+The paclet ships the result of this construction as [TPTPImport]() - `TPTPImport[File["p.p"]]` (or `TPTPImport["cnf(...)"]`) returns the canonical `<|"Axioms" -> {phi1, ...}, "Conjecture" -> phi|>` shape directly. The companion *Thousands of Problems for Theorem Provers (TPTP)* [Data Repository entry](https://tptp.org/) ships a catalogue index of the full 26,264-problem distribution and drives `TPTPImport` over any problem on demand from the online corpus. This note tells the story of how the parser is *built* - the BNF + action map that `TPTPImport` reuses internally. It works in two steps:
 
 1. Read the BNF into an `Association[name -> ParserCombinator]`.
 2. Apply the result to TPTP source - optionally with an `"Actions"` map that lifts the raw parse tree to a Wolfram-Language data shape.
@@ -201,7 +201,7 @@ Without actions, the parser is just a recogniser - it tells you whether the sour
 
 On the small CNF / FOF problems from the published `v9.2.1` distribution, per-clause parse time lands in the tens of milliseconds for short clauses (a few atoms, ground equations) and climbs into the hundreds of milliseconds for clauses with nested quantifiers and function applications. The 5-clause group-theory problem at the top of this note parses in ~700 ms end-to-end on a 2024 laptop with default `"ChoiceMode" -> "Auto"`.
 
-On the published `v9.2.1` distribution, per-clause parse time lands in the tens of milliseconds for short clauses (a few atoms, ground equations) and climbs into the hundreds of milliseconds for clauses with nested quantifiers and function applications. The cost of trying every alternative under longest-match without memoisation shows up on FOF with deep boolean / quantifier nesting. Adding [packrat-style memoisation](https://en.wikipedia.org/wiki/Parsing_expression_grammar#Implementing_parsers_from_parsing_expression_grammars) to `ParseRecursive` would close most of the throughput gap; a Pratt-style precedence climber for the connective grammar would be the right move for THF, where alternative explosion overwhelms even longest-match.
+The cost of trying every alternative under longest-match without memoisation shows up on FOF with deep boolean / quantifier nesting. Adding [packrat-style memoisation](https://en.wikipedia.org/wiki/Parsing_expression_grammar#Implementing_parsers_from_parsing_expression_grammars) to `ParseRecursive` would close most of the throughput gap; a Pratt-style precedence climber for the connective grammar would be the right move for THF, where alternative explosion overwhelms even longest-match.
 
 ### ParserCompile is currently a stub
 
@@ -228,6 +228,7 @@ Remaining failures cluster on the higher-order alternatives in `<thf_*>` (the re
 The TPTP distribution lives at https://tptp.org/TPTP/Distribution/TPTP-v9.2.1.tgz (922 MB compressed). Extract a sample and run:
 
 ```wl
+#| eval: false
 (* ... primitiveOverrides + parsers from above ... *)
 
 loadClean[path_String] := StringTrim @ StringReplace[
@@ -260,6 +261,7 @@ For the THF problems, raise the timeout or skip them (`StringContainsQ[FileBaseN
 To run the same bench against the compiled path, swap the parser:
 
 ```wl
+#| eval: false
 tptpCompiled = ParserCompile[parsers["TPTP_file"]];
 benchOne[file_] := Block[{src = loadClean[file], r, t},
     t = AbsoluteTime[];

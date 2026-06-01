@@ -28,14 +28,19 @@ subdir["Guide"] = {"Documentation", "English", "Guides"}
 subdir["TechNote"] = {"Documentation", "English", "Tutorials"}
 subdir["Overview"] = {"Documentation", "English", "Tutorials"}
 
+(* Tutorials thread state across sections (a parser built in one section is used
+   in the next), so the whole notebook must evaluate in a single context.
+   EvaluateSeparator -> None disables the per-heading context reset; the default
+   Automatic clears those definitions at each heading, leaving later sections
+   with unevaluated references. *)
 buildDoc[srcFile_String] := Block[{info, tmpl, baseName, dir, out},
-    info = MarkdownToNotebook[srcFile, "Association"];
+    info = MarkdownToNotebook[srcFile, "Association", "EvaluateSeparator" -> None];
     tmpl = info["Template"];
     baseName = FileBaseName[srcFile];
     dir = FileNameJoin[Prepend[subdir[tmpl], pacletDir]];
     Quiet @ CreateDirectory[dir, CreateIntermediateDirectories -> True];
     out = FileNameJoin[{dir, baseName <> ".nb"}];
-    MarkdownToNotebook[srcFile, out];
+    MarkdownToNotebook[srcFile, out, "EvaluateSeparator" -> None];
     Print["  ", FileNameTake[srcFile], " -> Documentation/English/", Last[subdir[tmpl]], "/", baseName, ".nb"]
 ]
 
@@ -44,6 +49,6 @@ Scan[buildDoc, Sort @ FileNames["*.md", FileNameJoin[{pacletDir, "docs"}], Infin
 
 rd = FileNameJoin[{pacletDir, "ResourceDefinition.md"}]
 If[ FileExistsQ[rd],
-    MarkdownToNotebook[rd, FileNameJoin[{pacletDir, "ResourceDefinition.nb"}]];
+    MarkdownToNotebook[rd, FileNameJoin[{pacletDir, "ResourceDefinition.nb"}], "EvaluateSeparator" -> None];
     Print["  ResourceDefinition.md -> ResourceDefinition.nb"]
 ]
