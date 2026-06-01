@@ -85,15 +85,22 @@ Slot types supported:
 | `<name:Integer>`         | alias for `Number`                                      | `Integer`           |
 | any other type           | `ParseFail` (use the pattern form for semantic types)   | -                   |
 
+Bare slot captures a word run:
+
 ```wl
-In[]:= Parse[GrammarRules[{"the weather in <city>" -> city}], "the weather in NYC"]
-Out[]= "NYC"
+Parse[GrammarRules[{"the weather in <city>" -> city}], "the weather in NYC"]
+```
 
-In[]:= Parse[GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}], "add 3 and 5"]
-Out[]= 8
+Typed slots and arithmetic in the rule body:
 
-In[]:= Parse[GrammarRules[{"<verb:Word> <obj:Word>" :> {verb, obj}}], "eat sushi"]
-Out[]= {"eat", "sushi"}
+```wl
+Parse[GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}], "add 3 and 5"]
+```
+
+Multi-slot template with a list-shaped result:
+
+```wl
+Parse[GrammarRules[{"<verb:Word> <obj:Word>" :> {verb, obj}}], "eat sushi"]
 ```
 
 ### (b) The pattern form (matches the built-in's surface syntax)
@@ -104,78 +111,117 @@ Each pattern node lowers to a `ParserCombinator`; the captures collected by `Pat
 
 | Built-in pattern node             | Lowered to                                                |
 |-----------------------------------|-----------------------------------------------------------|
-| `"string"`                        | `ParseLiteral`                                            |
-| `form1 \| form2 \| ...`           | `ParseChoice`                                             |
-| `FixedOrder[f1, f2, ...]`         | `ParseSequence` with optional whitespace between elements |
+| `"string"`                        | [ParseLiteral]()                                          |
+| `form1 \| form2 \| ...`           | [ParseChoice]()                                           |
+| `FixedOrder[f1, f2, ...]`         | [ParseSequence]() with optional whitespace between elements |
+| `AnyOrder[f1, f2, ...]`           | [ParseChoice]() over every permutation of the FixedOrder lowering (N! alternatives) |
 | `OptionalElement[form]`           | `ParseChoice[form, ParseSucceed[Missing["NoMatch"]]]`     |
 | `OptionalElement[form, default]`  | `ParseChoice[form, ParseSucceed[default]]`                |
-| `form..` (`Repeated`)             | `ParseSome`                                               |
-| `form...` (`RepeatedNull`)        | `ParseMany`                                               |
-| `DelimitedSequence[form, sep]`    | `ParseSepBy1`                                             |
+| `form..` (`Repeated`)             | [ParseSome]()                                             |
+| `form...` (`RepeatedNull`)        | [ParseMany]()                                             |
+| `DelimitedSequence[form, sep]`    | [ParseSepBy1]()                                           |
 | `CaseSensitive[form]`             | inner `form` (case-insensitive matching not modeled)      |
-| `GrammarToken["Number"]`          | the local `slotParser["Number"]` (digit-based)            |
+| `RegularExpression["r"]`          | [ParseRegex]() (anchored regex match at the current position) |
+| `GrammarToken["Number"]`          | the local `slotParser["Number"]` (digit-based, no [Interpreter]() call) |
 | `GrammarToken["Word"]`            | the local `slotParser["Word"]` (letter-based)             |
-| `GrammarToken[<other>]`           | `ParseFail` (no local Interpreter call yet)               |
+| `GrammarToken["Integer"]`         | alias for `Number`                                        |
+| `GrammarToken[<other-string>]`    | a word-ish run fed to `Interpreter[type]`; parser fails when interpretation fails |
 | `Pattern[name, form]` (`x : form`)| inner form, with `name -> matchedValue` added to bindings |
-| `AnyOrder[...]`, `RegularExpression[...]` | not yet lowered                                   |
+
+`FixedOrder` with two typed slots, arithmetic in the body:
 
 ```wl
-In[]:= Parse[
-       GrammarRules[{
-           FixedOrder["add", a : GrammarToken["Number"], "and", b : GrammarToken["Number"]] :> a + b
-       }],
-       "add 3 and 5"
-   ]
-Out[]= 8
-
-In[]:= Parse[
-       GrammarRules[{appl : ("stove" | "oven" | "fridge") :> appl}],
-       "fridge"
-   ]
-Out[]= "fridge"
-
-In[]:= Parse[
-       GrammarRules[{nums : DelimitedSequence[GrammarToken["Number"], ","] :> Total[nums]}],
-       "1,2,3,4"
-   ]
-Out[]= 10
-
-In[]:= Parse[
-       GrammarRules[{
-           FixedOrder["turn", OptionalElement["the", "no-the"], appl : ("stove" | "oven")] :> appl
-       }],
-       "turn stove"
-   ]
-Out[]= "stove"
+Parse[
+    GrammarRules[{
+        FixedOrder["add", a : GrammarToken["Number"], "and", b : GrammarToken["Number"]] :> a + b
+    }],
+    "add 3 and 5"
+]
 ```
 
-The rule head is either `Rule` or `RuleDelayed`:
+`Alternatives` with a captured choice:
 
 ```wl
-In[]:= Parse[GrammarRules[{"<n:Number>" -> n}],  "42"]      (* Rule: body evaluates *)
-Out[]= 42
-
-In[]:= Parse[GrammarRules[{"<n:Number>" :> n+1}], "42"]     (* RuleDelayed: body evaluates per match *)
-Out[]= 43
+Parse[GrammarRules[{appl : ("stove" | "oven" | "fridge") :> appl}], "fridge"]
 ```
 
-`Parse` is strict - input must match the *whole* template, not just a prefix:
+`DelimitedSequence` collecting a list of numbers:
 
 ```wl
-In[]:= Parse[GrammarRules[{"hello" -> "hi"}], "hello there"]
-Out[]= Failure["ParseError", <|"Position" -> 6, "Expected" -> "<end of input>", "Found" -> " "|>]
+Parse[GrammarRules[{nums : DelimitedSequence[GrammarToken["Number"], ","] :> Total[nums]}], "1,2,3,4"]
+```
+
+`OptionalElement` with a default:
+
+```wl
+Parse[
+    GrammarRules[{
+        FixedOrder["turn", OptionalElement["the", "no-the"], appl : ("stove" | "oven")] :> appl
+    }],
+    "turn stove"
+]
+```
+
+`AnyOrder` matching any permutation of three literals:
+
+```wl
+Parse[GrammarRules[{AnyOrder["red", "green", "blue"] :> "all three"}], "blue red green"]
+```
+
+`RegularExpression` as a slot:
+
+```wl
+Parse[GrammarRules[{n : RegularExpression["\\d+"] :> ToExpression[n]}], "42"]
+```
+
+Subsidiary-domain definitions via the two-argument `GrammarRules[rules, defs]`:
+
+```wl
+Parse[
+    GrammarRules[
+        {FixedOrder["from", c : GrammarToken["MyCity"]] :> c},
+        {"MyCity" -> ("Paris" | "Tokyo" | "Boston")}
+    ],
+    "from Paris"
+]
+```
+
+A semantic `GrammarToken[type]` resolves via [Interpreter]():
+
+```wl
+Parse[GrammarRules[{c : GrammarToken["Color"] :> c}], "red"]
+```
+
+```wl
+Parse[GrammarRules[{n : GrammarToken["SemanticNumber"] :> n}], "five"]
+```
+
+The rule head is either [Rule]() or [RuleDelayed](). With [Rule](), the body evaluates at lowering:
+
+```wl
+Parse[GrammarRules[{"<n:Number>" -> n}], "42"]
+```
+
+With [RuleDelayed](), the body re-evaluates per match (useful when the body is non-trivial):
+
+```wl
+Parse[GrammarRules[{"<n:Number>" :> n+1}], "42"]
+```
+
+[Parse]() is strict - input must match the *whole* template, not just a prefix:
+
+```wl
+Parse[GrammarRules[{"hello" -> "hi"}], "hello there"]
 ```
 
 Use [ParsePartial](paclet:Wolfram/WolframParser/ref/Parse) when you want a prefix match.
 
-### The same rules through `ParserCompile`
+### The same rules through [ParserCompile]()
 
-A `GrammarRules` lowers to a `ParserCombinator`; `ParserCompile` then materializes the [FunctionCompile]()d form:
+A [GrammarRules]() lowers to a [ParserCombinator](); [ParserCompile]() then materializes the [FunctionCompile]()d form. Compile once, run repeatedly:
 
 ```wl
-In[]:= cf = ParserCompile[GrammarRules[{"<n:Integer>" :> n^2}]];
-       cf["42"]
-Out[]= 1764
+ParserCompile[GrammarRules[{"<n:Integer>" :> n^2}]]["42"]
 ```
 
 Same syntax, same result, faster on hot paths.
@@ -184,39 +230,20 @@ Same syntax, same result, faster on hot paths.
 
 ## Part 3 - The gap
 
-What the local lowering does *not* cover yet, with the workarounds:
+The local lowering now covers every documented pattern node: `FixedOrder`, `AnyOrder`, `Alternatives`, `OptionalElement`, `Repeated`, `RepeatedNull`, `DelimitedSequence`, `CaseSensitive`, `RegularExpression`, `Pattern`, `GrammarToken` (digit / letter / Interpreter-backed), and the `GrammarRules[rules, defs]` two-argument form. The remaining gap is the **option-level** behaviour the cloud sets by default:
 
-### Not yet lowered: `AnyOrder`, `RegularExpression`, subsidiary `GrammarRules[rules, defs]`
-
-`AnyOrder[f1, f2, f3]` requires permutation matching (combinatorial in the number of elements). For small N the desugaring `AnyOrder[a, b, c] -> a~~b~~c | a~~c~~b | b~~a~~c | ...` is tractable, but the local lowering doesn't generate it today.
-
-`RegularExpression[r]` would need to wrap a `StringCases`-style runtime check at the current parse position. Skipped pending a use case.
-
-`GrammarRules[rules, defs]` lets a rule reference a named domain (`GrammarToken["MyCity"]`) defined in `defs`. The local lowering currently ignores the second argument; only the *rules* list is consumed. Workaround: inline the domain's alternatives directly into the rule via `GrammarToken["X"] -> ("foo" | "bar" | ...)` substitution, or compose the alternatives in the combinator core.
-
-### Not yet lowered: semantic `GrammarToken` types
-
-`GrammarToken["City"]`, `GrammarToken["Color"]`, `GrammarToken["Date"]`, `GrammarToken["SemanticNumber"]`, ... resolve via [Interpreter]() in the cloud. Locally, only the digit-and-letter classes (`Number`, `Integer`, `Word`, the default any-word slot) are wired up.
-
-**Workaround:** capture the slot as a `Word` and call `Interpreter[type]` yourself in the rule body:
-
-```wl
-Parse[
-    GrammarRules[{
-        FixedOrder["weather in", c : GrammarToken["Word"]] :> Interpreter["City"][c]
-    }],
-    "weather in Boston"
-]
-(* Entity["City", {"Boston", "Massachusetts", "UnitedStates"}] *)
-```
-
-Adding `Interpreter[type]` as the implementation of `slotParser[type]` for unsupported types is on the v0.4 list - it would make the cloud / local rendering of `GrammarToken[...]` exactly symmetric (modulo the network round-trip).
-
-### Not yet lowered: `AllowLooseGrammar`, `IgnoreCase`, `IgnoreDiacritics`
+### Not yet honoured: `AllowLooseGrammar`, `IgnoreCase`, `IgnoreDiacritics`
 
 The cloud's default `AllowLooseGrammar -> True` lets `GrammarApply[g, "could you please tell me the weather in Boston"]` match a `"weather <c:City>"` rule by ignoring surrounding fluff. The local parser is strict-PEG: every character must match. Same for case insensitivity (`IgnoreCase -> True` by default in the cloud, no equivalent locally) and diacritic stripping.
 
 **Workaround:** for loose-grammar behavior, scan with [StringPosition]() for a candidate substring and run the rule on that; for case insensitivity, lowercase the input before parsing. Both are awkward; honoring the `GrammarRules` options at lowering time is the eventual fix.
+
+### Caveats on the Interpreter-backed slots
+
+A `GrammarToken[type]` whose `type` isn't one of `Number` / `Integer` / `Word` consumes a single word-ish run (`[A-Za-z0-9][A-Za-z0-9_'.\-]*`) from the current position and feeds it to `Interpreter[type]`. Two consequences:
+
+- **Multi-word entities** (`City "New York"`, `DateString "March 5 2026"`) don't match through a single `GrammarToken[type]` because the local consumer stops at the first whitespace. Compose with `FixedOrder` or a custom `RegularExpression["..."]` slot when the entity spans whitespace.
+- **Network-required types** (`City`, `Country`, `Quantity`, ...) still call out to the Wolfram knowledge engine via `Interpreter[type]`; the *grammar* is local, the *semantic resolution* is not.
 
 ---
 
@@ -249,32 +276,34 @@ applianceRule = GrammarRules[{
 }];
 ```
 
-**Cloud-deployed:**
+**Cloud-deployed**, via [CloudDeploy]() + [GrammarApply]():
 
 ```wl
-co = CloudDeploy[applianceRule, "TestGrammar_3", Permissions -> "Public"];
-GrammarApply[co, "turn the stove on"]
-(* {"stove", "on"} *)
-GrammarApply[co, "turn oven off"]
-(* {"oven", "off"} *)
+co = CloudDeploy[applianceRule, "TestGrammar_3", Permissions -> "Public"]
 ```
 
-**Local, same expression:**
+```wl
+GrammarApply[co, "turn the stove on"]
+```
 
 ```wl
-Needs["Wolfram`Parser`"];
+GrammarApply[co, "turn oven off"]
+```
+
+**Local, same expression**, via [Parse]() with no network round-trip:
+
+```wl
 Parse[applianceRule, "turn the stove on"]
-(* {"stove", "on"} *)
+```
+
+```wl
 Parse[applianceRule, "turn oven off"]
-(* {"oven", "off"} *)
 ```
 
 The local path also compiles:
 
 ```wl
-cf = ParserCompile[applianceRule];
-cf["turn the fridge on"]
-(* {"fridge", "on"} *)
+ParserCompile[applianceRule]["turn the fridge on"]
 ```
 
-No rewrite, no separate combinator shape - the `applianceRule` value flows through `CloudDeploy + GrammarApply`, `Parse`, or `ParserCompile` interchangeably. Where the cloud and local paths still diverge is the semantic-token wall: replace one of the alternatives with `c : GrammarToken["City"]` and you'd need the cloud's Interpreter access (or the `Interpreter[c]`-in-body workaround) to resolve "Boston" into a city Entity. Everything else lowers identically.
+No rewrite, no separate combinator shape - the `applianceRule` value flows through [CloudDeploy]() + [GrammarApply](), [Parse](), or [ParserCompile]() interchangeably. Where the cloud and local paths still diverge is the semantic-token wall: replace one of the alternatives with <code>c : [GrammarToken]()["City"]</code> and you'd need the cloud's [Interpreter]() access (or the in-body workaround) to resolve "Boston" into a city [Entity](). Everything else lowers identically.

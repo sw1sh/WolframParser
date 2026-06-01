@@ -4,80 +4,93 @@
    A GrammarRules-style showcase: every inline markdown construct M2N
    recognises (emphasis, code, math, links, images, sub/sup, escapes,
    HTML <code>/<sub>/<sup>) reduced to ParseChoice over ParserCombinator
-   primitives. No StringSplit, no regex; the combinator core handles
-   the lot and the PEG order resolves the precedence ambiguity (a
-   "**" opening prefers "**bold**" over "*italic*"-"*italic*", a
-   "***" opening prefers "***bi***" over "*"-"**bold**", etc.).
+   primitives.  No StringSplit, no regex hand-tuning; the combinator core
+   handles the lot and the PEG order resolves the precedence ambiguity (a
+   "**" opening prefers "**bold**" over "*italic*"-"*italic*", a "***"
+   opening prefers "***bi***" over "*"-"**bold**", etc.).
 
-   Returns a flat list of inline atoms:
+   Returns a flat list of inline atoms shaped as Associations with a
+   "Type" discriminator, matching the convention M2N's block-level
+   parser uses (<|"Type" -> "Heading", "Level" -> 2, "Text" -> ...|>
+   etc.):
 
-       MdText[str]             plain text run
-       MdCode[str]             ` `code` `
-       MdLiteralCode[str]      ` ``code`` `      (verbatim, no markdown inside)
-       MdHtmlCode[str]         <code>...</code>  (markdown is allowed inside)
-       MdMathInline[str]       $...$
-       MdMathDisplay[str]      $$...$$
-       MdLink[label, url]      [label](url)      label is a List of inline atoms
-       MdImage[alt, url]       ![alt](url)
-       MdSub[children]         <sub>...</sub>  or  ~x~
-       MdSup[children]         <sup>...</sup>  or  ^x^
-       MdBold[children]        **...**
-       MdItalic[children]      *...*  or  _..._  (underscore is word-bounded)
-       MdBoldItalic[children]  ***...***
-       MdStrike[children]      ~~...~~
+       <|"Type" -> "Text",         "Text" -> str|>           plain text run
+       <|"Type" -> "Code",         "Code" -> str|>           ` `code` `
+       <|"Type" -> "LiteralCode",  "Code" -> str|>           ` ``code`` ` (verbatim)
+       <|"Type" -> "HtmlCode",     "Code" -> str|>           <code>...</code>
+       <|"Type" -> "MathInline",   "Math" -> str|>           $...$
+       <|"Type" -> "MathDisplay",  "Math" -> str|>           $$...$$
+       <|"Type" -> "Link",         "Label" -> [atoms], "Url" -> str|>
+       <|"Type" -> "Image",        "Alt"   -> str,     "Url" -> str|>
+       <|"Type" -> "Sub",          "Children" -> [atoms]|>   <sub>...</sub> | ~x~
+       <|"Type" -> "Sup",          "Children" -> [atoms]|>   <sup>...</sup> | ^x^
+       <|"Type" -> "Bold",         "Children" -> [atoms]|>   **...** | __...__
+       <|"Type" -> "Italic",       "Children" -> [atoms]|>   *...*   | _..._
+       <|"Type" -> "BoldItalic",   "Children" -> [atoms]|>   ***...***
+       <|"Type" -> "Strike",       "Children" -> [atoms]|>   ~~...~~
 
-   Adjacent MdText runs are merged so consumers see one MdText per
-   contiguous prose chunk. Bold/italic/strike/sub/sup children are
-   recursively re-parsed so "**bold $x$**" gives a Bold containing the
-   math, not a Bold containing the literal "$x$" string. *)
+   Adjacent "Text" runs are merged so consumers see one run per
+   contiguous prose chunk.  Bold/italic/strike/sub/sup/link children are
+   recursively re-parsed so "**bold $x$**" gives a Bold whose Children
+   are [Text["bold "], MathInline["x"]], not a Bold holding the literal
+   "$x$" string. *)
 
 BeginPackage["Wolfram`Parser`"]
 
 MarkdownInlineParse::usage =
     "MarkdownInlineParse[source] parses an inline markdown string into a " <>
-    "list of inline atoms (MdText / MdCode / MdMathInline / MdLink / " <>
-    "MdBold / MdItalic / ...).  Adjacent text runs are merged."
+    "list of inline-atom Associations.  Each atom carries a \"Type\" " <>
+    "discriminator (\"Text\", \"Code\", \"Bold\", \"Italic\", \"Link\", " <>
+    "...) plus payload keys.  Adjacent text runs are merged."
 
 MarkdownInlineParser::usage =
     "MarkdownInlineParser is the underlying ParserCombinator. " <>
     "Use it via Parse[MarkdownInlineParser, source] when you want the " <>
     "same parser applied to many inputs."
 
-MdText::usage          = "MdText[str] is a plain text run."
-MdCode::usage          = "MdCode[str] is a single-backtick `code` span."
-MdLiteralCode::usage   = "MdLiteralCode[str] is a double-backtick verbatim span."
-MdHtmlCode::usage      = "MdHtmlCode[str] is a <code>...</code> span."
-MdMathInline::usage    = "MdMathInline[str] is a $...$ inline math span."
-MdMathDisplay::usage   = "MdMathDisplay[str] is a $$...$$ display math span."
-MdLink::usage          = "MdLink[label, url] is a [label](url) link.  label is a List of inline atoms."
-MdImage::usage         = "MdImage[alt, url] is an ![alt](url) image."
-MdSub::usage           = "MdSub[children] is a <sub>...</sub> or ~...~ subscript."
-MdSup::usage           = "MdSup[children] is a <sup>...</sup> or ^...^ superscript."
-MdBold::usage          = "MdBold[children] is a **...** bold span."
-MdItalic::usage        = "MdItalic[children] is a *...* or _..._ italic span."
-MdBoldItalic::usage    = "MdBoldItalic[children] is a ***...*** bold-italic span."
-MdStrike::usage        = "MdStrike[children] is a ~~...~~ strikethrough span."
+MarkdownParse::usage =
+    "MarkdownParse[source] parses a whole markdown document into an " <>
+    "Association <|\"Metadata\" -> <|...|>, \"Blocks\" -> [...]|>.  " <>
+    "Mirrors the shape M2N's litParse uses, so each block is a typed " <>
+    "Association (Heading / Code / Separator / Prose / ...).  " <>
+    "Block-level Prose carries raw inline source; pass it through " <>
+    "MarkdownInlineParse to get the inline-atom list."
+
+MarkdownParser::usage =
+    "MarkdownParser is the underlying ParserCombinator for the whole-" <>
+    "document grammar.  Parse[MarkdownParser, source] runs it directly."
 
 Begin["`MarkdownPrivate`"]
+
+
+(* ===== atom constructors (shape conventions in one place) ===== *)
+
+text[s_]        := <|"Type" -> "Text",        "Text" -> s|>
+codeAtom[s_]    := <|"Type" -> "Code",        "Code" -> s|>
+litCode[s_]     := <|"Type" -> "LiteralCode", "Code" -> s|>
+htmlCode[s_]    := <|"Type" -> "HtmlCode",    "Code" -> s|>
+mathIn[s_]      := <|"Type" -> "MathInline",  "Math" -> s|>
+mathDis[s_]     := <|"Type" -> "MathDisplay", "Math" -> s|>
+link[lbl_, u_]  := <|"Type" -> "Link",        "Label" -> lbl, "Url" -> u|>
+image[a_, u_]   := <|"Type" -> "Image",       "Alt"   -> a,   "Url" -> u|>
+sub[c_]         := <|"Type" -> "Sub",         "Children" -> c|>
+sup[c_]         := <|"Type" -> "Sup",         "Children" -> c|>
+bold[c_]        := <|"Type" -> "Bold",        "Children" -> c|>
+italic[c_]      := <|"Type" -> "Italic",      "Children" -> c|>
+boldItalic[c_]  := <|"Type" -> "BoldItalic",  "Children" -> c|>
+strike[c_]      := <|"Type" -> "Strike",      "Children" -> c|>
 
 
 (* ===== character predicates ===== *)
 
 asciiPunct = (StringMatchQ[#, PunctuationCharacter] || # === "!") &
 
-(* a letter / digit / "_" for the underscore-emphasis word-boundary rule *)
-wordCh = (StringMatchQ[#, LetterCharacter | DigitCharacter] || # === "_") &
-
 
 (* ===== primitive combinators ===== *)
 
 anyChar = ParseCharacter[_]
 
-(* match a single character that satisfies a predicate *)
 charSat[pred_] := ParseCharacter[_ ? pred]
-
-(* match a literal string and discard *)
-litP[s_String] := ParseAction[ParseLiteral[s], Null &]
 
 
 (* ===== terminator-bounded content ===== *)
@@ -86,45 +99,41 @@ litP[s_String] := ParseAction[ParseLiteral[s], Null &]
    joined into a single String.  Used as the body of every paired-delimiter
    span (code, math, emphasis, ...).  The lookahead is what stops `**foo**`
    from gobbling the closing `**` into the content - the inner content rule
-   refuses any position that starts with `**`. *)
+   refuses any position that starts with `term`. *)
 content[term_] := ParseAction[
-    ParseSome[
-        ParseAction[ParseNotFollowedBy[term] ~~ anyChar, #2 &]
-    ],
+    ParseSome[ParseAction[ParseNotFollowedBy[term] ~~ anyChar, #2 &]],
     StringJoin[{##}] &
 ]
 
 
 (* ===== escapes ===== *)
 
-(* "\x" where x is an ASCII punctuation char becomes that single character
-   as an MdText atom.  Lets authors write a literal "*" inside prose with
-   "\*" (otherwise the "*" would open an italic span). *)
+(* "\x" where x is an ASCII punctuation char becomes that single character as
+   a Text atom.  Lets authors write a literal "*" inside prose with "\*"
+   (otherwise the "*" would open an italic span). *)
 escape = ParseAction[
     ParseLiteral["\\"] ~~ charSat[asciiPunct],
-    MdText[#2] &
+    text[#2] &
 ]
 
 
 (* ===== code spans ===== *)
 
-(* Order is significant: double backtick first so "``x``" prefers MdLiteralCode
-   over MdCode-empty-MdCode.  Same for HTML <code>...</code>: it can carry
-   markdown inside so it's parsed as a separate atom; the inner text is
-   stored verbatim and re-parsed by the consumer if it wants markdown. *)
+(* Order is significant: HTML <code> before backticks, double backtick before
+   single backtick. *)
 codeHtml = ParseAction[
     ParseLiteral["<code>"] ~~ content[ParseLiteral["</code>"]] ~~ ParseLiteral["</code>"],
-    MdHtmlCode[#2] &
+    htmlCode[#2] &
 ]
 
 dblCode = ParseAction[
     ParseLiteral["``"] ~~ content[ParseLiteral["``"]] ~~ ParseLiteral["``"],
-    MdLiteralCode[StringTrim[#2]] &
+    litCode[StringTrim[#2]] &
 ]
 
 code = ParseAction[
     ParseLiteral["`"] ~~ content[ParseLiteral["`"]] ~~ ParseLiteral["`"],
-    MdCode[#2] &
+    codeAtom[#2] &
 ]
 
 
@@ -132,12 +141,12 @@ code = ParseAction[
 
 displayMath = ParseAction[
     ParseLiteral["$$"] ~~ content[ParseLiteral["$$"]] ~~ ParseLiteral["$$"],
-    MdMathDisplay[#2] &
+    mathDis[#2] &
 ]
 
 inlineMath = ParseAction[
     ParseLiteral["$"] ~~ content[ParseLiteral["$"]] ~~ ParseLiteral["$"],
-    MdMathInline[#2] &
+    mathIn[#2] &
 ]
 
 
@@ -156,14 +165,14 @@ linkUrl = ParseAction[
     StringJoin[{##}] &
 ]
 
-image = ParseAction[
+imageP = ParseAction[
     ParseLiteral["!["] ~~ linkLabel ~~ ParseLiteral["]("] ~~ linkUrl ~~ ParseLiteral[")"],
-    MdImage[#2, #4] &
+    image[#2, #4] &
 ]
 
-link = ParseAction[
+linkP = ParseAction[
     ParseLiteral["["] ~~ linkLabel ~~ ParseLiteral["]("] ~~ linkUrl ~~ ParseLiteral[")"],
-    MdLink[#2, #4] &
+    link[#2, #4] &
 ]
 
 
@@ -171,23 +180,23 @@ link = ParseAction[
 
 htmlSub = ParseAction[
     ParseLiteral["<sub>"] ~~ content[ParseLiteral["</sub>"]] ~~ ParseLiteral["</sub>"],
-    MdSub[#2] &
+    sub[#2] &
 ]
 
 htmlSup = ParseAction[
     ParseLiteral["<sup>"] ~~ content[ParseLiteral["</sup>"]] ~~ ParseLiteral["</sup>"],
-    MdSup[#2] &
+    sup[#2] &
 ]
 
-(* Pandoc "~x~" subscript: refuses spaces inside (would conflict with
-   strike and with prose) and refuses an empty body. *)
+(* Pandoc "~x~" subscript: refuses spaces and empty body so it doesn't fire
+   on prose. *)
 pandocSubBody = ParseAction[
     ParseSome[charSat[# =!= "~" && # =!= " " &]],
     StringJoin[{##}] &
 ]
 pandocSub = ParseAction[
     ParseLiteral["~"] ~~ pandocSubBody ~~ ParseLiteral["~"],
-    MdSub[#2] &
+    sub[#2] &
 ]
 
 pandocSupBody = ParseAction[
@@ -196,45 +205,43 @@ pandocSupBody = ParseAction[
 ]
 pandocSup = ParseAction[
     ParseLiteral["^"] ~~ pandocSupBody ~~ ParseLiteral["^"],
-    MdSup[#2] &
+    sup[#2] &
 ]
 
 
 (* ===== strike ===== *)
 
-strike = ParseAction[
+strikeP = ParseAction[
     ParseLiteral["~~"] ~~ content[ParseLiteral["~~"]] ~~ ParseLiteral["~~"],
-    MdStrike[#2] &
+    strike[#2] &
 ]
 
 
 (* ===== emphasis ===== *)
 
-boldItalic = ParseAction[
+boldItalicP = ParseAction[
     ParseLiteral["***"] ~~ content[ParseLiteral["***"]] ~~ ParseLiteral["***"],
-    MdBoldItalic[#2] &
+    boldItalic[#2] &
 ]
 
-bold = ParseAction[
+boldP = ParseAction[
     ParseLiteral["**"] ~~ content[ParseLiteral["**"]] ~~ ParseLiteral["**"],
-    MdBold[#2] &
+    bold[#2] &
 ]
 
-(* Asterisk italic: refuse an inner "*" so "**a**" never re-matches as
-   "*"-"*a*"-"*", and refuse a leading space so "* list item" stays plain. *)
 italicAstBody = ParseAction[
     ParseSome[charSat[# =!= "*" &]],
     StringJoin[{##}] &
 ]
 italicAst = ParseAction[
     ParseLiteral["*"] ~~ ParseNotFollowedBy[ParseLiteral[" "]] ~~ italicAstBody ~~ ParseLiteral["*"],
-    MdItalic[#3] &
+    italic[#3] &
 ]
 
 
 (* ===== plain character (catch-all) ===== *)
 
-plainChar = ParseAction[anyChar, MdText[#1] &]
+plainChar = ParseAction[anyChar, text[#1] &]
 
 
 (* ===== the inline grammar ===== *)
@@ -245,12 +252,12 @@ plainChar = ParseAction[anyChar, MdText[#1] &]
    italic. *)
 inlineAtom = ParseChoice[
     escape,
-    codeHtml, image, link,
+    codeHtml, imageP, linkP,
     dblCode, code,
     displayMath, inlineMath,
-    strike,
+    strikeP,
     htmlSub, htmlSup,
-    boldItalic, bold, italicAst,
+    boldItalicP, boldP, italicAst,
     pandocSub, pandocSup,
     plainChar
 ]
@@ -258,78 +265,266 @@ inlineAtom = ParseChoice[
 MarkdownInlineParser := ParseAction[ParseMany[inlineAtom], {##} &]
 
 
-(* ===== plain-text merging + ellipsis + underscore-emphasis ===== *)
+(* ===== post-process: type-discriminated dispatch ===== *)
 
-(* Merge consecutive MdText atoms into one.  The character-by-character
-   plainChar rule emits one MdText per char; this rejoins them so consumers
-   see prose as one run, not a list of letters. *)
+textQ[a_] := AssociationQ[a] && a["Type"] === "Text"
+
+(* Merge consecutive Text atoms into one.  The character-by-character
+   plainChar rule emits one Text atom per char; this rejoins them so
+   consumers see prose as one run, not a list of letters. *)
 mergeText[atoms_List] := Block[{step},
-    step[acc_, MdText[s_]] := If[acc =!= {} && MatchQ[Last[acc], MdText[_]],
-        Append[Most[acc], MdText[acc[[-1, 1]] <> s]],
-        Append[acc, MdText[s]]
+    step[acc_, a_ ? textQ] := If[ acc =!= {} && textQ[Last[acc]],
+        Append[Most[acc], text[Last[acc]["Text"] <> a["Text"]]],
+        Append[acc, a]
     ];
     step[acc_, other_] := Append[acc, other];
     Fold[step, {}, atoms]
 ]
 
-(* Three literal dots in a plain text run become the Unicode ellipsis char.
-   Code / math / link URLs are untouched - the substitution applies only
-   to MdText atoms.  Matches the M2N convention. *)
-applyEllipsis[atoms_List] := Replace[atoms, MdText[s_String] :> MdText[StringReplace[s, "..." -> "\[Ellipsis]"]], {1}]
+(* Three literal dots in a plain text run become the Unicode ellipsis
+   char.  Code / math / link URLs are untouched - the substitution applies
+   only to Text atoms.  Matches the M2N convention. *)
+applyEllipsis[atoms_List] := Replace[atoms,
+    a_ ? textQ :> text[StringReplace[a["Text"], "..." -> "\[Ellipsis]"]], {1}]
 
 (* Underscore emphasis: CommonMark only opens "_em_" at a word boundary, so
-   "snake_case" in prose is left alone.  We post-process MdText runs to
-   convert balanced "__strong__" / "_em_" into Md{Bold,Italic}.  Lookbehind
-   forbids a word char (letter/digit/underscore) immediately before the
-   opening underscore; lookahead forbids one immediately after the closing
-   underscore.  Inner content has no whitespace at its edges (\S anchors),
-   so "_ word _" stays literal too.  Runs inside other atoms (code, math,
-   ...) are untouched - those carry literal "_". *)
+   "snake_case" in prose is left alone.  The grammar doesn't try to express
+   the lookbehind/lookahead rules; instead a post-pass scans each Text run
+   with two regexes anchored by word-boundary lookarounds.  Captured bodies
+   get sentinel-wrapped (private-use codepoints that no real markdown
+   source ships), then a StringSplit turns each wrapped run into a
+   Bold/Italic atom whose body is itself re-parsed. *)
 underscoreRules = {
     RegularExpression["(?<![A-Za-z0-9_])__(\\S|\\S.*?\\S)__(?![A-Za-z0-9_])"] -> "\:f001$1\:f002",
-    RegularExpression["(?<![A-Za-z0-9_])_(\\S|\\S.*?\\S)_(?![A-Za-z0-9_])"] -> "\:f003$1\:f004"
+    RegularExpression["(?<![A-Za-z0-9_])_(\\S|\\S.*?\\S)_(?![A-Za-z0-9_])"]   -> "\:f003$1\:f004"
 }
 underscoreRender[s_String] := With[{tagged = StringReplace[s, underscoreRules]},
-    If[ tagged === s, {MdText[s]},
+    If[ tagged === s, {text[s]},
         Replace[
             StringSplit[tagged, {
-                "\:f001" ~~ inner__ ~~ "\:f002" :> MdBold[runInner[inner]],
-                "\:f003" ~~ inner__ ~~ "\:f004" :> MdItalic[runInner[inner]]
+                "\:f001" ~~ inner__ ~~ "\:f002" :> bold[runInner[inner]],
+                "\:f003" ~~ inner__ ~~ "\:f004" :> italic[runInner[inner]]
             }],
-            inner_String :> MdText[inner],
+            inner_String :> text[inner],
             {1}
         ]
     ]
 ]
 applyUnderscoreEm[atoms_List] := Flatten @ Replace[atoms,
-    MdText[s_String] :> underscoreRender[s], {1}]
+    a_ ? textQ :> underscoreRender[a["Text"]], {1}]
 
 
 (* ===== recursive children ===== *)
 
-(* Children of bold / italic / sub / sup / strike / boldItalic /
-   linklabel are the *raw inner string* captured by `content`.  Re-parse
-   them so nested formatting works ("**a $x$**" -> Bold[List[Text["a "], MathInline["x"]]]). *)
+(* Children of bold / italic / sub / sup / strike / boldItalic and the
+   label of a link are the *raw inner string* captured by `content`.
+   Re-parse them so nested formatting works ("**a $x$**" -> Bold whose
+   Children include the inline math).  Image alt and HtmlCode bodies stay
+   verbatim. *)
 runInner[s_String] := MarkdownInlineParse[s]
 
-reparseChildren = {
-    MdBold[s_String]        :> MdBold[runInner[s]],
-    MdItalic[s_String]      :> MdItalic[runInner[s]],
-    MdBoldItalic[s_String]  :> MdBoldItalic[runInner[s]],
-    MdStrike[s_String]      :> MdStrike[runInner[s]],
-    MdSub[s_String]         :> MdSub[runInner[s]],
-    MdSup[s_String]         :> MdSup[runInner[s]],
-    MdLink[label_String, url_String] :> MdLink[runInner[label], url]
-    (* MdImage / MdHtmlCode keep their alt / inner verbatim *)
-}
+reparseChildren[atoms_List] := Replace[atoms, {
+    a_Association /; MemberQ[{"Bold", "Italic", "BoldItalic", "Strike", "Sub", "Sup"}, a["Type"]] &&
+        StringQ[a["Children"]] :>
+        Append[a, "Children" -> runInner[a["Children"]]],
+    a_Association /; a["Type"] === "Link" && StringQ[a["Label"]] :>
+        Append[a, "Label" -> runInner[a["Label"]]]
+}, {1}]
 
 
 (* ===== public entry point ===== *)
 
 MarkdownInlineParse[source_String] := With[{r = Parse[MarkdownInlineParser, source]},
-    If[FailureQ[r], r,
-        applyUnderscoreEm @ applyEllipsis @ mergeText[r /. reparseChildren]
+    If[ FailureQ[r], r,
+        applyUnderscoreEm @ applyEllipsis @ mergeText @ reparseChildren[r]
     ]
+]
+
+
+(* ===========================================================================
+   Block-level parser: MarkdownParse
+   ===========================================================================
+   Mirrors the output shape of M2N's litParse:
+       <|"Metadata" -> <|key -> val|>,
+         "Blocks"   -> [block, ...]
+       |>
+   with block Associations carrying a "Type" discriminator + payload keys:
+       <|"Type" -> "Heading",   "Level" -> n,           "Text" -> str|>
+       <|"Type" -> "Code",      "Lang"  -> str,         "Code" -> str, "Options" -> <|...|>|>
+       <|"Type" -> "Separator"|>
+       <|"Type" -> "Prose",     "Text"  -> str|>
+
+   First-pass coverage: frontmatter, headings, code fences (with #|
+   options), thematic breaks, and prose paragraphs.  Lists / tables /
+   blockquotes / math blocks / fenced divs are TODO and currently fall
+   into the Prose catch-all. *)
+
+
+(* ===== line-level primitives ===== *)
+
+newline       = ParseLiteral["\n"]
+notNewline    = charSat[# =!= "\n" &]
+restOfLine    = ParseAction[ParseMany[notNewline], StringJoin[{##}] &]
+eatNewline    = ParseAction[ParseOptional[newline], Null &]
+blankLine     = ParseAction[ParseMany[charSat[# === " " || # === "\t" &]] ~~ newline, Null &]
+blankLines    = ParseMany[blankLine]
+
+
+(* ===== frontmatter =====
+   "---" on a line, then "key: value" lines, then "---".  Returns an
+   Association.  An empty frontmatter (missing the leading "---") yields
+   <||> and consumes nothing. *)
+
+fmDelim     = ParseAction[ParseLiteral["---"] ~~ restOfLine ~~ newline, Null &]
+fmEntryLine = ParseAction[
+    ParseNotFollowedBy[ParseLiteral["---"]] ~~ restOfLine ~~ newline,
+    #2 &
+]
+
+parseFmValue[v_String] := With[{tr = StringTrim[v]},
+    Which[
+        StringStartsQ[tr, "[" ] && StringEndsQ[tr, "]"],
+            StringTrim /@ StringSplit[StringTake[tr, {2, -2}], ","],
+        StringMatchQ[tr, "\"" ~~ ___ ~~ "\""] || StringMatchQ[tr, "'" ~~ ___ ~~ "'"],
+            StringTake[tr, {2, -2}],
+        True, tr
+    ]
+]
+
+parseFmEntries[lines_List] := Association @ DeleteCases[
+    Map[
+        Function[ln,
+            With[{m = StringCases[ln, StartOfString ~~ k : Shortest[__] ~~ ":" ~~ v___ ~~ EndOfString :> {StringTrim[k], v}, 1]},
+                If[ m === {}, Nothing, First[m][[1]] -> parseFmValue[First[m][[2]]]]
+            ]
+        ],
+        lines
+    ],
+    Nothing
+]
+
+frontmatter = ParseAction[
+    fmDelim ~~ ParseMany[fmEntryLine] ~~ fmDelim,
+    parseFmEntries[#2] &
+]
+
+emptyFrontmatter = ParseAction[ParseSucceed[<||>], #1 &]
+frontmatterOpt = ParseChoice[frontmatter, emptyFrontmatter]
+
+
+(* ===== headings =====
+   "#"+ space rest-of-line.  Level = number of #s (1..6 per CommonMark,
+   but accept any count). *)
+
+hashes = ParseAction[ParseSome[ParseLiteral["#"]], Length[{##}] &]
+heading = ParseAction[
+    hashes ~~ ParseLiteral[" "] ~~ restOfLine ~~ newline,
+    <|"Type" -> "Heading", "Level" -> #1, "Text" -> StringTrim[#3]|> &
+]
+
+
+(* ===== thematic break =====
+   "---" / "***" / "___" - three or more on a line, alone.  Frontmatter's
+   "---" is already eaten by the frontmatter parser, so any "---" reaching
+   the block grammar is a thematic break. *)
+
+separatorLine = ParseAction[
+    ParseChoice[
+        ParseLiteral["---"] ~~ ParseMany[ParseLiteral["-"]],
+        ParseLiteral["***"] ~~ ParseMany[ParseLiteral["*"]],
+        ParseLiteral["___"] ~~ ParseMany[ParseLiteral["_"]]
+    ] ~~ ParseMany[charSat[# === " " || # === "\t" &]] ~~ newline,
+    <|"Type" -> "Separator"|> &
+]
+
+
+(* ===== code fence =====
+   "```" + optional lang word, then lines of content, then "```".  The
+   first body lines may carry "#| key: value" options that go into
+   "Options".  M2N also recognises tilde fences and indented code; this
+   first cut handles backtick fences only. *)
+
+fenceOpen = ParseAction[
+    ParseLiteral["```"] ~~ restOfLine ~~ newline,
+    StringTrim[#2] &
+]
+fenceClose = ParseAction[
+    ParseLiteral["```"] ~~ restOfLine ~~ newline,
+    Null &
+]
+fenceContentLine = ParseAction[
+    ParseNotFollowedBy[ParseLiteral["```"]] ~~ restOfLine ~~ newline,
+    #2 &
+]
+
+parseFenceOption[ln_String] := With[{
+    m = StringCases[StringTrim[ln],
+        StartOfString ~~ "#|" ~~ Whitespace... ~~ k : Shortest[__] ~~ ":" ~~ v___ ~~ EndOfString :>
+            StringTrim[k] -> StringTrim[v], 1]
+},
+    If[m === {}, Nothing, First[m]]
+]
+
+splitFenceOptions[lines_List] := Block[{opts = {}, body = lines, kv},
+    While[ body =!= {} && StringStartsQ[StringTrim[First[body]], "#|"],
+        kv = parseFenceOption[First[body]];
+        If[kv =!= Nothing, AppendTo[opts, kv]];
+        body = Rest[body]
+    ];
+    {Association[opts], body}
+]
+
+codeFence = ParseAction[
+    fenceOpen ~~ ParseMany[fenceContentLine] ~~ fenceClose,
+    With[{lang = #1, lines = #2, split = splitFenceOptions[#2]},
+        <|"Type" -> "Code",
+          "Lang" -> lang,
+          "Code" -> StringRiffle[Last[split], "\n"],
+          "Options" -> First[split]|>
+    ] &
+]
+
+
+(* ===== prose paragraph =====
+   One or more non-blank lines that don't start with a block-opener.
+   Joined with " " so a soft-wrapped paragraph reads as one Prose Text. *)
+
+proseLine = ParseAction[
+    ParseNotFollowedBy[ParseChoice[
+        ParseLiteral["#"], ParseLiteral["```"],
+        ParseLiteral["---"], ParseLiteral["***"], ParseLiteral["___"]
+    ]] ~~ restOfLine ~~ newline,
+    #2 &
+]
+prose = ParseAction[
+    ParseSome[proseLine],
+    <|"Type" -> "Prose", "Text" -> StringTrim @ StringRiffle[{##}, " "]|> &
+]
+
+
+(* ===== block grammar ===== *)
+
+block = ParseChoice[heading, codeFence, separatorLine, prose]
+
+documentBody = ParseAction[
+    ParseMany[ParseAction[blankLines ~~ block, #2 &]] ~~ blankLines,
+    #1 &
+]
+
+MarkdownParser := ParseAction[
+    frontmatterOpt ~~ documentBody,
+    <|"Metadata" -> #1, "Blocks" -> #2|> &
+]
+
+
+(* ===== public entry point =====
+   Auto-appends a final newline if the source is missing one - the line-
+   based rules above all consume a trailing newline, so a no-trailing-
+   newline file would fail their last block. *)
+
+MarkdownParse[source_String] := Parse[
+    MarkdownParser,
+    If[StringEndsQ[source, "\n"], source, source <> "\n"]
 ]
 
 

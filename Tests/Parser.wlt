@@ -963,3 +963,132 @@ VerificationTest[
     {"foo", "bar"},
     TestID -> "GrammarRules pattern: GrammarToken[Word] + multi-slot binding"
 ]
+
+
+(* === AnyOrder permutation matching === *)
+
+VerificationTest[
+    Parse[
+        GrammarRules[{AnyOrder["red", "green", "blue"] :> "all three"}],
+        "blue red green"
+    ],
+    "all three",
+    TestID -> "GrammarRules pattern: AnyOrder permutation match"
+]
+
+VerificationTest[
+    Parse[
+        GrammarRules[{AnyOrder[a : "red", b : "green"] :> {a, b}}],
+        "green red"
+    ],
+    {"red", "green"},
+    TestID -> "GrammarRules pattern: AnyOrder captures resolve by name regardless of input order"
+]
+
+
+(* === RegularExpression pattern (lowers to ParseRegex) === *)
+
+VerificationTest[
+    Parse[
+        GrammarRules[{n : RegularExpression["\\d+"] :> ToExpression[n]}],
+        "42"
+    ],
+    42,
+    TestID -> "GrammarRules pattern: RegularExpression captures the regex match"
+]
+
+VerificationTest[
+    Parse[ParseRegex["[a-z]+"], "hello"],
+    "hello",
+    TestID -> "ParseRegex primitive: greedy match"
+]
+
+VerificationTest[
+    MatchQ[Parse[ParseRegex["\\d+"], "abc"], _Failure],
+    True,
+    TestID -> "ParseRegex primitive: non-match returns Failure"
+]
+
+
+(* === GrammarRules[rules, defs] subsidiary domains === *)
+
+VerificationTest[
+    Parse[
+        GrammarRules[
+            {FixedOrder["from", c : GrammarToken["MyCity"]] :> c},
+            {"MyCity" -> ("Paris" | "Tokyo" | "Boston")}
+        ],
+        "from Paris"
+    ],
+    "Paris",
+    TestID -> "GrammarRules[rules, defs]: a GrammarToken[name] resolves to the subsidiary domain"
+]
+
+VerificationTest[
+    MatchQ[
+        Parse[
+            GrammarRules[
+                {FixedOrder["from", c : GrammarToken["MyCity"]] :> c},
+                {"MyCity" -> ("Paris" | "Tokyo")}
+            ],
+            "from Berlin"
+        ],
+        _Failure
+    ],
+    True,
+    TestID -> "GrammarRules[rules, defs]: input outside the domain fails"
+]
+
+VerificationTest[
+    Parse[
+        GrammarRules[
+            {FixedOrder["go", d : GrammarToken["MyDir"]] :> d},
+            {"MyDir" -> ("north" | "south" | GrammarToken["MyDiagonal"]),
+             "MyDiagonal" -> ("northeast" | "northwest")}
+        ],
+        "go south"
+    ],
+    "south",
+    TestID -> "GrammarRules[rules, defs]: subsidiary domains can reference each other"
+]
+
+
+(* === Interpreter-backed semantic GrammarToken types === *)
+
+VerificationTest[
+    Parse[
+        GrammarRules[{c : GrammarToken["Color"] :> c}],
+        "red"
+    ],
+    RGBColor[1, 0, 0],
+    TestID -> "GrammarRules: GrammarToken[Color] resolves via Interpreter"
+]
+
+VerificationTest[
+    Parse[
+        GrammarRules[{n : GrammarToken["SemanticNumber"] :> n}],
+        "five"
+    ],
+    5,
+    TestID -> "GrammarRules: GrammarToken[SemanticNumber] interprets 'five' to 5"
+]
+
+VerificationTest[
+    MatchQ[
+        Parse[GrammarRules[{c : GrammarToken["Color"] :> c}], "zzzzznotacolor"],
+        _Failure
+    ],
+    True,
+    TestID -> "GrammarRules: an Interpreter slot that fails to interpret fails the parse"
+]
+
+VerificationTest[
+    (* Number stays on the digit-fast-path, not Interpreter, so the result
+       is the bare Integer and no network call happens. *)
+    Parse[
+        GrammarRules[{n : GrammarToken["Number"] :> n}],
+        "42"
+    ],
+    42,
+    TestID -> "GrammarRules: GrammarToken[Number] stays on the digit-fast-path"
+]

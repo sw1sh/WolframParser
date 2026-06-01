@@ -54,3 +54,8 @@ Keywords: [parser, parsing, grammar, combinator, GrammarRules, FunctionCompile]
 
 - [The Parser Landscape: a survey of existing tech](paclet:Wolfram/WolframParser/tutorial/ParserLandscape)
 - [Design and Compilation Strategy](paclet:Wolfram/WolframParser/tutorial/DesignAndCompilationStrategy)
+- [Parsing GrammarRules Locally](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules)
+- [A Markdown Inline Parser in Parser Combinators](paclet:Wolfram/WolframParser/tutorial/ParsingMarkdownInline)
+- [Implementing the LaTeX Math Parser](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation)
+- [Parsing BNF Grammars](paclet:Wolfram/WolframParser/tutorial/ParsingBNFGrammars)
+- [Parsing TPTP](paclet:Wolfram/WolframParser/tutorial/ParsingTPTP)

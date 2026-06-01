@@ -48,20 +48,8 @@ PacletObject[<|
                 "Wolfram`Parser`TPTPImport",
                 "Wolfram`Parser`MarkdownInlineParse",
                 "Wolfram`Parser`MarkdownInlineParser",
-                "Wolfram`Parser`MdText",
-                "Wolfram`Parser`MdCode",
-                "Wolfram`Parser`MdLiteralCode",
-                "Wolfram`Parser`MdHtmlCode",
-                "Wolfram`Parser`MdMathInline",
-                "Wolfram`Parser`MdMathDisplay",
-                "Wolfram`Parser`MdLink",
-                "Wolfram`Parser`MdImage",
-                "Wolfram`Parser`MdSub",
-                "Wolfram`Parser`MdSup",
-                "Wolfram`Parser`MdBold",
-                "Wolfram`Parser`MdItalic",
-                "Wolfram`Parser`MdBoldItalic",
-                "Wolfram`Parser`MdStrike"
+                "Wolfram`Parser`MarkdownParse",
+                "Wolfram`Parser`MarkdownParser"
             }
         },
         {
