@@ -85,10 +85,14 @@ $tptpBnfURL =
 ensureTptpParser[] := (
     $tptpParsers = EBNFParse[
         Import[$tptpBnfURL, "Text"],
+        "PrimitiveOverrides" -> <|"thf_logic_formula" -> $thfLogicOverride|>,
         "Actions" -> Join[
-            $tptpTermActions, $tptpConnActions, $tptpQuantActions,
-            $tptpCnfActions, $tptpFileActions]
+            $tptpTermActions, $tptpConnActions, $tptpThfActions,
+            $tptpQuantActions, $tptpCnfActions, $tptpFileActions]
     ];
+    (* close the Pratt override's forward reference: thfUnitary$ now resolves
+       to the lowered <thf_unitary_formula> parser at parse time. *)
+    thfUnitary$ = $tptpParsers["thf_unitary_formula"];
     $tptpParser = $tptpParsers["TPTP_file"];
     ensureTptpParser[] := $tptpParser;
     $tptpParser
@@ -195,6 +199,83 @@ $tptpConnActions = <|
     "fof_unary_formula"   -> Function[Block[{a = {##}},
         Switch[Length[a], 1, a[[1]], 2, Not[a[[2]]]]]]
 |>
+
+(* ===== THF connectives via a Pratt operator table =====
+   The published <thf_binary_assoc> ::= <thf_or_formula> | <thf_and_formula>
+   | <thf_apply_formula> is an ordered choice whose three alternatives all
+   begin with the shared <thf_unit_formula>. Lowered to a PEG, the leading
+   operand is re-parsed once per alternative with no memo, and because each
+   operand can itself be a parenthesised formula the cost is O(3^depth) -
+   the THF blow-up the bench reports. Overriding <thf_logic_formula> with
+   ParseOperatorTable replaces the cascade with one binding-power climb:
+   the operand is parsed once, then the operators are consumed left to
+   right. The operand is <thf_unitary_formula> (quantifier / atom / variable
+   / parenthesised formula - alternatives distinguished by their first
+   token, so a parenthesised operand is parsed once, not re-parsed per
+   alternative the way <thf_unit_formula>'s unitary | unary | defined_infix
+   would). Everything that <thf_unit_formula> adds on top - prefix ~, the
+   = / != predicates - is lifted into the table instead. thfUnitary$ is a
+   forward reference bound to the lowered <thf_unitary_formula> after
+   EBNFParse returns (ParseRecursive looks it up lazily at parse time).
+   Precedence, tightest first: @ (application), = / != , prefix ~ , & , | ,
+   then the nonassoc connectives. *)
+
+thfApply[f_, x_]   := f[x]            (* curried application: f @ x @ y -> f[x][y] *)
+thfRevImplies[x_, y_] := Implies[y, x]
+thfNor[x_, y_]     := Not[Or[x, y]]
+thfNand[x_, y_]    := Not[And[x, y]]
+
+(* TPTP is whitespace-liberal, so each connective consumes the optional
+   whitespace on both sides; the (fn &) action discards the whitespace /
+   token list and yields fn as the combining function. The operand parser
+   (<thf_unit_formula>) is reached at a non-whitespace position because the
+   preceding connective already ate the gap. *)
+thfWs = ParseMany[ParseCharacter[WhitespaceCharacter]]
+thfOp[lit_String, fn_] :=
+    ParseAction[ParseSequence[thfWs, ParseLiteral[lit], thfWs], (fn &)]
+(* `=` must not swallow the `=` of `=>`; guard with a not-followed-by. *)
+thfOpNF[lit_String, after_String, fn_] := ParseAction[
+    ParseSequence[thfWs, ParseLiteral[lit],
+        ParseNotFollowedBy[ParseLiteral[after]], thfWs], (fn &)]
+
+$thfLogicOverride := ParseOperatorTable[ParseRecursive[thfUnitary$], {
+    {{"InfixL", thfOp["@", thfApply]}},
+    {{"InfixL", thfOpNF["=", ">", Equal]}, {"InfixL", thfOp["!=", Unequal]}},
+    {{"Prefix", thfOp["~", Not]}},
+    {{"InfixL", thfOp["&", And]}},
+    {{"InfixL", thfOp["|", Or]}},
+    {   (* nonassoc connectives - longer tokens first so <=> beats <= *)
+        {"InfixR", thfOp["<=>", Equivalent]},
+        {"InfixR", thfOp["<~>", Xor]},
+        {"InfixR", thfOp["=>",  Implies]},
+        {"InfixR", thfOp["<=",  thfRevImplies]},
+        {"InfixR", thfOp["~|",  thfNor]},
+        {"InfixR", thfOp["~&",  thfNand]}
+    }
+}]
+
+(* Minimal THF unit actions: enough for the connective / application /
+   equality core to come back as clean WL terms. Quantifier / let / type
+   bodies are not yet lifted - they pass through as raw parse trees. *)
+$tptpThfActions = <|
+    "thf_formula"         -> id,
+    "thf_unit_formula"    -> id,
+    "thf_unitary_formula" -> Function[Block[{a = {##}},
+        Switch[Length[a], 1, a[[1]], 3, a[[2]]]]],   (* ( logic ) -> logic *)
+    "thf_atomic_formula"  -> id,
+    "thf_plain_atomic"    -> id,
+    "thf_defined_atomic"  -> id,
+    "thf_system_atomic"   -> id,
+    "thf_defined_term"    -> id,
+    "thf_unitary_term"    -> Function[Block[{a = {##}},
+        Switch[Length[a], 1, a[[1]], 3, a[[2]]]]],
+    "thf_defined_infix"   -> Function[Equal[#1, #3]],
+    "thf_unary_formula"   -> id,
+    "thf_prefix_unary"    -> Function[Not[#2]],
+    "thf_preunit_formula" -> id,
+    "thf_infix_unary"     -> Function[Unequal[#1, #3]]
+|>
+
 
 (* Quantifiers: ! / ? lift to ForAll / Exists. *)
 $tptpQuantActions = <|
