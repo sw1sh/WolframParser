@@ -56,7 +56,8 @@ PacletObject[<|
             "Asset",
             "Root" -> "Assets",
             "Assets" -> {
-                {"CompiledLaTeXParser", "LaTeXMathParserCompiled.wxf"}
+                {"CompiledLaTeXParser", "LaTeXMathParserCompiled.wxf"},
+                {"Hero", "hero.png"}
             }
         },
         {

@@ -276,34 +276,14 @@ Parse[
 
 ## Hero Image
 
-The parser in action on a real-world formula (one of Maxwell's
-equations): the raw LaTeX source on top, and below it the typeset result
-`LaTeXMathParse` produces. The boxes are restyled with [LaTeXMathStyle]()
-into the same Computer-Modern face LaTeX itself uses, so the rendering is
-faithful to the source - vector bold (`\mathbf`), Greek subscripts, and a
-stacked partial-derivative fraction all land where TeX would put them.
+Test snippets from the suite, floating: typeset math the LaTeX parser
+produces (the Basel sum, a Gaussian integral, Euler's identity, a matrix,
+a nested radical, a bra-ket, Greek letters) interleaved with parser
+combinator fragments (`Parse`, `ParseChoice`, `GrammarRules`). Loaded
+from the paclet's registered `Hero` asset.
 
 ```wl
-With[{src = "\\nabla \\times \\mathbf{B} = \\mu_0 \\mathbf{J} + \\mu_0 \\epsilon_0 \\frac{\\partial \\mathbf{E}}{\\partial t}"},
-    Rasterize[
-        Framed[
-            Column[{
-                Style[src, FontFamily -> "Source Code Pro", FontSize -> 17, GrayLevel[0.55]],
-                Spacer[{0, 14}],
-                Style["LaTeXMathParse  \[LongRightArrow]", FontFamily -> "Source Code Pro", FontSize -> 13, GrayLevel[0.62]],
-                Spacer[{0, 26}],
-                Style[
-                    RawBoxes @ StyleBox[LaTeXMathStyle @ LaTeXMathParse[src], ScriptLevel -> 0],
-                    FontSize -> 52, FontColor -> GrayLevel[0.1]
-                ]
-            }, Alignment -> Center],
-            Background -> GrayLevel[0.985], FrameMargins -> 64,
-            FrameStyle -> GrayLevel[0.88], RoundingRadius -> 22,
-            ImageSize -> {940, 460}
-        ],
-        ImageResolution -> 144, Background -> None
-    ]
-]
+Import[PacletObject["Wolfram/Parser"]["AssetLocation", "Hero"]]
 ```
 
 ## Author Notes
