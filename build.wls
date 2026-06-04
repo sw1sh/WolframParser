@@ -35,6 +35,12 @@ subdir["Overview"] = {"Documentation", "English", "Tutorials"}
    Automatic clears those definitions at each heading, leaving later sections
    with unevaluated references. *)
 buildDoc[srcFile_String] := Block[{info, tmpl, baseName, dir, out},
+    (* Skip plain-markdown files with no YAML frontmatter (e.g. DOC_GUIDE.md,
+       a house-style guide for authors, not a doc page). *)
+    If[ ! StringStartsQ[StringTrim @ Import[srcFile, "Text"], "---"],
+        Print["  (skip ", FileNameTake[srcFile], ": no frontmatter)"];
+        Return[]
+    ];
     info = MarkdownToNotebook[srcFile, "Association", "EvaluateSeparator" -> None];
     tmpl = info["Template"];
     baseName = FileBaseName[srcFile];
