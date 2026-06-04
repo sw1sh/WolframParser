@@ -35,6 +35,7 @@ PacletObject[<|
                 "Wolfram`Parser`ParseSepBy1",
                 "Wolfram`Parser`ParseChainLeft",
                 "Wolfram`Parser`ParseChainRight",
+                "Wolfram`Parser`ParseOperatorTable",
                 "Wolfram`Parser`ParseLookahead",
                 "Wolfram`Parser`ParseNotFollowedBy",
                 "Wolfram`Parser`ParseTry",

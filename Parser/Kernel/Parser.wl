@@ -16,7 +16,7 @@
     type is a String ("Literal", "Character", "Sequence", "Choice",
     "Many", "Some", "Optional", "Between", "Lookahead",
     "NotFollowedBy", "Try", "Action", "Capture", "Recursive",
-    "Succeed", "Fail"), kept open so future combinator additions do
+    "OperatorTable", "Succeed", "Fail"), kept open so future combinator additions do
     not need to mint a fresh System symbol.
 
     Design references:
@@ -69,6 +69,8 @@ ParseSepBy1::usage = "ParseSepBy1[p, sep] matches one or more p separated by sep
 ParseChainLeft::usage = "ParseChainLeft[p, op] parses a left-associative chain: p, op, p, op, p, ..., folding op(prev, next) leftward."
 
 ParseChainRight::usage = "ParseChainRight[p, op] parses a right-associative chain."
+
+ParseOperatorTable::usage = "ParseOperatorTable[unit, levels] parses an operator-precedence expression grammar by Pratt-style binding-power climbing - a single left-to-right pass instead of a hand-written ParseChainLeft / ParseChainRight cascade. unit is the parser for an operand (an atom, a parenthesised sub-expression via ParseRecursive, a prefix-quantifier, ...). levels is a list of precedence levels, TIGHTEST binding first; each level is a list of operator specs {fixity, opParser} (a lone spec may stand in for a one-operator level) where fixity is \"InfixL\" | \"InfixR\" | \"Prefix\" | \"Postfix\" and opParser's RESULT is the combining function - binary for infix, unary for prefix / postfix - the same op-returns-a-function convention as ParseChainLeft. Stays linear on grammars where a PEG choice over or / and / apply re-parses the shared leading operand and backtracks exponentially (e.g. TPTP THF)."
 
 ParseLookahead::usage = "ParseLookahead[p] succeeds iff p would match at the current position, consuming nothing."
 
@@ -150,6 +152,16 @@ ParseChainLeft[p_ParserCombinator, op_ParserCombinator] :=
 
 ParseChainRight[p_ParserCombinator, op_ParserCombinator] :=
     ParserCombinator["ChainRight", {p, op}, <||>]
+
+(* Pratt operator-precedence table. unit parses an operand; levels is a
+   list of precedence levels (tightest first), each a list of operator
+   specs {fixity, opParser}. A lone {fixity, opParser} stands in for a
+   single-operator level. See the "OperatorTable" interpret clause. *)
+ParseOperatorTable[unit_ParserCombinator, levels_List] :=
+    ParserCombinator["OperatorTable", {unit, normalizeOpLevels[levels]}, <||>]
+
+normalizeOpLevels[levels_List] :=
+    Replace[levels, spec : {_String, _ParserCombinator} :> {spec}, {1}]
 
 ParseLookahead[p_ParserCombinator] :=
     ParserCombinator["Lookahead", p, <||>]
@@ -626,6 +638,84 @@ interpretDispatch[ParserCombinator["ChainRight", {p_, op_}, _], input_, pos_] :=
             ],
             cur
         ]
+    ]
+
+(* OperatorTable: Pratt / precedence-climbing dispatch.
+   args = {unit, levels}. levels is tightest-first; each level is a list of
+   operator specs {fixity, opParser}. Precedence is the level position
+   (level 1 binds tightest). opParser's RESULT is the combining function
+   (binary for "InfixL"/"InfixR", unary for "Prefix"/"Postfix"), the same
+   op-returns-a-function convention as ChainLeft.
+
+   One nud/led loop replaces the hand-cascaded ChainLeft/ChainRight tower:
+   the leading operand is parsed ONCE, then operators are consumed left to
+   right while their left binding power exceeds the caller's rbp. That is
+   what turns the THF or/and/apply re-parse blow-up (O(3^depth)) into a
+   single linear pass. nud/climb are Module-local mutually-recursive
+   helpers; climb carries the same $parseDepth guard as interpret so deep
+   right-nesting returns a clean parseErr instead of tripping
+   $RecursionLimit. *)
+interpretDispatch[ParserCombinator["OperatorTable", {unit_, levels_List}, _], input_, pos_] :=
+    Module[{n = Length[levels], specs, prefixSpecs, ledSpecs, noOp, nud, tryOps, climb},
+        specs = Catenate @ MapIndexed[
+            Function[{lvl, ix}, With[{bp = n - First[ix] + 1},
+                Map[{bp, #[[1]], #[[2]]} &, lvl]]],
+            levels
+        ];
+        prefixSpecs = Select[specs, #[[2]] === "Prefix" &];
+        ledSpecs    = Select[specs, MatchQ[#[[2]], "InfixL" | "InfixR" | "Postfix"] &];
+
+        (* null denotation: try the prefix operators (table order), else
+           fall through to the operand parser. *)
+        nud[p_] := Module[{hit = noOp, r, fn, opEnd, operand},
+            Do[
+                r = interpret[s[[3]], input, p];
+                If[ MatchQ[r, _parseOk], hit = {s, r}; Break[] ],
+                {s, prefixSpecs}
+            ];
+            If[ hit === noOp,
+                interpret[unit, input, p],
+                ( fn = hit[[2, 1]]; opEnd = hit[[2, 2]];
+                  operand = climb[hit[[1, 1]], opEnd];
+                  If[ MatchQ[operand, _parseErr], operand,
+                      parseOk[fn[operand[[1]]], operand[[2]]] ] )
+            ]
+        ];
+
+        (* leftmost led operator whose binding power beats rbp, if any. *)
+        tryOps[rbp_, p_] := Module[{found = noOp, r},
+            Do[
+                If[ s[[1]] > rbp,
+                    r = interpret[s[[3]], input, p];
+                    If[ MatchQ[r, _parseOk], found = {s, r}; Break[] ]
+                ],
+                {s, ledSpecs}
+            ];
+            found
+        ];
+
+        climb[rbp_, p_] := Block[{$parseDepth = $parseDepth + 1},
+            If[ $parseDepth > $maxParseDepth,
+                parseErr[p, "<input within nesting limit>", safeChar[input, p]],
+                Module[{leftR = nud[p], left, cur, opHit, s, fn, opEnd, rightRbp, rightR},
+                    If[ MatchQ[leftR, _parseErr], Return[leftR, Module] ];
+                    left = leftR[[1]]; cur = leftR[[2]];
+                    While[ (opHit = tryOps[rbp, cur]) =!= noOp,
+                        s = opHit[[1]]; fn = opHit[[2, 1]]; opEnd = opHit[[2, 2]];
+                        If[ s[[2]] === "Postfix",
+                            left = fn[left]; cur = opEnd,
+                            rightRbp = If[ s[[2]] === "InfixR", s[[1]] - 1, s[[1]] ];
+                            rightR = climb[rightRbp, opEnd];
+                            If[ MatchQ[rightR, _parseErr], Return[rightR, Module] ];
+                            left = fn[left, rightR[[1]]]; cur = rightR[[2]]
+                        ]
+                    ];
+                    parseOk[left, cur]
+                ]
+            ]
+        ];
+
+        climb[0, pos]
     ]
 
 (* Lookahead: succeed iff p matches, but reset position. *)
@@ -1726,6 +1816,7 @@ colorFor[t_String] := Replace[
         "Choice" -> StandardPurple,
         "Many" | "Some" | "Optional" -> StandardGreen,
         "Between" -> StandardYellow,
+        "ChainLeft" | "ChainRight" | "OperatorTable" -> StandardPink,
         "Action" | "Capture" -> StandardRed,
         _ -> StandardGray
     }
