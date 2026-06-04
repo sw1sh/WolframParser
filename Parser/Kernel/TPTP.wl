@@ -225,6 +225,16 @@ thfRevImplies[x_, y_] := Implies[y, x]
 thfNor[x_, y_]     := Not[Or[x, y]]
 thfNand[x_, y_]    := Not[And[x, y]]
 
+(* Quantified / binder formulas. ! / ? lift to ForAll / Exists (reusing the
+   FOF `quant` helper, which Quiets the pattern-variable ivar messages); the
+   higher-order binders ^ (lambda), @+ / @- (choice / description) and the
+   type quantifiers !> / ?* keep their TPTP token as a String head -
+   `"^"[{X_, ...}, body]` - the same string-headed-compound convention the
+   term actions use. Variable types parse (so `[X : $i > $i]` is accepted)
+   but are dropped from the binder, as in the FOF lifting. *)
+thfQuant[{q_String, vs_List}, body_] :=
+    If[ q === "!" || q === "?", quant[q, vs, body], q[vs, body] ]
+
 (* TPTP is whitespace-liberal, so each connective consumes the optional
    whitespace on both sides; the (fn &) action discards the whitespace /
    token list and yields fn as the combining function. The operand parser
@@ -254,26 +264,34 @@ $thfLogicOverride := ParseOperatorTable[ParseRecursive[thfUnitary$], {
     }
 }]
 
-(* Minimal THF unit actions: enough for the connective / application /
-   equality core to come back as clean WL terms. Quantifier / let / type
-   bodies are not yet lifted - they pass through as raw parse trees. *)
+(* THF unit actions: the connective / application / equality core plus the
+   quantifiers and higher-order binders come back as clean WL terms. $let /
+   $ite and standalone type declarations (thf_atom_typing) are not yet
+   lifted - they pass through as raw parse trees. *)
 $tptpThfActions = <|
-    "thf_formula"         -> id,
-    "thf_unit_formula"    -> id,
-    "thf_unitary_formula" -> Function[Block[{a = {##}},
+    "thf_formula"            -> id,
+    "thf_unit_formula"       -> id,
+    "thf_unitary_formula"    -> Function[Block[{a = {##}},
         Switch[Length[a], 1, a[[1]], 3, a[[2]]]]],   (* ( logic ) -> logic *)
-    "thf_atomic_formula"  -> id,
-    "thf_plain_atomic"    -> id,
-    "thf_defined_atomic"  -> id,
-    "thf_system_atomic"   -> id,
-    "thf_defined_term"    -> id,
-    "thf_unitary_term"    -> Function[Block[{a = {##}},
+    "thf_atomic_formula"     -> id,
+    "thf_plain_atomic"       -> id,
+    "thf_defined_atomic"     -> id,
+    "thf_system_atomic"      -> id,
+    "thf_defined_term"       -> id,
+    "thf_unitary_term"       -> Function[Block[{a = {##}},
         Switch[Length[a], 1, a[[1]], 3, a[[2]]]]],
-    "thf_defined_infix"   -> Function[Equal[#1, #3]],
-    "thf_unary_formula"   -> id,
-    "thf_prefix_unary"    -> Function[Not[#2]],
-    "thf_preunit_formula" -> id,
-    "thf_infix_unary"     -> Function[Unequal[#1, #3]]
+    "thf_defined_infix"      -> Function[Equal[#1, #3]],
+    "thf_unary_formula"      -> id,
+    "thf_prefix_unary"       -> Function[Not[#2]],
+    "thf_preunit_formula"    -> id,
+    "thf_infix_unary"        -> Function[Unequal[#1, #3]],
+    (* quantifiers / binders: ! ? ^ @+ @- !> ?* *)
+    "thf_quantified_formula" -> Function[thfQuant[#1, #2]],
+    "thf_quantification"     -> Function[{#1, #3}],   (* quantifier [ vars ] : *)
+    "thf_quantifier"         -> id,
+    "th0_quantifier"         -> id,
+    "thf_variable_list"      -> rightList,
+    "thf_typed_variable"     -> Function[#1]          (* keep variable, drop its type *)
 |>
 
 
@@ -315,7 +333,11 @@ annotated[head_String][args__] := Block[{a = {args}},
     <|"Head"    -> head,
       "Name"    -> ToString[a[[3]]],
       "Role"    -> ToString[a[[5]]],
-      "Formula" -> stripTopForAll[a[[7]]]|>
+      (* THF quantifiers are explicit and higher-order (they may bind
+         predicates, sit under a lambda, or nest) - keep them. The
+         top-ForAll strip is for CNF / FOF, where a leading universal is
+         the implicit clause closure. *)
+      "Formula" -> If[head === "thf", a[[7]], stripTopForAll[a[[7]]]]|>
 ]
 
 (* TPTP_file action: partition annotated clauses into includes,
