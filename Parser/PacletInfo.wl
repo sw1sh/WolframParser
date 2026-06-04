@@ -1,7 +1,7 @@
 (* ::Package:: *)
 
 PacletObject[<|
-    "Name" -> "Wolfram/WolframParser",
+    "Name" -> "Wolfram/Parser",
     "Description" -> "Parser combinators for the Wolfram Language - GrammarRules compatible, locally compiled, with a LaTeX math parser",
     "Creator" -> "Nikolay Murzin, Claude (Anthropic)",
     "PublisherID" -> "Wolfram",

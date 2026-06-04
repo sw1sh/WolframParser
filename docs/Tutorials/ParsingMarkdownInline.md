@@ -3,8 +3,8 @@ Template: TechNote
 Name: ParsingMarkdownInline
 Title: A Markdown Inline Parser in Parser Combinators
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/tutorial/ParsingMarkdownInline
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/tutorial/ParsingMarkdownInline
 Keywords: [markdown, inline parser, ParserCombinator, ParseChoice, ParseNotFollowedBy, ParseAction, recursion, PEG, MarkdownInlineParse, MarkdownParse, Association]
 RelatedGuides: [WolframParser]
 RelatedTutorials: [ParsingGrammarRules, DesignAndCompilationStrategy, LaTeXMathParserImplementation]

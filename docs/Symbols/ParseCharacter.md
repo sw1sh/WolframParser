@@ -2,8 +2,8 @@
 Template: Symbol
 Name: ParseCharacter
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/ref/ParseCharacter
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/ref/ParseCharacter
 Keywords: [parser, character, class, terminal, LetterCharacter, DigitCharacter]
 SeeAlso: [ParseLiteral, ParseToken, ParserCombinator, LetterCharacter, DigitCharacter, CharacterRange]
 RelatedGuides: [WolframParser]

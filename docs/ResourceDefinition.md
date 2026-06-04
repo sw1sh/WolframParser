@@ -1,9 +1,9 @@
 ---
 Template: Paclet
 ResourceType: Paclet
-Name: Wolfram/WolframParser
+Name: Wolfram/Parser
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
+Paclet: Wolfram/Parser
 Description: Parser combinators for the Wolfram Language - GrammarRules compatible, locally compiled, with a LaTeX math parser
 ContributedBy: Nikolay Murzin, Claude (Anthropic)
 Keywords: [parser, parsing, grammar, combinator, GrammarRules, FunctionCompile, LaTeX, KaTeX, TPTP, DSL]
@@ -19,7 +19,7 @@ RelatedResources: [Wolfram/MarkdownToNotebook]
 
 ## Details & Options
 
-- The library reuses the [GrammarRules]() declarative slot-syntax DSL, but compiles each grammar to a local parser via [FunctionCompile]() instead of round-tripping through [CloudDeploy](). The supported subset of `GrammarRules` is mapped in the [Parsing GrammarRules Locally](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules) tech note.
+- The library reuses the [GrammarRules]() declarative slot-syntax DSL, but compiles each grammar to a local parser via [FunctionCompile]() instead of round-tripping through [CloudDeploy](). The supported subset of `GrammarRules` is mapped in the [Parsing GrammarRules Locally](paclet:Wolfram/Parser/tutorial/ParsingGrammarRules) tech note.
 - A Parsec-style combinator core (`Parse*` constructors) covers grammars that don't fit the declarative shape: LaTeX math, custom DSLs with backtracking / lookahead, recursive descent over [CodeParser]() ASTs.
 - [LaTeXMathParse]() is a working LaTeX math-mode parser at 126 / 126 coverage of [KaTeX's own screenshotter test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml). Output is a tree of Wolfram boxes ([FractionBox](), [SubsuperscriptBox](), [RadicalBox](), [GridBox](), ...) ready to drop into a notebook cell or wrap with [DisplayForm]() for kernel-side rendering.
 - Operates uniformly on strings, on lists of tagged tokens, and on lists of Wolfram expressions (so the same combinators that lex a string can walk a [CodeParser]() AST).
@@ -139,7 +139,7 @@ A [GrammarRules]() expression lowers to a [ParserCombinator]() and runs locally 
 Parse[GrammarRules[{"weather in <city>" -> city}], "weather in Boston"]
 ```
 
-The pattern form accepts the same shapes [CloudDeploy]()'d [GrammarRules]() does - [FixedOrder](), [AnyOrder](), [OptionalElement](), [DelimitedSequence](), [RegularExpression](), [Pattern](), and [GrammarToken](). The [Parsing GrammarRules Locally](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules) tech note walks through every pattern.
+The pattern form accepts the same shapes [CloudDeploy]()'d [GrammarRules]() does - [FixedOrder](), [AnyOrder](), [OptionalElement](), [DelimitedSequence](), [RegularExpression](), [Pattern](), and [GrammarToken](). The [Parsing GrammarRules Locally](paclet:Wolfram/Parser/tutorial/ParsingGrammarRules) tech note walks through every pattern.
 
 ### Compilation
 
@@ -178,7 +178,7 @@ LaTeXMathParse["\\sum_{i=1}^{n} \\frac{1}{i^2} = \\frac{\\pi^2}{6}"]
 
 ### Markdown inline
 
-[MarkdownInlineParse]() parses inline markdown - emphasis, code spans, math, links, sub/sup, escapes - to a tree of typed atoms ([MdText](), [MdBold](), [MdMathInline](), [MdLink](), ...). The grammar is ~75 lines of [ParseChoice]() over the primitives; see the [Markdown inline parser](paclet:Wolfram/WolframParser/tutorial/ParsingMarkdownInline) tech note:
+[MarkdownInlineParse]() parses inline markdown - emphasis, code spans, math, links, sub/sup, escapes - to a tree of typed atoms ([MdText](), [MdBold](), [MdMathInline](), [MdLink](), ...). The grammar is ~75 lines of [ParseChoice]() over the primitives; see the [Markdown inline parser](paclet:Wolfram/Parser/tutorial/ParsingMarkdownInline) tech note:
 
 ```wl
 MarkdownInlineParse["**bold $x$** and `code`"]
@@ -202,7 +202,7 @@ The combinators operate uniformly on strings, on lists of tokens, and on lists o
 
 ## Properties and Relations
 
-[GrammarRules]() with [GrammarApply]() requires a [CloudDeploy]() round-trip; the cloud also resolves [Interpreter]()-backed semantic types (`City`, `Date`, `Quantity`, ...) via Wolfram knowledge. The local lowering trades the round-trip for offline evaluation - every documented pattern node is supported except the option flags (`AllowLooseGrammar`, `IgnoreCase`, `IgnoreDiacritics`). The [Parsing GrammarRules Locally](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules) tech note maps the supported subset.
+[GrammarRules]() with [GrammarApply]() requires a [CloudDeploy]() round-trip; the cloud also resolves [Interpreter]()-backed semantic types (`City`, `Date`, `Quantity`, ...) via Wolfram knowledge. The local lowering trades the round-trip for offline evaluation - every documented pattern node is supported except the option flags (`AllowLooseGrammar`, `IgnoreCase`, `IgnoreDiacritics`). The [Parsing GrammarRules Locally](paclet:Wolfram/Parser/tutorial/ParsingGrammarRules) tech note maps the supported subset.
 
 [CodeParser]() parses Wolfram-language source to an AST; it is the *target* of a parser walk, not a combinator core itself. [Wolfram`Parser`]()'s [ParseRecursive]() + [ParseChoice]() pair walks a [CodeParser]() AST the same way it walks a token list - same primitives, different leaf type.
 

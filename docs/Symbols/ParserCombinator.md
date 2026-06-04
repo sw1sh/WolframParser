@@ -2,8 +2,8 @@
 Template: Symbol
 Name: ParserCombinator
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/ref/ParserCombinator
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/ref/ParserCombinator
 Keywords: [parser, combinator, wrapper, summary box, UpValues, SubValues]
 SeeAlso: [Parse, ParserCompile, ParseLiteral, ParseSequence, ParseChoice, ParseMany]
 RelatedGuides: [WolframParser]
@@ -11,7 +11,7 @@ RelatedGuides: [WolframParser]
 
 ## Usage
 
-<code>[ParserCombinator]()[type, args, opts]</code> is the single computable wrapper every parser in the library is represented as. The head is *opaque* to user code: build a `ParserCombinator` by calling one of the [Parse*](paclet:Wolfram/WolframParser/guide/WolframParser) constructors ([ParseLiteral](), [ParseSequence](), [ParseChoice](), ...), never by hand.
+<code>[ParserCombinator]()[type, args, opts]</code> is the single computable wrapper every parser in the library is represented as. The head is *opaque* to user code: build a `ParserCombinator` by calling one of the [Parse*](paclet:Wolfram/Parser/guide/WolframParser) constructors ([ParseLiteral](), [ParseSequence](), [ParseChoice](), ...), never by hand.
 
 ## Details & Options
 

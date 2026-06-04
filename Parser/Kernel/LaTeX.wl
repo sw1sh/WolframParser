@@ -2868,7 +2868,7 @@ $latexDir = DirectoryName[$InputFileName]
 
 compiledLatexAssetPath[] := Module[{p},
     p = Quiet @ Check[
-        PacletObject["Wolfram/WolframParser"]["AssetLocation", "CompiledLaTeXParser"], $Failed];
+        PacletObject["Wolfram/Parser"]["AssetLocation", "CompiledLaTeXParser"], $Failed];
     If[StringQ[p] && FileExistsQ[p], p,
         FileNameJoin[{ParentDirectory[$latexDir], "Assets", "LaTeXMathParserCompiled.wxf"}]]]
 

@@ -3,8 +3,8 @@ Template: TechNote
 Name: LaTeXMathParserImplementation
 Title: Implementing the LaTeX Math Parser
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/tutorial/LaTeXMathParserImplementation
 Keywords: [LaTeX, math, parser, KaTeX, ParserCombinator, MathML, FractionBox, GridBox, environments, delimiters]
 RelatedGuides: [WolframParser]
 RelatedTutorials: [DesignAndCompilationStrategy, ParserLandscape]
@@ -12,7 +12,7 @@ RelatedTutorials: [DesignAndCompilationStrategy, ParserLandscape]
 
 ## What this note covers
 
-[LaTeXMathParse]() is a working LaTeX math-mode parser built on top of the [ParserCombinator]() core. It parses 126 / 126 of the inline cases from KaTeX's own [screenshot test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml) - the same shapes a production JS-side math renderer is expected to handle. This note is the second half of the [`DesignAndCompilationStrategy`](paclet:Wolfram/WolframParser/tutorial/DesignAndCompilationStrategy) story: that one explained the combinator core; this one walks through what it takes to point those primitives at real-world TeX and not flinch.
+[LaTeXMathParse]() is a working LaTeX math-mode parser built on top of the [ParserCombinator]() core. It parses 126 / 126 of the inline cases from KaTeX's own [screenshot test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml) - the same shapes a production JS-side math renderer is expected to handle. This note is the second half of the [`DesignAndCompilationStrategy`](paclet:Wolfram/Parser/tutorial/DesignAndCompilationStrategy) story: that one explained the combinator core; this one walks through what it takes to point those primitives at real-world TeX and not flinch.
 
 The interesting part of writing a LaTeX parser is not the grammar - LaTeX math has no grammar in any formal sense. The interesting part is *tolerance*: real TeX users mix balanced and unbalanced constructs, single-character and multi-character delimiters, math-mode and text-mode, optional and required brace arguments, and macros that were defined in someone's `.sty` file 15 years ago and never documented. A parser that demands well-formedness rejects most of the corpus on the first line. A parser that's pure regex-fallback renders the corpus as gibberish.
 
@@ -29,7 +29,7 @@ This note has four parts:
 
 `LaTeXMathParse` is a [PEG-ordered](https://en.wikipedia.org/wiki/Parsing_expression_grammar) parser. From innermost to outermost the layers are:
 
-| Layer        | Purpose                                          | Defined in [Kernel/LaTeX.wl](paclet:Wolfram/WolframParser/guide/WolframParser) |
+| Layer        | Purpose                                          | Defined in [Kernel/LaTeX.wl](paclet:Wolfram/Parser/guide/WolframParser) |
 |--------------|--------------------------------------------------|--------------------|
 | `atom`       | the smallest unit a factor can latch onto        | numbers, identifiers, commands, `(...)`, `[...]`, ``\|...\|``, `{...}`, ``\left...\right``, Unicode glyphs |
 | `factor`     | atom + a chain of `_` / `^` / `'` postfixes      | `x^2_i'` collapses into one `SubsuperscriptBox` with prime-decorated sup |
@@ -223,7 +223,7 @@ It matches any single character that *isn't* one of the reserved punctuation cha
 
 ## Part 4 - Coverage and limits
 
-The benchmark assertion in [``Tests/LaTeX.wlt``](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation) loads ``Tests/katex-cases.json`` directly and asserts the count of cases that parse without error:
+The benchmark assertion in [``Tests/LaTeX.wlt``](paclet:Wolfram/Parser/tutorial/LaTeXMathParserImplementation) loads ``Tests/katex-cases.json`` directly and asserts the count of cases that parse without error:
 
 ```
 VerificationTest[
@@ -256,7 +256,7 @@ The `126` floor catches any regression that drops a previously-passing case. Rai
 
 ### Adding a new macro
 
-The dispatch table is in [Kernel/LaTeX.wl](paclet:Wolfram/WolframParser/guide/WolframParser). To add ``\foo{a}`` rendering as some `Box[a]`:
+The dispatch table is in [Kernel/LaTeX.wl](paclet:Wolfram/Parser/guide/WolframParser). To add ``\foo{a}`` rendering as some `Box[a]`:
 
 ```
 commandHandlers["\\foo"] = Function[{opt, req}, Box[First[req, ""]]]

@@ -3,8 +3,8 @@ Template: TechNote
 Name: ParserLandscape
 Title: The Parser Landscape - a Survey of What Exists Today
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/tutorial/ParserLandscape
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/tutorial/ParserLandscape
 Keywords: [parser, parsing, grammar, combinator, EBNF, parsec, survey, comparison]
 RelatedGuides: [WolframParser]
 ---
@@ -278,4 +278,4 @@ What the paclet is *not* trying to be:
 - a general CFG parser (Earley / GLR / GLL backends are out of scope for v0.1)
 - a tokeniser for any specific format (those belong in companion paclets that *use* this library to define their lexers)
 
-The detailed API design, the parser algebra, and the FunctionCompile lowering live in [DesignAndCompilationStrategy](paclet:Wolfram/WolframParser/tutorial/DesignAndCompilationStrategy). This note's job is to be honest about what already exists, so the design decisions there can be read against the alternatives instead of in a vacuum.
+The detailed API design, the parser algebra, and the FunctionCompile lowering live in [DesignAndCompilationStrategy](paclet:Wolfram/Parser/tutorial/DesignAndCompilationStrategy). This note's job is to be honest about what already exists, so the design decisions there can be read against the alternatives instead of in a vacuum.

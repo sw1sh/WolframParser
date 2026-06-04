@@ -3,8 +3,8 @@ Template: TechNote
 Name: ParsingTPTP
 Title: Parsing TPTP, Auto-Generated from the Published BNF
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/tutorial/ParsingTPTP
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/tutorial/ParsingTPTP
 Keywords: [TPTP, ATP, automated theorem proving, CNF, FOF, TFF, BNF, grammar, benchmark, EBNFParse]
 RelatedGuides: [WolframParser]
 RelatedTutorials: [ParsingBNFGrammars, DesignAndCompilationStrategy]
@@ -19,7 +19,7 @@ The paclet ships the result of this construction as [TPTPImport]() - `TPTPImport
 1. Read the BNF into an `Association[name -> ParserCombinator]`.
 2. Apply the result to TPTP source - optionally with an `"Actions"` map that lifts the raw parse tree to a Wolfram-Language data shape.
 
-The lowering applies three standard PEG-vs-CFG rewrites automatically: direct left-recursion elimination, longest-alt-first sorting, and POSIX longest-match for rule bodies whose alternatives have equal element counts (the default `"ChoiceMode" -> "Auto"`). Together these handle the eleven left-recursive TPTP rules, the shared-prefix alternatives like `<constant> | <functor>(<fof_arguments>)`, and the cross-rule ambiguity in `<fof_atomic_formula> ::= <fof_plain_atomic_formula> | <fof_defined_atomic_formula>` where both branches can consume the same leading term but only the second one continues into the trailing `= rhs`. See [Parsing BNF Grammars](paclet:Wolfram/WolframParser/tutorial/ParsingBNFGrammars) for the grammar-level mechanics; this note is the TPTP-specific story.
+The lowering applies three standard PEG-vs-CFG rewrites automatically: direct left-recursion elimination, longest-alt-first sorting, and POSIX longest-match for rule bodies whose alternatives have equal element counts (the default `"ChoiceMode" -> "Auto"`). Together these handle the eleven left-recursive TPTP rules, the shared-prefix alternatives like `<constant> | <functor>(<fof_arguments>)`, and the cross-rule ambiguity in `<fof_atomic_formula> ::= <fof_plain_atomic_formula> | <fof_defined_atomic_formula>` where both branches can consume the same leading term but only the second one continues into the trailing `= rhs`. See [Parsing BNF Grammars](paclet:Wolfram/Parser/tutorial/ParsingBNFGrammars) for the grammar-level mechanics; this note is the TPTP-specific story.
 
 ---
 

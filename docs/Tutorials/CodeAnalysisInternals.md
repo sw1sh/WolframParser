@@ -3,8 +3,8 @@ Template: TechNote
 Name: CodeAnalysisInternals
 Title: Inside CodeAnalysis - How CodeStructure Parses C
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/tutorial/CodeAnalysisInternals
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/tutorial/CodeAnalysisInternals
 Keywords: [CodeAnalysis, CodeStructure, libclang, Clang, LLVM, C parser, AST, LibraryLink, CallGraph, survey]
 RelatedGuides: [WolframParser]
 RelatedTutorials: [ParserLandscape]

@@ -2,8 +2,8 @@
 Template: Symbol
 Name: ParseAction
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/ref/ParseAction
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/ref/ParseAction
 Keywords: [parser, action, transform, reshape, semantic]
 SeeAlso: [ParseCapture, ParseSequence, ParserCombinator]
 RelatedGuides: [WolframParser]
@@ -112,7 +112,7 @@ Parse[GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}], "add 3 and 5"]
 (* 8 *)
 ```
 
-See [Parsing GrammarRules Locally](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules) for the full subset of `GrammarRules` shapes lowered to `ParserCombinator`s.
+See [Parsing GrammarRules Locally](paclet:Wolfram/Parser/tutorial/ParsingGrammarRules) for the full subset of `GrammarRules` shapes lowered to `ParserCombinator`s.
 
 ## Possible Issues
 

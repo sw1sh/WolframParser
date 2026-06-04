@@ -2,8 +2,8 @@
 Template: Symbol
 Name: ParserCompile
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/ref/ParserCompile
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/ref/ParserCompile
 Keywords: [parser, compile, FunctionCompile, native code, CloudDeploy]
 SeeAlso: [Parse, ParserCombinator, FunctionCompile, CloudDeploy, GrammarRules]
 RelatedGuides: [WolframParser]

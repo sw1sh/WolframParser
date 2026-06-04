@@ -3,8 +3,8 @@ Template: TechNote
 Name: ParsingBNFGrammars
 Title: Parsing BNF Grammars (and bootstrapping a TPTP parser)
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/tutorial/ParsingBNFGrammars
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/tutorial/ParsingBNFGrammars
 Keywords: [BNF, EBNF, grammar, meta-grammar, bootstrap, TPTP, ATP, SyntaxBNF, GrammarApply, parser combinator, ParseRecursive]
 RelatedGuides: [WolframParser]
 RelatedTutorials: [DesignAndCompilationStrategy, ParsingGrammarRules]
@@ -98,7 +98,7 @@ Parse[parsers["cnf_annotated"], "cnf(test, axiom, p)."]
 (* {"cnf", "(", "test", ",", "axiom", ",", "p", Null, ")."} *)
 ```
 
-The output is the raw parse tree - a list of matched literals and sub-parser results. Turning it into the WL-term shape (`<|"Axioms" -> {phi1, ...}, "Conjecture" -> phi|>` with atoms as `String`-headed compounds) is the *semantic action* layer. Each rule needs a `ParseAction` that lifts the raw tree to the right WL value. The paclet ships the result as [TPTPImport](); see [Parsing TPTP](paclet:Wolfram/WolframParser/tutorial/ParsingTPTP) for the ~50-entry action map.
+The output is the raw parse tree - a list of matched literals and sub-parser results. Turning it into the WL-term shape (`<|"Axioms" -> {phi1, ...}, "Conjecture" -> phi|>` with atoms as `String`-headed compounds) is the *semantic action* layer. Each rule needs a `ParseAction` that lifts the raw tree to the right WL value. The paclet ships the result as [TPTPImport](); see [Parsing TPTP](paclet:Wolfram/Parser/tutorial/ParsingTPTP) for the ~50-entry action map.
 
 ---
 

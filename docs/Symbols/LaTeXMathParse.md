@@ -2,8 +2,8 @@
 Template: Symbol
 Name: LaTeXMathParse
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/ref/LaTeXMathParse
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/ref/LaTeXMathParse
 Keywords: [LaTeX, math, parser, KaTeX, FractionBox, SubsuperscriptBox, GridBox, RowBox, StyleBox, MathML]
 SeeAlso: [Parse, ParserCombinator, FractionBox, SubsuperscriptBox, RadicalBox, GridBox, RowBox, StyleBox]
 RelatedGuides: [WolframParser]
@@ -17,7 +17,7 @@ RelatedGuides: [WolframParser]
 
 - The parser handles the inline-math subset of LaTeX commonly written inside `$...$` or `\(...\)` (no preamble, no `\documentclass`).
 - Output is a tree of Wolfram boxes, ready to drop into a notebook cell or wrap in [DisplayForm]() / [RawBoxes]() for rendering.
-- 126 / 126 cases from [KaTeX's screenshotter test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml) parse cleanly. See [Implementing the LaTeX Math Parser](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation) for the design and the corpus.
+- 126 / 126 cases from [KaTeX's screenshotter test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml) parse cleanly. See [Implementing the LaTeX Math Parser](paclet:Wolfram/Parser/tutorial/LaTeXMathParserImplementation) for the design and the corpus.
 - The parser is tolerant: macros it doesn't know are emitted as their literal `\name` followed by their `{arg}` payload, so an unknown command doesn't abort the whole expression.
 
 ## Basic Examples
@@ -140,7 +140,7 @@ End-to-end: count how many of KaTeX's own test cases parse cleanly:
 
 ```wl
 cases = Association @ Import[
-    FileNameJoin[{PacletObject["Wolfram/WolframParser"]["Location"], "Tests", "katex-cases.json"}]
+    FileNameJoin[{PacletObject["Wolfram/Parser"]["Location"], "Tests", "katex-cases.json"}]
 ];
 Count[Values[cases], _ ? (! FailureQ[LaTeXMathParse[#]] &)]
 ```

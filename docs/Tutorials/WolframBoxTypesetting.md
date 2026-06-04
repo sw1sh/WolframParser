@@ -3,8 +3,8 @@ Template: TechNote
 Name: WolframBoxTypesetting
 Title: The Wolfram Box Typesetting Reference
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/tutorial/WolframBoxTypesetting
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/tutorial/WolframBoxTypesetting
 Keywords: [boxes, typesetting, RowBox, GridBox, FractionBox, SqrtBox, RadicalBox, SubscriptBox, SuperscriptBox, SubsuperscriptBox, UnderoverscriptBox, StyleBox, AdjustmentBox, FrameBox, Magnification, FractionLine, ColumnAlignments, LimitsPositioning, DisplayForm, RawBoxes, MakeBoxes, notebook, spacing]
 RelatedGuides: [WolframParser]
 RelatedTutorials: [LaTeXMathParserImplementation, DesignAndCompilationStrategy]
@@ -548,7 +548,7 @@ For Part 9 (rendering control), the option pages and community/blog sources:
 - Szabolcs Horvát (MaTeX author), [LaTeX typesetting in Mathematica](https://szhorvat.net/pelican/latex-typesetting-in-mathematica.html)
 - Wolfram Community: [math font control](https://community.wolfram.com/groups/-/m/t/1350218) · [operator spacing](https://community.wolfram.com/groups/-/m/t/2164751) · [stretchy delimiters](https://community.wolfram.com/groups/-/m/t/514789); meng6, [white-space characters in WL](https://meng6.net/pages/blog/white_space_characters_in_wolfram_language/)
 
-Related notes in this paclet: [LaTeXMathParserImplementation](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation)
+Related notes in this paclet: [LaTeXMathParserImplementation](paclet:Wolfram/Parser/tutorial/LaTeXMathParserImplementation)
 puts these boxes to work translating real TeX, and
-[DesignAndCompilationStrategy](paclet:Wolfram/WolframParser/tutorial/DesignAndCompilationStrategy)
+[DesignAndCompilationStrategy](paclet:Wolfram/Parser/tutorial/DesignAndCompilationStrategy)
 covers the combinator core that drives the parse.

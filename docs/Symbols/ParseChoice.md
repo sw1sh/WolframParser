@@ -2,8 +2,8 @@
 Template: Symbol
 Name: ParseChoice
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/ref/ParseChoice
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/ref/ParseChoice
 Keywords: [parser, choice, alternation, PEG, ordered, Alternatives]
 SeeAlso: [ParseSequence, ParseTry, ParserCombinator, Alternatives]
 RelatedGuides: [WolframParser]

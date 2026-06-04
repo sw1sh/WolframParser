@@ -3,8 +3,8 @@ Template: Guide
 Name: WolframParser
 Title: Parsing in the Wolfram Language
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/guide/WolframParser
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/guide/WolframParser
 Description: A general, fast, composable parser library for the Wolfram Language - Parse* combinators around a single ParserCombinator wrapper, GrammarRules-compatible declarative grammars, FunctionCompile-backed local execution.
 Keywords: [parser, parsing, grammar, combinator, ParserCombinator, GrammarRules, FunctionCompile, LaTeX, KaTeX, TPTP, DSL]
 RelatedGuides: [StringManipulation]

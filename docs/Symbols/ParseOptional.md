@@ -2,8 +2,8 @@
 Template: Symbol
 Name: ParseOptional
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/ref/ParseOptional
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/ref/ParseOptional
 Keywords: [parser, optional, zero or one, ?]
 SeeAlso: [ParseMany, ParseSome, ParserCombinator, Optional, Missing]
 RelatedGuides: [WolframParser]

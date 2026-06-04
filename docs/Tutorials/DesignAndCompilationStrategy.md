@@ -3,8 +3,8 @@ Template: TechNote
 Name: DesignAndCompilationStrategy
 Title: Design and Compilation Strategy
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/tutorial/DesignAndCompilationStrategy
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/tutorial/DesignAndCompilationStrategy
 Keywords: [parser, design, FunctionCompile, GrammarRules, LaTeX, TPTP, compilation, combinator, ParserCombinator, PEG]
 RelatedGuides: [WolframParser]
 RelatedTutorials: [ParserLandscape]
@@ -12,7 +12,7 @@ RelatedTutorials: [ParserLandscape]
 
 ## What this note covers
 
-The [ParserLandscape](paclet:Wolfram/WolframParser/tutorial/ParserLandscape) survey lays out *what's already there*; this note lays out *what we are building*. The plan in one sentence: **reuse the [GrammarRules]() declarative DSL, but compile the rules to a local parser via [FunctionCompile]() instead of round-tripping through [CloudDeploy](), and pair that with an Anton-style `Parse*` combinator core that all funnels into a single computable `ParserCombinator` head.**
+The [ParserLandscape](paclet:Wolfram/Parser/tutorial/ParserLandscape) survey lays out *what's already there*; this note lays out *what we are building*. The plan in one sentence: **reuse the [GrammarRules]() declarative DSL, but compile the rules to a local parser via [FunctionCompile]() instead of round-tripping through [CloudDeploy](), and pair that with an Anton-style `Parse*` combinator core that all funnels into a single computable `ParserCombinator` head.**
 
 The note has six parts:
 
@@ -459,7 +459,7 @@ Each of these will be answered by implementation experience against the targets 
 
 ## What ships in v0.1
 
-- The two tech notes ([ParserLandscape](paclet:Wolfram/WolframParser/tutorial/ParserLandscape) and this one).
+- The two tech notes ([ParserLandscape](paclet:Wolfram/Parser/tutorial/ParserLandscape) and this one).
 - The PacletInfo / ResourceDefinition scaffolding under context `` Wolfram`Parser` ``.
 - A placeholder kernel.
 

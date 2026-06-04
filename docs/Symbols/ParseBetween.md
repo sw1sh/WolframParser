@@ -2,8 +2,8 @@
 Template: Symbol
 Name: ParseBetween
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/ref/ParseBetween
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/ref/ParseBetween
 Keywords: [parser, bracketing, delimited, surround]
 SeeAlso: [ParseSequence, ParseSepBy, ParserCombinator]
 RelatedGuides: [WolframParser]

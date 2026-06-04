@@ -13,10 +13,10 @@
 $ProgressReporting = False
 
 dir = DirectoryName[$InputFileName]
-PacletDirectoryLoad[dir]
+PacletDirectoryLoad[FileNameJoin[{dir, "Parser"}]]
 Needs["Wolfram`Parser`"]
 
-files = Sort @ FileNames["*.wlt", FileNameJoin[{dir, "Tests"}]]
+files = Sort @ FileNames["*.wlt", FileNameJoin[{dir, "Parser", "Tests"}]]
 perFileTimeout = 300
 
 totalPass = 0

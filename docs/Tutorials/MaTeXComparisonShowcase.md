@@ -3,8 +3,8 @@ Template: TechNote
 Name: MaTeXComparisonShowcase
 Title: MaTeX Comparison Showcase
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/tutorial/MaTeXComparisonShowcase
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/tutorial/MaTeXComparisonShowcase
 Keywords: [LaTeX, math, parser, MaTeX, Computer Modern, fidelity, comparison, FractionBox, GridBox, RowBox]
 RelatedGuides: [WolframParser]
 RelatedTutorials: [LaTeXMathParserImplementation]
@@ -271,13 +271,13 @@ Grid[
 - **Stroke weight is the one thing that can't match, and it's the render engine, not the font.** Measured at identical size and resolution, the front-end column carries ~1.5× (italics) to ~1.8× (dense upright caps) the ink of the LaTeX column - and that ratio is *identical* whether the FE font is Latin Modern Math or the FE default, so no font choice changes it. MaTeX is a resolution-independent LaTeX vector; the parser column is front-end-rasterized text, which is simply heavier. Equalizing it would mean rendering both columns through the same engine - which would make them identical and defeat the comparison. It reads closest in light appearance.
 - **The ImportString column is the stock Wolfram importer**, shown for contrast - it is what `ImportString[…, "LaTeX"]` gives without this paclet (math-wrapped in `$…$`, since bare snippets return `$Failed`), drawn in the front end's **own default math font** rather than restyled to Computer Modern, so you see it exactly as it comes - typeface included. It handles the easy structural cases - superscripts, fractions, radicals, sums - but watch where it diverges from both gold and ours: `\mathbb{R}` comes back a **plain `R`** with no blackboard, `\begin{cases}` **loses its enclosing brace**, `\overrightarrow{AB}` misfires into a stray ring, and Greek letters are left **upright** rather than math-italic. That gap is the reason `LaTeXMathParse` exists.
 - **The fifth column is the raw box tree** `LaTeXMathParse` produced (InputForm), so you can read the structure that drives the rendering - `FractionBox`, `UnderoverscriptBox`, the bracketing-bar characters, the `"TI"` italic tags, and so on.
-- **Where the two diverge** is the front end's automatic math-spacing engine versus TeX's: the gaps around binary operators and relations, and how aggressively a delimiter grows around tall content. Those are rendering-side, not parse-side - the box tree is faithful; the FE just spaces it by its own rules. See [WolframBoxTypesetting](paclet:Wolfram/WolframParser/tutorial/WolframBoxTypesetting) for the levers that tighten this.
+- **Where the two diverge** is the front end's automatic math-spacing engine versus TeX's: the gaps around binary operators and relations, and how aggressively a delimiter grows around tall content. Those are rendering-side, not parse-side - the box tree is faithful; the FE just spaces it by its own rules. See [WolframBoxTypesetting](paclet:Wolfram/Parser/tutorial/WolframBoxTypesetting) for the levers that tighten this.
 
 > The code cell that builds this table is collapsed by default (``#| collapse: true``) so only the comparison shows; click the closed group's bracket to reveal the code. The MaTeX column is recolored with ``LightDarkSwitched[Black, White]`` so it stays legible in both light and dark front-end appearances.
 
 ## See also
 
-- [LaTeXMathParserImplementation](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation) - design and implementation notes, and the KaTeX-corpus coverage benchmark
-- [WolframBoxTypesetting](paclet:Wolfram/WolframParser/tutorial/WolframBoxTypesetting) - how the front end renders boxes, and how to control its math spacing/fonts
+- [LaTeXMathParserImplementation](paclet:Wolfram/Parser/tutorial/LaTeXMathParserImplementation) - design and implementation notes, and the KaTeX-corpus coverage benchmark
+- [WolframBoxTypesetting](paclet:Wolfram/Parser/tutorial/WolframBoxTypesetting) - how the front end renders boxes, and how to control its math spacing/fonts
 - [LaTeXMathParse]() - the symbol reference page
 - [MaTeX](https://github.com/szhorvat/MaTeX) - the gold-standard LaTeX-to-graphics package used here

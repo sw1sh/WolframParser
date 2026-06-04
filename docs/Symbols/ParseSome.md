@@ -2,8 +2,8 @@
 Template: Symbol
 Name: ParseSome
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/ref/ParseSome
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/ref/ParseSome
 Keywords: [parser, repetition, one or more, Kleene plus, Repeated]
 SeeAlso: [ParseMany, ParseOptional, ParseSepBy1, ParserCombinator, Repeated]
 RelatedGuides: [WolframParser]

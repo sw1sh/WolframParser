@@ -2,8 +2,8 @@
 Template: Symbol
 Name: Parse
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/ref/Parse
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/ref/Parse
 Keywords: [parser, parse, run, entry point]
 SeeAlso: [ParserCompile, ParserCombinator, ParsePartial, Interpreter]
 RelatedGuides: [WolframParser]

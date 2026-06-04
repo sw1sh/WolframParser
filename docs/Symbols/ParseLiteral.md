@@ -2,8 +2,8 @@
 Template: Symbol
 Name: ParseLiteral
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/ref/ParseLiteral
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/ref/ParseLiteral
 Keywords: [parser, literal, terminal, string match]
 SeeAlso: [ParseCharacter, ParseToken, ParserCombinator, Parse]
 RelatedGuides: [WolframParser]

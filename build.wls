@@ -12,15 +12,16 @@
    like what the cloud / paclet viewer shows. *)
 Quiet @ UsingFrontEnd[CurrentValue[$FrontEnd, LightDark] = "Light"]
 
-pacletDir = DirectoryName[$InputFileName]
+rootDir = DirectoryName[$InputFileName]
+pacletDir = FileNameJoin[{rootDir, "Parser"}]
 
 (* Register the dev paclet BEFORE Get-ing MarkdownToNotebook.wl - its
-   own bootstrap (PacletFind["Wolfram/WolframParser"]) would otherwise
+   own bootstrap (PacletFind["Wolfram/Parser"]) would otherwise
    fail and re-install the published version from the ResourceObject
    URL, shadowing our dev paclet's edits with stale code. *)
 PacletDirectoryLoad[pacletDir]
 
-Get[FileNameJoin[{pacletDir, "..", "..", "MarkdownToNotebook.wl"}]]
+Get[FileNameJoin[{rootDir, "..", "..", "MarkdownToNotebook.wl"}]]
 Needs["Wolfram`Parser`"]
 
 subdir["Symbol"] = {"Documentation", "English", "ReferencePages", "Symbols"}
@@ -45,9 +46,9 @@ buildDoc[srcFile_String] := Block[{info, tmpl, baseName, dir, out},
 ]
 
 Print["building WolframParser documentation"]
-Scan[buildDoc, Sort @ FileNames["*.md", FileNameJoin[{pacletDir, "docs"}], Infinity]]
+Scan[buildDoc, Sort @ FileNames["*.md", FileNameJoin[{rootDir, "docs"}], Infinity]]
 
-rd = FileNameJoin[{pacletDir, "ResourceDefinition.md"}]
+rd = FileNameJoin[{rootDir, "docs", "ResourceDefinition.md"}]
 If[ FileExistsQ[rd],
     MarkdownToNotebook[rd, FileNameJoin[{pacletDir, "ResourceDefinition.nb"}], "EvaluateSeparator" -> None];
     Print["  ResourceDefinition.md -> ResourceDefinition.nb"]

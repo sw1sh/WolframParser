@@ -2,8 +2,8 @@
 Template: Symbol
 Name: ParseMany
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/ref/ParseMany
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/ref/ParseMany
 Keywords: [parser, repetition, zero or more, Kleene star, RepeatedNull]
 SeeAlso: [ParseSome, ParseOptional, ParseSepBy, ParserCombinator, RepeatedNull]
 RelatedGuides: [WolframParser]

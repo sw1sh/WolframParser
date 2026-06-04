@@ -2,8 +2,8 @@
 Template: Symbol
 Name: ParseSequence
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/ref/ParseSequence
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/ref/ParseSequence
 Keywords: [parser, sequence, composition, StringExpression]
 SeeAlso: [ParseChoice, ParseBetween, ParseMany, ParserCombinator, StringExpression]
 RelatedGuides: [WolframParser]

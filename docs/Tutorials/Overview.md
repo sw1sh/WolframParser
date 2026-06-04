@@ -2,8 +2,8 @@
 Template: Overview
 Name: WolframParser
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/tutorial/Overview
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/tutorial/Overview
 Keywords: [parser, parsing, grammar, combinator, GrammarRules, FunctionCompile]
 ---
 
@@ -11,7 +11,7 @@ Keywords: [parser, parsing, grammar, combinator, GrammarRules, FunctionCompile]
 
 ## Guide
 
-- [WolframParser](paclet:Wolfram/WolframParser/guide/WolframParser)
+- [WolframParser](paclet:Wolfram/Parser/guide/WolframParser)
 
 ## Symbols
 
@@ -52,10 +52,10 @@ Keywords: [parser, parsing, grammar, combinator, GrammarRules, FunctionCompile]
 
 ## Tutorials
 
-- [The Parser Landscape: a survey of existing tech](paclet:Wolfram/WolframParser/tutorial/ParserLandscape)
-- [Design and Compilation Strategy](paclet:Wolfram/WolframParser/tutorial/DesignAndCompilationStrategy)
-- [Parsing GrammarRules Locally](paclet:Wolfram/WolframParser/tutorial/ParsingGrammarRules)
-- [A Markdown Inline Parser in Parser Combinators](paclet:Wolfram/WolframParser/tutorial/ParsingMarkdownInline)
-- [Implementing the LaTeX Math Parser](paclet:Wolfram/WolframParser/tutorial/LaTeXMathParserImplementation)
-- [Parsing BNF Grammars](paclet:Wolfram/WolframParser/tutorial/ParsingBNFGrammars)
-- [Parsing TPTP](paclet:Wolfram/WolframParser/tutorial/ParsingTPTP)
+- [The Parser Landscape: a survey of existing tech](paclet:Wolfram/Parser/tutorial/ParserLandscape)
+- [Design and Compilation Strategy](paclet:Wolfram/Parser/tutorial/DesignAndCompilationStrategy)
+- [Parsing GrammarRules Locally](paclet:Wolfram/Parser/tutorial/ParsingGrammarRules)
+- [A Markdown Inline Parser in Parser Combinators](paclet:Wolfram/Parser/tutorial/ParsingMarkdownInline)
+- [Implementing the LaTeX Math Parser](paclet:Wolfram/Parser/tutorial/LaTeXMathParserImplementation)
+- [Parsing BNF Grammars](paclet:Wolfram/Parser/tutorial/ParsingBNFGrammars)
+- [Parsing TPTP](paclet:Wolfram/Parser/tutorial/ParsingTPTP)

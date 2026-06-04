@@ -3,8 +3,8 @@ Template: TechNote
 Name: ParsingGrammarRules
 Title: Parsing GrammarRules Locally
 Context: Wolfram`Parser`
-Paclet: Wolfram/WolframParser
-URI: Wolfram/WolframParser/tutorial/ParsingGrammarRules
+Paclet: Wolfram/Parser
+URI: Wolfram/Parser/tutorial/ParsingGrammarRules
 Keywords: [GrammarRules, GrammarApply, GrammarToken, CloudDeploy, Interpreter, slot, FixedOrder, DelimitedSequence, parser, local]
 RelatedGuides: [WolframParser]
 RelatedTutorials: [DesignAndCompilationStrategy, LaTeXMathParserImplementation]
@@ -214,7 +214,7 @@ Parse[GrammarRules[{"<n:Number>" :> n+1}], "42"]
 Parse[GrammarRules[{"hello" -> "hi"}], "hello there"]
 ```
 
-Use [ParsePartial](paclet:Wolfram/WolframParser/ref/Parse) when you want a prefix match.
+Use [ParsePartial](paclet:Wolfram/Parser/ref/Parse) when you want a prefix match.
 
 ### The same rules through [ParserCompile]()
 
@@ -253,7 +253,7 @@ A `GrammarToken[type]` whose `type` isn't one of `Number` / `Integer` / `Word` c
 |-----------|--------|
 | You need named-entity recognition (`City`, `Country`, `Color`, `Date`) on free-form natural-language input | `CloudDeploy[GrammarRules[...]]` + `GrammarApply` - the built-in is doing real Interpreter work the local parser doesn't replicate |
 | You need a structured template like `"add <a:Number> and <b:Number>"` for digit/word patterns, no NLP | `Parse[GrammarRules[...]]` locally - no network, no auth, no rate limits |
-| You're parsing a formal grammar (a DSL, a math expression, a file format) | Skip `GrammarRules` entirely - the bare `Parse*` combinators in [`Wolfram\`Parser\``](paclet:Wolfram/WolframParser/guide/WolframParser) are the right tool |
+| You're parsing a formal grammar (a DSL, a math expression, a file format) | Skip `GrammarRules` entirely - the bare `Parse*` combinators in [`Wolfram\`Parser\``](paclet:Wolfram/Parser/guide/WolframParser) are the right tool |
 | You want to test offline what would deploy to the cloud later | `Parse[GrammarRules[...]]` accepts the same `FixedOrder` / `OptionalElement` / `DelimitedSequence` / `x : GrammarToken[...]` shapes the cloud does, modulo the semantic-token gap above |
 | You want maximum speed for a fixed grammar | `ParserCompile[GrammarRules[...]]` - same shape, returns a [CompiledCodeFunction]() |
 
