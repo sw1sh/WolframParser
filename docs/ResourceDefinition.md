@@ -75,6 +75,13 @@ LaTeXMathParse["\\frac{x^2}{y^2} = z^2"]
 
 <!-- => RowBox[{FractionBox[SuperscriptBox["x", "2"], SuperscriptBox["y", "2"]], "=", SuperscriptBox["z", "2"]}] -->
 
+Wrap those boxes in [RawBoxes]() to typeset them in a cell, and restyle
+with [LaTeXMathStyle]() into the same Computer-Modern face LaTeX itself uses:
+
+```wl
+RawBoxes @ LaTeXMathStyle @ LaTeXMathParse["\\frac{x^2}{y^2} = z^2"]
+```
+
 ## Scope
 
 ### Combinator primitives
@@ -173,7 +180,7 @@ ParserCompile[ParseSome[ParseCharacter[DigitCharacter]], Method -> "PEGVM"]
 [LaTeXMathParse]() is the largest grammar in the paclet: a PEG over the full inline-math fragment of TeX. It handles `\frac`, `\sqrt`, sub/superscripts, `\left/\right` delimiters, `\begin/end{matrix}` environments, big operators with limits, and 40+ KaTeX macros. The build ships a `.wxf` of the PEG-VM-compiled parser; first use auto-loads it if its grammar hash matches the source:
 
 ```wl
-LaTeXMathParse["\\sum_{i=1}^{n} \\frac{1}{i^2} = \\frac{\\pi^2}{6}"]
+RawBoxes @ LaTeXMathStyle @ LaTeXMathParse["\\sum_{i=1}^{n} \\frac{1}{i^2} = \\frac{\\pi^2}{6}"]
 ```
 
 ### Markdown inline
@@ -243,10 +250,13 @@ A [GrammarToken]() whose type is not `Number` / `Integer` / `Word` / `Automatic`
 A one-character math source resolves to its Wolfram named character:
 
 ```wl
-LaTeXMathParse["\\alpha + \\beta = \\gamma"]
+RawBoxes @ LaTeXMathParse["\\alpha + \\beta = \\gamma"]
 ```
 
-The output contains `"\[Alpha]"`, `"\[Beta]"`, `"\[Gamma]"` glyphs - the parser's command-to-glyph table covers the full Greek alphabet plus a long tail of math symbols.
+Each `\command` resolves to its Wolfram named character - the boxes hold
+`"\[Alpha]"`, `"\[Beta]"`, `"\[Gamma]"`, so [RawBoxes]() typesets them as the
+Greek letters. The command-to-glyph table covers the full Greek alphabet plus a
+long tail of math symbols.
 
 ### Markdown link-with-code-label
 
