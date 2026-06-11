@@ -28,7 +28,7 @@
 
 BeginPackage["Wolfram`Parser`"]
 
-Parse::usage = "Parse[parser, input] runs parser against input. Returns the parse result on success or a Failure[\"ParseError\", ...] on failure (usable with Confirm / Enclose). Requires the parser to consume the entire input; use ParsePartial to accept a leftover."
+Parse::usage = "Parse[parser, input] runs parser against input. Returns the parse result on success or a Failure[\"ParseError\", ...] on failure (usable with Confirm / Enclose). Requires the parser to consume the entire input; use ParsePartial to accept a leftover. The option \"Memoize\" -> Automatic | True | False controls packrat memoisation: each nonterminal's result is cached per {rule, position}, making an ordered-choice grammar that re-parses a shared operand run in linear time (Automatic enables it for recursive grammars). It is sound for PEG, so it never changes the result - only trades O(input x rules) space for the speed."
 
 ParsePartial::usage = "ParsePartial[parser, input] runs parser against input and returns {result, leftover} on success, or a Failure[\"ParseError\", ...] on failure."
 
@@ -47,6 +47,8 @@ ParseRegex::usage = "ParseRegex[regex] returns the ParserCombinator that matches
 ParseSucceed::usage = "ParseSucceed[val] returns the ParserCombinator that always succeeds with val, consuming nothing."
 
 ParseFail::usage = "ParseFail[msg] returns the ParserCombinator that always fails with msg."
+
+ParsePosition::usage = "ParsePosition[] returns the ParserCombinator that yields the current 1-based character position and consumes nothing. Bracket a sub-parser (ParsePosition[] ~~ p ~~ ParsePosition[]) to capture the source span p covers - the start position, then p's value, then the end position (one past the last character consumed)."
 
 ParseSequence::usage = "ParseSequence[p1, p2, ...] matches each pi in order; result is the list of their results."
 
@@ -107,6 +109,8 @@ ParseRegex[r_String] := ParserCombinator["Regex", r, <||>]
 ParseSucceed[val_] := ParserCombinator["Succeed", val, <||>]
 
 ParseFail[msg_] := ParserCombinator["Fail", msg, <||>]
+
+ParsePosition[] := ParserCombinator["Position", {}, <||>]
 
 ParseSequence[pc_ParserCombinator] := pc
 ParseSequence[pcs__ParserCombinator] /; Length[{pcs}] >= 2 :=
@@ -265,9 +269,25 @@ $maxParseRecursion = 12000
    and there's stack headroom to build the ParseError. (Doing the
    inspection inside the Block re-trips the limit before the
    conversion can run.) *)
-Parse[pc_ParserCombinator, input_String] :=
-    Module[{r, len = StringLength[input]},
-        r = Block[{$RecursionLimit = $maxParseRecursion}, interpret[pc, input, 1]];
+(* "Memoize": packrat caching of nonterminal results, keyed by {rule, pos}.
+   Automatic turns it on exactly when the grammar is recursive - the only
+   case where ordered-choice backtracking can blow up and where the memo
+   pays for itself; True / False force it. Sound for PEG (deterministic),
+   so it never changes the result, only the time/space trade (linear time,
+   O(input x rules) space). A fresh memo is allocated per top-level parse. *)
+Options[Parse] = {"Memoize" -> Automatic}
+Options[ParsePartial] = {"Memoize" -> Automatic}
+
+parseMemoInit[True, _]       := <||>
+parseMemoInit[Automatic, pc_] :=
+    If[FreeQ[pc, ParserCombinator["Recursive", _, _]], None, <||>]
+parseMemoInit[_, _]          := None
+
+Parse[pc_ParserCombinator, input_String, opts : OptionsPattern[]] :=
+    Module[{r, len = StringLength[input],
+            memo = parseMemoInit[OptionValue["Memoize"], pc]},
+        r = Block[{$RecursionLimit = $maxParseRecursion, $parseMemo = memo},
+            interpret[pc, input, 1]];
         Which[
             MatchQ[r, _TerminatedEvaluation],
                 makeFailure[1, "<input within nesting limit>", "<input nested too deeply>"]
@@ -283,9 +303,10 @@ Parse[pc_ParserCombinator, input_String] :=
         ]
     ]
 
-ParsePartial[pc_ParserCombinator, input_String] :=
-    Module[{r},
-        r = Block[{$RecursionLimit = $maxParseRecursion}, interpret[pc, input, 1]];
+ParsePartial[pc_ParserCombinator, input_String, opts : OptionsPattern[]] :=
+    Module[{r, memo = parseMemoInit[OptionValue["Memoize"], pc]},
+        r = Block[{$RecursionLimit = $maxParseRecursion, $parseMemo = memo},
+            interpret[pc, input, 1]];
         Which[
             MatchQ[r, _TerminatedEvaluation],
                 makeFailure[1, "<input within nesting limit>", "<input nested too deeply>"],
@@ -297,11 +318,11 @@ ParsePartial[pc_ParserCombinator, input_String] :=
     ]
 
 (* Accept GrammarRules as an input grammar: lower to ParserCombinator. *)
-Parse[g : HoldPattern[GrammarRules[_List, ___]], input_String] :=
-    Parse[lowerGrammarRules[g], input]
+Parse[g : HoldPattern[GrammarRules[_List, ___]], input_String, opts : OptionsPattern[]] :=
+    Parse[lowerGrammarRules[g], input, opts]
 
-ParsePartial[g : HoldPattern[GrammarRules[_List, ___]], input_String] :=
-    ParsePartial[lowerGrammarRules[g], input]
+ParsePartial[g : HoldPattern[GrammarRules[_List, ___]], input_String, opts : OptionsPattern[]] :=
+    ParsePartial[lowerGrammarRules[g], input, opts]
 
 ParserCompile[g : HoldPattern[GrammarRules[_List, ___]], opts___] :=
     ParserCompile[lowerGrammarRules[g], opts]
@@ -350,6 +371,14 @@ interpret[pc_, input_, pos_] :=
     ]
 
 $parseDepth = 0
+
+(* Packrat memo. None = disabled (no overhead). When Parse turns it on it
+   is a fresh Association per top-level parse, keyed by {rule-symbol, pos};
+   the Recursive clause caches each nonterminal's result at each position,
+   which makes an ordered-choice PEG that re-parses a shared operand (the
+   THF blow-up) linear without any grammar change. PEG is deterministic, so
+   a (rule, pos) pair has one result and caching it is sound. *)
+$parseMemo = None
 
 (* compiled dispatch: if the options carry "Code", call it. *)
 interpretDispatch[ParserCombinator[_, _, opts_Association], input_, pos_] /;
@@ -433,6 +462,10 @@ charMatchesQ[ch_String, pat_] := StringMatchQ[ch, pat]
 
 interpretDispatch[ParserCombinator["Succeed", val_, _], _, pos_] :=
     parseOk[val, pos]
+
+(* zero-width: yield the current position, consume nothing *)
+interpretDispatch[ParserCombinator["Position", _, _], _, pos_] :=
+    parseOk[pos, pos]
 
 interpretDispatch[ParserCombinator["Fail", msg_, _], _, pos_] :=
     parseErr[pos, msg, ""]
@@ -743,9 +776,18 @@ interpretDispatch[ParserCombinator["NotFollowedBy", p_, _], input_, pos_] :=
 interpretDispatch[ParserCombinator["Try", p_, _], input_, pos_] :=
     interpret[p, input, pos]
 
-(* Recursive: look up the held symbol's current value and interpret it. *)
+(* Recursive: look up the held symbol's current value and interpret it.
+   When packrat memoisation is on, cache the result by {rule-symbol, pos}. *)
 interpretDispatch[ParserCombinator["Recursive", Hold[s_Symbol], _], input_, pos_] :=
-    interpret[s, input, pos]
+    If[ $parseMemo === None,
+        interpret[s, input, pos],
+        With[{key = {Hold[s], pos}},
+            If[ KeyExistsQ[$parseMemo, key],
+                $parseMemo[key],
+                $parseMemo[key] = interpret[s, input, pos]
+            ]
+        ]
+    ]
 
 
 (* === GrammarRules lowering ===
@@ -1854,10 +1896,12 @@ End[]
 
 EndPackage[]
 
-(* LaTeX, EBNF, and TPTP sub-modules all BeginPackage["Wolfram`Parser`"]
+(* LaTeX, EBNF, AST, and TPTP sub-modules all BeginPackage["Wolfram`Parser`"]
    and add their public symbols (LaTeXMathParse / LaTeXMathParser /
-   EBNFParse / EBNFRules / TPTPImport) to the root context, so a single
-   Needs["Wolfram`Parser`"] loads everything. *)
+   EBNFParse / EBNFRules / TPTPImport; the standard-AST vocabulary LeafNode /
+   CallNode / ... / ASTAlgebra / ToCodeParser / RecCell / SpannedToken) to the
+   root context, so a single Needs["Wolfram`Parser`"] loads everything. *)
+Get[FileNameJoin[{DirectoryName[$InputFileName], "AST.wl"}]];
 Get[FileNameJoin[{DirectoryName[$InputFileName], "LaTeX.wl"}]];
 Get[FileNameJoin[{DirectoryName[$InputFileName], "EBNF.wl"}]];
 Get[FileNameJoin[{DirectoryName[$InputFileName], "TPTP.wl"}]];

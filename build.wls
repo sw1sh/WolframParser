@@ -24,6 +24,11 @@ PacletDirectoryLoad[pacletDir]
 Get[FileNameJoin[{rootDir, "..", "..", "MarkdownToNotebook.wl"}]]
 Needs["Wolfram`Parser`"]
 
+(* Load the Languages showcase (a sibling of the paclet) so its docs can build:
+   its symbols span Languages`AST` / Languages`<Lang>` contexts, named in each
+   page's ContextPath frontmatter, and must be in $Packages for MTN to resolve. *)
+Get[FileNameJoin[{rootDir, "Languages", "init.wl"}]]
+
 subdir["Symbol"] = {"Documentation", "English", "ReferencePages", "Symbols"}
 subdir["Guide"] = {"Documentation", "English", "Guides"}
 subdir["TechNote"] = {"Documentation", "English", "Tutorials"}
