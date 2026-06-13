@@ -564,9 +564,9 @@ VerificationTest[
        grammar's bare-delimiter fallback. *)
     LaTeXMathParse["\\bigl( a \\bigr)"],
     RowBox[{
-        StyleBox["(", Magnification -> 1.2],
+        StyleBox["(", FontSize -> 1.2 Inherited],
         StyleBox["a", "TI"],
-        StyleBox[")", Magnification -> 1.2]
+        StyleBox[")", FontSize -> 1.2 Inherited]
     }],
     TestID -> "KaTeX delimiters: \\bigl ... \\bigr keep + size their delim"
 ]
@@ -574,15 +574,78 @@ VerificationTest[
 VerificationTest[
     (* unmatched \big( in a superscript: sized paren stays visible *)
     LaTeXMathParse["x^{\\big(}"],
-    SuperscriptBox[StyleBox["x", "TI"], StyleBox["(", Magnification -> 1.2]],
+    SuperscriptBox[StyleBox["x", "TI"], StyleBox["(", FontSize -> 1.2 Inherited]],
     TestID -> "KaTeX delimiters: unmatched \\big( renders sized paren"
 ]
 
 VerificationTest[
     (* \Big\uparrow: arrow glyph, sized up at the \Big level (1.8x) *)
     LaTeXMathParse["a_{\\Big\\uparrow}"],
-    SubscriptBox[StyleBox["a", "TI"], StyleBox["\[UpArrow]", Magnification -> 1.8]],
+    SubscriptBox[StyleBox["a", "TI"], StyleBox["\[UpArrow]", FontSize -> 1.8 Inherited]],
     TestID -> "KaTeX delimiters: \\Big\\uparrow sizes the arrow"
+]
+
+(* --- issue #26: scripts on bare-sign tokens and closing delimiters --- *)
+
+VerificationTest[
+    (* a bare sign as a script argument: \sigma_- is the same subscript as
+       \sigma_{-} (TeX's "_ takes any single token") *)
+    LaTeXMathParse["\\sigma_-"],
+    SubscriptBox[StyleBox["\[Sigma]", "TI"], "-"],
+    TestID -> "scripts: bare-sign subscript \\sigma_- = \\sigma_{-}"
+]
+
+VerificationTest[
+    (* the braced form must be identical - localizes the fix to the bare case *)
+    LaTeXMathParse["\\sigma_-"] === LaTeXMathParse["\\sigma_{-}"],
+    True,
+    TestID -> "scripts: \\sigma_- identical to braced \\sigma_{-}"
+]
+
+VerificationTest[
+    LaTeXMathParse["a^-"],
+    SuperscriptBox[StyleBox["a", "TI"], "-"],
+    TestID -> "scripts: bare-sign superscript a^-"
+]
+
+VerificationTest[
+    LaTeXMathParse["x_*"],
+    SubscriptBox[StyleBox["x", "TI"], "*"],
+    TestID -> "scripts: bare-star subscript x_*"
+]
+
+VerificationTest[
+    (* a power attaches to the closing \rangle, where TeX puts it *)
+    LaTeXMathParse["|0\\rangle^{\\otimes 10}"],
+    RowBox[{StyleBox["|", SpanMaxSize -> 1], "0",
+        SuperscriptBox[StyleBox["\[RightAngleBracket]", SpanMaxSize -> 1],
+            RowBox[{"\[CircleTimes]", "10"}]]}],
+    TestID -> "scripts: power on a closing \\rangle"
+]
+
+VerificationTest[
+    (* a power on the closing bar of a bra *)
+    LaTeXMathParse["\\langle 1|^{2}"],
+    RowBox[{RowBox[{StyleBox["\[LeftAngleBracket]", SpanMaxSize -> 1], "1"}],
+        SuperscriptBox[StyleBox["|", SpanMaxSize -> 1], "2"]}],
+    TestID -> "scripts: power on the closing | of a bra"
+]
+
+VerificationTest[
+    (* a subscript label on a ket \rangle *)
+    LaTeXMathParse["|\\psi\\rangle_{AB}"],
+    RowBox[{StyleBox["|", SpanMaxSize -> 1], StyleBox["\[Psi]", "TI"],
+        SubscriptBox[StyleBox["\[RightAngleBracket]", SpanMaxSize -> 1],
+            RowBox[{StyleBox["A", "TI"], StyleBox["B", "TI"]}]]}],
+    TestID -> "scripts: subscript label on a ket \\rangle"
+]
+
+VerificationTest[
+    (* an unmatched \rangle with no script still renders as the bare glyph
+       (attachScripts with empty posts is a no-op) *)
+    LaTeXMathParse["\\rangle"],
+    StyleBox["\[RightAngleBracket]", SpanMaxSize -> 1],
+    TestID -> "scripts: bare \\rangle unchanged (empty postfix is a no-op)"
 ]
 
 VerificationTest[

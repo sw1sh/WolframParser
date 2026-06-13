@@ -137,6 +137,9 @@ commandName = ParseChoice[
 bracedArgRef = ParseRecursive[bracedArg]
 bracketedArgRef = ParseRecursive[bracketedArg]
 exprRef = ParseRecursive[expr]
+(* postfix is defined far below (it needs atom); tie it lazily so the
+   bare-token productions here can carry scripts (issue #26). *)
+postfixRef = ParseRecursive[postfix]
 
 (* Argument forms: optional [arg], then any number of {arg}s. Drop the
    trailing whitespace's value with #1, #2, #3 (skipping the 4th). *)
@@ -263,15 +266,25 @@ tildeToken = ParseAction[literal["~"], "\[NonBreakingSpace]" &]
 
 (* `|` (a bare bar - bra-ket separator, "divides", set-builder, conditional)
    is pinned to fixed size (fixedFence, defined below) so it doesn't stretch to
-   a tall sibling; LaTeX keeps an un-\left'd bar fixed. *)
-puncToken = ParseAction[literal["|"], fixedFence["|"] &] | ParseAction[
-    literal["?"] | literal["!"] | literal["*"] | literal["#"] |
-        literal["."] | literal["/"] |
-        literal["+"] | literal["-"] | literal["="] |
-        literal["<"] | literal[">"] |
-        literal["^"] | literal["_"] |
-        literal["`"] | literal["'"] | literal["\""],
-    #1 &
+   a tall sibling; LaTeX keeps an un-\left'd bar fixed.
+   A bare punctuation token can itself carry scripts: TeX attaches ^ / _ to
+   whatever single token precedes them, delimiter or not, so `\langle 1|^{2}`
+   superscripts the closing bar (issue #26).  attachScripts with no trailing
+   scripts reduces to the bare glyph, so existing behaviour is unchanged. *)
+puncToken = ParseAction[
+    ParseChoice[
+        ParseAction[literal["|"], fixedFence["|"] &],
+        ParseAction[
+            literal["?"] | literal["!"] | literal["*"] | literal["#"] |
+                literal["."] | literal["/"] |
+                literal["+"] | literal["-"] | literal["="] |
+                literal["<"] | literal[">"] |
+                literal["^"] | literal["_"] |
+                literal["`"] | literal["'"] | literal["\""],
+            #1 &
+        ]
+    ] ~~ ParseMany[postfixRef],
+    attachScripts[#1, #2] &
 ] | tildeToken
 
 (* Tokens valid ONLY at the outermost top level - intentionally
@@ -281,25 +294,34 @@ puncToken = ParseAction[literal["|"], fixedFence["|"] &] | ParseAction[
    parenAtom's / bracketAtom's inner row - balanced `(x)` / `[x]` still
    win via expr (tried first); only a genuinely unmatched delimiter
    falls through to here and renders as a bare glyph. *)
-outerPuncToken = ParseChoice[
-    ParseAction[literal[")"] | literal["]"] | literal["("] | literal["["], #1 &],
-    (* unmatched closing bracket commands (guarded out of commandAtom)
-       render as their bare glyph here, like an unmatched ) / ] *)
-    (* fixedFence (defined below, evaluated lazily): a bare closer doesn't
-       stretch to a tall sibling - e.g. the \rangle in the ket
-       `\lvert\psi\rangle` next to a fraction. *)
-    ParseAction[literal["\\rangle"], fixedFence["\[RightAngleBracket]"] &],
-    ParseAction[literal["\\rceil"],  fixedFence["\[RightCeiling]"] &],
-    ParseAction[literal["\\rfloor"], fixedFence["\[RightFloor]"] &],
-    ParseAction[literal["\\rVert"],  fixedFence["\[DoubleVerticalBar]"] &],
-    ParseAction[literal["\\rvert"],  fixedFence["|"] &]
+(* The trailing ParseMany[postfixRef] lets a script attach to an unmatched
+   closer - `|0\rangle^{\otimes 10}` puts the power on the \rangle glyph,
+   exactly where TeX puts it (issue #26). *)
+outerPuncToken = ParseAction[
+    ParseChoice[
+        ParseAction[literal[")"] | literal["]"] | literal["("] | literal["["], #1 &],
+        (* unmatched closing bracket commands (guarded out of commandAtom)
+           render as their bare glyph here, like an unmatched ) / ] *)
+        (* fixedFence (defined below, evaluated lazily): a bare closer doesn't
+           stretch to a tall sibling - e.g. the \rangle in the ket
+           `\lvert\psi\rangle` next to a fraction. *)
+        ParseAction[literal["\\rangle"], fixedFence["\[RightAngleBracket]"] &],
+        ParseAction[literal["\\rceil"],  fixedFence["\[RightCeiling]"] &],
+        ParseAction[literal["\\rfloor"], fixedFence["\[RightFloor]"] &],
+        ParseAction[literal["\\rVert"],  fixedFence["\[DoubleVerticalBar]"] &],
+        ParseAction[literal["\\rvert"],  fixedFence["|"] &]
+    ] ~~ ParseMany[postfixRef],
+    attachScripts[#1, #2] &
 ]
 (* matrix cells use a slightly looser row that accepts the closing
    delimiters ) and ] as bare tokens, so `3\times)` or `[a]` typo
    trailers don't abort the cell. The closes are kept OUT of `mathRow`
    itself so the recursive inner row of parenAtom / bracketAtom still
    has a ) / ] available for its literal close to consume. *)
-cellPuncToken = ParseAction[literal[")"] | literal["]"], #1 &]
+cellPuncToken = ParseAction[
+    (literal[")"] | literal["]"]) ~~ ParseMany[postfixRef],
+    attachScripts[#1, #2] &
+]
 
 cellRow = ParseAction[
     ParseSome[ParseChoice[mathToken, ParseRecursive[cellPuncToken]]],
@@ -1145,17 +1167,23 @@ lineBreakSegments[body_] := Module[{parts},
 (* Sized delimiters from \big / \Big / \bigg / \Bigg (and their l/r/m
    variants).  preprocessLaTeX rewrites `\Big(` -> `\xbigII{(}` etc.,
    routing the delimiter here so we can scale it.  KaTeX grows the
-   delimiter ~1.2 / 1.8 / 2.4 / 3.0x.  Magnification scales the glyph
-   uniformly (both dims) relative to the surrounding text, and - unlike
-   FontSize -> Scaled - resolves correctly inside a standalone
-   Rasterize (Scaled there blows up against the canvas size).  The `.`
-   null delimiter never reaches here - it's dropped upstream. *)
+   delimiter ~1.2 / 1.8 / 2.4 / 3.0x of the SURROUNDING text size.
+   FontSize -> r Inherited multiplies the inherited font size, so the
+   delimiter stays r times its neighbours under any viewer zoom and
+   still resolves inside a standalone Rasterize (issue #27).  Do NOT
+   swap this back to Magnification: that is an absolute screen-zoom
+   setting, not a relative scale, so under a zoomed viewer the glyph
+   stays pinned at e.g. 1.2x absolute and renders SMALLER than the
+   scaled-up body text.  FontSize -> Scaled[r] is also wrong - it
+   resolves against the window/canvas and explodes a standalone
+   Rasterize.  The `.` null delimiter never reaches here - dropped
+   upstream. *)
 $xbigRatio = <|"I" -> 1.2, "II" -> 1.8, "III" -> 2.4, "IV" -> 3.0|>
 Scan[
     Function[lvl,
         commandHandlers["\\xbig" <> lvl] = Function[{opt, req},
             With[{d = First[req, ""]},
-                If[d === "", "", StyleBox[d, Magnification -> $xbigRatio[lvl]]]
+                If[d === "", "", StyleBox[d, FontSize -> $xbigRatio[lvl] Inherited]]
             ]
         ]
     ],
@@ -1668,13 +1696,25 @@ atom = ParseChoice[
     bracedArgRef, identAtom, unicodeAtom
 ]
 
+(* TeX's _ / ^ take ANY single token as the script - including a bare
+   sign / relation / punctuation character: `\sigma_-`, `x_+`, `a^-`,
+   `x_*` (issue #26).  Delimiter characters stay excluded: a closing
+   ) / ] / | right after ^ or _ must remain available as the enclosing
+   group's own closer. *)
+scriptCharAtom = ParseAction[
+    token[ParseCharacter[
+        "+" | "-" | "*" | "/" | "=" | "<" | ">" | "!" | "?" | "."
+    ]],
+    #1 &
+]
+
 (* A postfix is _x, ^y, or a run of primes - each tagged so factor can
    accept them in any order and any number (`x_i^2`, `x^2_i`, `f'`,
    `x'^2_3`, `f_2'` all occur in real LaTeX). primes fold into the
    superscript. *)
 postfix = ParseChoice[
-    ParseAction[literal["_"] ~~ (bracedArgRef | atom), {"sub", #2} &],
-    ParseAction[literal["^"] ~~ (bracedArgRef | atom), {"sup", #2} &],
+    ParseAction[literal["_"] ~~ (bracedArgRef | atom | scriptCharAtom), {"sub", #2} &],
+    ParseAction[literal["^"] ~~ (bracedArgRef | atom | scriptCharAtom), {"sup", #2} &],
     (* Primes fold into a superscript.  Use the precomposed \[DoublePrime]
        (single tight glyph ″) for 2 marks instead of two concatenated
        \[Prime] glyphs, which render wider/looser than LaTeX (x'' was
@@ -1690,26 +1730,30 @@ postfix = ParseChoice[
     ]
 ]
 
-factor = ParseAction[
-    atom ~~ ParseMany[postfix],
-    Function[{base, posts},
-        Module[{sub, sups},
-            sub = FirstCase[posts, {"sub", v_} :> v, Missing[]];
-            sups = Cases[posts, {"sup", v_} :> v];
-            With[{sup = Which[
-                    Length[sups] === 0, Missing[],
-                    Length[sups] === 1, First[sups],
-                    True, RowBox[sups]
-            ]},
-                Which[
-                    ! MissingQ[sub] && ! MissingQ[sup], SubsuperscriptBox[base, sub, sup],
-                    ! MissingQ[sub],                    SubscriptBox[base, sub],
-                    ! MissingQ[sup],                    SuperscriptBox[base, sup],
-                    True,                                base
-                ]
-            ]
+(* Combine a base box with the postfix scripts collected after it
+   ({"sub"|"sup", box} pairs).  Shared by factor and the bare-token
+   paths (puncToken / outerPuncToken / cellPuncToken, issue #26); an
+   empty posts list returns the base unchanged. *)
+attachScripts[base_, posts_List] := Module[{sub, sups},
+    sub = FirstCase[posts, {"sub", v_} :> v, Missing[]];
+    sups = Cases[posts, {"sup", v_} :> v];
+    With[{sup = Which[
+            Length[sups] === 0, Missing[],
+            Length[sups] === 1, First[sups],
+            True, RowBox[sups]
+    ]},
+        Which[
+            ! MissingQ[sub] && ! MissingQ[sup], SubsuperscriptBox[base, sub, sup],
+            ! MissingQ[sub],                    SubscriptBox[base, sub],
+            ! MissingQ[sup],                    SuperscriptBox[base, sup],
+            True,                                base
         ]
     ]
+]
+
+factor = ParseAction[
+    atom ~~ ParseMany[postfix],
+    Function[{base, posts}, attachScripts[base, posts]]
 ]
 
 (* rowJoin: concatenate two boxes into a single flat RowBox, splicing
