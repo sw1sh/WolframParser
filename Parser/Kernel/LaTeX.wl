@@ -2960,6 +2960,83 @@ BuildLaTeXParserAsset[] := Module[{data, path},
 $nonASCIIQ = StringContainsQ[#, RegularExpression["[^\\x00-\\x7F]"]] &
 latexParserFor[pre_String] := If[$nonASCIIQ[pre], LaTeXMathParser, activeLatexParser[]]
 
+(* === Dirac bra/ket -> system Ket/Bra/BraKet templates ===
+   The active Dirac delimiters come out as StyleBox[char, SpanMaxSize -> 1]
+   (fixedFence), which never engage the front end's stretchy-delimiter
+   machinery, so bars/angles draw at nominal glyph height and sit detached.
+   Rewrite them to the self-contained system templates (TemplateBox[{...},
+   "Ket"|"Bra"|"BraKet"]), which render full-height and stretchy on the stock
+   Default.nb stylesheet with no extra load. The reliable Dirac marker is a
+   SpanMaxSize *angle*: ket, bra, braket and the expectation <X> all carry one,
+   while abs / norm / set-builder / conditional never do - so anchoring on the
+   angle leaves those untouched. *)
+$diracBar  = "|" | "\[LeftBracketingBar]" | "\[RightBracketingBar]"
+$diracLAng = "\[LeftAngleBracket]" | "<"
+$diracRAng = "\[RightAngleBracket]" | ">"
+$diracBareBar = "\[LeftBracketingBar]" | "\[RightBracketingBar]"
+$diracSpacer = "\[ThinSpace]" | "\[VeryThinSpace]" | "\[MediumSpace]" |
+    "\[ThickSpace]" | "\[NegativeThinSpace]" | "\[NegativeVeryThinSpace]" |
+    "\[NegativeMediumSpace]" | "\[NegativeThickSpace]" | " "
+$diracBarSB  = StyleBox[$diracBar,  SpanMaxSize -> 1, ___]
+$diracLAngSB = StyleBox[$diracLAng, SpanMaxSize -> 1, ___]
+$diracRAngSB = StyleBox[$diracRAng, SpanMaxSize -> 1, ___]
+$diracNoDelim = Except[$diracBarSB | $diracLAngSB | $diracRAngSB | $diracBareBar | $diracSpacer]
+(* a Dirac delimiter, bare or carrying a script (a closing bar/angle picks up a
+   power or label via the #26 grammar fix, e.g. `<1|^2`, `|psi>_{AB}`) *)
+diracSpanAngleQ[e_] := MatchQ[e, $diracLAngSB | $diracRAngSB |
+    (SubscriptBox | SuperscriptBox | SubsuperscriptBox)[$diracLAngSB | $diracRAngSB, ___]]
+diracBarQ[e_] := MatchQ[e, $diracBarSB | $diracBareBar |
+    (SubscriptBox | SuperscriptBox | SubsuperscriptBox)[$diracBarSB, ___]]
+diracNormalize[RowBox[{}]] := ""
+diracNormalize[RowBox[{e_}]] := e
+diracNormalize[o_] := o
+
+(* flatten nested rows and drop spacing glyphs, but only inside a row that holds
+   BOTH a Dirac angle and a bar - i.e. an actual bra/ket. An inner product
+   <a,b> or an expectation <X> (angle, no bar), and abs / norm / set-builder /
+   conditional, stay untouched. *)
+$diracFlatten = RowBox[{p___, RowBox[{q___}], r___}] /;
+    AnyTrue[{p, q, r}, diracSpanAngleQ] && AnyTrue[{p, q, r}, diracBarQ] :> RowBox[{p, q, r}]
+$diracStripSpace = RowBox[l_List] /;
+    (AnyTrue[l, diracSpanAngleQ] && AnyTrue[l, diracBarQ] && MemberQ[l, $diracSpacer]) :>
+        RowBox[DeleteCases[l, $diracSpacer]]
+
+(* sandwich + braket before ket/bra *)
+$diracRules = {
+    RowBox[{pre___, $diracLAngSB, a:$diracNoDelim.., $diracBareBar, mid:$diracNoDelim.., $diracBareBar, b:$diracNoDelim.., $diracRAngSB, post___}] :>
+        RowBox[{pre, TemplateBox[{diracNormalize[RowBox[{a}]]}, "Bra"], mid, TemplateBox[{diracNormalize[RowBox[{b}]]}, "Ket"], post}],
+    RowBox[{pre___, $diracLAngSB, a:$diracNoDelim.., $diracBarSB, b:$diracNoDelim.., $diracRAngSB, post___}] :>
+        RowBox[{pre, TemplateBox[{diracNormalize[RowBox[{a}]], diracNormalize[RowBox[{b}]]}, "BraKet"], post}],
+    (* ket / bra carrying a script on the closing delimiter: a power on the
+       ket (`|0>^{\otimes n}`) or a subsystem label on it (`|\psi>_{AB}`), and
+       likewise a script on a bra's closing bar (`<1|^2`). The #26 grammar fix
+       puts the script on the delimiter; lift it onto the whole template. *)
+    RowBox[{pre___, $diracBarSB, x:$diracNoDelim.., (h:SuperscriptBox|SubscriptBox)[$diracRAngSB, scr_], post___}] :>
+        RowBox[{pre, h[TemplateBox[{diracNormalize[RowBox[{x}]]}, "Ket"], scr], post}],
+    RowBox[{pre___, $diracBarSB, x:$diracNoDelim.., $diracRAngSB, post___}] :>
+        RowBox[{pre, TemplateBox[{diracNormalize[RowBox[{x}]]}, "Ket"], post}],
+    RowBox[{pre___, $diracLAngSB, x:$diracNoDelim.., (h:SuperscriptBox|SubscriptBox)[$diracBarSB, scr_], post___}] :>
+        RowBox[{pre, h[TemplateBox[{diracNormalize[RowBox[{x}]]}, "Bra"], scr], post}],
+    RowBox[{pre___, $diracLAngSB, x:$diracNoDelim.., $diracBarSB, post___}] :>
+        RowBox[{pre, TemplateBox[{diracNormalize[RowBox[{x}]]}, "Bra"], post}]
+}
+$diracCollapse = RowBox[{e:(_TemplateBox | _SuperscriptBox | _SubscriptBox)}] :> e
+
+(* force the amplitude modulus bars to full span, but only when they wrap a
+   Dirac template, so a plain |x| keeps its bare bars *)
+$diracModBarSpan = 1.9
+$diracModulusRule = RowBox[{first:$diracBareBar, mid__, last:$diracBareBar}] /;
+    ! FreeQ[{mid}, TemplateBox[_, "Ket" | "Bra" | "BraKet"]] :>
+    RowBox[{StyleBox[first, SpanMinSize -> $diracModBarSpan], mid, StyleBox[last, SpanMinSize -> $diracModBarSpan]}]
+
+diracTemplates[boxes_] := Module[{b = boxes},
+    b = b //. $diracFlatten;
+    b = b //. $diracStripSpace;
+    b = b //. $diracRules;
+    b = b //. $diracCollapse;
+    b /. $diracModulusRule
+]
+
 LaTeXMathParse[source_String] := Module[
     {pre = preprocessLaTeX[source], r},
     r = Parse[latexParserFor[pre], pre];
@@ -2967,7 +3044,7 @@ LaTeXMathParse[source_String] := Module[
         (* `/. $lineBreakMark -> ""` is a safety net: a stray marker not
            inside a RowBox (e.g. the whole input was just `\\`) would
            otherwise leak the private symbol into output. *)
-        uprightUnicodeSymbols @ suppressCommaSpaceBetweenDigits @ tightenScriptCommas @
+        diracTemplates @ uprightUnicodeSymbols @ suppressCommaSpaceBetweenDigits @ tightenScriptCommas @
             stripEmptyRowChildren @ applyLineBreaks @ bigOpDisplayLimits[r] /. $lineBreakMark -> ""
     ]
 ]

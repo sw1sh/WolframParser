@@ -323,16 +323,12 @@ VerificationTest[
     TestID -> "LaTeX: \\lVert ... \\rVert norm matchfix"
 ]
 
-(* A bare (un-\left'd) fence is pinned to natural size (SpanMaxSize -> 1) so it
-   doesn't stretch to a tall sibling: the ket's `|` and `\rangle` stay
-   psi-height next to a fraction, and `(x)` stays small next to a matrix. *)
+(* A \lvert ... \rangle ket maps to the system Ket template (full-height,
+   stretchy) rather than bare fixed-size fences. *)
 VerificationTest[
     LaTeXMathParse["\\lvert\\psi\\rangle"],
-    RowBox[{
-        RowBox[{StyleBox["|", SpanMaxSize -> 1], StyleBox["\[Psi]", "TI"]}],
-        StyleBox["\[RightAngleBracket]", SpanMaxSize -> 1]
-    }],
-    TestID -> "LaTeX: bare bra-ket fences pinned fixed-size (no stretch)"
+    TemplateBox[{StyleBox["\[Psi]", "TI"]}, "Ket"],
+    TestID -> "dirac: \\lvert\\psi\\rangle -> Ket template"
 ]
 
 (* Integral bounds stack above/below the sign in display style, like sums. *)
@@ -615,37 +611,56 @@ VerificationTest[
 ]
 
 VerificationTest[
-    (* a power attaches to the closing \rangle, where TeX puts it *)
-    LaTeXMathParse["|0\\rangle^{\\otimes 10}"],
-    RowBox[{StyleBox["|", SpanMaxSize -> 1], "0",
-        SuperscriptBox[StyleBox["\[RightAngleBracket]", SpanMaxSize -> 1],
-            RowBox[{"\[CircleTimes]", "10"}]]}],
-    TestID -> "scripts: power on a closing \\rangle"
-]
-
-VerificationTest[
-    (* a power on the closing bar of a bra *)
-    LaTeXMathParse["\\langle 1|^{2}"],
-    RowBox[{RowBox[{StyleBox["\[LeftAngleBracket]", SpanMaxSize -> 1], "1"}],
-        SuperscriptBox[StyleBox["|", SpanMaxSize -> 1], "2"]}],
-    TestID -> "scripts: power on the closing | of a bra"
-]
-
-VerificationTest[
-    (* a subscript label on a ket \rangle *)
-    LaTeXMathParse["|\\psi\\rangle_{AB}"],
-    RowBox[{StyleBox["|", SpanMaxSize -> 1], StyleBox["\[Psi]", "TI"],
-        SubscriptBox[StyleBox["\[RightAngleBracket]", SpanMaxSize -> 1],
-            RowBox[{StyleBox["A", "TI"], StyleBox["B", "TI"]}]]}],
-    TestID -> "scripts: subscript label on a ket \\rangle"
-]
-
-VerificationTest[
     (* an unmatched \rangle with no script still renders as the bare glyph
-       (attachScripts with empty posts is a no-op) *)
+       (attachScripts with empty posts is a no-op; no Dirac opener, so the
+       templatize pass leaves it alone) *)
     LaTeXMathParse["\\rangle"],
     StyleBox["\[RightAngleBracket]", SpanMaxSize -> 1],
     TestID -> "scripts: bare \\rangle unchanged (empty postfix is a no-op)"
+]
+
+(* --- Dirac bra/ket -> system Ket/Bra/BraKet templates (stretchy delimiters) --- *)
+
+VerificationTest[
+    LaTeXMathParse["|01\\rangle"],
+    TemplateBox[{"01"}, "Ket"],
+    TestID -> "dirac: ket |01> -> Ket template"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\langle\\phi|\\psi\\rangle"],
+    TemplateBox[{StyleBox["\[Phi]", "TI"], StyleBox["\[Psi]", "TI"]}, "BraKet"],
+    TestID -> "dirac: braket <phi|psi> -> BraKet template"
+]
+
+VerificationTest[
+    (* operator sandwich decomposes to Bra ... Ket *)
+    LaTeXMathParse["\\langle\\psi|H|\\psi\\rangle"],
+    RowBox[{TemplateBox[{StyleBox["\[Psi]", "TI"]}, "Bra"], StyleBox["H", "TI"],
+        TemplateBox[{StyleBox["\[Psi]", "TI"]}, "Ket"]}],
+    TestID -> "dirac: sandwich <psi|H|psi> -> Bra H Ket"
+]
+
+VerificationTest[
+    (* a power on the ket lifts onto the whole template *)
+    LaTeXMathParse["|0\\rangle^{\\otimes 10}"],
+    SuperscriptBox[TemplateBox[{"0"}, "Ket"], RowBox[{"\[CircleTimes]", "10"}]],
+    TestID -> "dirac: ket power |0>^{\\otimes 10}"
+]
+
+VerificationTest[
+    (* a power on the bra's closing bar lifts onto the template *)
+    LaTeXMathParse["\\langle 1|^{2}"],
+    SuperscriptBox[TemplateBox[{"1"}, "Bra"], "2"],
+    TestID -> "dirac: bra power <1|^2"
+]
+
+VerificationTest[
+    (* a subsystem label (subscript) on a ket *)
+    LaTeXMathParse["|\\psi\\rangle_{AB}"],
+    SubscriptBox[TemplateBox[{StyleBox["\[Psi]", "TI"]}, "Ket"],
+        RowBox[{StyleBox["A", "TI"], StyleBox["B", "TI"]}]],
+    TestID -> "dirac: labeled ket |psi>_{AB}"
 ]
 
 VerificationTest[
