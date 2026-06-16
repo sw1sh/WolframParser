@@ -5,3 +5,6 @@ Documentation/
 *.paclet
 tmp/
 dev/matex-out/
+# ParserCompile doc example artifacts (Export/Import of a compiled parser)
+/latex.wxf
+/LaTeXMathParser.wxf
