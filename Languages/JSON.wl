@@ -11,7 +11,7 @@
       JSONImport["[1, {\"a\": true}]"] -> {1, <|"a" -> True|>}  (native WL value)
 
     Only escape-decoding and numeric-literal reading delegate to the kernel
-    (ImportString[.., "RawJSON"] / ToExpression on a regex-validated token);
+    (ImportString[.., "RawJSON"] / Interpreter["Number"] on the matched token);
     the grammar structure - which is the point - is entirely combinators here.
 *)
 
@@ -25,7 +25,7 @@ JSONSemantic::usage = "JSONSemantic is the algebra that folds JSON to a native W
 Begin["`Private`"]
 
 unescapeJSON[raw_String]    := ImportString[raw, "RawJSON"]
-readJSONNumber[s_String]    := ToExpression[StringReplace[s, {"e" -> "*^", "E" -> "*^"}]]
+readJSONNumber[s_String]    := Interpreter["Number"][s]
 
 JSONGrammar[alg_] := Module[{ws, tok, str, num, bool, null, value, member, object, array},
     value = RecCell[];

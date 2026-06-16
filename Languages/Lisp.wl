@@ -62,7 +62,7 @@ lispAstAlgebra = <|
 
 LispSemantic = <|
     "Sym"   -> (LispSymbol[#] &),
-    "Num"   -> (ToExpression[#] &),
+    "Num"   -> (Interpreter["Number"][#] &),
     "Str"   -> (ImportString[#, "RawJSON"] &),
     "Quote" -> Function[f, {LispSymbol["quote"], f}],
     "List"  -> Function[elems, elems]

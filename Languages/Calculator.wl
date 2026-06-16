@@ -63,7 +63,7 @@ CalculatorGrammar[alg_] := Module[{ws, tok, number, ident, unit, bin, pre, expr,
 CalculatorSemantic = <|
     "Leaf" -> Function[{kind, src}, Switch[kind,
         "Integer", FromDigits[src],
-        "Real",    ToExpression[src],
+        "Real",    Interpreter["Number"][src],
         _,         Symbol[src]]],
     "Binary" -> Function[{op, l, r}, Switch[op,
         "+", l + r, "-", l - r, "*", l*r, "/", l/r, "^", l^r]],
