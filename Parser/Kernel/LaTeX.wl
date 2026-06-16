@@ -753,9 +753,12 @@ commandHandlers["\\underset"] = Function[{opt, req},
     If[ Length[req] >= 2, UnderscriptBox[req[[2]], req[[1]]], "\\underset" ]
 ]
 
+(* \binom{n}{k}: the WL Binomial typesetting template (TemplateBox[..,"Binomial"]),
+   not a hand-built parenthesized GridBox - so it renders as the standard binomial
+   coefficient and round-trips to Binomial[n, k] under ToExpression. *)
 commandHandlers["\\binom"] = Function[{opt, req},
     If[ Length[req] >= 2,
-        RowBox[{"(", GridBox[{{req[[1]]}, {req[[2]]}}], ")"}],
+        TemplateBox[{req[[1]], req[[2]]}, "Binomial"],
         "\\binom"
     ]
 ]

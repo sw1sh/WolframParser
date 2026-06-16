@@ -540,7 +540,7 @@ VerificationTest[
 
 VerificationTest[
     LaTeXMathParse["\\binom{n}{k}"],
-    RowBox[{"(", GridBox[{{StyleBox["n", "TI"]}, {StyleBox["k", "TI"]}}], ")"}],
+    TemplateBox[{StyleBox["n", "TI"], StyleBox["k", "TI"]}, "Binomial"],
     TestID -> "KaTeX binomials: \\binom"
 ]
 
