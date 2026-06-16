@@ -42,8 +42,12 @@ Run the test suite with `wl -f Languages/run-tests.wls` (53 tests).
 | [Lisp.wl](Lisp.wl) | uniform recursion, the quote reader macro, `;` comments | `CallNode`/`LeafNode`, `'` as `PrefixNode` | `LispRead` -> nested data + `LispSymbol[..]` |
 | [Lambda.wl](Lambda.wl) | binders, the application/abstraction precedence split, unicode (`\[Lambda]`) | `CallNode` headed by lambda | `LambdaEval` -> a native closure the kernel beta-reduces |
 | [Brainfuck.wl](Brainfuck.wl) | esoteric lexing, arbitrarily nested loops, comments | `LeafNode` commands + `GroupNode["Loop", ..]` | `BrainfuckRun` -> compiles to a `machine -> machine` closure and runs it |
+| [OpenQASM.wl](OpenQASM.wl) | a real DSL: statement grammar, two dialects (v2/v3), gate modifiers, gate defs, two measure syntaxes, angle expressions, `//` and `/* */` comments | `ContainerNode` of per-statement `CallNode`s | `OpenQASMRead` -> a neutral circuit IR (`<|"Version", "Includes", "Registers", "GateDefs", "Statements"|>`) as plain Wolfram data |
 
-The shared vocabulary and algebra live in [AST.wl](AST.wl).
+The shared vocabulary and algebra live in [AST.wl](AST.wl). OpenQASM is the full-fledged
+tier: the same circuit-level subset of OpenQASM 2.0 / 3.0 that QuantumFramework's importer
+accepts, but parsed with combinators instead of hand-rolled regex, to a dependency-free IR
+a QuantumFramework adapter could turn into a `QuantumCircuitOperator`.
 
 ## The design: one grammar, two algebras
 

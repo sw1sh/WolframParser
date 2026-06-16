@@ -19,9 +19,9 @@ Needs["Wolfram`Parser`"];
 With[{dir = DirectoryName[$InputFileName]},
     Scan[
         Get[FileNameJoin[{dir, # <> ".wl"}]] &,
-        {"Calculator", "JSON", "Lisp", "Lambda", "Brainfuck"}]
+        {"Calculator", "JSON", "Lisp", "Lambda", "Brainfuck", "OpenQASM"}]
 ];
 
 Scan[Needs, {"Wolfram`Parser`Languages`Calculator`", "Wolfram`Parser`Languages`JSON`",
     "Wolfram`Parser`Languages`Lisp`", "Wolfram`Parser`Languages`Lambda`",
-    "Wolfram`Parser`Languages`Brainfuck`"}];
+    "Wolfram`Parser`Languages`Brainfuck`", "Wolfram`Parser`Languages`OpenQASM`"}];
