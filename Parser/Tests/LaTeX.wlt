@@ -195,7 +195,7 @@ VerificationTest[
            KaTeX.  Integrals are the exception - they keep side bounds. *)
         UnderoverscriptBox["\[Sum]",
             RowBox[{StyleBox["n", "TI"], "=", "0"}],
-            "\[Infinity]"
+            "\[Infinity]", LimitsPositioning -> False
         ],
         FractionBox["1", SuperscriptBox[StyleBox["n", "TI"], "2"]]
     }],
@@ -309,7 +309,7 @@ VerificationTest[
     LaTeXMathParse["\\langle a, b \\rangle"],
     RowBox[{
         StyleBox["\[LeftAngleBracket]", SpanMaxSize -> 1],
-        RowBox[{StyleBox["a", "TI"], "," <> "\[ThinSpace]", StyleBox["b", "TI"]}],
+        RowBox[{StyleBox["a", "TI"], ",", StyleBox["b", "TI"]}],
         "\[VeryThinSpace]",
         StyleBox["\[RightAngleBracket]", SpanMaxSize -> 1]
     }],
@@ -323,19 +323,19 @@ VerificationTest[
     TestID -> "LaTeX: \\lVert ... \\rVert norm matchfix"
 ]
 
-(* A \lvert ... \rangle ket maps to the system Ket template (full-height,
-   stretchy) rather than bare fixed-size fences. *)
+(* A \lvert ... \rangle ket maps to an auto-growing bracketed RowBox (left
+   bracketing-bar + right angle), sized to its content rather than fixed. *)
 VerificationTest[
     LaTeXMathParse["\\lvert\\psi\\rangle"],
-    TemplateBox[{StyleBox["\[Psi]", "TI"]}, "Ket"],
-    TestID -> "dirac: \\lvert\\psi\\rangle -> Ket template"
+    RowBox[{"\[LeftBracketingBar]", StyleBox["\[Psi]", "TI"], "\[RightAngleBracket]"}],
+    TestID -> "dirac: \\lvert\\psi\\rangle -> ket box"
 ]
 
 (* Integral bounds stack above/below the sign in display style, like sums. *)
 VerificationTest[
     LaTeXMathParse["\\int_a^b f"],
     RowBox[{
-        UnderoverscriptBox["\[Integral]", StyleBox["a", "TI"], StyleBox["b", "TI"]],
+        UnderoverscriptBox["\[Integral]", StyleBox["a", "TI"], StyleBox["b", "TI"], LimitsPositioning -> False],
         StyleBox["f", "TI"]
     }],
     TestID -> "LaTeX: integral bounds stack above/below"
@@ -398,19 +398,19 @@ VerificationTest[
 
 VerificationTest[
     LaTeXMathParse["(a, b, c)"],
-    RowBox[{StyleBox["(", SpanMaxSize -> 1], RowBox[{StyleBox["a", "TI"], "," <> "\[ThinSpace]", StyleBox["b", "TI"], "," <> "\[ThinSpace]", StyleBox["c", "TI"]}], StyleBox[")", SpanMaxSize -> 1]}],
+    RowBox[{StyleBox["(", SpanMaxSize -> 1], RowBox[{StyleBox["a", "TI"], ",", StyleBox["b", "TI"], ",", StyleBox["c", "TI"]}], StyleBox[")", SpanMaxSize -> 1]}],
     TestID -> "LaTeX: comma-separated tuple in parens"
 ]
 
 VerificationTest[
     LaTeXMathParse["f(x, y)"],
-    RowBox[{StyleBox["f", "TI"], StyleBox["(", SpanMaxSize -> 1], RowBox[{StyleBox["x", "TI"], "," <> "\[ThinSpace]", StyleBox["y", "TI"]}], StyleBox[")", SpanMaxSize -> 1]}],
+    RowBox[{StyleBox["f", "TI"], StyleBox["(", SpanMaxSize -> 1], RowBox[{StyleBox["x", "TI"], ",", StyleBox["y", "TI"]}], StyleBox[")", SpanMaxSize -> 1]}],
     TestID -> "LaTeX: function of two args"
 ]
 
 VerificationTest[
-    (* a comma INSIDE a script hugs (tight, no thin space) - the
-       top-level tuple above keeps its thin space. *)
+    (* every math comma is a bare `,` - the FE supplies punctuation spacing
+       (a small gap after, none before) at whatever script size applies. *)
     LaTeXMathParse["a_{i,j}"],
     SubscriptBox[StyleBox["a", "TI"], RowBox[{StyleBox["i", "TI"], ",", StyleBox["j", "TI"]}]],
     TestID -> "LaTeX: comma in a subscript is tight"
@@ -433,7 +433,7 @@ VerificationTest[
 
 VerificationTest[
     LaTeXMathParse["\\{1, 2\\}"],
-    RowBox[{RowBox[{"{", "1"}], "," <> "\[ThinSpace]", RowBox[{"2", "}"}]}],
+    RowBox[{RowBox[{"{", "1"}], ",", RowBox[{"2", "}"}]}],
     TestID -> "LaTeX: escaped braces \\{ \\}"
 ]
 
@@ -619,46 +619,48 @@ VerificationTest[
     TestID -> "scripts: bare \\rangle unchanged (empty postfix is a no-op)"
 ]
 
-(* --- Dirac bra/ket -> system Ket/Bra/BraKet templates (stretchy delimiters) --- *)
+(* --- Dirac bra/ket -> auto-growing bracketed RowBoxes (content-sized) --- *)
 
 VerificationTest[
     LaTeXMathParse["|01\\rangle"],
-    TemplateBox[{"01"}, "Ket"],
-    TestID -> "dirac: ket |01> -> Ket template"
+    RowBox[{"\[LeftBracketingBar]", "01", "\[RightAngleBracket]"}],
+    TestID -> "dirac: ket |01> -> ket box"
 ]
 
 VerificationTest[
     LaTeXMathParse["\\langle\\phi|\\psi\\rangle"],
-    TemplateBox[{StyleBox["\[Phi]", "TI"], StyleBox["\[Psi]", "TI"]}, "BraKet"],
-    TestID -> "dirac: braket <phi|psi> -> BraKet template"
+    RowBox[{"\[LeftAngleBracket]", StyleBox["\[Phi]", "TI"], "\[RightBracketingBar]", StyleBox["\[Psi]", "TI"], "\[RightAngleBracket]"}],
+    TestID -> "dirac: braket <phi|psi> -> braket box"
 ]
 
 VerificationTest[
-    (* operator sandwich decomposes to Bra ... Ket *)
+    (* operator sandwich decomposes to bra ... ket *)
     LaTeXMathParse["\\langle\\psi|H|\\psi\\rangle"],
-    RowBox[{TemplateBox[{StyleBox["\[Psi]", "TI"]}, "Bra"], StyleBox["H", "TI"],
-        TemplateBox[{StyleBox["\[Psi]", "TI"]}, "Ket"]}],
-    TestID -> "dirac: sandwich <psi|H|psi> -> Bra H Ket"
+    RowBox[{
+        RowBox[{"\[LeftAngleBracket]", StyleBox["\[Psi]", "TI"], "\[RightBracketingBar]"}],
+        StyleBox["H", "TI"],
+        RowBox[{"\[LeftBracketingBar]", StyleBox["\[Psi]", "TI"], "\[RightAngleBracket]"}]}],
+    TestID -> "dirac: sandwich <psi|H|psi> -> bra H ket"
 ]
 
 VerificationTest[
-    (* a power on the ket lifts onto the whole template *)
+    (* a power on the ket lifts onto the whole bracketed box *)
     LaTeXMathParse["|0\\rangle^{\\otimes 10}"],
-    SuperscriptBox[TemplateBox[{"0"}, "Ket"], RowBox[{"\[CircleTimes]", "10"}]],
+    SuperscriptBox[RowBox[{"\[LeftBracketingBar]", "0", "\[RightAngleBracket]"}], RowBox[{"\[CircleTimes]", "10"}]],
     TestID -> "dirac: ket power |0>^{\\otimes 10}"
 ]
 
 VerificationTest[
-    (* a power on the bra's closing bar lifts onto the template *)
+    (* a power on the bra's closing bar lifts onto the box *)
     LaTeXMathParse["\\langle 1|^{2}"],
-    SuperscriptBox[TemplateBox[{"1"}, "Bra"], "2"],
+    SuperscriptBox[RowBox[{"\[LeftAngleBracket]", "1", "\[RightBracketingBar]"}], "2"],
     TestID -> "dirac: bra power <1|^2"
 ]
 
 VerificationTest[
     (* a subsystem label (subscript) on a ket *)
     LaTeXMathParse["|\\psi\\rangle_{AB}"],
-    SubscriptBox[TemplateBox[{StyleBox["\[Psi]", "TI"]}, "Ket"],
+    SubscriptBox[RowBox[{"\[LeftBracketingBar]", StyleBox["\[Psi]", "TI"], "\[RightAngleBracket]"}],
         RowBox[{StyleBox["A", "TI"], StyleBox["B", "TI"]}]],
     TestID -> "dirac: labeled ket |psi>_{AB}"
 ]

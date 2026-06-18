@@ -2781,17 +2781,23 @@ $limitsOpNames = {
 limitsOpQ[StyleBox[n_String, FontSlant -> "Plain"]] := MemberQ[$limitsOpNames, n]
 limitsOpQ[_] := False
 
+(* LimitsPositioning -> False forces the bound to STAY stacked above/below.
+   Without it the box keeps the FE default (LimitsPositioning -> True), which
+   stacks only in a display-style cell and drops the bound back to the side in
+   inline/text style - so `\sum_{i}` inside a `$...$` span (or any RowBox the FE
+   renders inline) trailed its limit to the right instead of underneath.  We
+   always want the KaTeX/display look, so pin it. *)
 bigOpDisplayLimits[boxes_] := boxes //. {
     SubsuperscriptBox[c_String /; MemberQ[$bigOpChars, c], lo_, hi_] :>
-        UnderoverscriptBox[c, lo, hi],
+        UnderoverscriptBox[c, lo, hi, LimitsPositioning -> False],
     SubscriptBox[c_String /; MemberQ[$bigOpChars, c], lo_] :>
-        UnderscriptBox[c, lo],
+        UnderscriptBox[c, lo, LimitsPositioning -> False],
     SuperscriptBox[c_String /; MemberQ[$bigOpChars, c], hi_] :>
-        OverscriptBox[c, hi],
+        OverscriptBox[c, hi, LimitsPositioning -> False],
     (* limits-operator names: same stacking promotion *)
-    SubsuperscriptBox[op_ /; limitsOpQ[op], lo_, hi_] :> UnderoverscriptBox[op, lo, hi],
-    SubscriptBox[op_ /; limitsOpQ[op], lo_] :> UnderscriptBox[op, lo],
-    SuperscriptBox[op_ /; limitsOpQ[op], hi_] :> OverscriptBox[op, hi],
+    SubsuperscriptBox[op_ /; limitsOpQ[op], lo_, hi_] :> UnderoverscriptBox[op, lo, hi, LimitsPositioning -> False],
+    SubscriptBox[op_ /; limitsOpQ[op], lo_] :> UnderscriptBox[op, lo, LimitsPositioning -> False],
+    SuperscriptBox[op_ /; limitsOpQ[op], hi_] :> OverscriptBox[op, hi, LimitsPositioning -> False],
     (* `\overbrace{X}^Y`: stack Y above the brace above X. *)
     SuperscriptBox[OverscriptBox[x_, deco_String], hi_] /;
         MemberQ[$overDecoChars, deco] :>
@@ -2801,6 +2807,34 @@ bigOpDisplayLimits[boxes_] := boxes //. {
         MemberQ[$underDecoChars, deco] :>
             UnderscriptBox[UnderscriptBox[x, deco], lo]
 }
+
+(* A big operator that DID carry bounds is now an Under/Over box, whose base the
+   FE draws at full display size.  A *bare* big operator (no bounds) - the bare
+   `\int` of `\dfrac1\pi\displaystyle\int ... dy`, or a limitless `\sum` - stays
+   a lone glyph at text size, so it reads short next to the display-size
+   integrand/fraction beside it.  This paclet already commits to a display-style
+   look (bounds always stacked, above), so size the bare glyph to match: scale
+   it up to the display integral/sigma height.  Only direct RowBox children are
+   touched (level 1), so an Under/Over base - which is NOT a RowBox child - keeps
+   its own sizing and never double-scales. *)
+$displayBigOpScale = 1.7
+(* Only the operators whose glyph has NO binary counterpart sharing the same
+   codepoint: integrals (no binary form) and the n-ary Sum/Product/Coproduct.
+   The set/logic big ops (\[Union] \[Intersection] \[Vee] \[Wedge] \[CirclePlus]
+   \[CircleTimes] ...) each share a char with a binary operator (\cup, \vee,
+   \otimes, ...), so scaling by character would wrongly enlarge the binary use -
+   e.g. the `\otimes` in `|0\rangle^{\otimes 10}`. *)
+$displayBigOpChars = {
+    "\[Sum]", "\[Product]", "\[Coproduct]",
+    "\[Integral]", "\[ContourIntegral]",
+    "\[Integral]\[Integral]", "\[Integral]\[Integral]\[Integral]",
+    "\[ContourIntegral]\[ContourIntegral]", "\[ContourIntegral]\[ContourIntegral]\[ContourIntegral]"
+}
+bareBigOpQ[c_] := StringQ[c] && MemberQ[$displayBigOpChars, c]
+displaySizeBigOps[boxes_] := boxes //. RowBox[parts_List] /;
+    AnyTrue[parts, bareBigOpQ] :>
+        RowBox[Replace[parts,
+            c_ /; bareBigOpQ[c] :> StyleBox[c, FontSize -> $displayBigOpScale Inherited], {1}]]
 
 (* Math-mode comma is `,` + thin space, which reads as a list/tuple
    separator (`(a, b, c)`).  But inside a numeric grouping like
@@ -2872,19 +2906,19 @@ suppressCommaSpaceBetweenDigits[boxes_] := boxes //. {
         ]
 }
 
-(* Commas inside sub/superscripts (`a_{i,j}`, `x^{m,n}`) should hug -
-   KaTeX sets a tight comma at script size.  Our math comma carries a
-   trailing thin space (right for a top-level tuple `(a, b, c)`), which
-   at script size reads as a wide gap.  Strip the thin space from comma
-   tokens that live inside a script argument only; top-level tuples keep
-   their spacing.  (//. reaches a fixed point in one rewrite since the
-   strip is idempotent.) *)
-tightenScriptCommas[boxes_] := boxes //. {
-    SubscriptBox[b_, s_] :> SubscriptBox[b, s /. $commaThinSpace -> ","],
-    SuperscriptBox[b_, s_] :> SuperscriptBox[b, s /. $commaThinSpace -> ","],
-    SubsuperscriptBox[b_, s1_, s2_] :>
-        SubsuperscriptBox[b, s1 /. $commaThinSpace -> ",", s2 /. $commaThinSpace -> ","]
-}
+(* The math comma is carried through parsing as `,` + thin space so the
+   digit-grouping pass above can spot `1,000,000` runs.  Once that pass has
+   consumed the runs it needs, the trailing thin space must go: the front end
+   already gives a standalone `,` its punctuation spacing (a small space AFTER,
+   none before), so the extra thin space both over-widens the gap and - because
+   the 2-char `,<thin>` token no longer reads as the punct operator - makes the
+   FE add a spurious symmetric space BEFORE the comma too (`(x , y)` instead of
+   `(x, y)`).  Collapsing every remaining comma to a bare `,` matches LaTeX/
+   KaTeX in tuples `(a, b, c)`, function args `f(x, y)`, set builders `{1, 2}`,
+   AND scripts `a_{i,j}` (where punct spacing shrinks with the script size) in
+   one rule.  MUST run after suppressCommaSpaceBetweenDigits, which still needs
+   the `,<thin>` marker to find numeric groupings. *)
+bareCommas[boxes_] := boxes /. $commaThinSpace -> ","
 
 (* Convert top-level / nested `\\` line breaks (carried as
    $lineBreakMark) into a stacked single-column GridBox, so multi-line
@@ -2963,16 +2997,16 @@ BuildLaTeXParserAsset[] := Module[{data, path},
 $nonASCIIQ = StringContainsQ[#, RegularExpression["[^\\x00-\\x7F]"]] &
 latexParserFor[pre_String] := If[$nonASCIIQ[pre], LaTeXMathParser, activeLatexParser[]]
 
-(* === Dirac bra/ket -> system Ket/Bra/BraKet templates ===
+(* === Dirac bra/ket -> auto-growing bracketed RowBoxes ===
    The active Dirac delimiters come out as StyleBox[char, SpanMaxSize -> 1]
-   (fixedFence), which never engage the front end's stretchy-delimiter
-   machinery, so bars/angles draw at nominal glyph height and sit detached.
-   Rewrite them to the self-contained system templates (TemplateBox[{...},
-   "Ket"|"Bra"|"BraKet"]), which render full-height and stretchy on the stock
-   Default.nb stylesheet with no extra load. The reliable Dirac marker is a
-   SpanMaxSize *angle*: ket, bra, braket and the expectation <X> all carry one,
-   while abs / norm / set-builder / conditional never do - so anchoring on the
-   angle leaves those untouched. *)
+   (fixedFence), which caps the stretchy-delimiter machinery so bars/angles draw
+   at nominal glyph height and sit detached from tall content.  Rewrite them to
+   plain RowBoxes built from the FE's auto-growing delimiter glyphs (see ketBox
+   / braBox / braketBox below), which size each bar/angle to the content height -
+   nominal for a short ket, grown for a fraction - matching LaTeX.  The reliable
+   Dirac marker is a SpanMaxSize *angle*: ket, bra, braket and the expectation
+   <X> all carry one, while abs / norm / set-builder / conditional never do - so
+   anchoring on the angle leaves those untouched. *)
 $diracBar  = "|" | "\[LeftBracketingBar]" | "\[RightBracketingBar]"
 $diracLAng = "\[LeftAngleBracket]" | "<"
 $diracRAng = "\[RightAngleBracket]" | ">"
@@ -3004,32 +3038,51 @@ $diracStripSpace = RowBox[l_List] /;
     (AnyTrue[l, diracSpanAngleQ] && AnyTrue[l, diracBarQ] && MemberQ[l, $diracSpacer]) :>
         RowBox[DeleteCases[l, $diracSpacer]]
 
+(* Ket / bra / braket as plain bracketed RowBoxes built from the FE's
+   auto-growing delimiter glyphs: the bracketing bars (\[LeftBracketingBar] /
+   \[RightBracketingBar]) and angle brackets (\[LeftAngleBracket] /
+   \[RightAngleBracket]).  In a RowBox the FE grows every delimiter to the
+   height of the content BETWEEN the matchfix pair, so `|x-y>` draws nominal
+   height while `|\frac ab>` grows - exactly LaTeX's \langle...\rangle sizing.
+   (The earlier TemplateBox "Ket"/"Bra"/"BraKet" forms always drew at a fixed
+   display height, so a short ket like |psi(t)> rendered with the bar and angle
+   noticeably taller than the content and detached from it.)  The middle
+   separator of a braket / sandwich uses \[RightBracketingBar], which grows like
+   the outer pair but - unlike \[VerticalBar], a relation glyph - carries no
+   surrounding operator space, so `<a|b>` stays tight. *)
+ketBox[x_]    := RowBox[{"\[LeftBracketingBar]", x, "\[RightAngleBracket]"}]
+braBox[x_]    := RowBox[{"\[LeftAngleBracket]", x, "\[RightBracketingBar]"}]
+braketBox[a_, b_] := RowBox[{"\[LeftAngleBracket]", a, "\[RightBracketingBar]", b, "\[RightAngleBracket]"}]
+
 (* sandwich + braket before ket/bra *)
 $diracRules = {
     RowBox[{pre___, $diracLAngSB, a:$diracNoDelim.., $diracBareBar, mid:$diracNoDelim.., $diracBareBar, b:$diracNoDelim.., $diracRAngSB, post___}] :>
-        RowBox[{pre, TemplateBox[{diracNormalize[RowBox[{a}]]}, "Bra"], mid, TemplateBox[{diracNormalize[RowBox[{b}]]}, "Ket"], post}],
+        RowBox[{pre, braBox[diracNormalize[RowBox[{a}]]], mid, ketBox[diracNormalize[RowBox[{b}]]], post}],
     RowBox[{pre___, $diracLAngSB, a:$diracNoDelim.., $diracBarSB, b:$diracNoDelim.., $diracRAngSB, post___}] :>
-        RowBox[{pre, TemplateBox[{diracNormalize[RowBox[{a}]], diracNormalize[RowBox[{b}]]}, "BraKet"], post}],
+        RowBox[{pre, braketBox[diracNormalize[RowBox[{a}]], diracNormalize[RowBox[{b}]]], post}],
     (* ket / bra carrying a script on the closing delimiter: a power on the
        ket (`|0>^{\otimes n}`) or a subsystem label on it (`|\psi>_{AB}`), and
        likewise a script on a bra's closing bar (`<1|^2`). The #26 grammar fix
-       puts the script on the delimiter; lift it onto the whole template. *)
+       puts the script on the delimiter; lift it onto the whole bracketed box. *)
     RowBox[{pre___, $diracBarSB, x:$diracNoDelim.., (h:SuperscriptBox|SubscriptBox)[$diracRAngSB, scr_], post___}] :>
-        RowBox[{pre, h[TemplateBox[{diracNormalize[RowBox[{x}]]}, "Ket"], scr], post}],
+        RowBox[{pre, h[ketBox[diracNormalize[RowBox[{x}]]], scr], post}],
     RowBox[{pre___, $diracBarSB, x:$diracNoDelim.., $diracRAngSB, post___}] :>
-        RowBox[{pre, TemplateBox[{diracNormalize[RowBox[{x}]]}, "Ket"], post}],
+        RowBox[{pre, ketBox[diracNormalize[RowBox[{x}]]], post}],
     RowBox[{pre___, $diracLAngSB, x:$diracNoDelim.., (h:SuperscriptBox|SubscriptBox)[$diracBarSB, scr_], post___}] :>
-        RowBox[{pre, h[TemplateBox[{diracNormalize[RowBox[{x}]]}, "Bra"], scr], post}],
+        RowBox[{pre, h[braBox[diracNormalize[RowBox[{x}]]], scr], post}],
     RowBox[{pre___, $diracLAngSB, x:$diracNoDelim.., $diracBarSB, post___}] :>
-        RowBox[{pre, TemplateBox[{diracNormalize[RowBox[{x}]]}, "Bra"], post}]
+        RowBox[{pre, braBox[diracNormalize[RowBox[{x}]]], post}]
 }
-$diracCollapse = RowBox[{e:(_TemplateBox | _SuperscriptBox | _SubscriptBox)}] :> e
+(* unwrap a singleton RowBox left by an empty pre/post (e.g. a lone ket), so the
+   bracketed RowBox surfaces directly instead of nested one deep *)
+$diracCollapse = RowBox[{e:(_TemplateBox | _SuperscriptBox | _SubscriptBox | _RowBox)}] :> e
 
 (* force the amplitude modulus bars to full span, but only when they wrap a
-   Dirac template, so a plain |x| keeps its bare bars *)
+   Dirac ket/bra/braket (marked by an angle bracket between the bars), so a
+   plain |x| keeps its bare bars *)
 $diracModBarSpan = 1.9
 $diracModulusRule = RowBox[{first:$diracBareBar, mid__, last:$diracBareBar}] /;
-    ! FreeQ[{mid}, TemplateBox[_, "Ket" | "Bra" | "BraKet"]] :>
+    ! FreeQ[{mid}, "\[LeftAngleBracket]" | "\[RightAngleBracket]"] :>
     RowBox[{StyleBox[first, SpanMinSize -> $diracModBarSpan], mid, StyleBox[last, SpanMinSize -> $diracModBarSpan]}]
 
 diracTemplates[boxes_] := Module[{b = boxes},
@@ -3047,8 +3100,8 @@ LaTeXMathParse[source_String] := Module[
         (* `/. $lineBreakMark -> ""` is a safety net: a stray marker not
            inside a RowBox (e.g. the whole input was just `\\`) would
            otherwise leak the private symbol into output. *)
-        diracTemplates @ uprightUnicodeSymbols @ suppressCommaSpaceBetweenDigits @ tightenScriptCommas @
-            stripEmptyRowChildren @ applyLineBreaks @ bigOpDisplayLimits[r] /. $lineBreakMark -> ""
+        diracTemplates @ uprightUnicodeSymbols @ bareCommas @ suppressCommaSpaceBetweenDigits @
+            stripEmptyRowChildren @ applyLineBreaks @ displaySizeBigOps @ bigOpDisplayLimits[r] /. $lineBreakMark -> ""
     ]
 ]
 
