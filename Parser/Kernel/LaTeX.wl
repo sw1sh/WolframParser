@@ -3038,21 +3038,15 @@ $diracStripSpace = RowBox[l_List] /;
     (AnyTrue[l, diracSpanAngleQ] && AnyTrue[l, diracBarQ] && MemberQ[l, $diracSpacer]) :>
         RowBox[DeleteCases[l, $diracSpacer]]
 
-(* Ket / bra / braket as plain bracketed RowBoxes built from the FE's
-   auto-growing delimiter glyphs: the bracketing bars (\[LeftBracketingBar] /
-   \[RightBracketingBar]) and angle brackets (\[LeftAngleBracket] /
-   \[RightAngleBracket]).  In a RowBox the FE grows every delimiter to the
-   height of the content BETWEEN the matchfix pair, so `|x-y>` draws nominal
-   height while `|\frac ab>` grows - exactly LaTeX's \langle...\rangle sizing.
-   (The earlier TemplateBox "Ket"/"Bra"/"BraKet" forms always drew at a fixed
-   display height, so a short ket like |psi(t)> rendered with the bar and angle
-   noticeably taller than the content and detached from it.)  The middle
-   separator of a braket / sandwich uses \[RightBracketingBar], which grows like
-   the outer pair but - unlike \[VerticalBar], a relation glyph - carries no
-   surrounding operator space, so `<a|b>` stays tight. *)
-ketBox[x_]    := RowBox[{"\[LeftBracketingBar]", x, "\[RightAngleBracket]"}]
-braBox[x_]    := RowBox[{"\[LeftAngleBracket]", x, "\[RightBracketingBar]"}]
-braketBox[a_, b_] := RowBox[{"\[LeftAngleBracket]", a, "\[RightBracketingBar]", b, "\[RightAngleBracket]"}]
+(* Ket / bra / braket -> the self-contained system Ket / Bra / BraKet templates
+   (issue sw1sh/MarkdownToNotebook#28): TemplateBoxes whose own DisplayFunction
+   draws full-height, content-stretchy delimiters and need no custom stylesheet,
+   so |psi>, <psi|, <phi|psi> render the way ToBoxes[Ket[psi], TraditionalForm]
+   does.  ($diracRules below recognise the bracketed glyph runs the parser emits -
+   the bars and angle brackets - and fold each into the matching template.) *)
+ketBox[x_]    := TemplateBox[{x}, "Ket"]
+braBox[x_]    := TemplateBox[{x}, "Bra"]
+braketBox[a_, b_] := TemplateBox[{a, b}, "BraKet"]
 
 (* sandwich + braket before ket/bra *)
 $diracRules = {
@@ -3082,7 +3076,7 @@ $diracCollapse = RowBox[{e:(_TemplateBox | _SuperscriptBox | _SubscriptBox | _Ro
    plain |x| keeps its bare bars *)
 $diracModBarSpan = 1.9
 $diracModulusRule = RowBox[{first:$diracBareBar, mid__, last:$diracBareBar}] /;
-    ! FreeQ[{mid}, "\[LeftAngleBracket]" | "\[RightAngleBracket]"] :>
+    ! FreeQ[{mid}, TemplateBox[_, "Ket" | "Bra" | "BraKet"] | "\[LeftAngleBracket]" | "\[RightAngleBracket]"] :>
     RowBox[{StyleBox[first, SpanMinSize -> $diracModBarSpan], mid, StyleBox[last, SpanMinSize -> $diracModBarSpan]}]
 
 diracTemplates[boxes_] := Module[{b = boxes},

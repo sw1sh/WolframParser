@@ -323,12 +323,11 @@ VerificationTest[
     TestID -> "LaTeX: \\lVert ... \\rVert norm matchfix"
 ]
 
-(* A \lvert ... \rangle ket maps to an auto-growing bracketed RowBox (left
-   bracketing-bar + right angle), sized to its content rather than fixed. *)
+(* A \lvert ... \rangle ket maps to the system Ket template (#28). *)
 VerificationTest[
     LaTeXMathParse["\\lvert\\psi\\rangle"],
-    RowBox[{"\[LeftBracketingBar]", StyleBox["\[Psi]", "TI"], "\[RightAngleBracket]"}],
-    TestID -> "dirac: \\lvert\\psi\\rangle -> ket box"
+    TemplateBox[{StyleBox["\[Psi]", "TI"]}, "Ket"],
+    TestID -> "dirac: \\lvert\\psi\\rangle -> Ket template"
 ]
 
 (* Integral bounds stack above/below the sign in display style, like sums. *)
@@ -619,48 +618,48 @@ VerificationTest[
     TestID -> "scripts: bare \\rangle unchanged (empty postfix is a no-op)"
 ]
 
-(* --- Dirac bra/ket -> auto-growing bracketed RowBoxes (content-sized) --- *)
+(* --- Dirac bra/ket -> the system Ket / Bra / BraKet templates (#28) --- *)
 
 VerificationTest[
     LaTeXMathParse["|01\\rangle"],
-    RowBox[{"\[LeftBracketingBar]", "01", "\[RightAngleBracket]"}],
-    TestID -> "dirac: ket |01> -> ket box"
+    TemplateBox[{"01"}, "Ket"],
+    TestID -> "dirac: ket |01> -> Ket template"
 ]
 
 VerificationTest[
     LaTeXMathParse["\\langle\\phi|\\psi\\rangle"],
-    RowBox[{"\[LeftAngleBracket]", StyleBox["\[Phi]", "TI"], "\[RightBracketingBar]", StyleBox["\[Psi]", "TI"], "\[RightAngleBracket]"}],
-    TestID -> "dirac: braket <phi|psi> -> braket box"
+    TemplateBox[{StyleBox["\[Phi]", "TI"], StyleBox["\[Psi]", "TI"]}, "BraKet"],
+    TestID -> "dirac: braket <phi|psi> -> BraKet template"
 ]
 
 VerificationTest[
     (* operator sandwich decomposes to bra ... ket *)
     LaTeXMathParse["\\langle\\psi|H|\\psi\\rangle"],
     RowBox[{
-        RowBox[{"\[LeftAngleBracket]", StyleBox["\[Psi]", "TI"], "\[RightBracketingBar]"}],
+        TemplateBox[{StyleBox["\[Psi]", "TI"]}, "Bra"],
         StyleBox["H", "TI"],
-        RowBox[{"\[LeftBracketingBar]", StyleBox["\[Psi]", "TI"], "\[RightAngleBracket]"}]}],
+        TemplateBox[{StyleBox["\[Psi]", "TI"]}, "Ket"]}],
     TestID -> "dirac: sandwich <psi|H|psi> -> bra H ket"
 ]
 
 VerificationTest[
-    (* a power on the ket lifts onto the whole bracketed box *)
+    (* a power on the ket lifts onto the whole template *)
     LaTeXMathParse["|0\\rangle^{\\otimes 10}"],
-    SuperscriptBox[RowBox[{"\[LeftBracketingBar]", "0", "\[RightAngleBracket]"}], RowBox[{"\[CircleTimes]", "10"}]],
+    SuperscriptBox[TemplateBox[{"0"}, "Ket"], RowBox[{"\[CircleTimes]", "10"}]],
     TestID -> "dirac: ket power |0>^{\\otimes 10}"
 ]
 
 VerificationTest[
-    (* a power on the bra's closing bar lifts onto the box *)
+    (* a power on the bra's closing bar lifts onto the template *)
     LaTeXMathParse["\\langle 1|^{2}"],
-    SuperscriptBox[RowBox[{"\[LeftAngleBracket]", "1", "\[RightBracketingBar]"}], "2"],
+    SuperscriptBox[TemplateBox[{"1"}, "Bra"], "2"],
     TestID -> "dirac: bra power <1|^2"
 ]
 
 VerificationTest[
     (* a subsystem label (subscript) on a ket *)
     LaTeXMathParse["|\\psi\\rangle_{AB}"],
-    SubscriptBox[RowBox[{"\[LeftBracketingBar]", StyleBox["\[Psi]", "TI"], "\[RightAngleBracket]"}],
+    SubscriptBox[TemplateBox[{StyleBox["\[Psi]", "TI"]}, "Ket"],
         RowBox[{StyleBox["A", "TI"], StyleBox["B", "TI"]}]],
     TestID -> "dirac: labeled ket |psi>_{AB}"
 ]
