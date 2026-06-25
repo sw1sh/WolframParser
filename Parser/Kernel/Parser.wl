@@ -28,7 +28,7 @@
 
 BeginPackage["Wolfram`Parser`"]
 
-Parse::usage = "Parse[parser, input] runs parser against input. Returns the parse result on success or a Failure[\"ParseError\", ...] on failure (usable with Confirm / Enclose). Requires the parser to consume the entire input; use ParsePartial to accept a leftover. The option \"Memoize\" -> Automatic | True | False controls packrat memoisation: each nonterminal's result is cached per {rule, position}, making an ordered-choice grammar that re-parses a shared operand run in linear time (Automatic enables it for recursive grammars). It is sound for PEG, so it never changes the result - only trades O(input x rules) space for the speed."
+Parse::usage = "Parse[parser, input] runs parser against input. Returns the parse result on success or a Failure[\"ParseError\", ...] on failure (usable with Confirm / Enclose). Requires the parser to consume the entire input; use ParsePartial to accept a leftover. The option \"Memoize\" -> True enables packrat memoisation: each nonterminal's result is cached per {rule, position}, making an ordered-choice grammar that re-parses a shared operand run in linear time instead of backtracking exponentially. It is sound for PEG, so it never changes the result - only trades O(input x rules) space for the speed; off by default."
 
 ParsePartial::usage = "ParsePartial[parser, input] runs parser against input and returns {result, leftover} on success, or a Failure[\"ParseError\", ...] on failure."
 
@@ -270,18 +270,19 @@ $maxParseRecursion = 12000
    inspection inside the Block re-trips the limit before the
    conversion can run.) *)
 (* "Memoize": packrat caching of nonterminal results, keyed by {rule, pos}.
-   Automatic turns it on exactly when the grammar is recursive - the only
-   case where ordered-choice backtracking can blow up and where the memo
-   pays for itself; True / False force it. Sound for PEG (deterministic),
-   so it never changes the result, only the time/space trade (linear time,
-   O(input x rules) space). A fresh memo is allocated per top-level parse. *)
-Options[Parse] = {"Memoize" -> Automatic}
-Options[ParsePartial] = {"Memoize" -> Automatic}
+   Off by default (zero overhead, identical behaviour); pass True for a
+   grammar whose ordered choice re-parses a shared operand and backtracks
+   (the THF blow-up), to make it run in linear time. Sound for PEG
+   (deterministic), so it never changes the result - only the time/space
+   trade (linear time, O(input x rules) space). A fresh memo is allocated
+   per top-level parse. (No Automatic mode: deciding it would mean a
+   FreeQ over the whole grammar tree per parse, which on a large grammar
+   costs more than the parse it would speed up.) *)
+Options[Parse] = {"Memoize" -> False}
+Options[ParsePartial] = {"Memoize" -> False}
 
-parseMemoInit[True, _]       := <||>
-parseMemoInit[Automatic, pc_] :=
-    If[FreeQ[pc, ParserCombinator["Recursive", _, _]], None, <||>]
-parseMemoInit[_, _]          := None
+parseMemoInit[True, _] := <||>
+parseMemoInit[_, _]    := None
 
 Parse[pc_ParserCombinator, input_String, opts : OptionsPattern[]] :=
     Module[{r, len = StringLength[input],
