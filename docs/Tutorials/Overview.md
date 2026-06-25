@@ -28,7 +28,7 @@ covers operator-precedence expression grammars with a Pratt engine
 - `ParserCombinatorQ` - test for a normalised combinator
 
 ### Run a parser
-- [Parse]() - run a parser, requiring it to consume the whole input
+- [Parse]() - run a parser, requiring it to consume the whole input; `"Memoize" -> True` adds packrat memoisation (linear time on grammars that backtrack)
 - `ParsePartial` - run a parser, returning `{result, leftover}`
 - [ParserCompile]() - lower to a compiled function (default) or an LPEG-style `"PEGVM"` machine
 

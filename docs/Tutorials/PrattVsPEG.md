@@ -176,6 +176,45 @@ for `"InfixR"`); the table generalises them with multiple precedence levels and
 prefix / postfix in a single linear pass. So the rule of thumb: PEG for the
 grammar, Pratt for the operators inside it.
 
+## Or skip the table: memoise
+
+The table is one fix; it is not the only one. The blow-up was never really about
+operators — it was an ordered choice re-parsing the same operand at the same
+position with no memory of having done so. **Packrat memoisation** removes
+exactly that: cache each nonterminal's result keyed by `{rule, position}`, and
+the second and third alternatives that re-enter the operand at the same spot hit
+the cache instead of re-parsing. The exponential collapses to linear with **no
+change to the grammar** — the same ordered-choice rules from the blow-up section
+above, run under [Parse]() with one option:
+
+```wl
+Parse[logic, "(((a@a)@a)@a)", "Memoize" -> True]
+```
+
+<!-- => {{{"a", "@", "a"}, "@", "a"}, "@", "a"} -->
+
+On the real TPTP THF grammar this is not hand-waving: the un-overridden,
+ordered-choice grammar that times out at 13 bytes parses a 121-byte nested
+formula in ~0.12 s with `"Memoize" -> True` — within noise of the Pratt override
+(~0.11 s). Same linearity, by a completely different route.
+
+So which do you reach for?
+
+- **Memoisation is the general lever.** It makes *any* backtracking PEG linear,
+  not just operator grammars, and it changes nothing about the grammar — the
+  published BNF stays the parser. The cost is **O(input × rules) memory** (one
+  cell per rule per position), and it does not, by itself, give you operator
+  *semantics*: the output is still whatever the raw rules produce.
+- **Pratt is the targeted lever.** It costs **O(1) extra memory** and folds
+  precedence and associativity into the result directly — the `And` / `Or` /
+  `ForAll` terms come out shaped correctly — but you hand-write the binding-power
+  table instead of reading it off the BNF.
+
+They are not rivals. `` Wolfram`Parser` `` ships both, and TPTP uses each where it
+is strong: the THF connectives go through the Pratt [ParseOperatorTable]() for
+clean terms with no memo table, while `"Memoize" -> True` is the one-flag escape
+hatch for any other recursive grammar that happens to backtrack.
+
 ## The payoff: TPTP THF
 
 The motivating case is real. The [TPTP](paclet:Wolfram/Parser/tutorial/ParsingTPTP)
