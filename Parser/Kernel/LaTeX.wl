@@ -1480,7 +1480,13 @@ Scan[
    the handler bodies evaluate lazily, so the forward reference is fine. *)
 Scan[
     Function[name,
-        commandHandlers[name] = Function[{opt, req}, fixedFence[namedSymbolChars[name]]]
+        commandHandlers[name] = Function[{opt, req},
+            (* A standalone fence takes no argument, but commandAtom greedily consumes
+               any following "{group}" as a req; re-emit it after the fence glyph
+               instead of dropping it, so `\langle{X}|` -> ⟨X| -> Bra[X] rather than
+               ⟨| with X lost (issue #49). *)
+            If[req === {}, fixedFence[namedSymbolChars[name]],
+                RowBox[Prepend[req, fixedFence[namedSymbolChars[name]]]]]]
     ],
     {"\\langle", "\\rangle", "\\lvert", "\\rvert", "\\lVert", "\\rVert",
      "\\lceil", "\\rceil", "\\lfloor", "\\rfloor"}
