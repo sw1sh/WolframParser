@@ -571,7 +571,9 @@ commandHandlers["\\mathrm"]   = Function[{opt, req},
     StyleBox[stripItalic @ First[req, ""], FontSlant -> "Plain"]
 ]
 commandHandlers["\\mathit"]   = Function[{opt, req},
-    StyleBox[First[req, ""], FontSlant -> "Italic"]
+    (* stripItalic (like every sibling font macro) coalesces a multi-letter argument;
+       without it \mathit{Word} rendered as spaced single letters (issue #56) *)
+    StyleBox[stripItalic @ First[req, ""], FontSlant -> "Italic"]
 ]
 commandHandlers["\\mathsf"]   = Function[{opt, req},
     StyleBox[stripItalic @ First[req, ""], FontFamily -> "Helvetica", FontSlant -> "Plain"]
@@ -1524,6 +1526,25 @@ Scan[
         ]
     ],
     Keys[greekChars]
+]
+
+(* Text-symbol control words (\AA -> Å, \o -> ø, \ss -> ß, ...): zero-argument
+   commands that stand for a single upright letter. Without a mapping an unknown
+   control word falls through to its literal characters ("\" + "AA"), so valid LaTeX
+   like `\text{\AA}` rendered as a raw backslash + "AA" instead of the Ångström sign
+   (issue #55). Keyed by codepoint so the source stays ASCII. *)
+textSymbolChars = <|
+    "\\AA" -> 16^^00C5, "\\aa" -> 16^^00E5, "\\O" -> 16^^00D8, "\\o" -> 16^^00F8,
+    "\\ss" -> 16^^00DF, "\\AE" -> 16^^00C6, "\\ae" -> 16^^00E6, "\\OE" -> 16^^0152,
+    "\\oe" -> 16^^0153, "\\L" -> 16^^0141, "\\l" -> 16^^0142, "\\i" -> 16^^0131,
+    "\\j" -> 16^^0237, "\\P" -> 16^^00B6, "\\S" -> 16^^00A7, "\\dag" -> 16^^2020,
+    "\\ddag" -> 16^^2021, "\\pounds" -> 16^^00A3, "\\copyright" -> 16^^00A9
+|>;
+Scan[
+    Function[name,
+        commandHandlers[name] = With[{glyph = FromCharacterCode[textSymbolChars[name]]},
+            Function[{opt, req}, glyph]]],
+    Keys[textSymbolChars]
 ]
 
 (* Named function operators (\sin, \log, \max, ...) render upright. *)
@@ -3039,7 +3060,7 @@ $diracStripSpace = RowBox[l_List] /;
         RowBox[DeleteCases[l, $diracSpacer]]
 
 (* Ket / bra / braket -> the self-contained system Ket / Bra / BraKet templates
-   (issue sw1sh/MarkdownToNotebook#28): TemplateBoxes whose own DisplayFunction
+   (issue WolframInstitute/MarkdownToNotebook#28): TemplateBoxes whose own DisplayFunction
    draws full-height, content-stretchy delimiters and need no custom stylesheet,
    so |psi>, <psi|, <phi|psi> render the way ToBoxes[Ket[psi], TraditionalForm]
    does.  ($diracRules below recognise the bracketed glyph runs the parser emits -
