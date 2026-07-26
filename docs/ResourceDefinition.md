@@ -185,7 +185,7 @@ RawBoxes @ LaTeXMathStyle @ LaTeXMathParse["\\sum_{i=1}^{n} \\frac{1}{i^2} = \\f
 
 ### Markdown inline
 
-[MarkdownInlineParse]() parses inline markdown - emphasis, code spans, math, links, sub/sup, escapes - to a tree of typed atoms ([MdText](), [MdBold](), [MdMathInline](), [MdLink](), ...). The grammar is ~75 lines of [ParseChoice]() over the primitives; see the [Markdown inline parser](paclet:Wolfram/Parser/tutorial/ParsingMarkdownInline) tech note:
+[MarkdownInlineParse]() parses inline markdown - emphasis, code spans, math, links, sub/sup, escapes - to a tree of typed atoms (`MdText`, `MdBold`, `MdMathInline`, `MdLink`, ...). The grammar is ~75 lines of [ParseChoice]() over the primitives; see the [Markdown inline parser](paclet:Wolfram/Parser/tutorial/ParsingMarkdownInline) tech note:
 
 ```wl
 MarkdownInlineParse["**bold $x$** and `code`"]
@@ -260,7 +260,7 @@ long tail of math symbols.
 
 ### Markdown link-with-code-label
 
-The recursive label parser in [MarkdownInlineParse]() handles a code-styled label inside a link, producing one [MdLink]() whose label is itself a parsed-list:
+The recursive label parser in [MarkdownInlineParse]() handles a code-styled label inside a link, producing one `MdLink` whose label is itself a parsed-list:
 
 ```wl
 MarkdownInlineParse["See [`Range`](paclet:ref/Range) for details."]

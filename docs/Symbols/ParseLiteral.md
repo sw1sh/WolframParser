@@ -44,7 +44,7 @@ A mismatched input fails:
 Parse[ParseLiteral["foo"], "bar"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "foo", "Found" -> "b", "Rule" -> Literal["foo"]|>] -->
+<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "foo", "Found" -> "b"|>] -->
 
 ## Scope
 

@@ -92,7 +92,7 @@ Parse[
 Parse[ParseLiteral["foo"], "foobar"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> "<end of input>", "Found" -> "b", "Rule" -> Literal["foo"]|>] -->
+<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> "<end of input>", "Found" -> "b"|>] -->
 
 [ParsePartial]() relaxes this and returns the leftover:
 
@@ -110,7 +110,7 @@ A complete-input mismatch returns a `Failure["ParseError", ...]` rather than thr
 Parse[ParseLiteral["foo"], "xyz"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "foo", "Found" -> "x", "Rule" -> Literal["foo"]|>] -->
+<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "foo", "Found" -> "x"|>] -->
 
 Use [MatchQ]() to branch on success vs failure:
 

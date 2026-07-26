@@ -5,7 +5,7 @@ Context: Wolfram`Parser`
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/ref/ParseCharacter
 Keywords: [parser, character, class, terminal, LetterCharacter, DigitCharacter]
-SeeAlso: [ParseLiteral, ParseToken, ParserCombinator, LetterCharacter, DigitCharacter, CharacterRange]
+SeeAlso: [ParseLiteral, ParserCombinator, LetterCharacter, DigitCharacter, CharacterRange]
 RelatedGuides: [WolframParser]
 ---
 
@@ -17,7 +17,7 @@ RelatedGuides: [WolframParser]
 
 - $pat$ may be a built-in character-class atom ([LetterCharacter](), [DigitCharacter](), [WhitespaceCharacter](), [WordCharacter](), [HexadecimalCharacter](), [PunctuationCharacter]()), a [CharacterRange]()`[$a$, $b$]`, an [Alternatives]() of these, or a literal one-character [String]().
 - Result: the matched character as a [String]() of length one.
-- For non-string inputs (token lists), `ParseCharacter[$pat$]` is equivalent to `ParseToken[$pat$]`.
+- The same combinator works over a token-list input (not just a string): it matches a single token against $pat$ and returns it, so the character classes double as token predicates.
 
 ## Basic Examples
 
@@ -100,7 +100,7 @@ The wrong character class produces a `Failure`:
 Parse[ParseCharacter[DigitCharacter], "x"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<digit>", "Found" -> "x", "Rule" -> Character[DigitCharacter]|>] -->
+<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<digit>", "Found" -> "x"|>] -->
 
 `ParseCharacter` consumes *exactly one* character. To match a multi-character literal, use [ParseLiteral]() instead.
 

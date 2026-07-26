@@ -5,7 +5,7 @@ Context: Wolfram`Parser`
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/ref/ParseAction
 Keywords: [parser, action, transform, reshape, semantic]
-SeeAlso: [ParseCapture, ParseSequence, ParserCombinator]
+SeeAlso: [ParseSequence, ParseChoice, ParserCombinator]
 RelatedGuides: [WolframParser]
 ---
 
@@ -16,7 +16,7 @@ RelatedGuides: [WolframParser]
 ## Details & Options
 
 - If `p`'s result is a [List]() of `n` elements, `f` is called as `f[el1, ..., eln]` (i.e. the list is splatted). For a scalar result, `f` is called as `f[el]`.
-- Use [ParseCapture]() with a name if you want $f$ to look up arguments by name instead of position.
+- Because the list is spread positionally, `f` picks arguments by position; a `Slot` function such as `#1 - #2 &` or a named [Function]() reads them in order.
 - $f$ is invoked at parse time, *not* compile time - so closures and ordinary WL evaluation work.
 - The combinator type is `Action`.
 

@@ -19,7 +19,7 @@ language a construct at a time, parsing it with [Parse]() combinators into a
 neutral *circuit IR* - plain Wolfram data, no QuantumFramework dependency - that
 an adapter can turn into a QuantumCircuitOperator.
 
-The two entry points are [OpenQASMRead]() (source to the IR) and [OpenQASMAST]()
+The two entry points are `OpenQASMRead` (source to the IR) and `OpenQASMAST`
 (source to the standard syntax tree). Everything below threads one growing
 example: a Bell circuit, then its variations.
 

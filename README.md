@@ -29,29 +29,37 @@ Target use cases:
 
 ## Status
 
-**v0.1** — design + scaffold. Two tech notes drive the implementation:
+**v0.2.3** — a working library. The `` Wolfram`Parser` `` kernel is six files under
+`Parser/Kernel/`: a Parsec-style combinator core plus the `GrammarRules` lowering
+([`Parser.wl`](Parser/Kernel/Parser.wl)), a LaTeX math-mode parser at 126 / 126 on
+KaTeX's screenshotter corpus ([`LaTeX.wl`](Parser/Kernel/LaTeX.wl)), a Markdown parser
+([`Markdown.wl`](Parser/Kernel/Markdown.wl)), an EBNF grammar reader
+([`EBNF.wl`](Parser/Kernel/EBNF.wl)), a TPTP importer/exporter
+([`TPTP.wl`](Parser/Kernel/TPTP.wl)), and the AST vocabulary — `LeafNode` / `CallNode` /
+… / `ToCodeParser` ([`AST.wl`](Parser/Kernel/AST.wl)). A `Languages/` showcase builds five
+example front-ends (Calculator, JSON, Lisp, Lambda, Brainfuck, plus OpenQASM) on the core.
 
-- [`docs/Tutorials/ParserLandscape.md`](docs/Tutorials/ParserLandscape.md) — what already exists in the WL parser landscape and outside it.
-- [`docs/Tutorials/DesignAndCompilationStrategy.md`](docs/Tutorials/DesignAndCompilationStrategy.md) — the API, the parser algebra, the FunctionCompile lowering, and the worked LaTeX / TPTP targets.
-
-The kernel is intentionally empty — the design comes first so the code can
-be written against it.
+The kernel is dependency-free — no C library — with performance from `FunctionCompile`'s
+LLVM backend. It ships as a full paclet (`Guides` / `Symbols` / `Tutorials` documentation,
+built from `docs/` by [`build.wls`](build.wls)) and is covered by ~360 core + ~70 language
+tests (`wl -f run-tests.wls`).
 
 ## Layout
 
 ```
 WolframParser/
-|-- PacletInfo.wl
-|-- Kernel/Parser.wl
-|-- README.md
-|-- ResourceDefinition.md
-|-- docs/
-|   |-- Guides/WolframParser.md
-|   |-- Symbols/
-|   `-- Tutorials/
-|       |-- ParserLandscape.md                  (the survey)
-|       |-- DesignAndCompilationStrategy.md     (the design)
-|       `-- Overview.md
+|-- Parser/                         the paclet
+|   |-- PacletInfo.wl
+|   |-- Kernel/                     AST.wl EBNF.wl LaTeX.wl Markdown.wl Parser.wl TPTP.wl (+ Languages/)
+|   |-- Assets/                     hero.png, LaTeXMathParserCompiled.wxf
+|   |-- Tests/                      *.wlt, per subsystem
+|   `-- Documentation/English/      built ref pages / guides / tutorials (from docs/)
+|-- docs/                           literate-markdown documentation sources
+|   |-- DOC_GUIDE.md                house style for these sources
+|   |-- ResourceDefinition.md       the paclet resource page
+|   `-- Guides/  Symbols/  Tutorials/
+|-- build.wls                       docs/*.md -> notebooks via MarkdownToNotebook
+`-- README.md
 ```
 
 ## License

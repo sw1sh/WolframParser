@@ -51,7 +51,7 @@ CalculatorEval["2^3^2"]
 
 ## Scope
 
-Division of integers stays exact, since the [Binary]() builder folds with ordinary [Times]() and [Power]():
+Division of integers stays exact, since the `Binary` builder folds with ordinary [Times]() and [Power]():
 
 ```wl
 CalculatorEval["7/2"]

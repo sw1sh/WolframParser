@@ -35,11 +35,13 @@ Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_co
 - [ParseCharacter]() match a single character against a character class
 - [ParseSucceed]() always succeed with the given value, consuming nothing
 - [ParseFail]() always fail with the given message
+- [ParseRegex]() match the input against a regular expression
 
 ### Composition
 
 - [ParseSequence]() each parser in order
 - [ParseChoice]() the first that matches, PEG-ordered
+- [ParseChoiceLongest]() every alternative, returning the longest match (POSIX-style)
 - [ParseBetween]() open, then `p`, then close; the result is `p`'s
 - [ParseSepBy]() zero or more `p` separated by `sep`
 - [ParseSepBy1]() one or more `p` separated by `sep`
@@ -70,8 +72,19 @@ Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_co
 ### LaTeX math
 
 - [LaTeXMathParse]() parse LaTeX math source into a tree of Wolfram boxes
+- [LaTeXMathParser]() the reusable parser object that [LaTeXMathParse]() runs
+- [LaTeXMathStyle]() restyle parsed math boxes into a Computer-Modern math font
 
-### BNF grammars
+### BNF & TPTP grammars
 
 - [EBNFParse]() read a BNF grammar (a string or <code>[File]()[path]</code>) and return an <code>[Association]()[name -> [ParserCombinator]()]</code>
-- [EBNFRules]() return the unlowered list of <code>[EBNFRule]()[name, kind, body]</code> records
+- [EBNFRules]() return the unlowered list of <code>EBNFRule[name, kind, body]</code> records
+- [TPTPImport]() import TPTP theorem-prover formulas (FOF / CNF / THF) or an SZS derivation
+- [TPTPExport]() render an SZS-output derivation back to TPTP text
+
+### Markdown
+
+- [MarkdownParse]() parse a markdown document into a block AST (headings, lists, fences, prose)
+- [MarkdownParser]() the reusable document-parser object behind [MarkdownParse]()
+- [MarkdownInlineParse]() parse one paragraph's inline spans (emphasis, code, links, math)
+- [MarkdownInlineParser]() the reusable inline-parser object behind [MarkdownInlineParse]()
