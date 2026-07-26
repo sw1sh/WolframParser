@@ -7,7 +7,7 @@ How to write the WolframParser documentation sources under `docs/` — the
 `MarkdownToNotebook` (MTN), landing under `Parser/Documentation/English/`.
 This is the house style. It is adapted from the THVMLink doc guide and
 overrides the upstream
-[wolfram-symbol-page skill](https://github.com/sw1sh/MarkdownToNotebook/blob/main/skills/wolfram-symbol-page/SKILL.md)
+[wolfram-symbol-page skill](https://github.com/WolframInstitute/MarkdownToNotebook/blob/main/skills/wolfram-symbol-page/SKILL.md)
 where they disagree (noted inline).
 
 ## Build and inspect, always
@@ -59,14 +59,25 @@ code word.
   **path** (`Parser/Tests/`).
 - If you link a paclet symbol that has no `docs/Symbols/<Name>.md` page,
   **create the page** in the same pass, so the link resolves.
+- **The Guide `## Functions` listing — two forms.** The listing's parser makes an
+  `InlineGuideFunction` chip (the built-in-style function grid; built-in vs paclet inferred
+  from context, no marker needed) *only* from a bullet that **leads with a backtick span**
+  (`` - `Parse` the entry point ``). A bullet that leads with the inferred-link form
+  (`- [Parse]() the entry point`) instead renders as a plain `GuideText` bullet whose link
+  still works — a clean prose index rather than a chip grid. This guide uses the **`[Parse]()`
+  prose form** throughout, consistent with the "always autolinked" rule above; keep that form
+  here for new entries. Switch a listing to leading backticks only if you specifically want
+  the chip grid.
 
 ## Argument names are italics, not math
 
-In a `## Usage` signature and in prose, write argument names in *italics*:
-<code>[ParseOperatorTable]()[*unit*, *levels*]</code>. **Do not** use the `$x$`
-math form — it renders as ugly inline LaTeX. (This overrides the skill, which
-uses `$x_i$`. The older pages that still carry `$p_1$` predate this rule and
-should migrate when next touched.)
+Argument names here are whole words, so write them in *italics*:
+<code>[ParseOperatorTable]()[*unit*, *levels*]</code> — **not** the `$x$` math form, which
+renders as ugly inline LaTeX. The one case that still needs `$…$` is a genuinely
+*subscripted* name (`$v_1$`), because `*v_1*` leaks the underscore and `*v1*` renders the
+literal pair `v1`; prefer a plain word to sidestep it. (This narrows the upstream skill's
+blanket `$x_i$` rule to "whole words in italics, subscripts in `$…$`". The older pages that
+still carry `$p_1$` for whole-word args predate this and should migrate when next touched.)
 
 ## Cells: no ceremony, one output each
 
@@ -89,7 +100,10 @@ should migrate when next touched.)
 
 Strings, numbers, lists, association-free WL terms (`And[p, q]`, `"f"[a, b]`),
 `Failure` objects, and `ParserCombinator` summary boxes all serialize and render
-in the `.nb`. What does **not** round-trip cleanly is a *bare* `Association`
+in the `.nb`. Typeset math round-trips too — delimited matrices
+(`\begin{pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix}…\end{…}`), stretchy norm/abs bars
+(`\|…\|`, `\lVert…\rVert`) around a tall argument, and Dirac kets/bras — which the LaTeX
+tutorials lean on. What does **not** round-trip cleanly is a *bare* `Association`
 (`<|…|>` with no wrapping head) or an `InputForm[…]` box — project those to a
 list/string (`Keys[…]`, `ToString[…, InputForm]`) only when you must.
 
@@ -113,6 +127,11 @@ by `Rasterize`.
   `## Possible Issues` / `## Neat Examples` as warranted. Model it on
   [Symbols/ParseChoice.md](Symbols/ParseChoice.md) or
   [Symbols/ParseOperatorTable.md](Symbols/ParseOperatorTable.md).
+- **Guide page** (`Template: Guide`): a `## Functions` section grouping the paclet's (and
+  relevant built-in) symbols into topic subsections, each item a **backtick-led** bullet
+  (`` - `Parse` the entry point ``; see the listing exception above). Fill the Tech Notes
+  section from a `RelatedTutorials:` frontmatter list and Related Links from `Links:`. Model
+  it on [Guides/WolframParser.md](Guides/WolframParser.md).
 - **Tutorial** (`Template: TechNote`): one running grammar carried deep across
   sections with real prose, like
   [Tutorials/ParsingTPTP.md](Tutorials/ParsingTPTP.md). Because state threads,
