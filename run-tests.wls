@@ -16,7 +16,7 @@ dir = DirectoryName[$InputFileName]
 PacletDirectoryLoad[FileNameJoin[{dir, "Parser"}]]
 Needs["Wolfram`Parser`"]
 
-files = Sort @ FileNames["*.wlt", FileNameJoin[{dir, "Parser", "Tests"}]]
+files = Sort @ FileNames["*.wlt", FileNameJoin[{dir, "Parser", "Tests"}], Infinity]
 perFileTimeout = 300
 
 totalPass = 0

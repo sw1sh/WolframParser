@@ -1907,3 +1907,12 @@ Get[FileNameJoin[{DirectoryName[$InputFileName], "LaTeX.wl"}]];
 Get[FileNameJoin[{DirectoryName[$InputFileName], "EBNF.wl"}]];
 Get[FileNameJoin[{DirectoryName[$InputFileName], "TPTP.wl"}]];
 Get[FileNameJoin[{DirectoryName[$InputFileName], "Markdown.wl"}]];
+
+(* Eager-load the parser-zoo language front-ends (Calculator / JSON / Lisp / Lambda /
+   Brainfuck / OpenQASM), each in a Wolfram`Parser`Languages`<Lang>` subcontext, so a single
+   Needs["Wolfram`Parser`"] also makes CalculatorEval / JSONImport / ... available. Those files
+   BeginPackage with a {"Wolfram`Parser`"} dependency; this root context is not yet on $Packages
+   mid-load, so mark it loaded first to keep that dependency's Needs a no-op rather than a
+   recursive re-Get of this file. *)
+If[! MemberQ[$Packages, "Wolfram`Parser`"], AppendTo[$Packages, "Wolfram`Parser`"]];
+Get[FileNameJoin[{DirectoryName[$InputFileName], "Languages", "init.wl"}]];
