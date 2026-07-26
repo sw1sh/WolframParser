@@ -860,6 +860,28 @@ VerificationTest[
     TestID -> "Env: vmatrix -> bar-delimited GridBox"
 ]
 
+(* mathtools inline-sized matrices carry the same delimiters as their full-sized
+   counterparts; bare amsmath smallmatrix has none (issue #62). *)
+VerificationTest[
+    LaTeXMathParse["\\begin{psmallmatrix} 1 & 2 \\\\ 3 & 4 \\end{psmallmatrix}"],
+    RowBox[{"(", GridBox[{{"1", "2"}, {"3", "4"}}], ")"}],
+    TestID -> "Env: psmallmatrix -> parenthesised GridBox (issue #62)"
+]
+
+VerificationTest[
+    {LaTeXMathParse["\\begin{bsmallmatrix} 1 \\end{bsmallmatrix}"],
+     LaTeXMathParse["\\begin{Bsmallmatrix} 1 \\end{Bsmallmatrix}"],
+     LaTeXMathParse["\\begin{vsmallmatrix} 1 \\end{vsmallmatrix}"],
+     LaTeXMathParse["\\begin{Vsmallmatrix} 1 \\end{Vsmallmatrix}"],
+     LaTeXMathParse["\\begin{smallmatrix} 1 \\end{smallmatrix}"]},
+    {RowBox[{"[", GridBox[{{"1"}}], "]"}],
+     RowBox[{"{", GridBox[{{"1"}}], "}"}],
+     RowBox[{"\[LeftBracketingBar]", GridBox[{{"1"}}], "\[RightBracketingBar]"}],
+     RowBox[{"\[LeftDoubleBracketingBar]", GridBox[{{"1"}}], "\[RightDoubleBracketingBar]"}],
+     GridBox[{{"1"}}]},
+    TestID -> "Env: b/B/v/Vsmallmatrix keep delimiters, bare smallmatrix undelimited (issue #62)"
+]
+
 VerificationTest[
     ! MatchQ[LaTeXMathParse["\\begin{cases} 1 & x > 0 \\\\ 0 & x \\le 0 \\end{cases}"], _Failure],
     True,

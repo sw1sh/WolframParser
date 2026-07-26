@@ -375,11 +375,15 @@ buildEnv[name_String, rowsIn_List] :=
         padded = Map[PadRight[#, width, ""] &, rows];
         grid = GridBox[padded];
         Switch[name,
-            "pmatrix" | "pmatrix*", RowBox[{"(", grid, ")"}],
-            "bmatrix" | "bmatrix*", RowBox[{"[", grid, "]"}],
-            "Bmatrix" | "Bmatrix*", RowBox[{"{", grid, "}"}],
-            "vmatrix" | "vmatrix*", RowBox[{"\[LeftBracketingBar]", grid, "\[RightBracketingBar]"}],
-            "Vmatrix" | "Vmatrix*", RowBox[{"\[LeftDoubleBracketingBar]", grid, "\[RightDoubleBracketingBar]"}],
+            (* mathtools' inline-sized p/b/B/v/Vsmallmatrix carry the SAME delimiters as their
+               full-sized counterparts; without these cases they fell through to the undelimited
+               "_" branch and their fences vanished silently (issue #62). Bare `smallmatrix`
+               (amsmath) genuinely has no delimiters and stays on the plain-grid branch below. *)
+            "pmatrix" | "pmatrix*" | "psmallmatrix" | "psmallmatrix*", RowBox[{"(", grid, ")"}],
+            "bmatrix" | "bmatrix*" | "bsmallmatrix" | "bsmallmatrix*", RowBox[{"[", grid, "]"}],
+            "Bmatrix" | "Bmatrix*" | "Bsmallmatrix" | "Bsmallmatrix*", RowBox[{"{", grid, "}"}],
+            "vmatrix" | "vmatrix*" | "vsmallmatrix" | "vsmallmatrix*", RowBox[{"\[LeftBracketingBar]", grid, "\[RightBracketingBar]"}],
+            "Vmatrix" | "Vmatrix*" | "Vsmallmatrix" | "Vsmallmatrix*", RowBox[{"\[LeftDoubleBracketingBar]", grid, "\[RightDoubleBracketingBar]"}],
             "cases" | "dcases" | "rcases" | "drcases",
                 RowBox[{"{", GridBox[padded, ColumnAlignments -> Left]}],
             (* align / aligned / split / eqnarray / alignat / flalign:
