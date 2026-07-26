@@ -27,6 +27,17 @@ Needs["Wolfram`Parser`"]
    (Parser/Kernel/Languages/, eager-loaded from Parser.wl), so their symbols are already
    in $Packages for MarkdownToNotebook to resolve the zoo docs. *)
 
+(* Warm the Wolfram compiler once, up front and Quieted. The first
+   FunctionCompile in a session autoloads the CompileUtilities` framework,
+   whose SystemSymbolQ collides with GeneralUtilities`SystemSymbolQ and emits a
+   one-time General::shdw as the framework's context joins the path. That
+   shadow would otherwise fire inside the first ParserCompile example cell and
+   be captured into the built notebook. Triggering the load here - outside any
+   example cell - keeps the compilation examples clean, the same reason
+   MarkdownToNotebook preloads the resource-framework packages before it starts
+   capturing cell output. *)
+Quiet @ ParserCompile[ParseLiteral["x"]]
+
 subdir["Symbol"] = {"Documentation", "English", "ReferencePages", "Symbols"}
 subdir["Guide"] = {"Documentation", "English", "Guides"}
 subdir["TechNote"] = {"Documentation", "English", "Tutorials"}
@@ -57,8 +68,16 @@ buildDoc[srcFile_String] := Block[{info, tmpl, baseName, dir, out},
 Print["building WolframParser documentation"]
 Scan[buildDoc, Sort @ FileNames["*.md", FileNameJoin[{rootDir, "docs"}], Infinity]]
 
+(* The ResourceDefinition is a showcase of INDEPENDENT examples (unlike the
+   tutorials, which deliberately thread one grammar across sections), so build
+   it with the default delimiter-respecting evaluation instead of overriding to
+   None: EvaluateSeparator -> Automatic resets the example context at each
+   heading and each `---` rule, so no example can accidentally depend on or
+   pollute another. (None is the setting only the state-threading tutorials
+   actually need; it was over-applied here.) The one multi-cell example (parens)
+   is self-contained within a single cell, so the reset breaks nothing. *)
 rd = FileNameJoin[{rootDir, "docs", "ResourceDefinition.md"}]
 If[ FileExistsQ[rd],
-    MarkdownToNotebook[rd, FileNameJoin[{pacletDir, "ResourceDefinition.nb"}], "EvaluateSeparator" -> None];
+    MarkdownToNotebook[rd, FileNameJoin[{pacletDir, "ResourceDefinition.nb"}], "EvaluateSeparator" -> Automatic];
     Print["  ResourceDefinition.md -> ResourceDefinition.nb"]
 ]
