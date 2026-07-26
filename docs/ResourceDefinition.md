@@ -14,7 +14,7 @@ Categories: [Core Language & Structure]
 Sources: ["Daan Leijen, *Parsec: Direct Style Monadic Parser Combinators for the Real World*, 2001", "Bryan Ford, *Parsing Expression Grammars: A Recognition-Based Syntactic Foundation*, POPL 2004"]
 SourceControlURL: https://github.com/sw1sh/WolframParser
 Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_combinator)", "[Parsing expression grammar (Wikipedia)](https://en.wikipedia.org/wiki/Parsing_expression_grammar)", "[AntonAntonov/FunctionalParsers (paclet)](https://resources.wolframcloud.com/PacletRepository/resources/AntonAntonov/FunctionalParsers/)", "[KaTeX screenshotter test corpus](https://github.com/KaTeX/KaTeX/blob/main/test/screenshotter/ss_data.yaml)"]
-RelatedResources: [Wolfram/MarkdownToNotebook]
+RelatedResources: [AntonAntonov/FunctionalParsers]
 ---
 
 ## Details & Options
@@ -158,14 +158,14 @@ With[{cf = ParserCompile[ParseSome[ParseCharacter[DigitCharacter]]]},
 ]
 ```
 
-The compiled artifact can be `Export`'d to a `.wxf` file and `Import`'d without recompiling - that is how [LaTeXMathParse]() ships its compiled core (`Assets/LaTeXMathParserCompiled.wxf`).
+The compiled artifact can be `Export`'d to a WXF file and `Import`'d without recompiling - that is how [LaTeXMathParse]() ships its compiled core (`Assets/LaTeXMathParserCompiled.wxf`).
 
 ## Options
 
 [ParserCompile]() takes a `Method` option choosing the compilation backend:
 
 - `Method -> Automatic` *(default)* - lowers the parser to a [FunctionCompile]() function. Fast on small to medium grammars; inliner aborts on large recursive trees (LaTeX, TPTP).
-- `Method -> "PEGVM"` - lowers to an integer instruction table run by an LPEG-style parsing machine. Scales to recursive grammars [FunctionCompile]() cannot handle, with 1-2 orders of magnitude better runtime than the interpreter. The compiled artifact `Export`'s to `.wxf` and `Import`'s without recompiling.
+- `Method -> "PEGVM"` - lowers to an integer instruction table run by an LPEG-style parsing machine. Scales to recursive grammars [FunctionCompile]() cannot handle, with 1-2 orders of magnitude better runtime than the interpreter. The compiled artifact `Export`'s to WXF and `Import`'s without recompiling.
 
 ```wl
 ParserCompile[ParseSome[ParseCharacter[DigitCharacter]], Method -> "PEGVM"]
@@ -177,7 +177,7 @@ ParserCompile[ParseSome[ParseCharacter[DigitCharacter]], Method -> "PEGVM"]
 
 ### LaTeX math
 
-[LaTeXMathParse]() is the largest grammar in the paclet: a PEG over the full inline-math fragment of TeX. It handles `\frac`, `\sqrt`, sub/superscripts, `\left/\right` delimiters, `\begin/end{matrix}` environments, big operators with limits, and 40+ KaTeX macros. The build ships a `.wxf` of the PEG-VM-compiled parser; first use auto-loads it if its grammar hash matches the source:
+[LaTeXMathParse]() is the largest grammar in the paclet: a PEG over the full inline-math fragment of TeX. It handles `\frac`, `\sqrt`, sub/superscripts, `\left/\right` delimiters, `\begin/end{matrix}` environments, big operators with limits, and 40+ KaTeX macros. The build ships a WXF dump of the PEG-VM-compiled parser; first use auto-loads it if its grammar hash matches the source:
 
 ```wl
 RawBoxes @ LaTeXMathStyle @ LaTeXMathParse["\\sum_{i=1}^{n} \\frac{1}{i^2} = \\frac{\\pi^2}{6}"]
@@ -193,7 +193,7 @@ MarkdownInlineParse["**bold $x$** and `code`"]
 
 ### EBNF / BNF grammars
 
-[EBNFParse]() reads a `::=` / `:==` / `::-` / `:::` BNF source (the TPTP project's `SyntaxBNF` shape) and returns an [Association]() of rule names to [ParserCombinator](). The BNF parser is itself written in the [ParserCombinator]() core - a literal demonstration that the combinators are enough to parse their own meta-grammar:
+[EBNFParse]() reads a BNF source (`::=`/`:==`/`::-`/`:::` arrow forms; the TPTP project's `SyntaxBNF` shape) and returns an [Association]() of rule names to [ParserCombinator](). The BNF parser is itself written in the [ParserCombinator]() core - a literal demonstration that the combinators are enough to parse their own meta-grammar:
 
 ```wl
 EBNFParse["<digit> ::= 0 | 1 | 2 | 3\n<number> ::= <digit> | <digit> <number>"]
@@ -201,7 +201,7 @@ EBNFParse["<digit> ::= 0 | 1 | 2 | 3\n<number> ::= <digit> | <digit> <number>"]
 
 ### TPTP
 
-[TPTPImport]() parses a `.p` file from the TPTP problem library - first-order, equational, higher-order, and typed fragments - returning a list of formulas. The parser handles the full TPTP grammar (10k+ lines of BNF) by composing the [EBNFParse]() output with a small post-processing pass.
+[TPTPImport]() parses a TPTP problem file (`.p`) from the library - first-order, equational, higher-order, and typed fragments - returning a list of formulas. The parser handles the full TPTP grammar (10k+ lines of BNF) by composing the [EBNFParse]() output with a small post-processing pass.
 
 ### Walking Wolfram ASTs
 
