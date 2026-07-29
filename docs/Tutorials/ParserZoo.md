@@ -1,12 +1,12 @@
 ---
-Template: Guide
+Template: TechNote
 Name: ParserZoo
 Title: The Parser Zoo - language front-ends over a shared algebra
 Context: Wolfram`Parser`
 ContextPath: [Wolfram`Parser`Languages`Calculator`, Wolfram`Parser`Languages`JSON`, Wolfram`Parser`Languages`Lisp`, Wolfram`Parser`Languages`Lambda`, Wolfram`Parser`Languages`Brainfuck`]
 Paclet: Wolfram/Parser
-URI: Wolfram/Parser/guide/ParserZoo
-Description: A showcase suite that battle-tests Wolfram/Parser by building a spread of language front-ends - calculator, JSON, Lisp, lambda calculus, Brainfuck - each grammar written once over a shared algebra and run two ways: with the language's meaningful actions, or with the shared ASTAlgebra to get a standard, CodeParser-shaped syntax tree.
+URI: Wolfram/Parser/tutorial/ParserZoo
+Description: "A showcase suite that battle-tests Wolfram/Parser by building a spread of language front-ends - calculator, JSON, Lisp, lambda calculus, Brainfuck - each grammar written once over a shared algebra and run two ways: with the language's meaningful actions, or with the shared ASTAlgebra to get a standard, CodeParser-shaped syntax tree."
 Keywords: [parser zoo, language front-ends, AST, algebra, calculator, JSON, Lisp, lambda calculus, Brainfuck]
 RelatedGuides: [WolframParser]
 ---

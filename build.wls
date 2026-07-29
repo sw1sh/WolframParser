@@ -57,11 +57,30 @@ buildDoc[srcFile_String] := Block[{info, tmpl, baseName, dir, out},
     ];
     info = MarkdownToNotebook[srcFile, "Association", "EvaluateSeparator" -> None];
     tmpl = info["Template"];
+    (* The Paclet resource-definition notebook (ResourceDefinition.md) is NOT a doc
+       page - it is the submission artifact, built separately below with Automatic
+       separator. buildDoc would otherwise emit a spurious, code-less copy under
+       Documentation/English/Paclet/. *)
+    If[ tmpl === "Paclet",
+        Print["  (skip ", FileNameTake[srcFile], ": Paclet definition notebook, built separately)"];
+        Return[]
+    ];
     baseName = FileBaseName[srcFile];
     dir = FileNameJoin[Prepend[subdir[tmpl], pacletDir]];
     Quiet @ CreateDirectory[dir, CreateIntermediateDirectories -> True];
     out = FileNameJoin[{dir, baseName <> ".nb"}];
     MarkdownToNotebook[srcFile, out, "EvaluateSeparator" -> None];
+    (* Content-completeness guard: a page whose source carries ```wl code blocks
+       but whose built notebook has NO Input/Code cells silently lost its examples
+       - the classic case is a Template: Guide with runnable code, which the guide
+       builder drops (the code belongs in a Template: TechNote tutorial). This is
+       not a build error, so a page-count / error scan misses it; flag it loudly. *)
+    If[ StringContainsQ[Import[srcFile, "Text"], "```wl"] &&
+            FreeQ[Get[out], Cell[_, "Input" | "Code", ___]],
+        Print["  !! WARNING: ", FileNameTake[srcFile], " (", tmpl,
+              ") has ```wl code blocks but the built .nb has NO Input cells - the ",
+              "template dropped them; a runnable page must be a TechNote, not a Guide."]
+    ];
     Print["  ", FileNameTake[srcFile], " -> Documentation/English/", Last[subdir[tmpl]], "/", baseName, ".nb"]
 ]
 
