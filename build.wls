@@ -23,6 +23,7 @@ PacletDirectoryLoad[pacletDir]
 
 Get[FileNameJoin[{rootDir, "..", "..", "MarkdownToNotebook.wl"}]]
 Needs["Wolfram`Parser`"]
+Needs["DocumentationBuild`"]
 (* Needs["Wolfram`Parser`"] now also loads the bundled Languages front-ends
    (Parser/Kernel/Languages/, eager-loaded from Parser.wl), so their symbols are already
    in $Packages for MarkdownToNotebook to resolve the zoo docs. *)
@@ -38,10 +39,22 @@ Needs["Wolfram`Parser`"]
    capturing cell output. *)
 Quiet @ ParserCompile[ParseLiteral["x"]]
 
-subdir["Symbol"] = {"Documentation", "English", "ReferencePages", "Symbols"}
-subdir["Guide"] = {"Documentation", "English", "Guides"}
-subdir["TechNote"] = {"Documentation", "English", "Tutorials"}
-subdir["Overview"] = {"Documentation", "English", "Tutorials"}
+(* Two-stage docs: MarkdownToNotebook writes AUTHORING notebooks into a source
+   tree (srcDocDir), then DocumentationBuild turns them into the BUILT
+   Documentation/ that ships in the paclet. The build stage is what produces the
+   navigation Index + SearchIndex + SpellIndex; a raw M2N notebook has none, so an
+   un-built paclet deploys as a lone landing page with no guide/symbol pages and no
+   sidebar. build/ and Documentation/ are both gitignored. subdir is relative to a
+   Documentation-level directory (no "Documentation" prefix), the shape
+   DocumentationBuildNotebooks expects for its input and output. *)
+srcDocDir  = FileNameJoin[{rootDir, "build", "DocSource"}]
+destDocDir = FileNameJoin[{pacletDir, "Documentation"}]
+If[DirectoryQ[srcDocDir], DeleteDirectory[srcDocDir, DeleteContents -> True]]
+
+subdir["Symbol"] = {"English", "ReferencePages", "Symbols"}
+subdir["Guide"] = {"English", "Guides"}
+subdir["TechNote"] = {"English", "Tutorials"}
+subdir["Overview"] = {"English", "Tutorials"}
 
 (* Tutorials thread state across sections (a parser built in one section is used
    in the next), so the whole notebook must evaluate in a single context.
@@ -66,7 +79,7 @@ buildDoc[srcFile_String] := Block[{info, tmpl, baseName, dir, out},
         Return[]
     ];
     baseName = FileBaseName[srcFile];
-    dir = FileNameJoin[Prepend[subdir[tmpl], pacletDir]];
+    dir = FileNameJoin[Prepend[subdir[tmpl], srcDocDir]];
     Quiet @ CreateDirectory[dir, CreateIntermediateDirectories -> True];
     out = FileNameJoin[{dir, baseName <> ".nb"}];
     MarkdownToNotebook[srcFile, out, "EvaluateSeparator" -> None];
@@ -81,11 +94,25 @@ buildDoc[srcFile_String] := Block[{info, tmpl, baseName, dir, out},
               ") has ```wl code blocks but the built .nb has NO Input cells - the ",
               "template dropped them; a runnable page must be a TechNote, not a Guide."]
     ];
-    Print["  ", FileNameTake[srcFile], " -> Documentation/English/", Last[subdir[tmpl]], "/", baseName, ".nb"]
+    Print["  ", FileNameTake[srcFile], " -> DocSource/English/", Last[subdir[tmpl]], "/", baseName, ".nb"]
 ]
 
-Print["building WolframParser documentation"]
+Print["building WolframParser documentation (authoring notebooks)"]
 Scan[buildDoc, Sort @ FileNames["*.md", FileNameJoin[{rootDir, "docs"}], Infinity]]
+
+(* Stage 2: turn the authoring notebooks in srcDocDir into the paclet's built
+   Documentation/. DocumentationBuildNotebooks fills in navigation / related
+   links and writes English/Index + English/SearchIndex + English/SpellIndex -
+   without this the deployed paclet renders only its landing page (no guide /
+   symbol pages, no sidebar). "LinkBase" namespaces the paclet:Wolfram/Parser/...
+   doc URIs so intra-paclet See-Also links resolve. Serial whole-tree build (the
+   robust path); the "See Also link to unknown URI removed" warnings are benign
+   (links to pages genuinely absent from the set). *)
+Print["running DocumentationBuild: ", srcDocDir, " -> ", destDocDir]
+If[DirectoryQ[destDocDir], DeleteDirectory[destDocDir, DeleteContents -> True]]
+UsingFrontEnd @ DocumentationBuild`DocumentationBuildNotebooks[srcDocDir, destDocDir, "LinkBase" -> "Wolfram/Parser"]
+Print["  built ", Length @ FileNames["*.nb", FileNameJoin[{destDocDir, "English"}], Infinity],
+      " documentation notebooks (+ Index / SearchIndex / SpellIndex)"]
 
 (* The ResourceDefinition is a showcase of INDEPENDENT examples (unlike the
    tutorials, which deliberately thread one grammar across sections), so build
