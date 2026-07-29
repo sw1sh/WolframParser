@@ -35,6 +35,8 @@ LaTeXMathParser::usage = "LaTeXMathParser is the underlying ParserCombinator. Us
 
 LaTeXMathStyle::usage = "LaTeXMathStyle[boxes] restyles LaTeXMathParse output into a Computer-Modern look, matching LaTeX/MaTeX: italic letters become their math-italic (cmmi) codepoints in an installed Latin Modern Math font and \\mathbb letters render in the MSBM10 blackboard font, with everything wrapped in the chosen family. With no font it auto-detects the best installed CM font (Latin Modern Math > Latin Modern Roman > CMU Serif) and returns the boxes unchanged if none is found. LaTeXMathStyle[boxes, font] forces a specific family."
 
+ExportLaTeX::usage = "ExportLaTeX[boxes] serializes a Wolfram box tree - FractionBox, SuperscriptBox, SqrtBox, GridBox matrices, quantum Ket/Bra/Dagger templates, Greek and operator glyphs, ... - to a LaTeX math string, the inverse of LaTeXMathParse. ExportLaTeX also accepts a RawBoxes[boxes] wrapper or a Cell, extracting the box content. Unknown boxes fall back to their InputForm."
+
 
 Begin["`LaTeXPrivate`"]
 
@@ -3181,6 +3183,179 @@ LaTeXMathStyle[boxes_, font_String] := Module[
             StyleBox[s, FontFamily -> msbm]];
     StyleBox[r, FontFamily -> font]
 ]
+
+
+(* ============================================================================
+   ExportLaTeX : serialize a Wolfram box tree to a LaTeX math string - the
+   inverse of LaTeXMathParse. Ported from the NotebookToMarkdown math serializer
+   so the box->LaTeX logic lives in one place. `normStr` and `$mathTeX` are
+   defined in the Wolfram`Parser` context (not `LaTeXPrivate`) so a consumer such
+   as NotebookToMarkdown reuses them for its prose / signature paths instead of
+   keeping duplicate copies; the tables they build on stay private here.
+   ============================================================================ *)
+
+(* Mathematical-alphanumeric PUA block map: {PUAstart, count, ASCIIstart,
+   UnicodeBase, <|holeIndex -> codepoint|>, texCommand}. The blocks are
+   contiguous except for letters unified into the Letterlike Symbols block. *)
+$mathAlpha = {
+    {63396, 26, 65, 16^^1D538, <|2 -> 16^^2102, 7 -> 16^^210D, 13 -> 16^^2115, 15 -> 16^^2119, 16 -> 16^^211A, 17 -> 16^^211D, 25 -> 16^^2124|>, "mathbb"},
+    {63206, 26, 97, 16^^1D552, <||>, "mathbb"},
+    {63451, 10, 48, 16^^1D7D8, <||>, "mathbb"},
+    {63344, 26, 65, 16^^1D49C, <|1 -> 16^^212C, 4 -> 16^^2130, 5 -> 16^^2131, 7 -> 16^^210B, 8 -> 16^^2110, 11 -> 16^^2112, 12 -> 16^^2133, 17 -> 16^^211B|>, "mathcal"},
+    {63154, 26, 97, 16^^1D4B6, <|4 -> 16^^212F, 6 -> 16^^210A, 14 -> 16^^2134|>, "mathcal"},
+    {63370, 26, 65, 16^^1D504, <|2 -> 16^^212D, 7 -> 16^^210C, 8 -> 16^^2111, 17 -> 16^^211C, 25 -> 16^^2128|>, "mathfrak"},
+    {63180, 26, 97, 16^^1D51E, <||>, "mathfrak"}
+};
+$puaAlphaGlyph = Association @ Flatten @ Table[
+    With[{r = $mathAlpha[[k]]},
+        Table[(r[[1]] + i) -> FromCharacterCode[Lookup[r[[5]], i, r[[4]] + i]], {i, 0, r[[2]] - 1}]],
+    {k, Length[$mathAlpha]}];
+$mathAlphaTeX = Association @ Flatten @ Table[
+    With[{r = $mathAlpha[[k]]},
+        Table[FromCharacterCode[Lookup[r[[5]], i, r[[4]] + i]] -> "\\" <> r[[6]] <> "{" <> FromCharacterCode[r[[3]] + i] <> "}", {i, 0, r[[2]] - 1}]],
+    {k, Length[$mathAlpha]}];
+
+normCharCode[n_Integer] := Which[
+    63488 <= n <= 63513, FromCharacterCode[n - 63488 + 97],
+    63514 <= n <= 63539, FromCharacterCode[n - 63514 + 65],
+    KeyExistsQ[$puaAlphaGlyph, n], $puaAlphaGlyph[n],
+    63307 <= n <= 63311, FromCharacterCode @ {68, 100, 101, 105, 106}[[n - 63306]],
+    n === 16^^F603 || n === 16^^F604, "|",
+    n === 16^^F7D9, "=",
+    n === 16^^F39E, "+",
+    n === 16^^F438, "lim",
+    57344 <= n <= 63487, "",
+    True, FromCharacterCode[n]
+];
+(* exposed for reuse: PUA/formal glyph -> canonical Unicode (prose-safe) *)
+Wolfram`Parser`normStr[s_String] := StringJoin[normCharCode /@ ToCharacterCode[s]];
+
+(* exposed for reuse: canonical Unicode glyph -> TeX command (math mode) *)
+Wolfram`Parser`$mathTeX = Join[<|
+    "\[Alpha]" -> "\\alpha ", "\[Beta]" -> "\\beta ", "\[Gamma]" -> "\\gamma ",
+    "\[Delta]" -> "\\delta ", "\[Epsilon]" -> "\\epsilon ", "\[CurlyEpsilon]" -> "\\varepsilon ",
+    "\[Zeta]" -> "\\zeta ", "\[Eta]" -> "\\eta ", "\[Theta]" -> "\\theta ",
+    "\[CurlyTheta]" -> "\\vartheta ", "\[Iota]" -> "\\iota ", "\[Kappa]" -> "\\kappa ",
+    "\[Lambda]" -> "\\lambda ", "\[Mu]" -> "\\mu ", "\[Nu]" -> "\\nu ", "\[Xi]" -> "\\xi ",
+    "\[Pi]" -> "\\pi ", "\[Rho]" -> "\\rho ", "\[Sigma]" -> "\\sigma ", "\[FinalSigma]" -> "\\varsigma ",
+    "\[Tau]" -> "\\tau ", "\[Upsilon]" -> "\\upsilon ", "\[Phi]" -> "\\phi ",
+    "\[CurlyPhi]" -> "\\varphi ", "\[Chi]" -> "\\chi ", "\[Psi]" -> "\\psi ", "\[Omega]" -> "\\omega ",
+    "\[CapitalGamma]" -> "\\Gamma ", "\[CapitalDelta]" -> "\\Delta ", "\[CapitalTheta]" -> "\\Theta ",
+    "\[CapitalLambda]" -> "\\Lambda ", "\[CapitalXi]" -> "\\Xi ", "\[CapitalPi]" -> "\\Pi ",
+    "\[CapitalSigma]" -> "\\Sigma ", "\[CapitalUpsilon]" -> "\\Upsilon ", "\[CapitalPhi]" -> "\\Phi ",
+    "\[CapitalPsi]" -> "\\Psi ", "\[CapitalOmega]" -> "\\Omega ",
+    "\[Dagger]" -> "\\dagger ", "\[CircleTimes]" -> "\\otimes ", "\[Ellipsis]" -> "\\ldots ",
+    "\[Sum]" -> "\\sum ", "\[Product]" -> "\\prod ", "\[Integral]" -> "\\int ",
+    "\[PartialD]" -> "\\partial ", "\[Del]" -> "\\nabla ", "\[Infinity]" -> "\\infty ",
+    "\[Times]" -> "\\times ", "\[CenterDot]" -> "\\cdot ", "\[Divide]" -> "\\div ",
+    "\[CirclePlus]" -> "\\oplus ", "\[CircleMinus]" -> "\\ominus ", "\[CircleDot]" -> "\\odot ",
+    "\[TildeTilde]" -> "\\approx ", "\[TildeEqual]" -> "\\simeq ", "\[Tilde]" -> "\\sim ",
+    "\[Congruent]" -> "\\equiv ", "\[Proportional]" -> "\\propto ",
+    "\[LeftAngleBracket]" -> "\\langle ", "\[RightAngleBracket]" -> "\\rangle ",
+    "\[LessEqual]" -> "\\le ", "\[GreaterEqual]" -> "\\ge ", "\[NotEqual]" -> "\\ne ",
+    "\[PlusMinus]" -> "\\pm ", "\[MinusPlus]" -> "\\mp ",
+    "\[Element]" -> "\\in ", "\[NotElement]" -> "\\notin ",
+    "\[Subset]" -> "\\subset ", "\[SubsetEqual]" -> "\\subseteq ",
+    "\[Superset]" -> "\\supset ", "\[SupersetEqual]" -> "\\supseteq ",
+    "\[Union]" -> "\\cup ", "\[Intersection]" -> "\\cap ", "\[EmptySet]" -> "\\emptyset ",
+    "\[ForAll]" -> "\\forall ", "\[Exists]" -> "\\exists ",
+    "\[And]" -> "\\wedge ", "\[Or]" -> "\\vee ", "\[Not]" -> "\\neg ",
+    "\[LeftArrow]" -> "\\leftarrow ", "\[LeftRightArrow]" -> "\\leftrightarrow ",
+    "\[Implies]" -> "\\implies ", "\[RightTeeArrow]" -> "\\mapsto ",
+    "\[Angle]" -> "\\angle ", "\[Degree]" -> "^\\circ "
+|>, $mathAlphaTeX, <|
+    FromCharacterCode[16^^210F] -> "\\hbar ",
+    FromCharacterCode[16^^226B] -> "\\gg ", FromCharacterCode[16^^226A] -> "\\ll ",
+    FromCharacterCode[16^^2218] -> "\\circ ", FromCharacterCode[16^^25E6] -> "\\circ ",
+    FromCharacterCode[16^^22C1] -> "\\bigvee ", FromCharacterCode[16^^22C0] -> "\\bigwedge ",
+    FromCharacterCode[16^^2502] -> "|", FromCharacterCode[16^^2225] -> "\\|",
+    FromCharacterCode[16^^200B] -> ""
+|>];
+
+(* ASCII relational / arrow operators typed literally into TraditionalForm math,
+   longest-first so "=!="/"===" beat "==" and "<->" beats "<="/"->". *)
+$mathAsciiOps = {
+    WhitespaceCharacter ... ~~ "=!=" ~~ WhitespaceCharacter ... -> " \\not\\equiv ",
+    WhitespaceCharacter ... ~~ "===" ~~ WhitespaceCharacter ... -> " \\equiv ",
+    WhitespaceCharacter ... ~~ "<->" ~~ WhitespaceCharacter ... -> " \\leftrightarrow ",
+    WhitespaceCharacter ... ~~ "<=" ~~ WhitespaceCharacter ... -> " \\le ",
+    WhitespaceCharacter ... ~~ ">=" ~~ WhitespaceCharacter ... -> " \\ge ",
+    WhitespaceCharacter ... ~~ "!=" ~~ WhitespaceCharacter ... -> " \\ne ",
+    WhitespaceCharacter ... ~~ "->" ~~ WhitespaceCharacter ... -> " \\to ",
+    WhitespaceCharacter ... ~~ "==" ~~ WhitespaceCharacter ... -> " = "};
+
+(* --- the serializer (produces the body of a math span, no outer $) --- *)
+ExportLaTeX["mod"] := "\\bmod "
+ExportLaTeX["div"] := "\\div "
+ExportLaTeX["gcd"] := "\\gcd "
+ExportLaTeX["lcm"] := "\\operatorname{lcm} "
+ExportLaTeX["{"] := "\\{"
+ExportLaTeX["}"] := "\\}"
+ExportLaTeX["\[Rule]"] := "\\to "
+ExportLaTeX["\[RightArrow]"] := "\\to "
+ExportLaTeX[s_String /; s =!= "" && StringMatchQ[s, Whitespace]] := "\\, "
+ExportLaTeX[s_String] := StringReplace[StringReplace[normStr[s], $mathAsciiOps], Normal @ $mathTeX]
+ExportLaTeX[StyleBox[s_String, "TI", ___]] /; StringMatchQ[s, RegularExpression["[a-zA-Z]{2,}"]] :=
+    "\\mathit{" <> s <> "}"
+plainOpQ[StyleBox[_String, opts___]] := ! FreeQ[{opts}, FontSlant -> "Plain"]
+plainOpQ[_] := False
+ExportLaTeX[b : StyleBox[s_String, ___]] /; plainOpQ[b] := "\\" <> s <> " "
+ExportLaTeX[StyleBox[s_, ___]] := ExportLaTeX[s]
+ExportLaTeX[FractionBox[a_, b_, ___]] := "\\frac{" <> ExportLaTeX[a] <> "}{" <> ExportLaTeX[b] <> "}"
+scriptBase[box_] := Replace[
+    StringReplace[ExportLaTeX[box], ("\\," | " ") .. ~~ EndOfString -> ""], "" -> "{}"]
+ExportLaTeX[SubscriptBox[a_, b_, ___]] := scriptBase[a] <> "_{" <> ExportLaTeX[b] <> "}"
+ExportLaTeX[SuperscriptBox[a_, b_, ___]] := scriptBase[a] <> "^{" <> ExportLaTeX[b] <> "}"
+ExportLaTeX[SubsuperscriptBox[a_, b_, c_, ___]] := scriptBase[a] <> "_{" <> ExportLaTeX[b] <> "}^{" <> ExportLaTeX[c] <> "}"
+ExportLaTeX[SqrtBox[a_, ___]] := "\\sqrt{" <> ExportLaTeX[a] <> "}"
+ExportLaTeX[RadicalBox[a_, b_, ___]] := "\\sqrt[" <> ExportLaTeX[b] <> "]{" <> ExportLaTeX[a] <> "}"
+ExportLaTeX[UnderscriptBox[a_, b_, ___]] := ExportLaTeX[a] <> "_{" <> ExportLaTeX[b] <> "}"
+ExportLaTeX[OverscriptBox[a_, "^", ___]] := "\\hat{" <> ExportLaTeX[a] <> "}"
+ExportLaTeX[OverscriptBox[a_, "_", ___]] := "\\overline{" <> ExportLaTeX[a] <> "}"
+ExportLaTeX[OverscriptBox[a_, "\[RightVector]" | "\[RightArrow]", ___]] := "\\vec{" <> ExportLaTeX[a] <> "}"
+ExportLaTeX[OverscriptBox[a_, b_, ___]] := "\\overset{" <> ExportLaTeX[b] <> "}{" <> ExportLaTeX[a] <> "}"
+ExportLaTeX[UnderoverscriptBox[a_, b_, c_, ___]] := ExportLaTeX[a] <> "_{" <> ExportLaTeX[b] <> "}^{" <> ExportLaTeX[c] <> "}"
+ExportLaTeX[ButtonBox[n_, ___]] := ExportLaTeX[n]
+gridRows[GridBox[rows_List, ___]] := StringRiffle[
+    Function[row, StringRiffle[ExportLaTeX /@ row, " & "]] /@ rows, " \\\\ "]
+ExportLaTeX[GridBox[{{"\[Piecewise]", inner_GridBox}}, ___]] :=
+    "\\begin{cases}" <> gridRows[inner] <> "\\end{cases}"
+ExportLaTeX[TemplateBox[{g_GridBox}, "Abs"]] := "\\begin{vmatrix}" <> gridRows[g] <> "\\end{vmatrix}"
+ExportLaTeX[TemplateBox[{g_GridBox}, "Norm"]] := "\\begin{Vmatrix}" <> gridRows[g] <> "\\end{Vmatrix}"
+ExportLaTeX[g_GridBox] := "\\begin{matrix}" <> gridRows[g] <> "\\end{matrix}"
+$matrixEnv = <|
+    "(" -> {"pmatrix", ")"}, "[" -> {"bmatrix", "]"}, "{" -> {"Bmatrix", "}"},
+    "|" -> {"vmatrix", "|"},
+    "\[LeftBracketingBar]" -> {"vmatrix", "\[RightBracketingBar]"},
+    "\[LeftDoubleBracketingBar]" -> {"Vmatrix", "\[RightDoubleBracketingBar]"}
+|>;
+fenceChar[s_String] := s
+fenceChar[StyleBox[s_String, ___]] := s
+fenceChar[_] := None
+matrixEnvFor[o_, c_] := With[{e = Lookup[$matrixEnv, fenceChar[o], None]},
+    If[MatchQ[e, {_String, _String}] && Last[e] === fenceChar[c], First[e], None]]
+ExportLaTeX[matrixEnvBox[env_String, g_GridBox]] := "\\begin{" <> env <> "}" <> gridRows[g] <> "\\end{" <> env <> "}"
+fuseMatrixFences[xs_List] := SequenceReplace[xs,
+    {o_, g_GridBox, c_} /; StringQ[matrixEnvFor[o, c]] :> matrixEnvBox[matrixEnvFor[o, c], g]]
+ExportLaTeX[RowBox[xs_List]] := StringJoin[ExportLaTeX /@
+    fuseMatrixFences @ SequenceReplace[xs, {op_?plainOpQ, " " | "\[ThinSpace]" | "\[MediumSpace]" | "\[InvisibleSpace]"} :> op]]
+ExportLaTeX[FormBox[box_, ___]] := ExportLaTeX[box]
+ExportLaTeX[TagBox[x_, ___]] := ExportLaTeX[x]
+ExportLaTeX[InterpretationBox[x_, ___]] := ExportLaTeX[x]
+ExportLaTeX[RawBoxes[b_]] := ExportLaTeX[b]
+ExportLaTeX[Cell[BoxData[b_], ___]] := ExportLaTeX[b]
+ExportLaTeX[Cell[c_, ___]] := ExportLaTeX[c]
+(* an auto-linked symbol (doc-link template) in math -> its bare name *)
+ExportLaTeX[tb : TemplateBox[{_, _String, ___}, "PackageLink" | "RefLink" | "RefLinkPlain", ___]] :=
+    FirstCase[First[tb], s_String :> s, "", Infinity]
+ExportLaTeX[TemplateBox[{x_}, "Ket"]] := "|" <> ExportLaTeX[x] <> "\\rangle "
+ExportLaTeX[TemplateBox[{x_}, "Bra"]] := "\\langle " <> ExportLaTeX[x] <> "|"
+ExportLaTeX[TemplateBox[{x_, y_}, "Braket" | "BraKet"]] := "\\langle " <> ExportLaTeX[x] <> "|" <> ExportLaTeX[y] <> "\\rangle "
+ExportLaTeX[TemplateBox[{x_}, "SuperDagger" | "Dagger"]] := ExportLaTeX[x] <> "^\\dagger "
+ExportLaTeX[TemplateBox[{x_}, "Conjugate"]] := ExportLaTeX[x] <> "^*"
+ExportLaTeX[TemplateBox[{x_}, "Norm"]] := "\\lVert " <> ExportLaTeX[x] <> "\\rVert "
+ExportLaTeX[TemplateBox[{x_}, "Abs"]] := "\\lvert " <> ExportLaTeX[x] <> "\\rvert "
+ExportLaTeX[other_] := ToString[other, InputForm]
 
 
 End[]

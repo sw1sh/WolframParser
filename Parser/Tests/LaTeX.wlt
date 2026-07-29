@@ -944,3 +944,86 @@ VerificationTest[
     True,
     TestID -> "LaTeXMathStyle: Failure passes through"
 ]
+
+
+(* === ExportLaTeX : box tree -> LaTeX (inverse of LaTeXMathParse) === *)
+
+VerificationTest[
+    ExportLaTeX[FractionBox["a", "b"]],
+    "\\frac{a}{b}",
+    TestID -> "ExportLaTeX: FractionBox"
+]
+
+VerificationTest[
+    ExportLaTeX[SuperscriptBox["x", "2"]],
+    "x^{2}",
+    TestID -> "ExportLaTeX: SuperscriptBox"
+]
+
+VerificationTest[
+    ExportLaTeX[SqrtBox["2"]],
+    "\\sqrt{2}",
+    TestID -> "ExportLaTeX: SqrtBox"
+]
+
+VerificationTest[
+    ExportLaTeX[StyleBox["output", "TI"]],
+    "\\mathit{output}",
+    TestID -> "ExportLaTeX: multi-letter TI identifier -> \\mathit"
+]
+
+VerificationTest[
+    ExportLaTeX["\[Alpha]"],
+    "\\alpha ",
+    TestID -> "ExportLaTeX: Greek glyph -> command"
+]
+
+VerificationTest[
+    ExportLaTeX[TemplateBox[{"x"}, "Ket"]],
+    "|x\\rangle ",
+    TestID -> "ExportLaTeX: Ket"
+]
+
+VerificationTest[
+    ExportLaTeX[TemplateBox[{"x"}, "Dagger"]],
+    "x^\\dagger ",
+    TestID -> "ExportLaTeX: Dagger"
+]
+
+VerificationTest[
+    ExportLaTeX[GridBox[{{"1", "2"}, {"3", "4"}}]],
+    "\\begin{matrix}1 & 2 \\\\ 3 & 4\\end{matrix}",
+    TestID -> "ExportLaTeX: GridBox -> matrix"
+]
+
+VerificationTest[
+    ExportLaTeX[RowBox[{"(", GridBox[{{"1"}, {"2"}}], ")"}]],
+    "\\begin{pmatrix}1 \\\\ 2\\end{pmatrix}",
+    TestID -> "ExportLaTeX: fenced GridBox -> pmatrix"
+]
+
+VerificationTest[
+    (* boxes -> LaTeX -> boxes round-trips through LaTeXMathParse *)
+    With[{tex = ExportLaTeX[LaTeXMathParse["\\frac{a}{b}"]]}, LaTeXMathParse[tex]],
+    FractionBox[StyleBox["a", "TI"], StyleBox["b", "TI"]],
+    TestID -> "ExportLaTeX: round-trips with LaTeXMathParse"
+]
+
+VerificationTest[
+    ExportLaTeX[RawBoxes[SqrtBox["2"]]],
+    "\\sqrt{2}",
+    TestID -> "ExportLaTeX: accepts RawBoxes wrapper"
+]
+
+VerificationTest[
+    ExportLaTeX[Cell[BoxData[SuperscriptBox["e", "x"]], "Input"]],
+    "e^{x}",
+    TestID -> "ExportLaTeX: accepts a Cell"
+]
+
+VerificationTest[
+    (* an unknown box falls back to its InputForm *)
+    ExportLaTeX[SomeUnknownBox[1, 2]],
+    "SomeUnknownBox[1, 2]",
+    TestID -> "ExportLaTeX: unknown box -> InputForm fallback"
+]
