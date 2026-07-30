@@ -21,7 +21,7 @@ pacletDir = FileNameJoin[{rootDir, "Parser"}]
    URL, shadowing our dev paclet's edits with stale code. *)
 PacletDirectoryLoad[pacletDir]
 
-Get[FileNameJoin[{rootDir, "..", "..", "MarkdownToNotebook.wl"}]]
+Get[FileNameJoin[{rootDir, "..", "..", "..", "MarkdownToNotebook.wl"}]]
 Needs["Wolfram`Parser`"]
 Needs["DocumentationBuild`"]
 (* Needs["Wolfram`Parser`"] now also loads the bundled Languages front-ends
