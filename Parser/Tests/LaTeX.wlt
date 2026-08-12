@@ -1027,3 +1027,33 @@ VerificationTest[
     "SomeUnknownBox[1, 2]",
     TestID -> "ExportLaTeX: unknown box -> InputForm fallback"
 ]
+
+(* ===== AMS negated relations (issue #2) ===== *)
+
+VerificationTest[
+    (* every negated relation resolves to its standard Unicode codepoint
+       instead of leaking the raw macro text *)
+    Map[
+        Function[m,
+            Replace[LaTeXMathParse["a \\" <> m <> " b"], {RowBox[{_, x_, _}] :> x, _ -> $Failed}]],
+        {"nmid", "nleq", "ngeq", "nsubseteq", "nsupseteq", "nparallel",
+         "nprec", "nsucc", "ncong", "nsim", "nvdash"}
+    ],
+    FromCharacterCode /@ {16^^2224, 16^^2270, 16^^2271, 16^^2288, 16^^2289,
+        16^^2226, 16^^2280, 16^^2281, 16^^2247, 16^^2241, 16^^22AC},
+    TestID -> "LaTeXMathParse: AMS negated relations"
+]
+
+VerificationTest[
+    (* the short aliases match their long forms *)
+    {LaTeXMathParse["a \\nle b"], LaTeXMathParse["a \\nge b"]},
+    {LaTeXMathParse["a \\nleq b"], LaTeXMathParse["a \\ngeq b"]},
+    TestID -> "LaTeXMathParse: \\nle / \\nge aliases"
+]
+
+VerificationTest[
+    (* and they survive the inverse, so LaTeX -> boxes -> LaTeX round-trips *)
+    ExportLaTeX[LaTeXMathParse["p \\nmid a"]],
+    "p\\nmid a",
+    TestID -> "ExportLaTeX: negated relation round-trip"
+]

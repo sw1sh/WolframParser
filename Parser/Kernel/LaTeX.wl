@@ -1346,6 +1346,18 @@ namedSymbolChars = <|
     "\\partial" -> "\[PartialD]",     "\\nabla" -> "\[Del]",
     "\\emptyset" -> "\[EmptySet]",
     "\\colon"   -> ":",               "\\mid"   -> "\[VerticalSeparator]",
+    (* AMS negated relations (issue #2). Named characters are used where they
+       carry the standard Unicode codepoint; \nmid and \nvdash are escaped
+       explicitly because \[NotVerticalBar] is a Wolfram private-use glyph
+       (U+F3D1, not U+2224) and there is no named character for U+22AC. *)
+    "\\nmid"    -> "\:2224",           "\\nparallel" -> "\[NotDoubleVerticalBar]",
+    "\\nleq"    -> "\[NotLessEqual]",  "\\nle"   -> "\[NotLessEqual]",
+    "\\ngeq"    -> "\[NotGreaterEqual]", "\\nge" -> "\[NotGreaterEqual]",
+    "\\nsubseteq" -> "\[NotSubsetEqual]", "\\nsupseteq" -> "\[NotSupersetEqual]",
+    "\\nsubset" -> "\[NotSubset]",     "\\nsupset" -> "\[NotSuperset]",
+    "\\nprec"   -> "\[NotPrecedes]",   "\\nsucc" -> "\[NotSucceeds]",
+    "\\ncong"   -> "\[NotTildeFullEqual]", "\\nsim" -> "\[NotTilde]",
+    "\\nvdash"  -> "\:22ac",
     "\\cong"    -> "\[TildeFullEqual]", "\\propto" -> "\[Proportional]",
     "\\ll"      -> "\[LessLess]",      "\\gg"    -> "\[GreaterGreater]",
     "\\setminus" -> "\[Backslash]",   "\\circ"  -> "\[SmallCircle]",
@@ -3255,6 +3267,16 @@ Wolfram`Parser`$mathTeX = Join[<|
     "\[LessEqual]" -> "\\le ", "\[GreaterEqual]" -> "\\ge ", "\[NotEqual]" -> "\\ne ",
     "\[PlusMinus]" -> "\\pm ", "\[MinusPlus]" -> "\\mp ",
     "\[Element]" -> "\\in ", "\[NotElement]" -> "\\notin ",
+    (* AMS negated relations, the inverse of the namedSymbolChars entries added
+       for issue #2, so p \nmid a survives a LaTeX -> boxes -> LaTeX round trip
+       instead of coming back as a bare Unicode glyph *)
+    FromCharacterCode[16^^2224] -> "\\nmid ", "\[NotDoubleVerticalBar]" -> "\\nparallel ",
+    "\[NotLessEqual]" -> "\\nleq ", "\[NotGreaterEqual]" -> "\\ngeq ",
+    "\[NotSubsetEqual]" -> "\\nsubseteq ", "\[NotSupersetEqual]" -> "\\nsupseteq ",
+    "\[NotSubset]" -> "\\nsubset ", "\[NotSuperset]" -> "\\nsupset ",
+    "\[NotPrecedes]" -> "\\nprec ", "\[NotSucceeds]" -> "\\nsucc ",
+    "\[NotTildeFullEqual]" -> "\\ncong ", "\[NotTilde]" -> "\\nsim ",
+    FromCharacterCode[16^^22AC] -> "\\nvdash ",
     "\[Subset]" -> "\\subset ", "\[SubsetEqual]" -> "\\subseteq ",
     "\[Superset]" -> "\\supset ", "\[SupersetEqual]" -> "\\supseteq ",
     "\[Union]" -> "\\cup ", "\[Intersection]" -> "\\cap ", "\[EmptySet]" -> "\\emptyset ",
