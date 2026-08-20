@@ -1057,3 +1057,14 @@ VerificationTest[
     "p\\nmid a",
     TestID -> "ExportLaTeX: negated relation round-trip"
 ]
+
+VerificationTest[
+    (* a command name never matches inside a longer one, in any position *)
+    {LaTeXMathParse["a\\cdots b"], LaTeXMathParse["a \\cdot b"],
+     LaTeXMathParse["a\\leftarrow b"], LaTeXMathParse["a\\simeq b"]},
+    {RowBox[{StyleBox["a", "TI"], "\[CenterEllipsis]", StyleBox["b", "TI"]}],
+     RowBox[{StyleBox["a", "TI"], "\[CenterDot]", StyleBox["b", "TI"]}],
+     RowBox[{StyleBox["a", "TI"], "\[LeftArrow]", StyleBox["b", "TI"]}],
+     RowBox[{StyleBox["a", "TI"], "\[TildeEqual]", StyleBox["b", "TI"]}]},
+    TestID -> "LaTeXMathParse: command names carry a letter boundary"
+]

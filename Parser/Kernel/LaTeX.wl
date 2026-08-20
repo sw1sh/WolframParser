@@ -1822,6 +1822,11 @@ mulOp = ParseChoice[
     ParseAction[literal["/"], Function[op, Function[{a, b}, rowJoin[a, "/", b]]]],
     (* Distinct glyphs: `\cdot` is ·, `\times` is ×, `*` is the
        asterisk operator. KaTeX renders all three differently. *)
+    (* \cdots comes first: PEG alternatives are ordered, and \cdot would otherwise
+       match the first five characters of \cdots and leave a stray "s". A centered
+       ellipsis joins its neighbours exactly like the product operators here. *)
+    ParseAction[literal["\\cdots"],
+        Function[op, Function[{a, b}, rowJoin[a, "\[CenterEllipsis]", b]]]],
     ParseAction[literal["\\cdot"],
         Function[op, Function[{a, b}, rowJoin[a, "\[CenterDot]", b]]]],
     ParseAction[literal["\\times"],
