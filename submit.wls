@@ -86,14 +86,40 @@ If[ fatal =!= {},
    all inside UsingFrontEnd, which ResourceSubmit needs for the example notebook
    (else ResourceSubmit::enbdf). ScrapeResource emits harmless KeyDrop::invrl
    noise on an internal HintData lookup; the returned ResourceObject is valid. *)
-result = UsingFrontEnd @ Block[{nb, rtype, res, ro},
+(* Clear any staged paclet build before scraping. ScrapeResource packs whatever
+   Wolfram__Parser* it finds under Parser/build/, and build.wls does NOT refresh that stage -
+   so a stage left from an older release keeps being packed and published under each new
+   version number. That is how the repository ended up holding records it cannot serve:
+   PacletInstall answered 401 for 1.0.0 and vnotavail for the version the record claimed,
+   while resources.wolframcloud.com showed the new version on the page. With the stage gone
+   the scrape packs pacletDir itself, at the version in PacletInfo. *)
+Scan[
+    If[DirectoryQ[#], DeleteDirectory[#, DeleteContents -> True], DeleteFile[#]] &,
+    FileNames["Wolfram__Parser*", FileNameJoin[{pacletDir, "build"}]]
+]
+
+(* Scrape, check and submit inside ONE Block with the notebook still open: the scraped
+   record is only fully resolvable while its notebook is open ("IncludeNotebookData" reads
+   from it), so closing early puts $Failed into the request and the repository rejects it
+   with "disallowed symbols". The artifact check therefore happens here, mid-block. *)
+result = UsingFrontEnd @ Block[{nb, rtype, res, ro, pf},
     nb    = NotebookOpen[nbFile, Visible -> False];
     rtype = DefinitionNotebookClient`NotebookResourceType[nb];
     res   = Quiet[
         DefinitionNotebookClient`ScrapeResource[rtype, nb, "IncludeNotebookData" -> True],
         {KeyDrop::invrl}];
-    ro    = ResourceObject[res];
-    r     = ResourceSubmit[ro, "Version" -> version, PublisherID -> publisher];
+    (* The artifact the scrape produced must be the version being submitted. Publishing a
+       mismatched pair is silent - the submission succeeds and the resource page shows the
+       new version - and only surfaces later as a paclet nobody can install. *)
+    pf = Replace[Lookup[First[res], "PacletFile", None], File[f_] :> f];
+    Print["artifact: ", If[StringQ[pf], FileNameTake[pf], "(none)"]];
+    If[ StringQ[pf] && ! StringContainsQ[FileNameTake[pf], version],
+        NotebookClose[nb];
+        Print["FATAL: artifact does not match PacletInfo version ", version, " - not submitting."];
+        Exit[1]
+    ];
+    ro = ResourceObject[res];
+    r  = ResourceSubmit[ro, "Version" -> version, PublisherID -> publisher];
     NotebookClose[nb];
     r
 ]
