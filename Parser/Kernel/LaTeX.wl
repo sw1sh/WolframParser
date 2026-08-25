@@ -1525,11 +1525,13 @@ greekChars = <|
     "\\mu" -> "\[Mu]",         "\\nu"    -> "\[Nu]",
     "\\xi" -> "\[Xi]",         "\\rho"   -> "\[Rho]",
     "\\sigma" -> "\[Sigma]",   "\\tau"   -> "\[Tau]",
+    "\\upsilon" -> "\[Upsilon]",
     "\\phi" -> "\[Phi]",       "\\chi"   -> "\[Chi]",
     "\\psi" -> "\[Psi]",       "\\omega" -> "\[Omega]",
     "\\Gamma" -> "\[CapitalGamma]",   "\\Delta" -> "\[CapitalDelta]",
     "\\Theta" -> "\[CapitalTheta]",   "\\Lambda" -> "\[CapitalLambda]",
-    "\\Xi" -> "\[CapitalXi]",         "\\Sigma" -> "\[CapitalSigma]",
+    "\\Xi" -> "\[CapitalXi]",         "\\Pi"    -> "\[CapitalPi]",
+    "\\Sigma" -> "\[CapitalSigma]",   "\\Upsilon" -> "\[CapitalUpsilon]",
     "\\Phi" -> "\[CapitalPhi]",       "\\Psi"   -> "\[CapitalPsi]",
     "\\Omega" -> "\[CapitalOmega]"
 |>
@@ -1574,7 +1576,8 @@ Scan[
 (* Named function operators (\sin, \log, \max, ...) render upright. *)
 functionNames = {
     "sin", "cos", "tan", "cot", "sec", "csc",
-    "sinh", "cosh", "tanh", "arcsin", "arccos", "arctan",
+    "sinh", "cosh", "tanh", "coth", "csch", "sech",
+    "arcsin", "arccos", "arctan",
     "log", "ln", "lg", "exp",
     "max", "min", "sup", "inf", "lim", "limsup", "liminf",
     "det", "dim", "ker", "gcd", "lcm", "deg", "arg", "mod", "hom",
@@ -2775,22 +2778,27 @@ preprocessLaTeX[s_String] :=
         ] -> ""
     }]
 
-(* Post-process: the big-operator characters (Σ, Π, ∫, ∮, ∐, ⋃, ⋂, ⋁,
-   ⋀, ⨁, ⨂, ⨆, ∏) render with their `_low`/`^hi` indices STACKED in
+(* Post-process: the big-operator characters (Σ, Π, ∐, ⋃, ⋂, ⋁, ⋀,
+   ⨁, ⨂, ⨆) render with their `_low`/`^hi` indices STACKED in
    display-style math (KaTeX default). The parser turns
    `\sum_{i=0}^n` into `SubsuperscriptBox[Σ, i=0, n]` which places
    the indices to the right - matching `\nolimits` behaviour but not
    what KaTeX shows on screen. Convert to `UnderoverscriptBox` so
    the FE stacks them. *)
-(* Integrals (∫ ∮ ∬ ...) stack their bounds above/below here too.  TeX/KaTeX
-   default to side bounds (\nolimits) for the integral family, but stacked
-   bounds read better in this paclet's display output, so the integral glyphs
-   are included.  The multi-integral strings (\iint -> two glyphs, etc.) are
-   listed explicitly since the rule matches the SubsuperscriptBox base string. *)
 $bigOpChars = {
     "\[Sum]", "\[Product]",
     "\[Coproduct]", "\[Union]", "\[Intersection]", "\[Vee]", "\[Wedge]",
-    "\[CirclePlus]", "\[CircleTimes]", "\[SquareUnion]",
+    "\[CirclePlus]", "\[CircleTimes]", "\[SquareUnion]"
+}
+
+(* The integral family (∫ ∮ ∬ ...) gets LimitsPositioning -> True instead: the
+   FE then stacks the bounds in a display-style cell but side-sets them in
+   inline/text style, TeX's \nolimits default for integrals.  A stacked inline
+   integral is a full text line tall, and at the start of a wrapped line its
+   lower bound lands left of the text margin, where a fixed-width window clips
+   it.  The multi-integral strings (\iint -> two glyphs, etc.) are listed
+   explicitly since the rule matches the SubsuperscriptBox base string. *)
+$intOpChars = {
     "\[Integral]", "\[ContourIntegral]",
     "\[Integral]\[Integral]", "\[Integral]\[Integral]\[Integral]",
     "\[ContourIntegral]\[ContourIntegral]", "\[ContourIntegral]\[ContourIntegral]\[ContourIntegral]"
@@ -2844,6 +2852,13 @@ bigOpDisplayLimits[boxes_] := boxes //. {
         UnderscriptBox[c, lo, LimitsPositioning -> False],
     SuperscriptBox[c_String /; MemberQ[$bigOpChars, c], hi_] :>
         OverscriptBox[c, hi, LimitsPositioning -> False],
+    (* integral family: True stacks in display cells, side-sets inline *)
+    SubsuperscriptBox[c_String /; MemberQ[$intOpChars, c], lo_, hi_] :>
+        UnderoverscriptBox[c, lo, hi, LimitsPositioning -> True],
+    SubscriptBox[c_String /; MemberQ[$intOpChars, c], lo_] :>
+        UnderscriptBox[c, lo, LimitsPositioning -> True],
+    SuperscriptBox[c_String /; MemberQ[$intOpChars, c], hi_] :>
+        OverscriptBox[c, hi, LimitsPositioning -> True],
     (* limits-operator names: same stacking promotion *)
     SubsuperscriptBox[op_ /; limitsOpQ[op], lo_, hi_] :> UnderoverscriptBox[op, lo, hi, LimitsPositioning -> False],
     SubscriptBox[op_ /; limitsOpQ[op], lo_] :> UnderscriptBox[op, lo, LimitsPositioning -> False],

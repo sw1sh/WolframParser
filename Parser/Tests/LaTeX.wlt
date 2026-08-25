@@ -79,6 +79,47 @@ VerificationTest[
     TestID -> "LaTeX: Greek \\Omega"
 ]
 
+VerificationTest[
+    LaTeXMathParse["\\Pi"],
+    "\[CapitalPi]",
+    TestID -> "LaTeX: Greek \\Pi is upright capital pi"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\Upsilon"],
+    "\[CapitalUpsilon]",
+    TestID -> "LaTeX: Greek \\Upsilon is upright capital upsilon"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\upsilon"],
+    StyleBox["\[Upsilon]", "TI"],
+    TestID -> "LaTeX: Greek \\upsilon is math-italic"
+]
+
+(* Each standard Greek macro (plain, var-form, and capital) resolves to a
+   named character; a key missing from the forward tables would leave the
+   literal control word ("\Pi") in the boxes, so any backslash string
+   surviving the parse marks a gap. *)
+VerificationTest[
+    Select[
+        Map["\\" <> # &, {
+            "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta",
+            "theta", "iota", "kappa", "lambda", "mu", "nu", "xi", "pi",
+            "rho", "sigma", "tau", "upsilon", "phi", "chi", "psi", "omega",
+            "varepsilon", "vartheta", "varpi", "varrho", "varsigma",
+            "varphi", "varkappa", "digamma",
+            "Gamma", "Delta", "Theta", "Lambda", "Xi", "Pi", "Sigma",
+            "Upsilon", "Phi", "Psi", "Omega"
+        }],
+        Function[cmd,
+            !FreeQ[LaTeXMathParse[cmd],
+                s_String /; StringContainsQ[s, "\\"]]]
+    ],
+    {},
+    TestID -> "LaTeX: Greek macro family leaves no literal control words"
+]
+
 
 (* === raw Unicode atoms (pasted, not \macro) ===
    The PEGVM-compiled parser matches char classes (LetterCharacter, the
@@ -191,8 +232,9 @@ VerificationTest[
     LaTeXMathParse["\\sum_{n=0}^{\\infty} \\frac{1}{n^2}"],
     RowBox[{
         (* limits-stacking operators (\sum, \prod, \bigcup, ...) get
-           their bounds stacked above/below in display style, matching
-           KaTeX.  Integrals are the exception - they keep side bounds. *)
+           their bounds pinned stacked above/below in every context,
+           matching KaTeX display style.  Integrals are the exception -
+           LimitsPositioning -> True lets them side-set inline. *)
         UnderoverscriptBox["\[Sum]",
             RowBox[{StyleBox["n", "TI"], "=", "0"}],
             "\[Infinity]", LimitsPositioning -> False
@@ -330,14 +372,15 @@ VerificationTest[
     TestID -> "dirac: \\lvert\\psi\\rangle -> Ket template"
 ]
 
-(* Integral bounds stack above/below the sign in display style, like sums. *)
+(* Integral bounds carry LimitsPositioning -> True: the FE stacks them in a
+   display-style cell and side-sets them inline, TeX's \nolimits default. *)
 VerificationTest[
     LaTeXMathParse["\\int_a^b f"],
     RowBox[{
-        UnderoverscriptBox["\[Integral]", StyleBox["a", "TI"], StyleBox["b", "TI"], LimitsPositioning -> False],
+        UnderoverscriptBox["\[Integral]", StyleBox["a", "TI"], StyleBox["b", "TI"], LimitsPositioning -> True],
         StyleBox["f", "TI"]
     }],
-    TestID -> "LaTeX: integral bounds stack above/below"
+    TestID -> "LaTeX: integral bounds stack in display, side-set inline"
 ]
 
 VerificationTest[
@@ -363,6 +406,20 @@ VerificationTest[
     LaTeXMathParse["2x"],
     RowBox[{"2", StyleBox["x", "TI"]}],
     TestID -> "LaTeX: plain juxtaposition stays tight (no function space)"
+]
+
+(* \coth completes the base-LaTeX hyperbolic set; \csch and \sech are its
+   common reciprocal companions.  All render upright like \sinh. *)
+VerificationTest[
+    LaTeXMathParse["\\coth x"],
+    RowBox[{StyleBox["coth", FontSlant -> "Plain"], "\[ThinSpace]", StyleBox["x", "TI"]}],
+    TestID -> "LaTeX: \\coth upright with function-application space"
+]
+
+VerificationTest[
+    {LaTeXMathParse["\\csch"], LaTeXMathParse["\\sech"]},
+    {StyleBox["csch", FontSlant -> "Plain"], StyleBox["sech", FontSlant -> "Plain"]},
+    TestID -> "LaTeX: \\csch and \\sech render upright"
 ]
 
 
