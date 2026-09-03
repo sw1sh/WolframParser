@@ -9,7 +9,7 @@ devDir    = DirectoryName[$InputFileName];
 rootDir   = ParentDirectory[devDir];
 pacletDir = FileNameJoin[{rootDir, "Parser"}];
 PacletDirectoryLoad[pacletDir];
-Get[FileNameJoin[{rootDir, "..", "..", "MarkdownToNotebook.wl"}]];
+Get[FileNameJoin[{rootDir, "..", "..", "..", "MarkdownToNotebook.wl"}]];
 Needs["Wolfram`Parser`"];
 
 subdir["Symbol"]   = {"Documentation", "English", "ReferencePages", "Symbols"};

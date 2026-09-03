@@ -100,7 +100,7 @@ Scan[
     If[DirectoryQ[#], DeleteDirectory[#, DeleteContents -> True], DeleteFile[#]] &,
     FileNames["Wolfram__Parser*", buildDir]
 ]
-built = PacletTools`PacletBuild[pacletDir, buildDir, OverwriteTarget -> True]
+built = PacletTools`PacletBuild[pacletDir, buildDir]
 If[ ! MatchQ[built, _Success],
     Print["FATAL: PacletBuild failed: ", built];
     Exit[1]
