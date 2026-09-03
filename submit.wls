@@ -86,17 +86,27 @@ If[ fatal =!= {},
    all inside UsingFrontEnd, which ResourceSubmit needs for the example notebook
    (else ResourceSubmit::enbdf). ScrapeResource emits harmless KeyDrop::invrl
    noise on an internal HintData lookup; the returned ResourceObject is valid. *)
-(* Clear any staged paclet build before scraping. ScrapeResource packs whatever
-   Wolfram__Parser* it finds under Parser/build/, and build.wls does NOT refresh that stage -
-   so a stage left from an older release keeps being packed and published under each new
-   version number. That is how the repository ended up holding records it cannot serve:
-   PacletInstall answered 401 for 1.0.0 and vnotavail for the version the record claimed,
-   while resources.wolframcloud.com showed the new version on the page. With the stage gone
-   the scrape packs pacletDir itself, at the version in PacletInfo. *)
+(* Build the stage the scrape packs. ScrapeResource submits whatever Wolfram__Parser* it
+   finds under Parser/build/ - the FULL paclet as PacletTools`PacletBuild makes it (source
+   plus DocumentationBuild over the authoring notebooks; the definition notebook's Build
+   button does the same). Deleting the stage was the earlier fix for a STALE stage being
+   published under each new version, but it left the scrape packing the raw source, whose
+   unbuilt documentation the repository's server-side step cannot digest (502 from
+   SubmitResource, and a version record the paclet site never serves). Rebuilding the
+   stage every time is the fix for both. *)
+Needs["PacletTools`"]
+buildDir = FileNameJoin[{pacletDir, "build"}]
 Scan[
     If[DirectoryQ[#], DeleteDirectory[#, DeleteContents -> True], DeleteFile[#]] &,
-    FileNames["Wolfram__Parser*", FileNameJoin[{pacletDir, "build"}]]
+    FileNames["Wolfram__Parser*", buildDir]
 ]
+built = PacletTools`PacletBuild[pacletDir, buildDir, OverwriteTarget -> True]
+If[ ! MatchQ[built, _Success],
+    Print["FATAL: PacletBuild failed: ", built];
+    Exit[1]
+]
+Print["built: ", FileNameTake[built["PacletArchive"]], " (",
+      Round[FileByteCount[built["PacletArchive"]]/2^20, 0.1], " MB)"]
 
 (* Scrape, check and submit inside ONE Block with the notebook still open: the scraped
    record is only fully resolvable while its notebook is open ("IncludeNotebookData" reads
