@@ -32,6 +32,12 @@ If[ ! FileExistsQ[nbFile],
 PacletDirectoryLoad[pacletDir]
 Needs["DefinitionNotebookClient`"]
 Needs["ResourceSystemClient`"]
+
+(* Show the endpoint, HTTP status and body of a rejected request - the client collapses anything it
+   cannot parse into "Unknown error". The condition always fails, so the stock handlers still run. *)
+ResourceSystemClient`Private`handleError[head_, endpoint_, code_, chars_, params_, rbase_] /;
+    (Print["API error ", code, " from ", endpoint, ": ",
+        StringTake[Quiet @ Check[FromCharacterCode[chars], ToString[chars]], UpTo[1500]]]; False) := Null
 (* PacletTools MUST be loaded before ScrapeResource: the Paclet scrape computes the
    relative paths of the Documentation extension via PacletTools`PacletExtensionFiles,
    and if that context is not loaded the call stays unevaluated -> FileNameSplit::fstr
