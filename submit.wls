@@ -52,6 +52,16 @@ If[ ! TrueQ[$CloudConnected],
    against $PublisherID; without this it defaults to None and rejects the
    "Wolfram" option with ResourceSubmit::invparam. *)
 $PublisherID = publisher
+
+(* The connected account must own the publisher, or the repository answers "not authorized to
+   use the given PublisherID" - after the whole build. A machine whose remembered login was
+   overwritten by a CI script connects as the CI account without asking, so check up front. *)
+owner = "nikm@wolfram.com"
+If[ $WolframID =!= owner,
+    Print["FATAL: connected as ", $WolframID, " but publisher ", publisher, " belongs to ", owner,
+          " - CloudConnect[\"", owner, "\"] in a kernel first (RememberMe), then rerun."];
+    Exit[1]
+]
 Print["submitting ", paclet["Name"], " ", version, " (publisher ", publisher,
       ", $PublisherID=", $PublisherID, ") as ", $WolframID]
 
