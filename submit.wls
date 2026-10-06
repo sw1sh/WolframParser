@@ -104,21 +104,46 @@ If[ fatal =!= {},
    noise on an internal HintData lookup; the returned ResourceObject is valid. *)
 (* Build the stage the scrape packs. ScrapeResource submits whatever Wolfram__Parser* it
    finds under Parser/build/ - the FULL paclet as PacletTools`PacletBuild makes it (source
-   plus DocumentationBuild over the authoring notebooks; the definition notebook's Build
-   button does the same). Deleting the stage was the earlier fix for a STALE stage being
-   published under each new version, but it left the scrape packing the raw source, whose
-   unbuilt documentation the repository's server-side step cannot digest (502 from
-   SubmitResource, and a version record the paclet site never serves). Rebuilding the
-   stage every time is the fix for both. *)
+   plus DocumentationBuild over the documentation; the definition notebook's Build button
+   does the same), rebuilt every run so a stale stage is never published under a new
+   version, and never the raw source, whose unbuilt documentation the repository's
+   server-side step cannot digest (502 from SubmitResource, and a version record the
+   paclet site never serves).
+   PacletBuild's DocumentationBuild must be handed the AUTHORING notebooks. Parser/
+   Documentation holds the pages build.wls already built, which carry no categorization:
+   a 15.1 PacletBuild rebuilds them, finds no URI in any, and packs no pages at all. So
+   the build runs over a copy of the paclet whose Documentation is build.wls's authoring
+   stage, build/DocSource, and the submission stops unless every one of those pages is
+   in the archive. *)
 Needs["PacletTools`"]
-buildDir = FileNameJoin[{pacletDir, "build"}]
+buildDir  = FileNameJoin[{pacletDir, "build"}]
+docSource = FileNameJoin[{repoDir, "build", "DocSource"}]
+If[ ! DirectoryQ[docSource],
+    Print["FATAL: ", docSource, " does not exist - run build.wls first."];
+    Exit[1]
+]
 Scan[
     If[DirectoryQ[#], DeleteDirectory[#, DeleteContents -> True], DeleteFile[#]] &,
     FileNames["Wolfram__Parser*", buildDir]
 ]
-built = PacletTools`PacletBuild[pacletDir, buildDir]
+stageRoot = CreateDirectory[]
+stage     = CreateDirectory[FileNameJoin[{stageRoot, "Parser"}]]
+Scan[
+    With[{dest = FileNameJoin[{stage, FileNameTake[#]}]}, If[DirectoryQ[#], CopyDirectory[#, dest], CopyFile[#, dest]]] &,
+    Select[FileNames["*", pacletDir], ! MemberQ[{"build", "Documentation"}, FileNameTake[#]] &]
+]
+CopyDirectory[docSource, FileNameJoin[{stage, "Documentation"}]]
+built = PacletTools`PacletBuild[stage, buildDir]
+DeleteDirectory[stageRoot, DeleteContents -> True]
 If[ ! MatchQ[built, _Success],
     Print["FATAL: PacletBuild failed: ", built];
+    Exit[1]
+]
+docPages    = Length @ FileNames["*.nb", docSource, Infinity]
+packedPages = Count[Import[built["PacletArchive"], "ZIP"],
+    s_String /; StringMatchQ[s, ___ ~~ "Documentation/English/" ~~ ___ ~~ ".nb"]]
+If[ packedPages < docPages,
+    Print["FATAL: the archive holds ", packedPages, " of the ", docPages, " documentation pages - not submitting."];
     Exit[1]
 ]
 Print["built: ", FileNameTake[built["PacletArchive"]], " (",
