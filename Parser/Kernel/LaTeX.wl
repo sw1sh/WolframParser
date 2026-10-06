@@ -828,10 +828,21 @@ styleScopeHandler = Function[{opt, req},
     ]
 ]
 
+(* \limits / \nolimits / \displaylimits choose where a big operator's scripts
+   go. The grammar reads each one as an atom of its own, so the `_lo^hi` after
+   it attaches to that atom rather than to the operator. The handler leaves a
+   limitsMark atom there, and attachLimitModifiers (a post-parse pass) moves
+   the scripts back onto the operator in the placement the modifier names. A
+   brace group the greedy command parser consumed is re-emitted after it. *)
+limitsModifierHandler[kind_String] := Function[{opt, req},
+    If[Length[req] === 0, limitsMark[kind], RowBox[Prepend[req, limitsMark[kind]]]]]
+commandHandlers["\\limits"] = limitsModifierHandler["limits"]
+commandHandlers["\\nolimits"] = limitsModifierHandler["nolimits"]
+commandHandlers["\\displaylimits"] = limitsModifierHandler["displaylimits"]
+
 Scan[
     (commandHandlers[#] = noopHandler) &,
-    {"\\limits", "\\nolimits", "\\displaylimits",
-     "\\nonumber", "\\notag", "\\eqno", "\\leqno",
+    {"\\nonumber", "\\notag", "\\eqno", "\\leqno",
      "\\hline", "\\hdashline", "\\cline",
      "\\newline", "\\linebreak", "\\nolinebreak",
      "\\nobreak", "\\allowbreak", "\\noindent", "\\indent", "\\displaybreak",
@@ -2873,6 +2884,29 @@ bigOpDisplayLimits[boxes_] := boxes //. {
             UnderscriptBox[UnderscriptBox[x, deco], lo]
 }
 
+(* Scripts written after a limits modifier sit on its limitsMark atom (see
+   limitsModifierHandler); move them onto the operator before it.  \limits
+   stacks them in every context (LimitsPositioning -> False), \nolimits sets
+   them beside the sign, and \displaylimits leaves the placement to
+   bigOpDisplayLimits, the same as writing no modifier.  A side-set result is
+   held as sideScripts so bigOpDisplayLimits does not stack it again;
+   restoreSideScripts releases it after that pass.  An operator name (\lim,
+   \max, ...) is followed by its spacing atom, which lands between the name and
+   the mark; it is skipped and kept after the result, where it sits when no
+   modifier is written.  A mark with no operator before it, or no scripts after
+   it, drops out. *)
+limitsSpaceQ[x_] := StringQ[x] && StringMatchQ[x, WhitespaceCharacter ...]
+attachLimitModifiers[boxes_] := (boxes //.
+    RowBox[{pre___, op_ /; ! limitsSpaceQ[op], ws___?limitsSpaceQ,
+            (h : SubsuperscriptBox | SubscriptBox | SuperscriptBox)[limitsMark[k_], s__], post___}] :>
+        RowBox[{pre, limitScripts[k, h, op, s], ws, post}]) /. limitsMark[_] -> ""
+limitScripts["limits", SubsuperscriptBox, op_, lo_, hi_] := UnderoverscriptBox[op, lo, hi, LimitsPositioning -> False]
+limitScripts["limits", SubscriptBox, op_, lo_] := UnderscriptBox[op, lo, LimitsPositioning -> False]
+limitScripts["limits", SuperscriptBox, op_, hi_] := OverscriptBox[op, hi, LimitsPositioning -> False]
+limitScripts["nolimits", h_, op_, s__] := sideScripts[h, op, s]
+limitScripts[_, h_, op_, s__] := h[op, s]
+restoreSideScripts[boxes_] := boxes /. sideScripts[h_, op_, s__] :> h[op, s]
+
 (* A big operator that DID carry bounds is now an Under/Over box, whose base the
    FE draws at full display size.  A *bare* big operator (no bounds) - the bare
    `\int` of `\dfrac1\pi\displaystyle\int ... dy`, or a limitless `\sum` - stays
@@ -3160,7 +3194,8 @@ LaTeXMathParse[source_String] := Module[
            inside a RowBox (e.g. the whole input was just `\\`) would
            otherwise leak the private symbol into output. *)
         diracTemplates @ uprightUnicodeSymbols @ bareCommas @ suppressCommaSpaceBetweenDigits @
-            stripEmptyRowChildren @ applyLineBreaks @ displaySizeBigOps @ bigOpDisplayLimits[r] /. $lineBreakMark -> ""
+            stripEmptyRowChildren @ applyLineBreaks @ restoreSideScripts @ displaySizeBigOps @
+                bigOpDisplayLimits @ attachLimitModifiers[r] /. $lineBreakMark -> ""
     ]
 ]
 
@@ -3346,6 +3381,34 @@ ExportLaTeX[StyleBox[s_, ___]] := ExportLaTeX[s]
 ExportLaTeX[FractionBox[a_, b_, ___]] := "\\frac{" <> ExportLaTeX[a] <> "}{" <> ExportLaTeX[b] <> "}"
 scriptBase[box_] := Replace[
     StringReplace[ExportLaTeX[box], ("\\," | " ") .. ~~ EndOfString -> ""], "" -> "{}"]
+(* A big operator's script placement, the inverse of attachLimitModifiers.  An
+   integral stacked by \limits carries LimitsPositioning -> False (a plain
+   \int_a^b parses with True), and an n-ary Sum / Product / Coproduct set beside
+   the sign by \nolimits is a script box (a plain \sum_i^n parses stacked); each
+   writes its modifier back.  A side-set integral needs none: beside the sign is
+   TeX's own placement for \int.  The set and logic big operators share their
+   glyph with a binary operator (\otimes, \cup, ...), after which a limits
+   modifier is a TeX error, so they keep the plain form. *)
+$naryOpChars = {"\[Sum]", "\[Product]", "\[Coproduct]"}
+stackedLimitsQ[o_List] := MemberQ[o, LimitsPositioning -> False]
+ExportLaTeX[UnderoverscriptBox[c_String, lo_, hi_, o___]] /; MemberQ[$intOpChars, c] && stackedLimitsQ[{o}] :=
+    scriptBase[c] <> "\\limits_{" <> ExportLaTeX[lo] <> "}^{" <> ExportLaTeX[hi] <> "}"
+ExportLaTeX[UnderscriptBox[c_String, lo_, o___]] /; MemberQ[$intOpChars, c] && stackedLimitsQ[{o}] :=
+    scriptBase[c] <> "\\limits_{" <> ExportLaTeX[lo] <> "}"
+ExportLaTeX[OverscriptBox[c_String, hi_, o___]] /; MemberQ[$intOpChars, c] && stackedLimitsQ[{o}] :=
+    scriptBase[c] <> "\\limits^{" <> ExportLaTeX[hi] <> "}"
+ExportLaTeX[SubsuperscriptBox[c_String, lo_, hi_, ___]] /; MemberQ[$naryOpChars, c] :=
+    scriptBase[c] <> "\\nolimits_{" <> ExportLaTeX[lo] <> "}^{" <> ExportLaTeX[hi] <> "}"
+ExportLaTeX[SubscriptBox[c_String, lo_, ___]] /; MemberQ[$naryOpChars, c] :=
+    scriptBase[c] <> "\\nolimits_{" <> ExportLaTeX[lo] <> "}"
+ExportLaTeX[SuperscriptBox[c_String, hi_, ___]] /; MemberQ[$naryOpChars, c] :=
+    scriptBase[c] <> "\\nolimits^{" <> ExportLaTeX[hi] <> "}"
+(* an operator name that stacks its bound by default (\lim, \max, ...) set beside
+   by \nolimits *)
+ExportLaTeX[SubsuperscriptBox[op_ /; limitsOpQ[op], lo_, hi_, ___]] :=
+    scriptBase[op] <> "\\nolimits_{" <> ExportLaTeX[lo] <> "}^{" <> ExportLaTeX[hi] <> "}"
+ExportLaTeX[SubscriptBox[op_ /; limitsOpQ[op], lo_, ___]] := scriptBase[op] <> "\\nolimits_{" <> ExportLaTeX[lo] <> "}"
+ExportLaTeX[SuperscriptBox[op_ /; limitsOpQ[op], hi_, ___]] := scriptBase[op] <> "\\nolimits^{" <> ExportLaTeX[hi] <> "}"
 ExportLaTeX[SubscriptBox[a_, b_, ___]] := scriptBase[a] <> "_{" <> ExportLaTeX[b] <> "}"
 ExportLaTeX[SuperscriptBox[a_, b_, ___]] := scriptBase[a] <> "^{" <> ExportLaTeX[b] <> "}"
 ExportLaTeX[SubsuperscriptBox[a_, b_, c_, ___]] := scriptBase[a] <> "_{" <> ExportLaTeX[b] <> "}^{" <> ExportLaTeX[c] <> "}"
@@ -3397,6 +3460,10 @@ ExportLaTeX[TemplateBox[{x_}, "SuperDagger" | "Dagger"]] := ExportLaTeX[x] <> "^
 ExportLaTeX[TemplateBox[{x_}, "Conjugate"]] := ExportLaTeX[x] <> "^*"
 ExportLaTeX[TemplateBox[{x_}, "Norm"]] := "\\lVert " <> ExportLaTeX[x] <> "\\rVert "
 ExportLaTeX[TemplateBox[{x_}, "Abs"]] := "\\lvert " <> ExportLaTeX[x] <> "\\rvert "
+(* a formula typed with the front end's Insert > TeX keeps the author's TeX as its
+   "input"; without it, its typeset "boxes" are serialized like any other boxes *)
+ExportLaTeX[TemplateBox[a_Association, "TeXAssistantTemplate", ___]] :=
+    If[StringQ[a["input"]], a["input"], ExportLaTeX[Lookup[a, "boxes", ""]]]
 ExportLaTeX[other_] := ToString[other, InputForm]
 
 

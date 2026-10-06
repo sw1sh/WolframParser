@@ -1125,3 +1125,42 @@ VerificationTest[
      RowBox[{StyleBox["a", "TI"], "\[TildeEqual]", StyleBox["b", "TI"]}]},
     TestID -> "LaTeXMathParse: command names carry a letter boundary"
 ]
+
+VerificationTest[
+    (* a limits modifier sets the placement on the operator's own box - the
+       scripts never hang off an empty base *)
+    {LaTeXMathParse["\\int\\limits_a^b f"], LaTeXMathParse["\\int\\nolimits_a^b f"],
+     LaTeXMathParse["\\sum\\limits_{i}^{n} x"], LaTeXMathParse["\\sum\\nolimits_{i}^{n} x"]},
+    {RowBox[{UnderoverscriptBox["\[Integral]", StyleBox["a", "TI"], StyleBox["b", "TI"], LimitsPositioning -> False], StyleBox["f", "TI"]}],
+     RowBox[{SubsuperscriptBox["\[Integral]", StyleBox["a", "TI"], StyleBox["b", "TI"]], StyleBox["f", "TI"]}],
+     RowBox[{UnderoverscriptBox["\[Sum]", StyleBox["i", "TI"], StyleBox["n", "TI"], LimitsPositioning -> False], StyleBox["x", "TI"]}],
+     RowBox[{SubsuperscriptBox["\[Sum]", StyleBox["i", "TI"], StyleBox["n", "TI"]], StyleBox["x", "TI"]}]},
+    TestID -> "LaTeXMathParse: \\limits / \\nolimits place a big operator's scripts"
+]
+
+VerificationTest[
+    (* an operator name's spacing atom does not take the scripts, \displaylimits
+       is the plain placement, and a modifier with no scripts drops out *)
+    {LaTeXMathParse["\\lim\\limits_{x} f"] === LaTeXMathParse["\\lim_{x} f"],
+     LaTeXMathParse["\\sum\\displaylimits_{i}^{n} x"] === LaTeXMathParse["\\sum_{i}^{n} x"],
+     LaTeXMathParse["\\int\\limits f"] === LaTeXMathParse["\\int f"]},
+    {True, True, True},
+    TestID -> "LaTeXMathParse: \\limits after an operator name, \\displaylimits, a bare modifier"
+]
+
+VerificationTest[
+    (* the modifiers survive the inverse, with no empty {} base; a side-set
+       integral needs none, beside the sign being TeX's placement for \int *)
+    ExportLaTeX /@ LaTeXMathParse /@ {"\\int\\limits_a^b f", "\\sum\\nolimits_{i}^{n} x", "\\int\\nolimits_a^b f"},
+    {"\\int\\limits_{a}^{b}f", "\\sum\\nolimits_{i}^{n}x", "\\int_{a}^{b}f"},
+    TestID -> "ExportLaTeX: \\limits / \\nolimits round-trip"
+]
+
+VerificationTest[
+    (* a front-end Insert > TeX formula exports the TeX its author typed, or its
+       boxes when it carries none *)
+    {ExportLaTeX[TemplateBox[<|"boxes" -> FormBox["\[Eta]", TraditionalForm], "errors" -> {}, "input" -> "\\eta", "state" -> "Boxes"|>, "TeXAssistantTemplate"]],
+     ExportLaTeX[TemplateBox[<|"boxes" -> FormBox[SuperscriptBox["x", "2"], TraditionalForm]|>, "TeXAssistantTemplate"]]},
+    {"\\eta", "x^{2}"},
+    TestID -> "ExportLaTeX: TeXAssistantTemplate"
+]
