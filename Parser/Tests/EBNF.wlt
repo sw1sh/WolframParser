@@ -6,7 +6,7 @@ Needs["Wolfram`Parser`"]
    per test run, then reuse the cached string across every test below
    so a flaky network doesn't multiply into N timeouts. *)
 $tptpBnf = Import[
-    "https://raw.githubusercontent.com/TPTPWorld/SyntaxBNF/master/SyntaxBNF-v9.2.1.4",
+    "https://raw.githubusercontent.com/TPTPWorld/SyntaxBNF/da4fbddc9da7b066f03a4fd47edb148fa6e17c91/SyntaxBNF-v9.2.1.4",
     "Text"]
 
 

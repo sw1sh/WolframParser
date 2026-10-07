@@ -79,8 +79,12 @@ Begin["`Private`"]
 
 (* ===== BNF + parser construction (memoized once per kernel) ===== *)
 
+(* The grammar the action maps below are written against, v9.2.1.4, at the
+   commit that last carried it: the repository keeps one version at a time
+   and renames the file with each, so its master branch serves no fixed
+   grammar. *)
 $tptpBnfURL =
-    "https://raw.githubusercontent.com/TPTPWorld/SyntaxBNF/master/SyntaxBNF-v9.2.1.4"
+    "https://raw.githubusercontent.com/TPTPWorld/SyntaxBNF/da4fbddc9da7b066f03a4fd47edb148fa6e17c91/SyntaxBNF-v9.2.1.4"
 
 ensureTptpParser[] := (
     $tptpParsers = EBNFParse[
