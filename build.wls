@@ -15,6 +15,12 @@ Quiet @ UsingFrontEnd[CurrentValue[$FrontEnd, LightDark] = "Light"]
 rootDir = DirectoryName[$InputFileName]
 pacletDir = FileNameJoin[{rootDir, "Parser"}]
 
+(* `wl -f build.wls --no-cache` re-evaluates every example instead of serving
+   cached outputs. The cache is keyed by the example code alone, so after the
+   library or the build environment changes, a page whose code did not change
+   would otherwise keep its old outputs. *)
+useCache = ! MemberQ[Rest[$ScriptCommandLine], "--no-cache"]
+
 (* Register the dev paclet BEFORE Get-ing MarkdownToNotebook.wl - its
    own bootstrap (PacletFind["Wolfram/Parser"]) would otherwise
    fail and re-install the published version from the ResourceObject
@@ -68,7 +74,9 @@ buildDoc[srcFile_String] := Block[{info, tmpl, baseName, dir, out},
         Print["  (skip ", FileNameTake[srcFile], ": no frontmatter)"];
         Return[]
     ];
-    info = MarkdownToNotebook[srcFile, "Association", "EvaluateSeparator" -> None];
+    (* only the template is read here, so the examples wait for the real
+       conversion; the converter's layout steps still want a front end *)
+    info = UsingFrontEnd @ MarkdownToNotebook[srcFile, "Association", "Evaluate" -> False];
     tmpl = info["Template"];
     (* The Paclet resource-definition notebook (ResourceDefinition.md) is NOT a doc
        page - it is the submission artifact, built separately below with Automatic
@@ -82,7 +90,7 @@ buildDoc[srcFile_String] := Block[{info, tmpl, baseName, dir, out},
     dir = FileNameJoin[Prepend[subdir[tmpl], srcDocDir]];
     Quiet @ CreateDirectory[dir, CreateIntermediateDirectories -> True];
     out = FileNameJoin[{dir, baseName <> ".nb"}];
-    MarkdownToNotebook[srcFile, out, "EvaluateSeparator" -> None];
+    MarkdownToNotebook[srcFile, out, "EvaluateSeparator" -> None, "UseCache" -> useCache];
     (* Content-completeness guard: a page whose source carries ```wl code blocks
        but whose built notebook has NO Input/Code cells silently lost its examples
        - the classic case is a Template: Guide with runnable code, which the guide
@@ -120,10 +128,11 @@ Print["  built ", Length @ FileNames["*.nb", FileNameJoin[{destDocDir, "English"
    None: EvaluateSeparator -> Automatic resets the example context at each
    heading and each `---` rule, so no example can accidentally depend on or
    pollute another. (None is the setting only the state-threading tutorials
-   actually need; it was over-applied here.) The one multi-cell example (parens)
-   is self-contained within a single cell, so the reset breaks nothing. *)
+   actually need; it was over-applied here.) An example that binds a parser in
+   one cell and runs it in the next keeps both under one heading with no `---`
+   between, so the reset breaks nothing. *)
 rd = FileNameJoin[{rootDir, "docs", "ResourceDefinition.md"}]
 If[ FileExistsQ[rd],
-    MarkdownToNotebook[rd, FileNameJoin[{pacletDir, "ResourceDefinition.nb"}], "EvaluateSeparator" -> Automatic];
+    MarkdownToNotebook[rd, FileNameJoin[{pacletDir, "ResourceDefinition.nb"}], "EvaluateSeparator" -> Automatic, "UseCache" -> useCache];
     Print["  ResourceDefinition.md -> ResourceDefinition.nb"]
 ]
