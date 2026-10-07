@@ -67,8 +67,6 @@ A high-level, type-driven parser. `Interpreter[type]` returns a function that tr
 Interpreter["Color"]["sky blue"]
 ```
 
-<!-- => RGBColor[0.529, 0.808, 0.922] -->
-
 `Restricted[type, constraints]` narrows the interpretation:
 
 ```wl
@@ -92,6 +90,8 @@ GrammarApply[
 ]
 ```
 
+<!-- => the message GrammarApply::arg1 is issued and the expression returns unevaluated -->
+
 The catch is right there in the documentation:
 
 > `GrammarRules[rules]` represents grammar rules **to be deployed to a cloud object**.
@@ -109,7 +109,10 @@ The *design* of `GrammarRules`, however, is the right shape. `WolframParser` bor
 A first-party paclet (`CodeParser\``) that tokenises and parses Wolfram Language source code into a typed AST. The implementation is in C with a thin WL surface, so it is *very* fast and very precise about source positions:
 
 ```wl
-Needs["CodeParser`"];
+Needs["CodeParser`"]
+```
+
+```wl
 CodeParse["f[x_] := x + 1"]
 ```
 
@@ -126,6 +129,7 @@ returns a `ContainerNode[String, {CallNode[LeafNode[Symbol, "SetDelayed", ...], 
 The `CodeParser` story, one language over: a first-party parser for **C/C++** source, delivered through the Function Repository. `ResourceFunction["CodeStructure"]` is itself only a *loader shim* - its entire definition is three lines that install and load the `CodeAnalysis` paclet on first use, then hand every call off to `CodeAnalysis`CodeStructure`:
 
 ```wl
+#| eval: false
 CodeStructure[args___]  := (getCodeAnalysis[]; Symbol["CodeAnalysis`CodeStructure"][args])
 getCodeAnalysis[]       := getCodeAnalysis[] = (installCodeAnalysis[]; Block[{$ContextPath}, Needs["CodeAnalysis`"]])
 installCodeAnalysis[]   := PacletInstall["CodeAnalysis"] /; PacletFind["CodeAnalysis"] === {}
@@ -133,7 +137,10 @@ installCodeAnalysis[]   := PacletInstall["CodeAnalysis"] /; PacletFind["CodeAnal
 
 The real engine is the `CodeAnalysis` paclet (v0.9.6 at writing), which parses C by **shelling out to Clang** and post-processing its AST dump into a Wolfram expression tree. The options give the backend away: `ClangBinariesDirectory`, `CommandLineArguments`, `BinaryLocation`, `ShellProlog` (plus the `$BuildError` / `$ExtractError` / `$OptError` channels for the three external stages).
 
+It needs Clang on the path and the paclet's native library, which this page is not built with, so the call and its output are shown as recorded on a machine that has both:
+
 ```wl
+#| eval: false
 ResourceFunction["CodeStructure"]["int main(void){ return 41+1; }"]
 ```
 
@@ -155,9 +162,10 @@ The tree mirrors Clang's AST node names - `TranslationUnit`, `FunctionDecl`, `Co
 
 ### `AntonAntonov/FunctionalParsers`
 
-The most complete pure-WL parser combinator library on the Paclet Repository. Anton Antonov has been working on it for years; the API is a faithful Wolfram port of the Haskell `Parsec` design.
+The most complete pure-WL parser combinator library on the Paclet Repository. Anton Antonov has been working on it for years; the API is a faithful Wolfram port of the Haskell `Parsec` design. With the paclet installed (`PacletInstall["AntonAntonov/FunctionalParsers"]`; this page is not built with it), an EBNF grammar becomes a parser in two calls:
 
 ```wl
+#| eval: false
 Needs["AntonAntonov`FunctionalParsers`"];
 ebnf = "<expr> = <num> , { \"+\" , <num> } ; <num> = \"0\" | \"1\" | \"2\" ;";
 GenerateParsersFromEBNF[ParseToEBNFTokens[ebnf]];

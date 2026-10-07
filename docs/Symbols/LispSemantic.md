@@ -98,6 +98,9 @@ Because the algebra is a plain [Association](), a single key can be overridden t
 
 ```wl
 twist = <|LispSemantic, "Sym" -> Function[s, s]|>;
+```
+
+```wl
 LispGrammar[twist]["(a b c)"]
 ```
 

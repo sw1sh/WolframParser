@@ -50,8 +50,6 @@ The same call under [Parse]() fails, because [Parse]() requires the whole input 
 Parse[ParseLiteral["foo"], "foobar"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> "<end of input>", "Found" -> "b"|>] -->
-
 ## Scope
 
 *result* keeps its full structure — here a [ParseSequence]() result — with the leftover as the second element:
@@ -86,8 +84,6 @@ The callable form of a [ParserCombinator]() is [Parse](), not [ParsePartial](), 
 (ParseLiteral["foo"])["foobar"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> "<end of input>", "Found" -> "b"|>] -->
-
 ## Possible Issues
 
 [ParsePartial]() relaxes only the end-of-input check; a parser that cannot match at the current position still fails, exactly as under [Parse]():
@@ -95,5 +91,3 @@ The callable form of a [ParserCombinator]() is [Parse](), not [ParsePartial](), 
 ```wl
 ParsePartial[ParseLiteral["foo"], "xyz"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "foo", "Found" -> "x"|>] -->

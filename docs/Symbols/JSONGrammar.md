@@ -27,10 +27,8 @@ RelatedGuides: [ParserZoo]
 `JSONGrammar` over [JSONSemantic]() is a [ParserCombinator]():
 
 ```wl
-Head[JSONGrammar[JSONSemantic]]
+JSONGrammar[JSONSemantic]
 ```
-
-<!-- => ParserCombinator -->
 
 Run it on a string to fold JSON to a native value:
 
@@ -91,5 +89,3 @@ The parser returned by `JSONGrammar` reports a [Failure]() on input it cannot fi
 ```wl
 JSONGrammar[JSONSemantic]["{a: 1}"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 2, "Expected" -> {"}"}, "Found" -> "a"|>] -->

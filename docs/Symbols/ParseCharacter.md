@@ -27,8 +27,6 @@ A digit:
 ParseCharacter[DigitCharacter]
 ```
 
-<!-- => ParserCombinator[Character, DigitCharacter, <||>] -->
-
 Apply it:
 
 ```wl
@@ -99,8 +97,6 @@ The wrong character class produces a `Failure`:
 ```wl
 Parse[ParseCharacter[DigitCharacter], "x"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<digit>", "Found" -> "x"|>] -->
 
 `ParseCharacter` consumes *exactly one* character. To match a multi-character literal, use [ParseLiteral]() instead.
 

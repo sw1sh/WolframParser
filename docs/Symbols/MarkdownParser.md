@@ -33,8 +33,6 @@ RelatedGuides: [WolframParser]
 MarkdownParser
 ```
 
-<!-- => ParserCombinator[Action, …] summary box (combinator Type "Action") -->
-
 <!-- #| annotation: 26.07.26: Design review - the block grammar is exposed as a first-class ParserCombinator so it can be inspected, composed, and compiled (ParserCompile), not merely invoked; MarkdownParse is the thin one-shot entry point (trailing-newline fix-up, then Parse). Splitting the reusable object from the convenience function mirrors the Parse-vs-compiled-parser split used across the paclet. -->
 
 Its head is [ParserCombinator](), the wrapper every parser in the library normalises to:
@@ -100,8 +98,6 @@ Run directly on a source with no trailing newline, [MarkdownParser]() leaves the
 ```wl
 Parse[MarkdownParser, "# Title"]
 ```
-
-<!-- => Failure["ParseError", <|…, "Position" -> 1, "Expected" -> "<end of input>", "Found" -> "#"|>] -->
 
 Append a newline, or use [MarkdownParse](), which does it for you:
 

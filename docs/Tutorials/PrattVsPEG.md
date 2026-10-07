@@ -2,6 +2,7 @@
 Template: TechNote
 Name: PrattVsPEG
 Context: Wolfram`Parser`
+ContextPath: [Global`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/tutorial/PrattVsPEG
 Keywords: [TDOP, Pratt, PEG, operator precedence, binding power, parsing expression grammar, ParseOperatorTable, ParseChoice, expression grammar]
@@ -34,17 +35,34 @@ refer back to each other through [ParseRecursive](), which looks a parser up by
 symbol at parse time so the cycle can be written before every node exists.
 
 ```wl
-num    = ParseAction[ParseRegex["[0-9]+"], FromDigits];
+num    = ParseAction[ParseRegex["[0-9]+"], FromDigits]
+```
+
+```wl
 addOp  = ParseChoice[ParseAction[ParseLiteral["+"], (Plus &)],
-                     ParseAction[ParseLiteral["-"], (Subtract &)]];
+                     ParseAction[ParseLiteral["-"], (Subtract &)]]
+```
+
+```wl
 mulOp  = ParseChoice[ParseAction[ParseLiteral["*"], (Times &)],
-                     ParseAction[ParseLiteral["/"], (Divide &)]];
+                     ParseAction[ParseLiteral["/"], (Divide &)]]
+```
+
+```wl
 factor = ParseChoice[
    ParseBetween[ParseLiteral["("], ParseRecursive[expr], ParseLiteral[")"]],
-   num];
-term   = ParseChainLeft[factor, mulOp];
-expr   = ParseChainLeft[term, addOp];
+   num]
+```
 
+```wl
+term   = ParseChainLeft[factor, mulOp]
+```
+
+```wl
+expr   = ParseChainLeft[term, addOp]
+```
+
+```wl
 Parse[expr, "1+2*3"]
 ```
 
@@ -73,19 +91,36 @@ sub-expression, that re-parse recurses, and the cost of a left-nested chain
 becomes **O(3^depth)**. Here is the shape, built honestly with the combinators:
 
 ```wl
-atom = ParseChoice[ParseLiteral["a"], ParseLiteral["b"]];
+atom = ParseChoice[ParseLiteral["a"], ParseLiteral["b"]]
+```
+
+```wl
 unit = ParseChoice[
    ParseBetween[ParseLiteral["("], ParseRecursive[logic], ParseLiteral[")"]],
-   atom];
-orF  = ParseSequence[ParseRecursive[unit], ParseLiteral["|"], ParseRecursive[unit]];
-andF = ParseSequence[ParseRecursive[unit], ParseLiteral["&"], ParseRecursive[unit]];
-appF = ParseSequence[ParseRecursive[unit], ParseLiteral["@"], ParseRecursive[unit]];
-logic = ParseChoice[orF, andF, appF, ParseRecursive[unit]];
+   atom]
+```
 
+```wl
+orF  = ParseSequence[ParseRecursive[unit], ParseLiteral["|"], ParseRecursive[unit]]
+```
+
+```wl
+andF = ParseSequence[ParseRecursive[unit], ParseLiteral["&"], ParseRecursive[unit]]
+```
+
+```wl
+appF = ParseSequence[ParseRecursive[unit], ParseLiteral["@"], ParseRecursive[unit]]
+```
+
+```wl
+logic = ParseChoice[orF, andF, appF, ParseRecursive[unit]]
+```
+
+```wl
 Parse[logic, "((a@b)@b)"]
 ```
 
-<!-- => {{"a", "@", "b"}, "@", "b"}  (a raw tree - the point here is the cost, not the value) -->
+<!-- => {{"a", "@", "b"}, "@", "b"} -->
 
 Each extra layer of `(… @ b)` multiplies the work by three: `orF` parses the
 inner group and fails at `@`, `andF` re-parses it and fails at `@`, `appF`
@@ -124,16 +159,24 @@ The same expression language as the cascade above, now as one table — and it
 *evaluates*, because the operator parsers return the real arithmetic functions:
 
 ```wl
-num2  = ParseAction[ParseRegex["[0-9]+"], FromDigits];
+num2  = ParseAction[ParseRegex["[0-9]+"], FromDigits]
+```
+
+```wl
 unit2 = ParseChoice[
    ParseBetween[ParseLiteral["("], ParseRecursive[calc], ParseLiteral[")"]],
-   num2];
+   num2]
+```
+
+```wl
 calc  = ParseOperatorTable[unit2, {
    {{"InfixL", ParseChoice[ParseAction[ParseLiteral["*"], (Times &)],
                            ParseAction[ParseLiteral["/"], (Divide &)]]}},
    {{"InfixL", ParseChoice[ParseAction[ParseLiteral["+"], (Plus &)],
-                           ParseAction[ParseLiteral["-"], (Subtract &)]]}}}];
+                           ParseAction[ParseLiteral["-"], (Subtract &)]]}}}]
+```
 
+```wl
 Parse[calc, "1+2*3"]
 ```
 
@@ -145,13 +188,30 @@ read once and the operator is chosen by looking at the *next token*, not by
 re-parsing the operand under each hypothesis:
 
 ```wl
-ap   = ParseAction[ParseLiteral["@"], (app &)];
+ap   = ParseAction[ParseLiteral["@"], (app &)]
+```
+
+```wl
 u    = ParseChoice[
    ParseBetween[ParseLiteral["("], ParseRecursive[e], ParseLiteral[")"]],
-   ParseAction[ParseChoice @@ (ParseLiteral /@ {"a", "b"}), Symbol]];
-e    = ParseOperatorTable[u, {{"InfixL", ap}}];
+   ParseAction[ParseChoice @@ (ParseLiteral /@ {"a", "b"}), Symbol]]
+```
 
-f[0] = "a"; f[k_] := f[k] = "(" <> f[k - 1] <> "@b)";
+```wl
+e    = ParseOperatorTable[u, {{"InfixL", ap}}]
+```
+
+```wl
+f[0] = "a"
+```
+
+<!-- => "a" -->
+
+```wl
+f[k_] := f[k] = "(" <> f[k - 1] <> "@b)";
+```
+
+```wl
 Parse[e, f[12]]
 ```
 
@@ -233,7 +293,7 @@ higher-order structure comes back as clean Wolfram Language terms:
 TPTPImport["thf(a, axiom, ! [X:$i] : ? [Y:$i] : ( r @ X @ Y ))."]["Axioms"]
 ```
 
-<!-- => {ForAll[{X_}, Exists[{Y_}, r[][X_][Y_]]]} -->
+<!-- => {ForAll[{X_}, Exists[{Y_}, "r"[][X_][Y_]]]} -->
 
 Quantifiers nest, `^`-lambdas survive as binders, application curries:
 
@@ -241,7 +301,7 @@ Quantifiers nest, `^`-lambdas survive as binders, application curries:
 TPTPImport["thf(two, axiom, two = ( ^ [F:$i>$i, X:$i] : ( F @ ( F @ X ) ) ))."]["Axioms"]
 ```
 
-<!-- => {two[] == ^[{F_, X_}, (F_)[(F_)[X_]]]} -->
+<!-- => {"two"[] == "^"[{F_, X_}, (F_)[(F_)[X_]]]} -->
 
 That is the whole argument in one place: the grammar shape PEG could only parse
 exponentially, Pratt parses in a line — and the binding-power table that does it

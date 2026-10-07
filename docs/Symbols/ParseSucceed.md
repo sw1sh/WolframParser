@@ -29,8 +29,6 @@ The constructor holds its value in a `"Succeed"` combinator:
 ParseSucceed[42]
 ```
 
-<!-- => ParserCombinator[Succeed, 42, <||>] -->
-
 <!-- #| annotation: 26.07.26: Design review - ParseSucceed is the parser monad's pure/return (Parsec's return / pure): it lifts a value into a trivially-succeeding parser and consumes nothing. Named ParseSucceed rather than Return / Pure to keep the Parse* family verb-first and to avoid clashing with the built-in Return. Its dual is ParseFail; together they are the unit and zero of ParseChoice. -->
 
 It succeeds on empty input, returning the constant:
@@ -101,8 +99,6 @@ Parse[ParseAction[ParseChoice[ParseRegex["[0-9]+"], ParseSucceed["0"]], FromDigi
 ParseFail["nope"]
 ```
 
-<!-- => ParserCombinator[Fail, "nope", <||>] -->
-
 ## Possible Issues
 
 Because it consumes nothing, a top-level [Parse]() of [ParseSucceed]() on non-empty input fails on the leftover — the value was produced, but the input was not consumed:
@@ -110,5 +106,3 @@ Because it consumes nothing, a top-level [Parse]() of [ParseSucceed]() on non-em
 ```wl
 Parse[ParseSucceed["x"], "abc"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<end of input>", "Found" -> "a"|>] -->

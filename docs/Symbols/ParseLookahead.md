@@ -23,7 +23,13 @@ RelatedGuides: [WolframParser]
 
 ## Basic Examples
 
-A positive lookahead succeeds when its parser would match, consuming nothing - [ParsePartial]() returns the leftover, showing the input is still fully available:
+A lookahead wraps the parser it tests:
+
+```wl
+ParseLookahead[ParseLiteral["a"]]
+```
+
+It succeeds when its parser would match, consuming nothing - [ParsePartial]() returns the leftover, showing the input is still fully available:
 
 ```wl
 ParsePartial[ParseLookahead[ParseLiteral["a"]], "abc"]
@@ -38,18 +44,6 @@ It fails, carrying *p*'s own diagnostic, when *p* would not match:
 ```wl
 Parse[ParseLookahead[ParseLiteral["a"]], "xbc"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "a", "Found" -> "x"|>] -->
-
----
-
-The combinator wraps its argument:
-
-```wl
-ParseLookahead[ParseLiteral["foo"]]
-```
-
-<!-- => ParserCombinator[Lookahead, ParserCombinator[Literal, "foo", <||>], <||>] -->
 
 ## Scope
 
@@ -79,8 +73,6 @@ Parse[ParseLookahead[ParseCharacter[DigitCharacter]] ~~ ParseCharacter[DigitChar
 Parse[ParseNotFollowedBy[ParseLiteral["a"]], "abc"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<not followed by parser>", "Found" -> "a"|>] -->
-
 ---
 
 Two negative lookaheads compose to a positive one - `ParseNotFollowedBy[ParseNotFollowedBy[p]]` succeeds exactly when *p* is present, still consuming nothing:
@@ -98,5 +90,3 @@ A lookahead consumes nothing, so on its own it leaves the input unconsumed and [
 ```wl
 Parse[ParseLookahead[ParseLiteral["foo"]], "foo"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<end of input>", "Found" -> "f"|>] -->

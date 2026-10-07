@@ -34,14 +34,19 @@ RelatedGuides: [WolframParser]
 
 ## Basic Examples
 
-Read a three-rule arithmetic grammar; the result is an association keyed by rule name:
+Read a three-rule arithmetic grammar; the result is an association of one parser per rule:
 
 ```wl
 g = EBNFParse["
     <digit>  ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
     <number> ::= <digit><digit>*
     <expr>   ::= <number> + <number>
-"];
+"]
+```
+
+Its keys are the rule names:
+
+```wl
 Keys[g]
 ```
 
@@ -56,8 +61,6 @@ Each rule name maps to the parser combinator it lowers to:
 ```wl
 g["number"]
 ```
-
-<!-- => ParserCombinator[Action] (the lowered <number> parser, a summary box) -->
 
 ---
 
@@ -81,12 +84,13 @@ Parse[g["expr"], "12 + 34"]
 
 ## Scope
 
-Read the grammar from a file with [File]():
+Read the grammar from a file with [File]() - here one written out first, [Export]() giving back its path:
 
 ```wl
-path = FileNameJoin[{$TemporaryDirectory, "greeting.bnf"}];
-Export[path, "<greeting> ::= hello | bye", "Text"];
-gFile = EBNFParse[File[path]];
+gFile = EBNFParse[File[Export[FileNameJoin[{$TemporaryDirectory, "greeting.bnf"}], "<greeting> ::= hello | bye", "Text"]]]
+```
+
+```wl
 Parse[gFile["greeting"], "bye"]
 ```
 
@@ -98,7 +102,10 @@ A recursive rule — the classic $a^n b^n$ language — parses by referring to i
 
 ```wl
 anbn = EBNFParse["<S> ::= a <S> b | <epsilon>
-                  <epsilon> ::="];
+                  <epsilon> ::="]
+```
+
+```wl
 Parse[anbn["S"], "aaabbb"]
 ```
 
@@ -112,15 +119,16 @@ The empty `<epsilon>` alternative matches the empty string, so the base case suc
 Parse[anbn["S"], ""]
 ```
 
-<!-- => Null -->
-
 ---
 
 `::-` (token) and `:::` (character-class) rules compile through the regex-style meta-parser:
 
 ```wl
 charGram = EBNFParse["<word>  ::- <lower><lower>*
-<lower> ::: [a-z]"];
+<lower> ::: [a-z]"]
+```
+
+```wl
 Parse[charGram["word"], "hello"]
 ```
 
@@ -135,7 +143,10 @@ gAct = EBNFParse[
     "<digit>  ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
      <number> ::= <digit><digit>*",
     "Actions" -> <|"number" -> Function[FromDigits @ StringJoin[#1, StringJoin @ #2]]|>
-];
+]
+```
+
+```wl
 Parse[gAct["number"], "42"]
 ```
 
@@ -147,7 +158,10 @@ Parse[gAct["number"], "42"]
 
 ```wl
 gOver = EBNFParse["<greeting> ::= <word>",
-    "PrimitiveOverrides" -> <|"word" -> ParseRegex["[a-z]+"]|>];
+    "PrimitiveOverrides" -> <|"word" -> ParseRegex["[a-z]+"]|>]
+```
+
+```wl
 Parse[gOver["greeting"], "hello"]
 ```
 
@@ -158,18 +172,22 @@ Parse[gOver["greeting"], "hello"]
 With `"ChoiceMode" -> "PEG"` alternatives are tried in order and the first match commits, so `a` matches and leaves `b` unconsumed:
 
 ```wl
-pegTok = EBNFParse["<tok> ::= a | ab", "ChoiceMode" -> "PEG"];
-Parse[pegTok["tok"], "ab"]
+pegTok = EBNFParse["<tok> ::= a | ab", "ChoiceMode" -> "PEG"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 2, "Expected" -> "<end of input>", "Found" -> "b"|>] -->
+```wl
+Parse[pegTok["tok"], "ab"]
+```
 
 ---
 
 The default `"Auto"` uses longest-match when a rule's alternatives have equal length, so the longer `ab` alternative wins:
 
 ```wl
-autoTok = EBNFParse["<tok> ::= a | ab"];
+autoTok = EBNFParse["<tok> ::= a | ab"]
+```
+
+```wl
 Parse[autoTok["tok"], "ab"]
 ```
 
@@ -180,7 +198,10 @@ Parse[autoTok["tok"], "ab"]
 `"Longest"` always takes the longest-matching alternative, regardless of element counts:
 
 ```wl
-lngTok = EBNFParse["<tok> ::= a | ab", "ChoiceMode" -> "Longest"];
+lngTok = EBNFParse["<tok> ::= a | ab", "ChoiceMode" -> "Longest"]
+```
+
+```wl
 Parse[lngTok["tok"], "ab"]
 ```
 
@@ -209,8 +230,6 @@ A non-terminal named in a rule body but never defined (and not supplied via `"Pr
 Parse[EBNFParse["<greeting> ::= <word>"]["greeting"], "hello"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "No parser bound for non-terminal: word", "Found" -> ""|>] -->
-
 ---
 
 When a name has both a `::=` and a `:==` definition, the syntactic (`::=`) body is kept; the semantic body is not lowered separately. Indirectly left-recursive and deeply ambiguous grammars (the TPTP `<thf_*>` higher-order rules) can still backtrack exponentially — [Parsing TPTP](paclet:Wolfram/Parser/tutorial/ParsingTPTP) covers the boundary.
@@ -232,7 +251,12 @@ mini = EBNFParse["<TPTP_file>     ::= <cnf_annotated>*
         "cnf_annotated" -> Function[<|"Role" -> #5, "Atom" -> #7|>],
         "TPTP_file" -> Function[
             <|"Axioms" -> Map[#["Atom"] &, Cases[{##}, KeyValuePattern["Role" -> "axiom"]]]|>]
-    |>];
+    |>]
+```
+
+Three clauses, two of them axioms:
+
+```wl
 Parse[mini["TPTP_file"], "cnf(t1, axiom, p).cnf(t2, axiom, q).cnf(t3, hypothesis, r)."]
 ```
 

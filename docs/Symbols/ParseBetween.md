@@ -21,7 +21,13 @@ RelatedGuides: [WolframParser]
 
 ## Basic Examples
 
-Parenthesised content:
+Content between two delimiters:
+
+```wl
+ParseBetween[ParseLiteral["("], ParseCharacter[LetterCharacter], ParseLiteral[")"]]
+```
+
+Run on parenthesised input, it keeps only the content:
 
 ```wl
 Parse[
@@ -76,23 +82,26 @@ group = ParseBetween[
     ParseLiteral["("],
     ParseMany[ParseCharacter[LetterCharacter] | ParseRecursive[group]],
     ParseLiteral[")"]
-];
+]
+```
+
+```wl
 Parse[group, "((a)(b))"]
 (* {{"a"}, {"b"}} *)
 ```
+
+<!-- => {{"a"}, {"b"}} -->
 
 The same technique drives the recursive cross-references inside [LaTeXMathParse]()'s grammar (factor refers to atom which refers to bracedArg which refers back to atom, ...).
 
 The `ParseAction[Sequence, #2 &]` derivation matches the convenience helper:
 
 ```wl
-{
-    Parse[ParseBetween[ParseLiteral["["], ParseLiteral["x"], ParseLiteral["]"]], "[x]"],
+Parse[ParseBetween[ParseLiteral["["], ParseLiteral["x"], ParseLiteral["]"]], "[x]"] ===
     Parse[ParseAction[ParseSequence[ParseLiteral["["], ParseLiteral["x"], ParseLiteral["]"]], #2 &], "[x]"]
-}
 ```
 
-<!-- => {"x", "x"} -->
+<!-- => True -->
 
 ## Possible Issues
 
@@ -104,8 +113,6 @@ Parse[
     "(x"
 ]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 3, "Expected" -> ")", "Found" -> "<end of input>"|>] -->
 
 ## Neat Examples
 

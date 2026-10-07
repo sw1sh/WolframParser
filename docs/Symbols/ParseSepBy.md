@@ -24,11 +24,27 @@ RelatedGuides: [WolframParser]
 
 ## Basic Examples
 
-Comma-separated digits — the separators drop out of the result:
+Comma-separated digits. An item parser:
 
 ```wl
-digit = ParseCharacter[DigitCharacter];
-comma = ParseLiteral[","];
+digit = ParseCharacter[DigitCharacter]
+```
+
+A separator parser:
+
+```wl
+comma = ParseLiteral[","]
+```
+
+Items separated by separators:
+
+```wl
+ParseSepBy[digit, comma]
+```
+
+Run on input, the separators drop out of the result:
+
+```wl
 Parse[ParseSepBy[digit, comma], "1,2,3,4"]
 ```
 
@@ -59,7 +75,10 @@ Parse[ParseSepBy[digit, comma], "5"]
 The item and the separator can each be any parser — here whole words split on `,`:
 
 ```wl
-word = ParseAction[ParseSome[ParseCharacter[LetterCharacter]], StringJoin];
+word = ParseAction[ParseSome[ParseCharacter[LetterCharacter]], StringJoin]
+```
+
+```wl
 Parse[ParseSepBy[word, comma], "foo,bar,baz"]
 ```
 
@@ -83,8 +102,6 @@ The constructor returns a [ParserCombinator](), rendered as a summary box:
 ParseSepBy[digit, comma]
 ```
 
-<!-- => ParserCombinator[SepBy] -->
-
 ## Properties and Relations
 
 `ParseSepBy` and [ParseSepBy1]() differ only at the empty match: where `ParseSepBy` yields `{}`, [ParseSepBy1]() fails:
@@ -92,8 +109,6 @@ ParseSepBy[digit, comma]
 ```wl
 Parse[ParseSepBy1[digit, comma], ""]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "at least one occurrence", "Found" -> "<end of input>"|>] -->
 
 ---
 
@@ -112,8 +127,6 @@ A trailing separator is not consumed, so [Parse]() — which demands all input b
 ```wl
 Parse[ParseSepBy[digit, comma], "1,2,"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> "<end of input>", "Found" -> ","|>] -->
 
 ---
 
@@ -143,7 +156,10 @@ A bracketed integer-list parser — [ParseBetween]() supplies the delimiters, `P
 numList = ParseBetween[
    ParseLiteral["["],
    ParseSepBy[ParseAction[ParseRegex["[0-9]+"], FromDigits], comma],
-   ParseLiteral["]"]];
+   ParseLiteral["]"]]
+```
+
+```wl
 Parse[numList, "[1,2,3]"]
 ```
 

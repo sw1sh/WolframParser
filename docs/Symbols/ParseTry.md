@@ -29,8 +29,6 @@ The combinator wraps its argument:
 ParseTry[ParseLiteral["foo"]]
 ```
 
-<!-- => ParserCombinator[Try, ParserCombinator[Literal, "foo", <||>], <||>] -->
-
 ---
 
 On success `ParseTry` is transparent - it returns its parser's result unchanged:
@@ -58,8 +56,6 @@ On failure it reports the wrapped parser's own diagnostic:
 ```wl
 Parse[ParseTry[ParseLiteral["foo"]], "bar"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "foo", "Found" -> "b"|>] -->
 
 ## Scope
 

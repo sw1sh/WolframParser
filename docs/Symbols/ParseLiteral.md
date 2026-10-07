@@ -28,8 +28,6 @@ The simplest possible parser - exactly the string "foo":
 ParseLiteral["foo"]
 ```
 
-<!-- => ParserCombinator[Literal, "foo", <||>] -->
-
 Apply it:
 
 ```wl
@@ -44,8 +42,6 @@ A mismatched input fails:
 Parse[ParseLiteral["foo"], "bar"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "foo", "Found" -> "b"|>] -->
-
 ## Scope
 
 The empty literal succeeds on any input and consumes nothing:
@@ -53,8 +49,6 @@ The empty literal succeeds on any input and consumes nothing:
 ```wl
 Parse[ParseLiteral[""], "anything"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<end of input>", "Found" -> "a"|>] (Parse requires whole-input consumption; ParsePartial would return {"", "anything"}) -->
 
 A multi-character literal:
 
@@ -81,8 +75,6 @@ Parse[ParseLiteral["hello "] ~~ ParseLiteral["world"], "hello world"]
 ```wl
 Parse[ParseLiteral["foo"] ~~ ParseLiteral["bar"], "foo bar"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> "bar", "Found" -> " "|>] -->
 
 ## Neat Examples
 

@@ -32,8 +32,6 @@ The constructor holds the pattern in a `"Regex"` combinator:
 ParseRegex["[0-9]+"]
 ```
 
-<!-- => ParserCombinator[Regex, "[0-9]+", <||>] -->
-
 <!-- #| annotation: 26.07.26: Design review - ParseRegex is the lexer-level escape hatch: rather than force every terminal to be spelled as a tree of ParseCharacter combinators, it hands a whole token class to the engine's regex matcher (StringCases with a StartOfString anchor, so it matches at the current position instead of searching). Matches PCRE, the same dialect RegularExpression takes, and a RegularExpression pattern inside a GrammarRules declaration lowers to exactly this primitive - so hand-built and declarative grammars share one regex path. -->
 
 A lowercase run, matched greedily:
@@ -100,23 +98,17 @@ The match is anchored, not a search: a pattern that would match later in the inp
 Parse[ParseRegex["[0-9]+"], "abc123"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "regex /[0-9]+/", "Found" -> "a"|>] -->
-
 A non-match reports the pattern as the expected token:
 
 ```wl
 Parse[ParseRegex["\\d+"], "abc"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "regex /\d+/", "Found" -> "a"|>] -->
-
 The regex consumes only what it matches, so at top level [Parse]() still requires the rest of the input to be consumed — here `"42"` matches but `"abc"` is left over:
 
 ```wl
 Parse[ParseRegex["[0-9]+"], "42abc"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 3, "Expected" -> "<end of input>", "Found" -> "a"|>] -->
 
 Use [ParsePartial]() or continue the grammar to consume the remainder.
 

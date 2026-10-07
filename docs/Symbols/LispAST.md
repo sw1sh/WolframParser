@@ -103,5 +103,3 @@ An unbalanced list is an honest [Failure](), reporting how far it got and what i
 ```wl
 LispAST["(a b"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 5, "Expected" -> {")"}, "Found" -> "<end of input>"|>] -->

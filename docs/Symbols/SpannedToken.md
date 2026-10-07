@@ -23,10 +23,16 @@ RelatedGuides: [ParserZoo]
 
 ## Basic Examples
 
-Match an integer token, skip trailing whitespace, and build a [LeafNode]() carrying its span - `Source -> {1, 3}` is the character offsets of `"42"`:
+An integer token that skips trailing whitespace and builds a [LeafNode]() carrying its span:
 
 ```wl
-Parse[SpannedToken[ParseRegex["[0-9]+"], ParseMany[ParseCharacter[WhitespaceCharacter]], (LeafNode["Integer", #, <||>] &)], "42"]
+intToken = SpannedToken[ParseRegex["[0-9]+"], ParseMany[ParseCharacter[WhitespaceCharacter]], (LeafNode["Integer", #, <||>] &)]
+```
+
+Run on input - `Source -> {1, 3}` is the character offsets of `"42"`:
+
+```wl
+Parse[intToken, "42"]
 ```
 
 <!-- => LeafNode["Integer", "42", <|"Source" -> {1, 3}|>] -->
@@ -36,7 +42,7 @@ The span is `{start, end}` with *end* one past the last character, so `end - sta
 The trailing whitespace *ws* is consumed *outside* the span, so it never widens it - parsing `"42   "` still yields the span `{1, 3}`:
 
 ```wl
-Parse[SpannedToken[ParseRegex["[0-9]+"], ParseMany[ParseCharacter[WhitespaceCharacter]], (LeafNode["Integer", #, <||>] &)], "42   "]
+Parse[intToken, "42   "]
 ```
 
 <!-- => LeafNode["Integer", "42", <|"Source" -> {1, 3}|>] -->

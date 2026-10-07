@@ -41,23 +41,17 @@ A literal-matching parser is a `ParserCombinator` with type `Literal`:
 ParseLiteral["foo"]
 ```
 
-<!-- => ParserCombinator[Literal, "foo", <||>] -->
-
 A sequence built with the `~~` operator is the same expression you'd get from [ParseSequence]() directly:
 
 ```wl
 ParseLiteral["foo"] ~~ ParseLiteral["bar"]
 ```
 
-<!-- => ParserCombinator[Sequence, {ParserCombinator[Literal, "foo", <||>], ParserCombinator[Literal, "bar", <||>]}, <||>] -->
-
 The same `ParseSequence` call explicitly:
 
 ```wl
 ParseSequence[ParseLiteral["foo"], ParseLiteral["bar"]]
 ```
-
-<!-- => ParserCombinator[Sequence, {ParserCombinator[Literal, "foo", <||>], ParserCombinator[Literal, "bar", <||>]}, <||>] -->
 
 ## Scope
 
@@ -67,23 +61,17 @@ A `ParseChoice` built with the `|` operator collapses associativity through [Alt
 ParseLiteral["a"] | ParseLiteral["b"] | ParseLiteral["c"]
 ```
 
-<!-- => ParserCombinator[Choice, {ParserCombinator[Literal, "a", <||>], ParserCombinator[Literal, "b", <||>], ParserCombinator[Literal, "c", <||>]}, <||>] -->
-
 Repetition operators lower to `ParseSome` / `ParseMany`:
 
 ```wl
 ParseLiteral["x"]..
 ```
 
-<!-- => ParserCombinator[Some, ParserCombinator[Literal, "x", <||>], <||>] -->
-
 ---
 
 ```wl
 ParseLiteral["x"]...
 ```
-
-<!-- => ParserCombinator[Many, ParserCombinator[Literal, "x", <||>], <||>] -->
 
 Subvalue: a `ParserCombinator` is callable directly:
 
@@ -97,23 +85,33 @@ ParseLiteral["foo"]["foo"]
 
 ## Properties and Relations
 
-[ParserCompile]() returns a `ParserCombinator` with the same head and a `CompiledCodeFunction` added to its options under the `"Code"` key:
+[ParserCompile]() returns a `ParserCombinator` of the same head, with the compiled function added to its options under the `"Code"` key:
 
 ```wl
-With[{compiled = ParserCompile[ParseLiteral["foo"]]},
-    {Head[compiled], KeyExistsQ[compiled[[3]], "Code"]}]
+ParserCompile[ParseLiteral["foo"]]
 ```
 
-<!-- => {ParserCombinator, True} -->
+Its options hold that one key:
+
+```wl
+Keys @ Last[ParserCompile[ParseLiteral["foo"]]]
+```
+
+<!-- => {"Code"} -->
 
 A `ParserCombinator` is *inert* until applied - it does not run when first constructed:
 
 ```wl
-parser = ParseLiteral["foo"];
-{Head[parser], Parse[parser, "foo"]}
+parser = ParseLiteral["foo"]
 ```
 
-<!-- => {ParserCombinator, "foo"} -->
+It parses only when [Parse]() applies it:
+
+```wl
+Parse[parser, "foo"]
+```
+
+<!-- => "foo" -->
 
 The `~~` overload only fires when both sides are `ParserCombinator` instances, so plain string sequences are unaffected:
 
@@ -123,8 +121,6 @@ The `~~` overload only fires when both sides are `ParserCombinator` instances, s
     ParseLiteral["foo"] ~~ ParseLiteral["bar"]      (* a ParserCombinator *)
 }
 ```
-
-<!-- => {"foo" ~~ "bar", ParserCombinator[Sequence, {ParserCombinator[Literal, "foo", <||>], ParserCombinator[Literal, "bar", <||>]}, <||>]} -->
 
 ## Possible Issues
 
@@ -137,5 +133,3 @@ The operator overloads compose without ever spelling `ParserCombinator` by hand.
 ```wl
 ParseCharacter[DigitCharacter].. ~~ Optional[ParseLiteral["."] ~~ ParseCharacter[DigitCharacter]...]
 ```
-
-<!-- => a Sequence ParserCombinator with one Some and one Optional child, whose body is itself a Sequence of a Literal and a Many -->

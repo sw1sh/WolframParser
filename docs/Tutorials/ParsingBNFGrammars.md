@@ -3,6 +3,7 @@ Template: TechNote
 Name: ParsingBNFGrammars
 Title: Parsing BNF Grammars (and bootstrapping a TPTP parser)
 Context: Wolfram`Parser`
+ContextPath: [Global`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/tutorial/ParsingBNFGrammars
 Keywords: [BNF, EBNF, grammar, meta-grammar, bootstrap, TPTP, ATP, SyntaxBNF, GrammarApply, parser combinator, ParseRecursive]
@@ -12,13 +13,13 @@ RelatedTutorials: [DesignAndCompilationStrategy, ParsingGrammarRules]
 
 ## What this note covers
 
-A grammar definition file - the kind tool authors publish to describe their input language - is itself a string with structure. The TPTP project's [SyntaxBNF-v9.2.1.4](https://github.com/TPTPWorld/SyntaxBNF/blob/master/SyntaxBNF-v9.2.1.4) is 735 lines and 338 rules of the shape `<name> ::= <alt1> | <alt2> | ...`. If we have a parser combinator library, the natural question is: can we use it to parse the BNF file, then turn the parsed rules back into combinators that parse the language the grammar describes? The answer is "yes, with caveats" - this note works the example end-to-end and is honest about where the bootstrap breaks down.
+A grammar definition file - the kind tool authors publish to describe their input language - is itself a string with structure. The TPTP project's [SyntaxBNF-v9.2.1.4](https://github.com/TPTPWorld/SyntaxBNF/blob/da4fbddc9da7b066f03a4fd47edb148fa6e17c91/SyntaxBNF-v9.2.1.4) is 735 lines and 338 rules of the shape `<name> ::= <alt1> | <alt2> | ...`. If we have a parser combinator library, the natural question is: can we use it to parse the BNF file, then turn the parsed rules back into combinators that parse the language the grammar describes? The answer is "yes, with caveats" - this note works the example end-to-end and is honest about where the bootstrap breaks down.
 
 Three parts:
 
 1. **The EBNF parser.** `Wolfram\`Parser\`EBNF\`` reads a BNF source file using nothing but `Parse*` combinators - no regex `StringCases`, no hand-cracked line scanning. The output is an `Association[name -> ParserCombinator]`. Tested against TPTP's full 354-rule grammar.
-2. **Bootstrapping TPTP.** A minimal `PrimitiveOverrides` map plugs in lexical tokens (`lower_word`, `upper_word`, `integer`, `single_quoted`, ...) that the BNF defines as `::-` / `:::` regex-style rules. With that wired up, the auto-generated parsers handle the simplest TPTP clauses. The end-to-end test parses `cnf(test, axiom, p).`.
-3. **The PEG wall.** Where the bootstrap stops, and what the [handwritten TPTPImport](https://github.com/sw1sh/thvm) does that the auto-generation can't yet.
+2. **Bootstrapping TPTP.** The whole TPTP grammar lowers in one call, its regex-style token and character-class rules included, and the generated parsers read real clauses. An `"Actions"` map lifts each rule's raw parse tree to a Wolfram Language value - which is how [TPTPImport]() is built.
+3. **The PEG wall.** Where a grammar written for an LALR parser needs rewriting for PEG, which rewrites the lowering does itself, and what still takes a hand-written parser.
 
 ---
 
@@ -28,9 +29,10 @@ Three parts:
 
 **(a) The BNF grammar itself, expressed as `Parse*` combinators.** The whole grammar is about 100 lines, with a `nonTerm` parser for `<name>` references, a `literalLetters` and `literalPunct` pair for the two flavours of literal token, a `rawElt` choice over (`nonTerm` + optional `*`, plain `nonTerm`, letters, punct), an `altSeq` of repeated elements separated by whitespace, an `alts` that's `ParseSepBy1[altSeq, "|"]`, a `ruleP` that ties it all together with the arrow, and finally `grammarP` = `ParseMany[ruleP]`. PEG ordering does the heavy lifting: `nonTerm` is tried before `literalPunct`, so `<name>` is consumed as a non-terminal; if `<` isn't followed by `name>`, `literalPunct` picks it up as a bare `<` (e.g. the `<<` in `<subtype_sign> ::= <<`).
 
-One small piece deserves attention - the `literalPunct` lookahead:
+One small piece of the source deserves attention - the `literalPunct` lookahead, listed as `EBNF.wl` defines it:
 
 ```wl
+#| eval: false
 literalPunct = ParseAction[
     ParseSome[
         ParseAction[
@@ -46,17 +48,31 @@ Without the `ParseNotFollowedBy[nonTerm]`, a punctuation run is greedy and would
 
 **(b) The lowering: rule list -> `Association[name -> parser]`.** Each rule is walked: literals become `ParseLiteral`, non-terminals become `ParseRecursive[symbol]` where each rule has an allocated `Unique` symbol holding its lowered parser. The fresh-symbol indirection is what lets the lowering build the parser map *in any order* - mutual recursion among rules ties through the symbols, looked up at parse time. Once every rule is lowered, each rule's parser is bound to its symbol; the `ParseRecursive` references resolve and the whole grammar wakes up.
 
+A three-rule grammar lowers to one parser per rule:
+
 ```wl
 g = EBNFParse["
     <digit>  ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
     <number> ::= <digit><digit>*
     <expr>   ::= <number> + <number>
-"];
-Parse[g["expr"], "12 + 34"]
-(* {{"1", {"2"}}, "+", {"3", {"4"}}} *)
+"]
 ```
 
-Whitespace between adjacent elements is automatic - the lowering inserts an optional-whitespace parser between every two sequence elements, so `12+34` and `12 + 34` both parse.
+The `<expr>` parser gives the raw tree of its rules' results:
+
+```wl
+Parse[g["expr"], "12 + 34"]
+```
+
+<!-- => {{"1", {"2"}}, "+", {"3", {"4"}}} -->
+
+Whitespace between adjacent elements is automatic - the lowering inserts an optional-whitespace parser between every two sequence elements, so the same tree comes from the input with no spaces:
+
+```wl
+Parse[g["expr"], "12+34"]
+```
+
+<!-- => {{"1", {"2"}}, "+", {"3", {"4"}}} -->
 
 ---
 
@@ -71,34 +87,70 @@ The TPTP BNF distinguishes four rule kinds:
 | `::-`  | token-construction rule (e.g. `<single_quoted> ::- <single_quote><sq_char>* ...`)    |
 | `:::`  | character-class rule (e.g. `<star> ::: [*]`, `<lower_alpha> ::: [a-z]`)              |
 
-The first two parse cleanly via our lowering. The latter two are mostly regex-style definitions that the EBNF parser reads but does NOT auto-lower (you'd build a small regex-to-`ParseCharacter` compiler to handle the `[a-z]` / `[^*]` classes). For the bootstrap, we hand-define the lexical primitives that the syntactic rules call out by name:
+The lowering handles all four. `::=` and `:==` rules lower to sequences and choices; the `::-` and `:::` bodies are regex-style (`[a-z]`, `[*]`) and are compiled to [ParseCharacter]() classes. The grammar file, read in once:
 
 ```wl
-primitiveOverrides = <|
-    "lower_word" -> ParseAction[
-        ParseCharacter[CharacterRange["a", "z"]] ~~ ParseMany[
-            ParseCharacter[CharacterRange["a", "z"] | CharacterRange["A", "Z"] |
-                           DigitCharacter | "_"]
-        ],
-        StringJoin[#1, StringJoin @ #2] &
-    ],
-    "upper_word" -> ...,
-    "integer"    -> ParseAction[ParseSome[ParseCharacter[DigitCharacter]], StringJoin @ {##} &],
-    "single_quoted" -> ...,
-    "vline" -> ParseLiteral["|"],
-    "star"  -> ParseLiteral["*"],
-    "plus"  -> ParseLiteral["+"],
-    ...
-|>;
-
-tptpBnf  = Import["https://raw.githubusercontent.com/TPTPWorld/SyntaxBNF/master/SyntaxBNF-v9.2.1.4", "Text"];
-parsers  = EBNFParse[tptpBnf, "PrimitiveOverrides" -> primitiveOverrides];
-
-Parse[parsers["cnf_annotated"], "cnf(test, axiom, p)."]
-(* {"cnf", "(", "test", ",", "axiom", ",", "p", Null, ")."} *)
+tptpBnf = Import["https://raw.githubusercontent.com/TPTPWorld/SyntaxBNF/da4fbddc9da7b066f03a4fd47edb148fa6e17c91/SyntaxBNF-v9.2.1.4", "Text"];
 ```
 
-The output is the raw parse tree - a list of matched literals and sub-parser results. Turning it into the WL-term shape (`<|"Axioms" -> {phi1, ...}, "Conjecture" -> phi|>` with atoms as `String`-headed compounds) is the *semantic action* layer. Each rule needs a `ParseAction` that lifts the raw tree to the right WL value. The paclet ships the result as [TPTPImport](); see [Parsing TPTP](paclet:Wolfram/Parser/tutorial/ParsingTPTP) for the ~50-entry action map.
+One rule of each kind, as the file states them:
+
+```wl
+Select[StringSplit[tptpBnf, "\n"], StringStartsQ[#, "<cnf_annotated>" | "<lower_word>" | "<lower_alpha>" | "<single_quoted>"] &]
+```
+
+The whole grammar lowers in one call:
+
+```wl
+tptpParsers = EBNFParse[tptpBnf];
+```
+
+A parser per rule name - here the first three of them:
+
+```wl
+Take[tptpParsers, 3]
+```
+
+All 338 rule names:
+
+```wl
+Length[tptpParsers]
+```
+
+<!-- => 338 -->
+
+The `<cnf_annotated>` parser reads a clause straight away:
+
+```wl
+Parse[tptpParsers["cnf_annotated"], "cnf(test, axiom, p)."]
+```
+
+<!-- => {"cnf", "(", "test", ",", "axiom", ",", {"p", {}}, Null, ")."} -->
+
+The output is the raw parse tree - the matched literals and sub-parser results in grammar order. Turning it into a Wolfram Language value is the *semantic action* layer: an `"Actions"` entry wraps one rule's parser in [ParseAction](). On the small grammar from Part 1, an action for `<number>` turns each digit tree into an integer:
+
+```wl
+gNum = EBNFParse[
+    "<digit>  ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+     <number> ::= <digit><digit>*
+     <expr>   ::= <number> + <number>",
+    "Actions" -> <|"number" -> Function[FromDigits @ StringJoin[#1, StringJoin @ #2]]|>
+]
+```
+
+```wl
+Parse[gNum["expr"], "12 + 34"]
+```
+
+<!-- => {12, "+", 34} -->
+
+[TPTPImport]() is this layer done for TPTP: 72 actions over the same grammar lift every clause to Wolfram Language terms. See [Parsing TPTP](paclet:Wolfram/Parser/tutorial/ParsingTPTP) for the action map.
+
+```wl
+TPTPImport["cnf(test, axiom, p)."]
+```
+
+<!-- => <|"Axioms" -> {"p"[]}, "Conjecture" -> None|> -->
 
 ---
 
@@ -158,45 +210,29 @@ After both rewrites land, real TPTP inputs parse via the auto-generated parser:
 | 5-clause group-theory problem with quantifiers and equality   | OK     |
 | `include('Axioms/SET006-0.ax').`                              | OK     |
 
-What still doesn't lower automatically:
-
-**Dual definitions.** Many rules have BOTH a `::=` and a `:==` definition for the same name. The auto-lowering keys both into one `name -> parser` map and the second definition overwrites the first.
-
-**`::-` / `:::` rules untouched.** The lowering reads them (so all 338 rules parse), but only `::=` and `:==` get auto-lowered. The `::-` / `:::` rules need either a small regex-to-`ParseCharacter` compiler or hand-defined primitives via `PrimitiveOverrides` (the same 12-entry override map shown in Part 2).
-
-**Semantic actions.** What `<cnf_annotated>` parses to today is the raw token tree `{"cnf", "(", name, ",", role, ",", {formula, {tail-matches}}, annotations, ")."}` - the literals and the sub-parser results in BNF order, with `{}` placeholders where ParseMany produced zero matches. The handwritten [TPTPImport](https://github.com/sw1sh/thvm) lifts this to the `<|"Axioms" -> {phi1, ...}, "Conjecture" -> phi|>` shape via per-rule actions; the lowering doesn't yet take an `actionMap` option.
+What the lowering does not fix is the cost of a shared prefix. The higher-order rule `<thf_binary_assoc>` is an ordered choice whose three alternatives all begin with the same operand; lowered to a PEG with no memo, that operand is re-parsed once per alternative, and since an operand can itself be a parenthesised formula the cost grows as $3^{\text{depth}}$. [TPTPImport]() replaces `<thf_logic_formula>` with a [ParseOperatorTable]() through the `"PrimitiveOverrides"` option, so each operand is parsed once and the connectives are consumed by precedence - every other rule is the lowered grammar.
 
 ---
 
-## Comparison to the handwritten TPTPImport
+## What the grammar gives you
 
-The [TPTPImport](https://github.com/sw1sh/thvm) (a sibling project, ~1100 lines) is a complete reference implementation: cnf, fof, tff, tcf, thf, ncf clauses, the full Boolean grammar, quantifiers, sequents, includes with optional clause-name selectors, the term-level coverage (variables, distinct objects, numeric literals, single-quoted atoms), and the WL-term lifting.
-
-What the EBNF approach gives you:
-
-- **The recogniser, done.** 338 rules parsed, 280 lowered, the two PEG-vs-CFG rewrites applied automatically. Real TPTP problems with quantifiers, function application, equality, and multi-term boolean connectives parse end to end - the action layer that lifts the raw tree to canonical Wolfram-Language terms ships as [TPTPImport]().
-- **Vendored grammar tracking.** When the upstream TPTP grammar updates (the `v9.2.1.x` version numbers in the comment header), the auto-generated parser updates with it - re-run `EBNFParse` on the new file. The handwritten parser has to be diffed line-by-line against the new grammar.
-- **Single source of truth.** The grammar IS the parser definition; you can't end up with a parser that disagrees with the published grammar.
-
-What still has to be written by hand:
-
-- **`::-` and `:::` primitives** for the lexical tokens. The 12-entry `PrimitiveOverrides` map in Part 2 is a working starter set; a more complete one would cover `real`, `rational`, `dollar_dollar_word`, the spacing / punctuation tokens, and the comment / whitespace rules properly.
-- **The action map** that lifts each rule's raw parse tree to the WL value the consumer wants. For TPTP this is the `clauseToFormula` / `readTerm` / sequent-rewrite logic from the handwritten reference. The lowering's `ParseAction` is the right shape; what's missing is the `name -> actionFn` plumbing through `EBNFParse`.
-
-The endpoint is a v0.4 of `EBNFParse` that takes a BNF + action map + override map and returns a parser whose output is the user-defined WL shape. The hard parts (recogniser construction, left-recursion elimination, left-factoring) are done.
+- **The recogniser, done.** 338 rules lowered, the two PEG-vs-CFG rewrites applied automatically. Real TPTP problems with quantifiers, function application, equality and multi-term Boolean connectives parse end to end.
+- **Grammar tracking.** When the upstream TPTP grammar changes version, re-running [EBNFParse]() on the new file re-derives the parser; the actions only need touching where a rule's shape changed.
+- **Single source of truth.** The grammar is the parser definition; the parser cannot disagree with the published grammar.
 
 ---
 
 ## Try it
 
-The tests in ``Tests/EBNF.wlt`` cover the unit cases above plus the five-clause group-theory TPTP problem end-to-end. They fetch the canonical [TPTPWorld BNF](https://github.com/TPTPWorld/SyntaxBNF) directly. To experiment:
+The tests in ``Tests/EBNF.wlt`` cover the unit cases above plus the five-clause group-theory TPTP problem end-to-end, against the same pinned [TPTPWorld grammar](https://github.com/TPTPWorld/SyntaxBNF). To experiment, the classic $a^n b^n$ grammar:
 
 ```wl
-Needs["Wolfram`Parser`"]
-
-source = "<S> ::= a <S> b | <epsilon>
-          <epsilon> ::=";
-g = EBNFParse[source];
-Parse[g["S"], "aaabbb"]
-(* the classic a^n b^n grammar - parses cleanly *)
+anbn = EBNFParse["<S> ::= a <S> b | <epsilon>
+                  <epsilon> ::="]
 ```
+
+```wl
+Parse[anbn["S"], "aaabbb"]
+```
+
+<!-- => {"a", {"a", {"a", Null, "b"}, "b"}, "b"} -->

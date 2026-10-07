@@ -47,13 +47,11 @@ LambdaSemantic["App"][f, x]
 
 <!-- => f[x] -->
 
-The other half of the dual design is the abstract-syntax algebra; the *same* grammar over it emits a standard tree instead of a closure, which [LambdaAST]() runs:
+The other half of the dual design is the abstract-syntax algebra; the *same* grammar over it emits a standard tree instead of a closure, which [LambdaAST]() runs - the identity abstraction becomes a `λ` call node over its variable and body:
 
 ```wl
-LambdaAST["(\\x.\\x.x) a b"]
+LambdaAST["\\x.x"]
 ```
-
-<!-- => ContainerNode["String", {CallNode[CallNode[CallNode[LeafNode["Symbol", "λ", <||>], {LeafNode["Symbol", "x", <||>], CallNode[LeafNode["Symbol", "λ", <||>], {LeafNode["Symbol", "x", <||>], LeafNode["Symbol", "x", <|"Source" -> {{1, 8}, {1, 9}}|>]}, <|"Source" -> {{1, 8}, {1, 9}}|>]}, <|"Source" -> {{1, 8}, {1, 9}}|>], {LeafNode["Symbol", "a", <|"Source" -> {{1, 11}, {1, 12}}|>]}, <|"Source" -> {{1, 8}, {1, 12}}|>], {LeafNode["Symbol", "b", <|"Source" -> {{1, 13}, {1, 14}}|>]}, <|"Source" -> {{1, 8}, {1, 14}}|>]}, <|"Source" -> {{1, 8}, {1, 14}}|>] -->
 
 ## Scope
 

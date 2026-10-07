@@ -24,11 +24,27 @@ RelatedGuides: [WolframParser]
 
 ## Basic Examples
 
-Right-associative exponentiation — the chain `2^3^2` folds as `2^(3^2)`, i.e. `2^9`:
+Right-associative exponentiation. An operand parser reads one digit as a number:
 
 ```wl
-num = ParseAction[ParseCharacter[DigitCharacter], FromDigits];
-pow = ParseAction[ParseLiteral["^"], (Power &)];
+num = ParseAction[ParseCharacter[DigitCharacter], FromDigits]
+```
+
+The operator parser returns the function that combines two operands:
+
+```wl
+pow = ParseAction[ParseLiteral["^"], (Power &)]
+```
+
+The chain of the two:
+
+```wl
+ParseChainRight[num, pow]
+```
+
+The chain `2^3^2` folds as `2^(3^2)`, i.e. `2^9`:
+
+```wl
 Parse[ParseChainRight[num, pow], "2^3^2"]
 ```
 
@@ -39,7 +55,10 @@ Parse[ParseChainRight[num, pow], "2^3^2"]
 Right-associative subtraction groups the other way from the everyday reading — `1-2-3` becomes `1-(2-3)`:
 
 ```wl
-sub = ParseAction[ParseLiteral["-"], (Subtract &)];
+sub = ParseAction[ParseLiteral["-"], (Subtract &)]
+```
+
+```wl
 Parse[ParseChainRight[num, sub], "1-2-3"]
 ```
 
@@ -70,7 +89,10 @@ Parse[ParseChainRight[num, ParseAction[ParseLiteral["^"], (caret &)]], "2^3^2"]
 Right associativity is the natural shape for a `cons`-style list constructor, where `a:b:c` means `a:(b:c)`:
 
 ```wl
-word = ParseAction[ParseSome[ParseCharacter[LetterCharacter]], StringJoin];
+word = ParseAction[ParseSome[ParseCharacter[LetterCharacter]], StringJoin]
+```
+
+```wl
 Parse[ParseChainRight[word, ParseAction[ParseLiteral[":"], (cons &)]], "a:b:c"]
 ```
 
@@ -83,8 +105,6 @@ The constructor returns a [ParserCombinator](), rendered as a summary box:
 ```wl
 ParseChainRight[num, pow]
 ```
-
-<!-- => ParserCombinator[ChainRight] -->
 
 ## Properties and Relations
 
@@ -143,8 +163,6 @@ At least one operand is required, so empty input fails:
 ```wl
 Parse[ParseChainRight[num, sub], ""]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<digit>", "Found" -> "<end of input>"|>] -->
 
 ## Neat Examples
 

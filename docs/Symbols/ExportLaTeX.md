@@ -30,7 +30,7 @@ A fraction serializes to `\frac`:
 ExportLaTeX[FractionBox["a", "b"]]
 ```
 
-<!-- => "\frac{a}{b}" -->
+<!-- => "\\frac{a}{b}" -->
 
 A superscript:
 
@@ -46,7 +46,7 @@ ExportLaTeX[SuperscriptBox["x", "2"]]
 ExportLaTeX[LaTeXMathParse["\\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}"]]
 ```
 
-<!-- => "\frac{-b\pm \sqrt{b^{2}-4ac}}{2a}" -->
+<!-- => "\\frac{-b\\pm \\sqrt{b^{2}-4ac}}{2a}" -->
 
 ## Scope
 
@@ -56,7 +56,7 @@ A Greek glyph maps to its command:
 ExportLaTeX["\[Alpha]"]
 ```
 
-<!-- => "\alpha " -->
+<!-- => "\\alpha " -->
 
 A quantum ket:
 
@@ -64,7 +64,7 @@ A quantum ket:
 ExportLaTeX[TemplateBox[{"\[Psi]"}, "Ket"]]
 ```
 
-<!-- => "|\psi \rangle " -->
+<!-- => "|\\psi \\rangle " -->
 
 A grid becomes a matrix environment; an author's parentheses around it promote it to `pmatrix`:
 
@@ -72,7 +72,7 @@ A grid becomes a matrix environment; an author's parentheses around it promote i
 ExportLaTeX[RowBox[{"(", GridBox[{{"1", "0"}, {"0", "1"}}], ")"}]]
 ```
 
-<!-- => "\begin{pmatrix}1 & 0 \\ 0 & 1\end{pmatrix}" -->
+<!-- => "\\begin{pmatrix}1 & 0 \\\\ 0 & 1\\end{pmatrix}" -->
 
 A two-or-more-letter italic identifier is wrapped in `\mathit` so it does not read as a product of letters:
 
@@ -80,7 +80,7 @@ A two-or-more-letter italic identifier is wrapped in `\mathit` so it does not re
 ExportLaTeX[StyleBox["output", "TI"]]
 ```
 
-<!-- => "\mathit{output}" -->
+<!-- => "\\mathit{output}" -->
 
 ## Properties and Relations
 
@@ -98,7 +98,7 @@ It accepts a [RawBoxes]() wrapper, so the output of a typeset cell can be export
 ExportLaTeX[RawBoxes[SqrtBox["2"]]]
 ```
 
-<!-- => "\sqrt{2}" -->
+<!-- => "\\sqrt{2}" -->
 
 It also accepts a [Cell](), extracting the [BoxData]() content:
 
@@ -128,4 +128,4 @@ Round-trip a whole formula - parse LaTeX to boxes, restyle for display, then exp
 ExportLaTeX[LaTeXMathParse["\\sum_{i=1}^{n} \\frac{1}{i^2} = \\frac{\\pi^2}{6}"]]
 ```
 
-<!-- => "\sum _{i=1}^{n}\frac{1}{i^{2}}=\frac{\pi^{2}}{6}" -->
+<!-- => "\\sum _{i=1}^{n}\\frac{1}{i^{2}}=\\frac{\\pi^{2}}{6}" -->

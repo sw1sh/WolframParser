@@ -30,34 +30,56 @@ It is the [Pratt / top-down-operator-precedence](https://tdop.github.io/) ("prec
 
 ## Basic Examples
 
-A four-operator arithmetic calculator — `*` `/` bind tighter than `+` `-`, and the operator parsers return the actual arithmetic functions, so the result *evaluates*:
+A four-operator arithmetic calculator — `*` `/` bind tighter than `+` `-`, and the operator parsers return the actual arithmetic functions, so the result *evaluates*. A number is the operand:
 
 ```wl
-num   = ParseAction[ParseRegex["[0-9]+"], FromDigits];
+num = ParseAction[ParseRegex["[0-9]+"], FromDigits]
+```
+
+Each operator parser returns the function its operator stands for:
+
+```wl
 addOp = ParseChoice[ParseAction[ParseLiteral["+"], (Plus &)],
-                    ParseAction[ParseLiteral["-"], (Subtract &)]];
+                    ParseAction[ParseLiteral["-"], (Subtract &)]]
+```
+
+```wl
 mulOp = ParseChoice[ParseAction[ParseLiteral["*"], (Times &)],
-                    ParseAction[ParseLiteral["/"], (Divide &)]];
-unit  = ParseChoice[
+                    ParseAction[ParseLiteral["/"], (Divide &)]]
+```
+
+A *unit* - what the table combines - is a number or a bracketed expression:
+
+```wl
+unit = ParseChoice[
    ParseBetween[ParseLiteral["("], ParseRecursive[calc], ParseLiteral[")"]],
-   num];
-calc  = ParseOperatorTable[unit, {
+   num]
+```
+
+The table lists its levels tightest first:
+
+```wl
+calc = ParseOperatorTable[unit, {
    {{"InfixL", mulOp}},   (* tightest *)
    {{"InfixL", addOp}}    (* loosest  *)
-}];
+}]
+```
 
+```wl
 Parse[calc, "2*3+4*5"]
 ```
 
 <!-- => 26 -->
 
-Precedence and left-associativity:
+Precedence - `*` binds tighter than `+`:
 
 ```wl
 Parse[calc, "1+2*3"]
 ```
 
 <!-- => 7 -->
+
+Left-associativity - `1-2-3` groups as `(1-2)-3`:
 
 ```wl
 Parse[calc, "1-2-3"]
@@ -79,7 +101,10 @@ Parse[calc, "(1+2)*3"]
 
 ```wl
 pow = ParseOperatorTable[ParseAction[ParseRegex["[0-9]+"], FromDigits],
-   {{"InfixR", ParseAction[ParseLiteral["^"], (power &)]}}];
+   {{"InfixR", ParseAction[ParseLiteral["^"], (power &)]}}]
+```
+
+```wl
 Parse[pow, "2^3^2"]
 ```
 
@@ -88,26 +113,39 @@ Parse[pow, "2^3^2"]
 **Prefix and postfix.** A propositional-logic grammar with prefix `~`, infix `&` `|`, and right-associative `=>`, mapping to the built-in boolean heads:
 
 ```wl
-sym   = ParseAction[ParseChoice @@ (ParseLiteral /@ {"p", "q", "r"}), Symbol];
+sym = ParseAction[ParseChoice @@ (ParseLiteral /@ {"p", "q", "r"}), Symbol]
+```
+
+```wl
 lunit = ParseChoice[
    ParseBetween[ParseLiteral["("], ParseRecursive[logic], ParseLiteral[")"]],
-   sym];
+   sym]
+```
+
+```wl
 logic = ParseOperatorTable[lunit, {
    {{"Prefix", ParseAction[ParseLiteral["~"],  (Not &)]}},
    {{"InfixL", ParseAction[ParseLiteral["&"],  (And &)]}},
    {{"InfixL", ParseAction[ParseLiteral["|"],  (Or &)]}},
    {{"InfixR", ParseAction[ParseLiteral["=>"], (Implies &)]}}
-}];
+}]
+```
+
+`&` binds tighter than `|`:
+
+```wl
 Parse[logic, "p|q&r"]
 ```
 
 <!-- => p || (q && r) -->
 
+Prefix `~` binds tighter still:
+
 ```wl
 Parse[logic, "~p&q"]
 ```
 
-<!-- => !p && q -->
+<!-- =>  !p && q -->
 
 A postfix operator (factorial) at the tightest level:
 
@@ -115,7 +153,10 @@ A postfix operator (factorial) at the tightest level:
 fac = ParseOperatorTable[ParseAction[ParseRegex["[0-9]+"], FromDigits], {
    {{"Postfix", ParseAction[ParseLiteral["!"], (fact &)]}},
    {{"InfixL",  ParseAction[ParseLiteral["+"], (plus &)]}}
-}];
+}]
+```
+
+```wl
 Parse[fac, "3!+4!"]
 ```
 
@@ -126,7 +167,10 @@ Parse[fac, "3!+4!"]
 A one-level, one-operator table is exactly [ParseChainLeft]() / [ParseChainRight]():
 
 ```wl
-chainL = ParseOperatorTable[num, {{"InfixL", ParseAction[ParseLiteral["+"], (Plus &)]}}];
+chainL = ParseOperatorTable[num, {{"InfixL", ParseAction[ParseLiteral["+"], (Plus &)]}}]
+```
+
+```wl
 Parse[chainL, "1+2+3"]
 ```
 
@@ -153,16 +197,45 @@ Parse[calc, "10-2+3"]
 The input shape that makes a [ParseChoice]() over `or | and | apply` backtrack exponentially — a left-nested apply chain `f[n] = "(" <> f[n-1] <> "@b)"` — stays linear here. At depth 200 (an 801-character string) it parses in milliseconds, where the equivalent [ParseChoice]() / [ParseRecursive]() grammar times out by depth 10:
 
 ```wl
-apOp = ParseAction[ParseLiteral["@"], (app &)];
-u    = ParseChoice[
-   ParseBetween[ParseLiteral["("], ParseRecursive[e], ParseLiteral[")"]],
-   ParseAction[ParseChoice @@ (ParseLiteral /@ {"a", "b"}), Symbol]];
-e    = ParseOperatorTable[u, {{"InfixL", apOp}}];
-
-f[0] = "a"; f[k_] := f[k] = "(" <> f[k - 1] <> "@b)";
-AbsoluteTiming[Parse[e, f[200]]][[1]]
+apOp = ParseAction[ParseLiteral["@"], (app &)]
 ```
 
-<!-- => ~0.02 (seconds) -->
+```wl
+u = ParseChoice[
+   ParseBetween[ParseLiteral["("], ParseRecursive[e], ParseLiteral[")"]],
+   ParseAction[ParseChoice @@ (ParseLiteral /@ {"a", "b"}), Symbol]]
+```
+
+```wl
+e = ParseOperatorTable[u, {{"InfixL", apOp}}]
+```
+
+The nested inputs, each wrapping the last in one more `(... @b)`:
+
+```wl
+f[k_] := f[k] = If[k == 0, "a", "(" <> f[k - 1] <> "@b)"]
+```
+
+Three levels deep:
+
+```wl
+f[3]
+```
+
+<!-- => "(((a@b)@b)@b)" -->
+
+It parses to three nested applications:
+
+```wl
+Parse[e, f[3]]
+```
+
+<!-- => app[app[app[a, b], b], b] -->
+
+The seconds the 200-level input takes:
+
+```wl
+First @ AbsoluteTiming[Parse[e, f[200]]]
+```
 
 This is the "Pratt-style precedence climber" the [Parsing TPTP](paclet:Wolfram/Parser/tutorial/ParsingTPTP) note points to for the higher-order (THF) connective grammar, where alternative explosion overwhelms even longest-match. [TPTPImport]() now parses the THF `@` / `&` / `|` / `<=>` connectives through exactly this combinator.

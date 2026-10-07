@@ -23,7 +23,13 @@ RelatedGuides: [WolframParser]
 
 ## Basic Examples
 
-A negative lookahead succeeds when its parser would not match, consuming nothing - [ParsePartial]() shows the input still fully available:
+A negative lookahead wraps the parser it tests:
+
+```wl
+ParseNotFollowedBy[ParseLiteral["a"]]
+```
+
+It succeeds when its parser would not match, consuming nothing - [ParsePartial]() shows the input still fully available:
 
 ```wl
 ParsePartial[ParseNotFollowedBy[ParseLiteral["a"]], "xbc"]
@@ -38,18 +44,6 @@ It fails when *p* would match:
 ```wl
 Parse[ParseNotFollowedBy[ParseLiteral["a"]], "abc"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<not followed by parser>", "Found" -> "a"|>] -->
-
----
-
-The combinator wraps its argument:
-
-```wl
-ParseNotFollowedBy[ParseLiteral["bar"]]
-```
-
-<!-- => ParserCombinator[NotFollowedBy, ParserCombinator[Literal, "bar", <||>], <||>] -->
 
 ## Scope
 
@@ -69,8 +63,6 @@ When the forbidden `"bar"` does follow, the assertion fails at that position:
 Parse[ParseLiteral["foo"] ~~ ParseNotFollowedBy[ParseLiteral["bar"]] ~~ ParseLiteral["bar"], "foobar"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> "<not followed by parser>", "Found" -> "b"|>] -->
-
 ---
 
 A keyword with a word boundary - `"let"` matches only when no letter follows it:
@@ -88,8 +80,6 @@ On `"lets"` the boundary assertion fails, so `"let"` is not accepted as a keywor
 ```wl
 Parse[ParseLiteral["let"] ~~ ParseNotFollowedBy[ParseCharacter[LetterCharacter]], "lets"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> "<not followed by parser>", "Found" -> "s"|>] -->
 
 ## Properties and Relations
 
@@ -118,5 +108,3 @@ A negative lookahead consumes nothing, so on its own it leaves the input unconsu
 ```wl
 Parse[ParseNotFollowedBy[ParseLiteral["x"]], "abc"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<end of input>", "Found" -> "a"|>] -->

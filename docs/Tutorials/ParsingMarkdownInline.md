@@ -57,6 +57,8 @@ Plain prose comes out as a single `"Text"` atom:
 MarkdownInlineParse["plain text"]
 ```
 
+<!-- => {<|"Type" -> "Text", "Text" -> "plain text"|>} -->
+
 Mixed prose, emphasis, math, and code:
 
 ```wl
@@ -69,11 +71,60 @@ A link with a code-styled label demonstrates recursive label parsing - the label
 MarkdownInlineParse["[`Range`](paclet:ref/Range)"]
 ```
 
+<!-- => {<|"Type" -> "Link", "Url" -> "paclet:ref/Range", "Label" -> {<|"Type" -> "Code", "Code" -> "Range"|>}|>} -->
+
 ---
 
 ## Part 2 - The grammar
 
-The whole parser lives in [examples/WolframParser/Kernel/Markdown.wl](https://github.com/sw1sh/WolframParser/blob/main/Kernel/Markdown.wl). The grammar is one big [ParseChoice]() and lots of small [ParseAction]() arms.
+The whole parser lives in [Parser/Kernel/Markdown.wl](https://github.com/sw1sh/WolframParser/blob/main/Parser/Kernel/Markdown.wl). The grammar is one big [ParseChoice]() and lots of small [ParseAction]() arms. The arms below are the paclet's own, and each one runs here once the few helpers it is written with are defined.
+
+### The helpers
+
+Each atom has a constructor that builds its `"Type"`-tagged [Association](), which keeps the grammar arms short:
+
+```wl
+text[s_] := <|"Type" -> "Text", "Text" -> s|>
+codeAtom[s_] := <|"Type" -> "Code", "Code" -> s|>
+mathIn[s_] := <|"Type" -> "MathInline", "Math" -> s|>
+bold[c_] := <|"Type" -> "Bold", "Children" -> c|>
+italic[c_] := <|"Type" -> "Italic", "Children" -> c|>
+link[lbl_, u_] := <|"Type" -> "Link", "Label" -> lbl, "Url" -> u|>
+```
+
+A constructor applied to a body:
+
+```wl
+codeAtom["x"]
+```
+
+<!-- => <|"Type" -> "Code", "Code" -> "x"|> -->
+
+`anyChar` consumes one character of any kind:
+
+```wl
+anyChar = ParseCharacter[_]
+```
+
+`charSat` consumes one character that passes a test:
+
+```wl
+charSat[pred_] := ParseCharacter[_ ? pred]
+```
+
+The test escapes use is ASCII punctuation:
+
+```wl
+asciiPunct = (StringMatchQ[#, PunctuationCharacter] || # === "!") &
+```
+
+<!-- => StringMatchQ[#1, PunctuationCharacter] || #1 === "!" &  -->
+
+```wl
+Parse[charSat[asciiPunct], "*"]
+```
+
+<!-- => "*" -->
 
 ### The bounded-content helper
 
@@ -88,11 +139,17 @@ content[term_] := ParseAction[
 
 Reading the body: `anyChar` is <code>[ParseCharacter]()[_]</code>; <code>[ParseNotFollowedBy]()[term]</code> is a zero-width assertion that the next characters do *not* start `term`. Their sequence consumes one char only when `term` doesn't start there. [ParseSome]() iterates the assertion-plus-char until [ParseNotFollowedBy]() fires, at which point [ParseSome]() stops and the outer [ParseAction]() joins the accumulated chars into a string.
 
-<code>content[[ParseLiteral]()["**"]]</code> matches `"foo $x$"` and stops cleanly at the `**` of `"foo $x$**"` - which is exactly the bound a `**foo $x$**` body needs.
+<code>content[[ParseLiteral]()["**"]]</code> matches `"foo $x$"` and stops cleanly at the `**` of `"foo $x$**"` - which is exactly the bound a `**foo $x$**` body needs. [ParsePartial]() shows where it stops:
+
+```wl
+ParsePartial[content[ParseLiteral["**"]], "foo $x$**"]
+```
+
+<!-- => {"foo $x$", "**"} -->
 
 ### Paired spans
 
-Every paired span is a literal-open / `content[close]` / literal-close trio. The grammar reads a few private helper constructors (`text`, `codeAtom`, `mathIn`, `bold`, ...) that each build the corresponding `"Type"`-tagged [Association]() - keeping the AST construction in one place so the grammar arms stay readable.
+Every paired span is a literal-open / `content[close]` / literal-close trio, wrapped by an [ParseAction]() in the atom constructor for its type.
 
 Inline code:
 
@@ -103,6 +160,12 @@ code = ParseAction[
 ]
 ```
 
+```wl
+Parse[code, "`x + 1`"]
+```
+
+<!-- => <|"Type" -> "Code", "Code" -> "x + 1"|> -->
+
 Inline math:
 
 ```wl
@@ -112,6 +175,12 @@ inlineMath = ParseAction[
 ]
 ```
 
+```wl
+Parse[inlineMath, "$x^2$"]
+```
+
+<!-- => <|"Type" -> "MathInline", "Math" -> "x^2"|> -->
+
 Bold:
 
 ```wl
@@ -120,6 +189,14 @@ boldP = ParseAction[
     bold[#2] &
 ]
 ```
+
+The body of a bold span is captured as the raw string, re-parsed later (Part 3):
+
+```wl
+Parse[boldP, "**bold $x$**"]
+```
+
+<!-- => <|"Type" -> "Bold", "Children" -> "bold $x$"|> -->
 
 The `#2 &` arm takes the second result (the content; the first is the open literal, the third is the close) and wraps it in the appropriate atom constructor.
 
@@ -134,17 +211,45 @@ escape = ParseAction[
 ]
 ```
 
+```wl
+Parse[escape, "\\*"]
+```
+
+<!-- => <|"Type" -> "Text", "Text" -> "*"|> -->
+
 After every other alternative has had a chance, the catch-all `plainChar` consumes one character and wraps it in a `"Text"` atom:
 
 ```wl
 plainChar = ParseAction[anyChar, text[#1] &]
 ```
 
+```wl
+Parse[plainChar, "a"]
+```
+
+<!-- => <|"Type" -> "Text", "Text" -> "a"|> -->
+
 [ParseSome]() over the outer [ParseChoice]() iterates this until the input is exhausted; the post-process step `mergeText` coalesces consecutive `"Text"` atoms so prose comes out as one run, not one atom per character.
 
 ### Links and images
 
-The label can contain markdown itself, but capturing it character-by-character at the top level would be wrong (we'd lose the structure). Instead capture the raw label *string* during parse and re-parse it after:
+The label can contain markdown itself, but capturing it character-by-character at the top level would be wrong (we'd lose the structure). Instead capture the raw label *string* during parse and re-parse it after. `linkLabel` is every character up to the next `]`, joined to a string - the same shape as `content[]`:
+
+```wl
+linkLabel = ParseAction[
+    ParseSome[ParseAction[ParseNotFollowedBy[ParseLiteral["]"]] ~~ anyChar, #2 &]],
+    StringJoin[{##}] &
+]
+```
+
+`linkUrl` is the same up to `)`, with [ParseMany]() so an empty URL still parses:
+
+```wl
+linkUrl = ParseAction[
+    ParseMany[ParseAction[ParseNotFollowedBy[ParseLiteral[")"]] ~~ anyChar, #2 &]],
+    StringJoin[{##}] &
+]
+```
 
 ```wl
 linkP = ParseAction[
@@ -153,15 +258,22 @@ linkP = ParseAction[
 ]
 ```
 
-`linkLabel` is <code>[ParseSome]()[[ParseNotFollowedBy]()[[ParseLiteral]()["]"]] ~~ anyChar]</code> joined to a string - similar to `content[]`, but the body is "any character that isn't `]`". `linkUrl` is the same shape with `)`. The `link[#2, #4]` action stores them; recursive re-parsing of the label happens in Part 3.
+```wl
+Parse[linkP, "[`Range`](paclet:ref/Range)"]
+```
+
+<!-- => <|"Type" -> "Link", "Label" -> "`Range`", "Url" -> "paclet:ref/Range"|> -->
+
+The `link[#2, #4]` action stores the label and URL strings; recursive re-parsing of the label happens in Part 3.
 
 `imageP` is the same with a leading `!`, listed first in the [ParseChoice]() so `![` opens an image and not a link with `!` prefix.
 
 ### PEG ordering: longer prefixes first
 
-The full alternation:
+The full alternation, as `Markdown.wl` writes it - it names a dozen arms more than this page builds, so it is listed rather than run here:
 
 ```wl
+#| eval: false
 inlineAtom = ParseChoice[
     escape,                                                                 (* \x      *)
     codeHtml, imageP, linkP,                                                (* HTML / [ / ![ *)
@@ -182,7 +294,11 @@ Within each opening-character family the longest opener comes first:
 - `***` before `**` before `*` so `***x***` is one `"BoldItalic"`, not `*`-`**x**`-`*`.
 - `<sub>` before `~` so the HTML form wins when both are syntactically possible (`<sub>` carrying a `~` inside).
 
-These are the standard PEG-prefix rules. None of them require a lookahead or a special action - just ordering the [ParseChoice]() arms longer-first.
+These are the standard PEG-prefix rules. None of them require a lookahead or a special action - just ordering the [ParseChoice]() arms longer-first. The paclet's parser shows all three orderings at once:
+
+```wl
+MarkdownInlineParse["``a`b`` and $$x$$ and ***y***"]
+```
 
 ### Word-bounded asterisk italic
 
@@ -190,11 +306,20 @@ These are the standard PEG-prefix rules. None of them require a lookahead or a s
 
 ```wl
 italicAstBody = ParseAction[ParseSome[charSat[# =!= "*" &]], StringJoin[{##}] &]
+```
+
+```wl
 italicAst = ParseAction[
     ParseLiteral["*"] ~~ ParseNotFollowedBy[ParseLiteral[" "]] ~~ italicAstBody ~~ ParseLiteral["*"],
     italic[#3] &
 ]
 ```
+
+```wl
+Parse[italicAst, "*word*"]
+```
+
+<!-- => <|"Type" -> "Italic", "Children" -> "word"|> -->
 
 The body forbids `*` so `**bold**` never re-matches as `*`-`*bold*`-`*` after `bold` has been tried; the no-leading-space lookahead keeps `* list item` from being parsed as `*` opening italic.
 
@@ -222,7 +347,11 @@ runInner[s_String] := MarkdownInlineParse[s]
 
 ### Adjacent-text merging
 
-The catch-all `plainChar` emits one `"Text"` atom per character. After parsing finishes:
+The catch-all `plainChar` emits one `"Text"` atom per character. After parsing finishes, a [Fold]() over the atoms merges each run of them:
+
+```wl
+textQ[a_] := AssociationQ[a] && a["Type"] === "Text"
+```
 
 ```wl
 mergeText[atoms_List] := Block[{step},
@@ -235,15 +364,24 @@ mergeText[atoms_List] := Block[{step},
 ]
 ```
 
-[Fold]() coalesces consecutive `"Text"` atoms into one. The non-`"Text"` atoms break the run, which is exactly the segmentation a downstream consumer wants.
+Three one-character atoms and a code atom become one text run and the code:
+
+```wl
+mergeText[{text["a"], text["b"], text["c"], codeAtom["d"]}]
+```
+
+<!-- => {<|"Type" -> "Text", "Text" -> "abc"|>, <|"Type" -> "Code", "Code" -> "d"|>} -->
+
+The non-`"Text"` atoms break the run, which is exactly the segmentation a downstream consumer wants.
 
 ### Underscore emphasis (CommonMark word boundaries)
 
 Underscore emphasis is the one rule that *isn't* trivially expressible as a paired delimiter, because `snake_case` must NOT open italic but `see _em_ there` must. CommonMark says: a `_` can open emphasis only if it's left-flanking AND (not right-flanking OR preceded by punctuation). Equivalently for our purposes: a `_` opens / closes at a word boundary (start of string, end of string, or adjacent to a non-word character).
 
-The grammar doesn't try to express the lookbehind/lookahead rules; instead a post-pass scans each `"Text"` run with two regular expressions:
+The grammar doesn't try to express the lookbehind/lookahead rules; instead a post-pass scans each `"Text"` run with two regular expressions, listed here as the source has them:
 
 ```wl
+#| eval: false
 underscoreRules = {
     RegularExpression["(?<![A-Za-z0-9_])__(\\S|\\S.*?\\S)__(?![A-Za-z0-9_])"] -> "\:f001$1\:f002",
     RegularExpression["(?<![A-Za-z0-9_])_(\\S|\\S.*?\\S)_(?![A-Za-z0-9_])"]   -> "\:f003$1\:f004"
@@ -252,7 +390,11 @@ underscoreRules = {
 
 The captured bodies get sentinel-wrapped, then a [StringSplit]() turns each wrapped run into a `"Bold"` / `"Italic"` atom whose body is itself re-parsed (so a `_x **bold** y_` italic still re-parses its body). The sentinels are private-use Unicode codepoints that no real markdown source ships, so they never collide with prose.
 
-Because this pass scans only `"Text"` atoms, an underscore inside a `"Code"` (`snake_case`) or `"MathInline"` (`x_i`) atom is left alone - the literal underscores in code and math always survive.
+Because this pass scans only `"Text"` atoms, an underscore inside a `"Code"` (`snake_case`) or `"MathInline"` (`x_i`) atom is left alone - the literal underscores in code and math always survive:
+
+```wl
+MarkdownInlineParse["see _em_ there, but not snake_case or `x_i`"]
+```
 
 ---
 
@@ -270,18 +412,7 @@ Because this pass scans only `"Text"` atoms, an underscore inside a `"Code"` (`s
 MarkdownParse["---\nTemplate: TechNote\nName: Demo\n---\n\n# Title\n\nA paragraph.\n\n```wl\n#| eval: true\n1+1\n```\n"]
 ```
 
-The result mirrors M2N's `litParse` shape exactly:
-
-```wl
-<|"Metadata" -> <|"Template" -> "TechNote", "Name" -> "Demo"|>,
-  "Blocks"   -> {
-      <|"Type" -> "Heading", "Level" -> 1, "Text" -> "Title"|>,
-      <|"Type" -> "Prose", "Text" -> "A paragraph."|>,
-      <|"Type" -> "Code", "Lang" -> "wl", "Code" -> "1+1", "Options" -> <|"eval" -> "true"|>|>
-  }|>
-```
-
-Lists, tables, blockquotes, math blocks (`$$ ... $$` on a line), and fenced `:::` divs aren't yet covered by the combinator grammar - they currently fall into the prose catch-all and are slated for a follow-up tutorial as they land.
+The result mirrors M2N's `litParse` shape exactly: the frontmatter as `"Metadata"`, then the typed `"Blocks"`, the code fence carrying its `#|` options. Lists, tables, blockquotes, math blocks (`$$ ... $$` on a line), and fenced `:::` divs aren't yet covered by the combinator grammar - they currently fall into the prose catch-all and are slated for a follow-up tutorial as they land.
 
 ---
 

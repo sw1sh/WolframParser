@@ -70,13 +70,15 @@ BrainfuckAST["hello"]
 
 ## Properties and Relations
 
-[BrainfuckAST]() and [BrainfuckRun]() share one grammar and differ only in the algebra. The tree form records the structure; the run form collapses it to the program's output string:
+[BrainfuckAST]() and [BrainfuckRun]() share one grammar and differ only in the algebra. The tree form records the structure:
 
 ```wl
 BrainfuckAST["+++."]
 ```
 
 <!-- => ContainerNode["String", {LeafNode["Command", "+", <|"Source" -> {{1, 1}, {1, 2}}|>], LeafNode["Command", "+", <|"Source" -> {{1, 2}, {1, 3}}|>], LeafNode["Command", "+", <|"Source" -> {{1, 3}, {1, 4}}|>], LeafNode["Command", ".", <|"Source" -> {{1, 4}, {1, 5}}|>]}, <|"Source" -> {{1, 1}, {1, 5}}|>] -->
+
+The run form collapses it to the program's output string:
 
 ```wl
 BrainfuckRun["++++++++[>+++++++++<-]>."]
@@ -91,5 +93,3 @@ Brackets must balance. An unclosed `[` does not parse to completion and returns 
 ```wl
 BrainfuckAST["+[>+"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 2, "Expected" -> "<end of input>", "Found" -> "["|>] -->

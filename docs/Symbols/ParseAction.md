@@ -22,7 +22,13 @@ RelatedGuides: [WolframParser]
 
 ## Basic Examples
 
-Convert a digit-list to an integer. `StringJoin` is variadic, so it can be passed directly as the action:
+An action attached to a parser makes a new parser:
+
+```wl
+ParseAction[ParseCharacter[DigitCharacter].., StringJoin]
+```
+
+Run on input, the action joins the matched digits into one string - [StringJoin]() is variadic, so it can be passed directly:
 
 ```wl
 Parse[
@@ -97,13 +103,10 @@ Parse[
 `ParseAction[p, Identity]` is `p` (no reshape):
 
 ```wl
-{
-    Parse[ParseAction[ParseLiteral["foo"], Identity], "foo"],
-    Parse[ParseLiteral["foo"], "foo"]
-}
+Parse[ParseAction[ParseLiteral["foo"], Identity], "foo"] === Parse[ParseLiteral["foo"], "foo"]
 ```
 
-<!-- => {"foo", "foo"} -->
+<!-- => True -->
 
 `ParseAction` is what powers the `:>` slot bodies in a [GrammarRules]() declaration. The string template `"add <a:Number> and <b:Number>"` lowers to a [ParseSequence]() of literals and slot-recognizers, all wrapped in a `ParseAction` that binds the captured slot values to `a` / `b` in the rule body:
 
@@ -111,6 +114,8 @@ Parse[
 Parse[GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}], "add 3 and 5"]
 (* 8 *)
 ```
+
+<!-- => 8 -->
 
 See [Parsing GrammarRules Locally](paclet:Wolfram/Parser/tutorial/ParsingGrammarRules) for the full subset of `GrammarRules` shapes lowered to `ParserCombinator`s.
 

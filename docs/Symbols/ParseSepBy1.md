@@ -23,11 +23,27 @@ RelatedGuides: [WolframParser]
 
 ## Basic Examples
 
-One or more comma-separated digits:
+One or more comma-separated digits. An item parser:
 
 ```wl
-digit = ParseCharacter[DigitCharacter];
-comma = ParseLiteral[","];
+digit = ParseCharacter[DigitCharacter]
+```
+
+A separator parser:
+
+```wl
+comma = ParseLiteral[","]
+```
+
+Items separated by separators:
+
+```wl
+ParseSepBy1[digit, comma]
+```
+
+Run on input, the separators drop out of the result:
+
+```wl
 Parse[ParseSepBy1[digit, comma], "7,8"]
 ```
 
@@ -51,14 +67,15 @@ The empty input fails, because at least one item is required:
 Parse[ParseSepBy1[digit, comma], ""]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "at least one occurrence", "Found" -> "<end of input>"|>] -->
-
 ## Scope
 
 The item and separator can be any parsers — here whole words separated by `,`:
 
 ```wl
-word = ParseAction[ParseSome[ParseCharacter[LetterCharacter]], StringJoin];
+word = ParseAction[ParseSome[ParseCharacter[LetterCharacter]], StringJoin]
+```
+
+```wl
 Parse[ParseSepBy1[word, comma], "foo,bar"]
 ```
 
@@ -71,8 +88,6 @@ The constructor returns a [ParserCombinator](), rendered as a summary box:
 ```wl
 ParseSepBy1[digit, comma]
 ```
-
-<!-- => ParserCombinator[SepBy1] -->
 
 ## Properties and Relations
 
@@ -92,15 +107,16 @@ A *leading* separator has no first *p* to match, so the parse fails at the very 
 Parse[ParseSepBy1[digit, comma], ",1"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "at least one occurrence", "Found" -> ","|>] -->
-
 ## Neat Examples
 
 A function-call argument list that must be non-empty — [ParseBetween]() supplies the parentheses and `ParseSepBy1` the arguments:
 
 ```wl
 call = ParseSequence[word,
-   ParseBetween[ParseLiteral["("], ParseSepBy1[word, comma], ParseLiteral[")"]]];
+   ParseBetween[ParseLiteral["("], ParseSepBy1[word, comma], ParseLiteral[")"]]]
+```
+
+```wl
 Parse[call, "f(a,b,c)"]
 ```
 
@@ -123,5 +139,3 @@ An empty argument list `f()` is rejected — exactly the guarantee [ParseSepBy](
 ```wl
 Parse[call, "f()"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 3, "Expected" -> "at least one occurrence", "Found" -> ")"|>] -->

@@ -32,8 +32,6 @@ RelatedGuides: [WolframParser]
 MarkdownInlineParser
 ```
 
-<!-- => ParserCombinator[Action, …] summary box (combinator Type "Action") -->
-
 <!-- #| annotation: 26.07.26: Design review - MarkdownInlineParser is the raw ParseMany[ParseChoice[…]] grammar; the four post-passes (adjacent-text merge, ellipsis, underscore emphasis, recursive children) are deliberately kept OUT of the combinator so the object stays a pure grammar that composes and compiles. Underscore emphasis in particular has no grammar arm at all - it is a regex post-pass in the wrapper - which is why the raw object emits one Text atom per character and leaves span children as raw strings. MarkdownInlineParse is the entry point that layers those passes on top. -->
 
 Its head is [ParserCombinator](), the wrapper every parser normalises to:

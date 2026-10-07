@@ -3,6 +3,7 @@ Template: TechNote
 Name: ParsingTPTP
 Title: Parsing TPTP, Auto-Generated from the Published BNF
 Context: Wolfram`Parser`
+ContextPath: [Global`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/tutorial/ParsingTPTP
 Keywords: [TPTP, ATP, automated theorem proving, CNF, FOF, TFF, BNF, grammar, benchmark, EBNFParse]
@@ -25,19 +26,25 @@ The lowering applies three standard PEG-vs-CFG rewrites automatically: direct le
 
 ## Bootstrapping a TPTP parser
 
+The grammar file, read once:
+
 ```wl
-Needs["Wolfram`Parser`"]
-
-tptpBnf = Import[
-    "https://raw.githubusercontent.com/TPTPWorld/SyntaxBNF/master/SyntaxBNF-v9.2.1.4",
-    "Text"
-];
-
-parsers = EBNFParse[tptpBnf];
-(* Association of 338 rule-name -> ParserCombinator. No PrimitiveOverrides, no options.
-   Default `"ChoiceMode" -> "Auto"` enables longest-match for rules whose
-   alternatives have equal element counts; PEG order for the rest. *)
+tptpBnf = Import["https://raw.githubusercontent.com/TPTPWorld/SyntaxBNF/da4fbddc9da7b066f03a4fd47edb148fa6e17c91/SyntaxBNF-v9.2.1.4", "Text"];
 ```
+
+[EBNFParse]() lowers it with no options - no `"PrimitiveOverrides"`, and the default `"ChoiceMode" -> "Auto"`, which takes the longest match for rules whose alternatives have equal element counts and PEG order for the rest:
+
+```wl
+parsers = EBNFParse[tptpBnf];
+```
+
+One parser per rule:
+
+```wl
+Length[parsers]
+```
+
+<!-- => 338 -->
 
 Every `::-` (token) and `:::` (char-class) rule auto-compiles through a regex meta-parser built out of the same `Parse*` combinators. The meta-parser handles char classes (`[a-z]`, `[abc]`, and meta chars literally as in `[|]` / `[*]`), negation (`[^x]`), octal escapes (``[\40-\41]``), named escapes (``\n``, ``\r``, ``\t``), the bare-`.` regex any-char, ref forms (`<name>`, `{name}`), grouping (`(...)`), alternation (`|`), and the postfix repetition operators (`*`, `+`, `?`). The full TPTP lexical layer (`<lower_word>`, `<upper_word>`, `<integer>`, `<single_quoted>`, `<distinct_object>`, `<dollar_word>`, the punctuation tokens like `<vline>` / `<star>`, and the regex-heavy `<sq_char>` / `<do_char>` / `<not_star_slash>`) all compile from the published BNF without manual help.
 
@@ -54,10 +61,25 @@ fof(commutator_def, axiom, ! [X, Y] :
     commutator(X, Y) = multiply(multiply(X, Y),
                                  multiply(inverse(X), inverse(Y)))).
 fof(goal, conjecture, ! [X] : commutator(X, identity) = identity).";
-
-Length @ Parse[parsers["TPTP_file"], groupAxioms]
-(* 5 *)
 ```
+
+```wl
+groupTree = Parse[parsers["TPTP_file"], groupAxioms];
+```
+
+The raw parse of the first clause, the associativity axiom:
+
+```wl
+First[groupTree]
+```
+
+Five clauses in all:
+
+```wl
+Length[groupTree]
+```
+
+<!-- => 5 -->
 
 Five clauses, quantifiers, function application, equality - all parsed. But the value above is the raw parse tree (a list of clauses, each clause a list of literal tokens and sub-rule results). For a workable downstream shape, pass a per-rule `"Actions"` map.
 
@@ -65,30 +87,38 @@ Five clauses, quantifiers, function application, equality - all parsed. But the 
 
 ## Lifting to a useful shape: the `"Actions"` map
 
-Each entry in `"Actions" -> <|name -> fn|>` wraps the named rule's parser in a `ParseAction`. The function receives the rule's parsed value via the normal splatted convention - `Function[#1, #2, ...]` indexes into the sequence of matched sub-pieces. The action map below is the one [TPTPImport]() installs at first call - it lifts the raw parse tree to the canonical Wolfram-Language shape:
+Each entry in `"Actions" -> <|name -> fn|>` wraps the named rule's parser in a `ParseAction`. The function receives the rule's parsed value via the normal splatted convention - `Function[#1, #2, ...]` indexes into the sequence of matched sub-pieces. The map below is a smaller version of the one [TPTPImport]() installs (its full map also covers the typed and higher-order dialects); it lifts the raw parse tree to the canonical Wolfram-Language shape.
+
+Three helpers the actions share. `binConn` maps a binary connective to its Wolfram head:
 
 ```wl
 binConn[op_String, x_, y_] := Switch[op,
     "<=>", Equivalent[x, y], "=>", Implies[x, y],
     "<=",  Implies[y, x],    "<~>", Xor[x, y],
     "~|",  Nor[x, y],        "~&", Nand[x, y]
-];
+]
+```
 
-(* Flattener for right-recursive `<x> | <x>,<right>` rules
-   (used by fof_arguments and fof_variable_list). *)
+`rightList` flattens the right-recursive `<x> | <x>,<right>` rules (`fof_arguments`, `fof_variable_list`) into a list:
+
+```wl
 rightList[args__] := Module[{a = {args}},
     Switch[Length[a], 1, {a[[1]]}, 3, Prepend[a[[3]], a[[1]]]]
-];
+]
+```
 
-(* ForAll / Exists are HoldAll, so a literal call holds the bound
-   var list and body uninterpreted. Apply substitutes them before
-   the head holds; Quiet swallows the ForAll::ivar warning that
-   fires because our TPTP variables are strings, not symbols. *)
+`quant` builds the quantifier: [ForAll]() and [Exists]() hold their arguments, so [Apply]() substitutes the variable list and body first; the TPTP variables are strings, not symbols, so the `ForAll::ivar` warning is named and quieted:
+
+```wl
 quant[q_, vs_, body_] := Quiet[
     Apply[If[q === "!", ForAll, Exists], {vs, body}],
     {ForAll::ivar, Exists::ivar}
-];
+]
+```
 
+The action map, one entry per rule on the path from `<TPTP_file>` to `<constant>`:
+
+```wl
 tptpActions = <|
     (* Term level. Constants emit as `tok[]` (String-headed 0-ary
        compound) to sidestep `Equal["a", "b"] -> False` eager
@@ -173,25 +203,29 @@ tptpActions = <|
         ]
     |>]]
 |>;
+```
 
-parsers = EBNFParse[tptpBnf, "Actions" -> tptpActions];
+```wl
+Length[tptpActions]
+```
 
-Parse[parsers["TPTP_file"],
+<!-- => 35 -->
+
+The same grammar, with the actions:
+
+```wl
+actionParsers = EBNFParse[tptpBnf, "Actions" -> tptpActions];
+```
+
+```wl
+Parse[actionParsers["TPTP_file"],
     "fof(assoc, axiom, ! [X, Y, Z] :
         multiply(multiply(X, Y), Z) = multiply(X, multiply(Y, Z))).
 fof(left_id, axiom, ! [X] : multiply(identity, X) = X).
 fof(goal, conjecture, ! [X] : multiply(X, identity) = X)."]
-
-(* <|"Includes"   -> {},
-     "Axioms"     -> {
-        ForAll[{X, Y, Z}, multiply[multiply[X, Y], Z] ==
-                          multiply[X, multiply[Y, Z]]],
-        ForAll[{X}, multiply[identity[], X] == X]
-     },
-     "Conjecture" -> ForAll[{X}, multiply[X, identity[]] == X]|> *)
 ```
 
-This is the shape [TPTPImport]() returns: `ForAll`/`Exists` quantifiers, function application as `head[args...]`, `Equal`/`Unequal` for `=`/`!=`, the Boolean grammar as `And`/`Or`/`Not`/`Implies`/`Equivalent`/`Xor`, cnf disjunctions as `Or[...]` (single literal stays bare), and `negated_conjecture` flipped through `Not` so the returned `Conjecture` is the positive goal. The action map is ~50 entries, one per BNF rule on the path from `<TPTP_file>` to `<constant>`. The recogniser is unchanged - the same `EBNFParse` call drives both the with-actions and without-actions flows.
+This is the shape [TPTPImport]() returns: `ForAll`/`Exists` quantifiers, function application as `head[args...]`, `Equal`/`Unequal` for `=`/`!=`, the Boolean grammar as `And`/`Or`/`Not`/`Implies`/`Equivalent`/`Xor`, cnf disjunctions as `Or[...]` (single literal stays bare), and `negated_conjecture` flipped through `Not` so the returned `Conjecture` is the positive goal.  The recogniser is unchanged - the same `EBNFParse` call drives both the with-actions and without-actions flows.
 
 Without actions, the parser is just a recogniser - it tells you whether the source matches the grammar but the value is the structural skeleton. The action layer is what turns that into a workable Wolfram Language data structure.
 
@@ -199,29 +233,13 @@ Without actions, the parser is just a recogniser - it tells you whether the sour
 
 ## Benchmark on the published corpus
 
-On the small CNF / FOF problems from the published `v9.2.1` distribution, per-clause parse time lands in the tens of milliseconds for short clauses (a few atoms, ground equations) and climbs into the hundreds of milliseconds for clauses with nested quantifiers and function applications. The 5-clause group-theory problem at the top of this note parses in ~700 ms end-to-end on a 2024 laptop with default `"ChoiceMode" -> "Auto"`.
+On the small CNF / FOF problems from the published `v9.2.1` distribution, per-clause parse time lands in the tens of milliseconds for short clauses (a few atoms, ground equations) and climbs into the hundreds of milliseconds for clauses with nested quantifiers and function applications. The 5-clause group-theory problem at the top of this note parses in about a second with the default `"ChoiceMode" -> "Auto"`.
 
-The cost of trying every alternative under longest-match without memoisation shows up on FOF with deep boolean / quantifier nesting. Adding [packrat-style memoisation](https://en.wikipedia.org/wiki/Parsing_expression_grammar#Implementing_parsers_from_parsing_expression_grammars) to `ParseRecursive` would close most of the throughput gap; a Pratt-style precedence climber for the connective grammar would be the right move for THF, where alternative explosion overwhelms even longest-match.
+The cost of trying every alternative under longest-match without memoisation shows up on FOF with deep boolean / quantifier nesting. Adding [packrat-style memoisation](https://en.wikipedia.org/wiki/Parsing_expression_grammar#Implementing_parsers_from_parsing_expression_grammars) to `ParseRecursive` would close most of the throughput gap. For THF, where alternative explosion overwhelms even longest-match, [TPTPImport]() replaces the connective grammar with a [ParseOperatorTable]() precedence climber.
 
-### ParserCompile is currently a stub
+### Compiling the parser
 
-```wl
-compiled = ParserCompile[parsers["TPTP_file"]];
-(* same parser with "Code" key in opts, but routed through an
-   interpretive shim - no real FunctionCompile lowering yet *)
-```
-
-Per the [ParserCompile]() usage string: "v0.2: stubbed via the interpreter; the real FunctionCompile lowering lands later". A head-to-head bench on the 4 passing files confirms it - interpretive vs compiled are within measurement noise (1.00x speedup). Wiring up the real FunctionCompile path is a v0.4 item; the compiler infrastructure (`compilableQ`, `compileParser`, `interpretCompiledShim`, `CompileFeasibility` test suite) is in place but the per-combinator codegen rules aren't all written yet.
-
-### What the ChoiceMode flip fixes
-
-The earlier draft of this note reported a cluster of failures around equations and disequations whose left side was a function application, in `cnf` and `fof` contexts. Example: `multiply(b, a) != c` inside `cnf(_, negated_conjecture, multiply(b, a) != c).`. PEG-ordered `Choice` was committing to `<fof_plain_atomic_formula>` on `multiply(b, a)`, then expecting end-of-clause, but the source continued with `!= c` which only `<fof_infix_unary>` (a sibling alt at the same `<cnf_literal>` level) reaches.
-
-The default `"ChoiceMode" -> "Auto"` resolves that whole cluster: for rule bodies whose alternatives have equal element counts (the static `longest-alt-first` sort can't break the tie), the lowering uses POSIX longest-match - every alt is tried at the current position and the one that consumed the most input wins. The `<fof_atomic_formula>` choice, `<cnf_literal>` choice, and a handful of other shape-ambiguous rules become correct without changing the grammar. The cost is some throughput - longest-match cannot early-exit on first hit, so deeply nested choices pay a constant factor over PEG. Set `"ChoiceMode" -> "PEG"` to opt back into the fast-but-strict ordering when the grammar is unambiguous; set `"ChoiceMode" -> "Longest"` to use longest-match unconditionally (correct on more grammars, slowest).
-
-Remaining failures cluster on the higher-order alternatives in `<thf_*>` (the recursive `<thf_typeable_formula>` rule and friends). These exhibit *exponential* backtracking under any ordered-choice strategy and want either packrat memoisation or a Pratt-style precedence parser to be tractable - both unimplemented.
-
----
+[ParserCompile]() does not speed this grammar up yet. On its default backend a recursive grammar stays on the interpretive path, and the PEG-VM backend (`Method -> "PEGVM"`), which compiles recursive grammars natively, does not yet agree with [Parse]() on this grammar: it rejects a quantified formula whose body is itself a compound formula, such as `! [X] : p(X) & q(X)`. [TPTPImport]() therefore parses with the interpreter.
 
 ## Building the bench yourself
 

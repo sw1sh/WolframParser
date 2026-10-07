@@ -43,7 +43,7 @@ Restyle to an OpenType math font - italic letters are remapped to their math-ita
 LaTeXMathStyle[frac, "Latin Modern Math"]
 ```
 
-<!-- => StyleBox[FractionBox[StyleBox["𝑎"], StyleBox["𝑏"]], FontFamily -> "Latin Modern Math"]  (𝑎 𝑏 are math-italic a, b at U+1D44E, U+1D44F) -->
+<!-- => StyleBox[FractionBox[StyleBox["\|01d44e"], StyleBox["\|01d44f"]], FontFamily -> "Latin Modern Math"] -->
 
 ---
 
@@ -63,7 +63,7 @@ A single tagged atom is the unit the rewrite works on - a `"TI"` letter under a 
 LaTeXMathStyle[StyleBox["x", "TI"], "Latin Modern Math"]
 ```
 
-<!-- => StyleBox[StyleBox["𝑥"], FontFamily -> "Latin Modern Math"]  (𝑥 is math-italic x, U+1D465) -->
+<!-- => StyleBox[StyleBox["\|01d465"], FontFamily -> "Latin Modern Math"] -->
 
 ---
 
@@ -93,7 +93,7 @@ With no *font* argument the family is auto-detected from the installed fonts:
 LaTeXMathStyle[frac]
 ```
 
-<!-- => the boxes remapped and wrapped in the first detected CM family (Latin Modern Math on this machine), or returned unchanged if no CM font is installed -->
+<!-- => StyleBox[FractionBox[StyleBox["\|01d44e"], StyleBox["\|01d44f"]], FontFamily -> "Latin Modern Math"] -->
 
 ---
 
@@ -113,7 +113,7 @@ A `\mathbb` letter parses to a bare double-struck character, which [LaTeXMathSty
 LaTeXMathStyle[LaTeXMathParse["\\mathbb{R}"], "Latin Modern Math"]
 ```
 
-<!-- => StyleBox[StyleBox["\[DoubleStruckCapitalR]", FontFamily -> "MSBM10"], FontFamily -> "Latin Modern Math"]  (the inner MSBM10 wrap appears only when MSBM10.otf is installed) -->
+<!-- => StyleBox[StyleBox["\:211d", FontFamily -> "MSBM10"], FontFamily -> "Latin Modern Math"] -->
 
 ## Properties and Relations
 
@@ -123,14 +123,17 @@ LaTeXMathStyle[LaTeXMathParse["\\mathbb{R}"], "Latin Modern Math"]
 LaTeXMathStyle[LaTeXMathParse["\\sin x"], "Latin Modern Math"]
 ```
 
-<!-- => StyleBox[RowBox[{StyleBox["sin", FontSlant -> "Plain"], " ", StyleBox["𝑥"]}], FontFamily -> "Latin Modern Math"] -->
+<!-- => StyleBox[RowBox[{StyleBox["sin", FontSlant -> "Plain"], "\[ThinSpace]", StyleBox["\|01d465"]}], FontFamily -> "Latin Modern Math"] -->
 
 ---
 
 A [Failure]() passes straight through, so styling an unparseable source returns the failure itself:
 
 ```wl
-bad = LaTeXMathParse["{unclosed"];
+bad = LaTeXMathParse["{unclosed"]
+```
+
+```wl
 LaTeXMathStyle[bad, "Latin Modern Math"] === bad
 ```
 
@@ -155,8 +158,11 @@ LaTeXMathStyle[LaTeXMathParse["\\mathbf{v}"], "CMU Serif"]
 Parse and restyle a whole formula - every italic identifier in the quadratic formula is remapped to its math-italic codepoint, the structure untouched:
 
 ```wl
-quad = LaTeXMathParse["x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}"];
+quad = LaTeXMathParse["x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}"]
+```
+
+```wl
 LaTeXMathStyle[quad, "Latin Modern Math"]
 ```
 
-<!-- => StyleBox[RowBox[{StyleBox["𝑥"], "=", FractionBox[RowBox[{"-", StyleBox["𝑏"], "±", SqrtBox[RowBox[{SuperscriptBox[StyleBox["𝑏"], "2"], "-", "4", StyleBox["𝑎"], StyleBox["𝑐"]}]]}], RowBox[{"2", StyleBox["𝑎"]}]]}], FontFamily -> "Latin Modern Math"] -->
+<!-- => StyleBox[RowBox[{StyleBox["\|01d465"], "=", FractionBox[RowBox[{"-", StyleBox["\|01d44f"], "\[PlusMinus]", SqrtBox[RowBox[{SuperscriptBox[StyleBox["\|01d44f"], "2"], "-", "4", StyleBox["\|01d44e"], StyleBox["\|01d450"]}]]}], RowBox[{"2", StyleBox["\|01d44e"]}]]}], FontFamily -> "Latin Modern Math"] -->

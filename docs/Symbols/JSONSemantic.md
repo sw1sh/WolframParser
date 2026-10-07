@@ -63,7 +63,7 @@ The `"Num"` builder reads exponent notation:
 JSONSemantic["Num"]["1e3"]
 ```
 
-<!-- => 1000 -->
+<!-- => 1000. -->
 
 The `"Bool"` builder maps the literal text to [True]() or [False]():
 

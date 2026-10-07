@@ -50,13 +50,15 @@ LispRead["(+ 1 2)"]
 
 ## Properties and Relations
 
-`LispSymbol` has no [DownValues](), so it is inert - applying one does not evaluate:
+`LispSymbol` has no [DownValues](), so it is inert:
 
 ```wl
 DownValues[LispSymbol]
 ```
 
 <!-- => {} -->
+
+Applied to arguments, it stays as written:
 
 ```wl
 LispSymbol["+"][1, 2]

@@ -32,7 +32,7 @@ The raw record of a one-rule grammar:
 EBNFRules["<greeting> ::= hello | bye"]
 ```
 
-<!-- => {EBNFRule["greeting", "::=", {{Lit["hello"]}, {Lit["bye"]}}]} -->
+<!-- => {Wolfram`Parser`EBNFPrivate`EBNFRule["greeting", "::=", {{Wolfram`Parser`EBNFPrivate`Lit["hello"]}, {Wolfram`Parser`EBNFPrivate`Lit["bye"]}}]} -->
 
 <!-- #| annotation: 26.07.26: Design review - EBNFRules is the pre-lowering inspection point of the EBNF pipeline: it returns the grammar's own structure (one EBNFRule per rule, bodies as Lit/NonTerm/Rep markers), not an AST of any parsed input. The record heads live in a private context on purpose - they are an internal intermediate representation that EBNFParse consumes, kept minimal rather than promoted to a public node zoo. It exists so a caller can count rules, read names and arrow kinds, and diff a vendored grammar (e.g. TPTP SyntaxBNF) across versions without paying for lowering; positioned against a parser generator's internal grammar table, this simply exposes that table as ordinary Wolfram Language data. -->
 
@@ -84,19 +84,17 @@ The third field is the list of alternatives; each element is a `Lit`, `NonTerm`,
 EBNFRules["<number> ::= <digit><digit>*"][[1, 3]]
 ```
 
-<!-- => {{NonTerm["digit"], Rep["Many", NonTerm["digit"]]}} -->
+<!-- => {{Wolfram`Parser`EBNFPrivate`NonTerm["digit"], Wolfram`Parser`EBNFPrivate`Rep["Many", Wolfram`Parser`EBNFPrivate`NonTerm["digit"]]}} -->
 
 ---
 
 Read the grammar from a file with [File]():
 
 ```wl
-gpath = FileNameJoin[{$TemporaryDirectory, "greeting.bnf"}];
-Export[gpath, "<greeting> ::= hello | bye", "Text"];
-EBNFRules[File[gpath]][[1, 1]]
+EBNFRules[File[Export[FileNameJoin[{$TemporaryDirectory, "greeting.bnf"}], "<greeting> ::= hello | bye", "Text"]]]
 ```
 
-<!-- => "greeting" -->
+<!-- => {Wolfram`Parser`EBNFPrivate`EBNFRule["greeting", "::=", {{Wolfram`Parser`EBNFPrivate`Lit["hello"]}, {Wolfram`Parser`EBNFPrivate`Lit["bye"]}}]} -->
 
 ## Properties and Relations
 

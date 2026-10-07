@@ -55,26 +55,33 @@ Why these and not others:
 
 **(2) SubValue: call a parser as a function.** Every `ParserCombinator` also carries a SubValues rule: `pc[input]` evaluates to `Parse[pc, input]`. So a constructed parser is *directly callable*, the same way a `CompiledCodeFunction` or an `InterpolatingFunction` is. For an uncompiled parser the SubValue routes to the interpreter; for one passed through `ParserCompile` it routes to the cached compiled function.
 
-A sample composition:
+A sample composition - one or more digits, then optionally a dot and a fraction:
 
 ```wl
-(* match one or more digits, followed optionally by a dot-and-fraction *)
-number = ParseCharacter[DigitCharacter].. ~~ Optional[ParseLiteral["."] ~~ ParseCharacter[DigitCharacter]...];
+number = ParseCharacter[DigitCharacter].. ~~ Optional[ParseLiteral["."] ~~ ParseCharacter[DigitCharacter]...]
 ```
+
+Applied to input, it gives each part's result:
+
+```wl
+number["3.14"]
+```
+
+<!-- => {{"3"}, {".", {"1", "4"}}} -->
 
 UpValues mean each operator picks the right combinator without the user ever typing `ParserCombinator[...]`.
 
-**(3) A canonical, inspectable representation.** Every parser is a tree of `ParserCombinator` nodes, so the compiler, the pretty-printer, and the diagnostic machinery all walk *one* expression shape. There is no separate "compiled form" data type at the user-visible level - `ParserCompile[p]` adds a `"Code" -> CompiledCodeFunction[...]` entry to the wrapper's options and otherwise leaves the tree alone. The presence of `"Code"` is the canonical "is this compiled?" marker; no separate `"Compiled" -> True` flag is needed.
+**(3) A canonical, inspectable representation.** Every parser is a tree of `ParserCombinator` nodes, so the compiler, the pretty-printer, and the diagnostic machinery all walk *one* expression shape. There is no separate "compiled form" data type at the user-visible level - `ParserCompile[p]` adds a `"Code"` entry - the compiled function - to the wrapper's options and otherwise leaves the tree alone. The presence of `"Code"` is the canonical "is this compiled?" marker; no separate `"Compiled" -> True` flag is needed.
 
-**(4) A nice summary box.** `ParserCombinator` carries a [BoxForm`ArrangeSummaryBox]() formatter modelled on `FiniteFieldElement` / `PAdicNumber` / `Quantity`. Always-visible: combinator type, arity, compile status. Expanded: the structural sketch, the option association, an icon hinting at the combinator family (a sequence of glyphs for `Sequence`, a fork for `Choice`, a star for `Many`, a brace for `Between`, *etc.*). Concretely:
+**(4) A nice summary box.** `ParserCombinator` carries a [BoxForm`ArrangeSummaryBox]() formatter modelled on `FiniteFieldElement` / `PAdicNumber` / `Quantity`. Always visible: an icon colored by combinator family (sequences, choices, repetitions, operator chains, actions), the combinator type, arity, and compile status. Expanded: the structural sketch and the option association. Concretely, `number` above opens to:
 
 ```
 ParserCombinator
   ── Type: Sequence
-  ── Arity: 3
+  ── Arity: 2
   ── Compiled: False
-  ── Structure: Literal["the weather in "] ~~ Capture["city", Restricted["City", "USA"]] ~~ Literal["."]
-  ── Options: <|"Memoize" -> False, "TrackPosition" -> True|>
+  ── Structure: Sequence[Some, Optional]
+  ── Options: <||>
 ```
 
 The summary box is the same convention used by every modern WL computable object - users get a one-line glance plus an opener, not an opaque blob.
@@ -113,29 +120,42 @@ The constructors are *just* `ParserCombinator` builders - they do not run the pa
 
 ### Worked sample composition
 
-The same number-parser, three equivalent ways:
+The same number-parser, three equivalent ways. The operator form is the shortest, and idiomatic for new code:
 
 ```wl
-(* operator form - shortest, idiomatic for new code *)
-number = ParseCharacter[DigitCharacter].. ~~ Optional[ParseLiteral["."] ~~ ParseCharacter[DigitCharacter]...];
+numberOp = ParseCharacter[DigitCharacter].. ~~ Optional[ParseLiteral["."] ~~ ParseCharacter[DigitCharacter]...]
+```
 
-(* explicit constructor form - what the UpValues lower to *)
-number = ParseSequence[
+The explicit constructor form is what the UpValues lower to:
+
+```wl
+numberExplicit = ParseSequence[
     ParseSome[ParseCharacter[DigitCharacter]],
     ParseOptional[ParseSequence[
         ParseLiteral["."],
         ParseMany[ParseCharacter[DigitCharacter]]
     ]]
-];
-
-(* mixed - drop into the operator form wherever readable, fall back to explicit calls when it helps *)
-number = ParseSequence[
-    ParseCharacter[DigitCharacter]..,
-    ParseOptional[ParseLiteral["."] ~~ ParseCharacter[DigitCharacter]...]
-];
+]
 ```
 
-All three return *the same* `ParserCombinator` expression. Composability is a single-axis story - whatever you write, it lowers into one canonical tree.
+The mixed form drops into operators wherever they read well and falls back to explicit calls where those help:
+
+```wl
+numberMixed = ParseSequence[
+    ParseCharacter[DigitCharacter]..,
+    ParseOptional[ParseLiteral["."] ~~ ParseCharacter[DigitCharacter]...]
+]
+```
+
+All three are *the same* `ParserCombinator` expression:
+
+```wl
+numberOp === numberExplicit === numberMixed
+```
+
+<!-- => True -->
+
+Composability is a single-axis story - whatever you write, it lowers into one canonical tree.
 
 ---
 
@@ -143,30 +163,40 @@ All three return *the same* `ParserCombinator` expression. Composability is a si
 
 ### Tier 1 - the declarative path (`GrammarRules`-compatible)
 
-The built-in [GrammarRules]() takes a list of slot-templates paired with actions and returns an inert symbolic form. Today the only way to *evaluate* a `GrammarRules` object is to deploy it as a cloud object and call `GrammarApply` against the deployment; the declaration itself is just data:
+The built-in [GrammarRules]() takes a list of grammar patterns - literal strings, [FixedOrder]() sequences, named [GrammarToken]() slots - paired with actions, and returns an inert symbolic form. Today the only way to *evaluate* a `GrammarRules` object is to deploy it as a cloud object and call `GrammarApply` against the deployment; the declaration itself is just data:
 
 ```wl
-GrammarRules[{
-    "the weather in <city:Restricted[\"City\", \"USA\"]>" -> city,
-    "convert <amount:Number> <from:Restricted[\"Currency\"]> to <to:Restricted[\"Currency\"]>"
-        :> CurrencyConvert[Quantity[amount, from], to]
+grammar = GrammarRules[{
+    FixedOrder["the weather in", city : GrammarToken["City"]] :> city,
+    FixedOrder["add", a : GrammarToken["Integer"], "and", b : GrammarToken["Integer"]] :> a + b
 }]
 ```
 
-`WolframParser` accepts the same declaration, and provides two ways to use it locally:
+`WolframParser` accepts the same declaration, and provides two ways to use it locally. The first just parses - the grammar is lowered to a parser and run on the input:
 
 ```wl
-(* "just parse" - JIT-compile the grammar, cache it, parse the input *)
 Parse[grammar, "the weather in NYC"]
-
-(* explicit compile - get back a parser holding the compiled code *)
-parser = ParserCompile[grammar];
-parser["the weather in NYC"]
 ```
 
-The compile step is the local analogue of [CloudDeploy](): it materialises a callable parser. The cloud path returns a `CloudObject`; the local path returns a `ParserCombinator` with a `"Code" -> CompiledCodeFunction[...]` entry added to its options. The presence of `"Code"` is what marks the parser as compiled - both `Parse` and the SubValues route compiled parsers through that function.
+<!-- => Entity["City", {"NewYork", "NewYork", "UnitedStates"}] -->
 
-The slot vocabulary is identical to the built-in one - `<name>`, `<name:Type>`, `<name:Restricted[Type, constraints]>` - and [GrammarToken]() is honoured. The differences are confined to *where* compilation happens, not *what* a grammar means.
+The second compiles once and returns a callable parser:
+
+```wl
+parser = ParserCompile[grammar]
+```
+
+Applied to input, it runs that code:
+
+```wl
+parser["add 40 and 2"]
+```
+
+<!-- => 42 -->
+
+The compile step is the local analogue of [CloudDeploy](): it materialises a callable parser. The cloud path returns a `CloudObject`; the local path returns a `ParserCombinator` with a `"Code"` entry added to its options - compiled code where every node lowers natively, a call into the interpreter where one does not, as here: the `GrammarToken["City"]` slot asks [Interpreter]() at parse time. The presence of `"Code"` is what marks the parser as compiled - both `Parse` and the SubValues route compiled parsers through that function.
+
+The pattern vocabulary is the built-in one - literal strings, [FixedOrder](), [AnyOrder](), [OptionalElement](), [DelimitedSequence](), alternatives, repeats, [CaseSensitive](), `x : form` names, and [GrammarToken]() domains, either [Interpreter]() types or ones defined in the rules' second argument. Two limits remain: a semantic slot reads a single word run, so a multi-word name is reached through its one-word form (`NYC`, not `New York`), and [Restricted]() domains are not lowered yet. `WolframParser` also takes a compact string form, `"the weather in <city:City>"`, whose `<name>` and `<name:Type>` slots lower the same way.
 
 ### Tier 2 - the combinator core
 
@@ -177,19 +207,20 @@ For grammars where the slot-template DSL is too coarse - LaTeX environments, TPT
 `GrammarRules[...]` lowers to a `ParserCombinator` expression internally. The two tiers are not parallel implementations of the same thing - tier 1 is a *front-end* to tier 2:
 
 ```
-GrammarRules[{"the weather in <city:Restricted[\"City\"]>" -> city}]
-       │  lower
+GrammarRules[{FixedOrder["the weather in", city : GrammarToken["City"]] :> city}]
+       │  lower  (the actions that thread the city binding are elided)
        ▼
-ParserCombinator[Action,
-    {ParserCombinator[Sequence, {
-        ParserCombinator[Literal, "the weather in ", <||>],
-        ParserCombinator[Capture, {"city", Interpreter["City"]}, <||>]
+ParserCombinator["Action", {
+    ParserCombinator["Sequence", {
+        ParserCombinator["Literal", "the weather in", <||>],
+        ParserCombinator["Many", ParserCombinator["Character", WhitespaceCharacter, <||>], <||>],
+        ParserCombinator["InterpreterSlot", "City", <||>]
     }, <||>],
     city &},
     <||>]
        │  ParserCompile
        ▼
-ParserCombinator[Action, {...}, <|"Code" -> CompiledCodeFunction[...]|>]
+ParserCombinator["Action", {...}, <|"Code" -> ...|>]
 ```
 
 Adding to either tier benefits the other: a new combinator becomes available as a lowering target for new slot syntaxes; a new slot syntax just extends the lowering.
@@ -299,6 +330,7 @@ This is what `ParserCompile` now does. The compiled function has the shape `(inp
 **Phase 4 - codegen.** A parser of shape `ParseSequence[ParseLiteral["foo"], ParseSome[digit]]` compiles to roughly:
 
 ```wl
+#| eval: false
 Function[{in, pos},
     Module[{p = pos, acc = {}, ch},
         If[ StringTake[in, {p, p + 2}] =!= "foo",

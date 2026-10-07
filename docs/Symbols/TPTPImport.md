@@ -2,6 +2,7 @@
 Template: Symbol
 Name: TPTPImport
 Context: Wolfram`Parser`
+ContextPath: [Global`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/ref/TPTPImport
 Keywords: [tptp, theorem prover, atp, automated reasoning, cnf, fof, thf, szs, first-order logic, import]
@@ -83,18 +84,16 @@ fof(left_id, axiom, ! [X] : mult(e, X) = X).
 fof(goal, conjecture, ! [X] : mult(X, e) = X)."]
 ```
 
-<!-- => <|"Axioms" -> {"mult"["mult"[X_, Y_], Z_] == "mult"[X_, "mult"[Y_, Z_]], "mult"["e"[], X_] == X_}, "Conjecture" -> "mult"[X_, "e"[]] == X_|> -->
+<!-- => <|"Axioms" -> {"mult"["mult"[X_, Y_], Z_] == "mult"[X_, "mult"[Y_, Z_]], "mult"["e"[], X_] == (X_)}, "Conjecture" -> "mult"[X_, "e"[]] == (X_)|> -->
 
 ---
 
 Import from a file with [File]():
 
 ```wl
-probPath = FileNameJoin[{$TemporaryDirectory, "group.p"}];
-Export[probPath,
+TPTPImport[File[Export[FileNameJoin[{$TemporaryDirectory, "group.p"}],
     "cnf(comm, axiom, mult(X, Y) = mult(Y, X)).
-cnf(goal, negated_conjecture, mult(a, b) != mult(b, a)).", "Text"];
-TPTPImport[File[probPath]]
+cnf(goal, negated_conjecture, mult(a, b) != mult(b, a)).", "Text"]]]
 ```
 
 <!-- => <|"Axioms" -> {"mult"[X_, Y_] == "mult"[Y_, X_]}, "Conjecture" -> "mult"["a"[], "b"[]] == "mult"["b"[], "a"[]]|> -->
@@ -147,7 +146,7 @@ A cnf disjunction with a negative literal becomes an [Or]() of the literals:
 TPTPImport["cnf(a, axiom, p(X) | q(X) | ~r(X))."]["Axioms"]
 ```
 
-<!-- => {"p"[X_] || "q"[X_] || ! "r"[X_]} -->
+<!-- => {"p"[X_] || "q"[X_] ||  !"r"[X_]} -->
 
 ### Term-level atoms
 
@@ -173,18 +172,33 @@ TPTPImport["fof(a, axiom, $true)."]["Axioms"]
 
 `include` pulls axioms from another file, resolved relative to the including file:
 
+A fresh directory for the files:
+
 ```wl
 incDir = CreateDirectory[];
+```
+
+An axiom file:
+
+```wl
 Export[FileNameJoin[{incDir, "ax.ax"}],
     "cnf(a1, axiom, mult(X, e) = X).
 cnf(a2, axiom, mult(e, X) = X).", "Text"];
+```
+
+A problem that includes it:
+
+```wl
 Export[FileNameJoin[{incDir, "main.p"}],
     "include('ax.ax').
 cnf(g, negated_conjecture, mult(a, b) != c).", "Text"];
+```
+
+```wl
 TPTPImport[File @ FileNameJoin[{incDir, "main.p"}]]
 ```
 
-<!-- => <|"Axioms" -> {"mult"[X_, "e"[]] == X_, "mult"["e"[], X_] == X_}, "Conjecture" -> "mult"["a"[], "b"[]] == "c"[]|> -->
+<!-- => <|"Axioms" -> {"mult"[X_, "e"[]] == (X_), "mult"["e"[], X_] == (X_)}, "Conjecture" -> "mult"["a"[], "b"[]] == "c"[]|> -->
 
 ---
 
@@ -192,10 +206,13 @@ A clause-name selector admits only the listed clauses of the included file:
 
 ```wl
 Export[FileNameJoin[{incDir, "one.p"}], "include('ax.ax', [a1]).", "Text"];
+```
+
+```wl
 TPTPImport[File @ FileNameJoin[{incDir, "one.p"}]]
 ```
 
-<!-- => <|"Axioms" -> {"mult"[X_, "e"[]] == X_}, "Conjecture" -> None|> -->
+<!-- => <|"Axioms" -> {"mult"[X_, "e"[]] == (X_)}, "Conjecture" -> None|> -->
 
 ## Properties and Relations
 
@@ -219,7 +236,15 @@ cnf(left_identity, axiom, multiply(identity,X) = X, file('GRP001-4.p', left_iden
 cnf(c7, plain, multiply(a,b) = c, inference(superposition, [status(thm)], [associativity, left_identity])).
 cnf(c12, plain, $false, inference(cr, [status(thm)], [c7, prove_goal])).
 % SZS output end CNFRefutation for GRP001-4";
-szs = TPTPImport[szsText, "SZS"];
+```
+
+```wl
+szs = TPTPImport[szsText, "SZS"]
+```
+
+The status alone:
+
+```wl
 szs["Status"]
 ```
 
@@ -263,7 +288,7 @@ Source that does not match the grammar emits a `TPTPImport::badparse` message an
 TPTPImport["this is not tptp at all"]
 ```
 
-<!-- => $Failed  (with a TPTPImport::badparse message) -->
+<!-- => the message TPTPImport::badparse is issued and the result is $Failed -->
 
 ---
 

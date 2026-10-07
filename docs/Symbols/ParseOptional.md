@@ -21,7 +21,13 @@ RelatedGuides: [WolframParser]
 
 ## Basic Examples
 
-A present optional:
+An optional literal:
+
+```wl
+ParseOptional[ParseLiteral["foo"]]
+```
+
+When the literal is present, it is the result:
 
 ```wl
 Parse[ParseOptional[ParseLiteral["foo"]], "foo"]
@@ -29,7 +35,7 @@ Parse[ParseOptional[ParseLiteral["foo"]], "foo"]
 
 <!-- => "foo" -->
 
-An absent optional - succeeds, returns Missing:
+When it is absent, the parse still succeeds, with a [Missing]() result:
 
 ```wl
 Parse[ParseOptional[ParseLiteral["foo"]], ""]
@@ -66,13 +72,11 @@ Parse[
 `ParseOptional[$p$]` is `ParseChoice[$p$, ParseSucceed[Missing["NoMatch"]]]`:
 
 ```wl
-{
-    Parse[ParseOptional[ParseLiteral["x"]], "x"],
+Parse[ParseOptional[ParseLiteral["x"]], "x"] ===
     Parse[ParseChoice[ParseLiteral["x"], ParseSucceed[Missing["NoMatch"]]], "x"]
-}
 ```
 
-<!-- => {"x", "x"} -->
+<!-- => True -->
 
 The `Optional[]` wrapper has a UpValue that lowers a `ParserCombinator` argument:
 
@@ -80,14 +84,17 @@ The `Optional[]` wrapper has a UpValue that lowers a `ParserCombinator` argument
 Optional[ParseLiteral["foo"]]
 ```
 
-<!-- => ParserCombinator[Optional, ParserCombinator[Literal, "foo", <||>], <||>] -->
-
 ## Possible Issues
 
 `Missing["NoMatch"]` is the *typed* absent marker - tests for it with [MissingQ](), not for `Null`:
 
 ```wl
-res = Parse[ParseOptional[ParseLiteral["x"]], ""];
+res = Parse[ParseOptional[ParseLiteral["x"]], ""]
+```
+
+<!-- => Missing["NoMatch"] -->
+
+```wl
 MissingQ[res]
 ```
 

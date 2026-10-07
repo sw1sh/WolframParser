@@ -31,8 +31,6 @@ The object itself is a [ParserCombinator](), shown as a summary box:
 LaTeXMathParser
 ```
 
-<!-- => ParserCombinator[Action] summary box (Type "Action", one child, uncompiled) -->
-
 <!-- #| annotation: 26.07.26: Design review - LaTeXMathParser is the parser exposed as a first-class value, the split every parser-combinator library makes: the grammar is a reusable object you can Parse, ParserCompile, serialize, or embed, distinct from the one-shot LaTeXMathParse convenience call. This differs from a stock importer like ImportString[s, "LaTeX"], which exposes only the finished call and no reusable, compilable grammar object. Alternative name considered: LaTeXMathGrammar. -->
 
 Run it on a source string with [Parse]() - a fraction:
@@ -58,7 +56,10 @@ Parse[LaTeXMathParser, "x_i^2"]
 Compile the object once with the PEG-VM backend; the result is a [ParserCombinator]() carrying a `"Code"` function, callable directly on each input:
 
 ```wl
-latex = ParserCompile[LaTeXMathParser, Method -> "PEGVM"];
+latex = ParserCompile[LaTeXMathParser, Method -> "PEGVM"]
+```
+
+```wl
 latex["\\frac{a}{b}"]
 ```
 
@@ -96,13 +97,13 @@ Parse[LaTeXMathParser, "\\frac{a}{b}"] === LaTeXMathParse["\\frac{a}{b}"]
 
 ---
 
-Where the wrapper's post-pass matters, the two diverge. A line break `\\` is left as an internal marker by the raw parser:
+Where the wrapper's post-pass matters, the two diverge. A line break `\\` is left as an internal marker, `$lineBreakMark`, by the raw parser:
 
 ```wl
 Parse[LaTeXMathParser, "a \\\\ b"]
 ```
 
-<!-- => RowBox[{StyleBox["a", "TI"], <the private $lineBreakMark symbol>, StyleBox["b", "TI"]}] -->
+<!-- => RowBox[{StyleBox["a", "TI"], Wolfram`Parser`LaTeXPrivate`$lineBreakMark, StyleBox["b", "TI"]}] -->
 
 ---
 
@@ -158,12 +159,17 @@ For finished box output, call [LaTeXMathParse](); reach for [LaTeXMathParser]() 
 
 ## Neat Examples
 
-Compile the parser with the PEG-VM backend, serialize the compiled table, and reload it in a fresh kernel with no recompilation - the pattern the shipped asset uses:
+The compiled parser from above serializes to a file and reloads with no recompilation - in a fresh kernel too, which is the pattern the shipped asset uses:
 
 ```wl
-latex = ParserCompile[LaTeXMathParser, Method -> "PEGVM"];
 Export[FileNameJoin[{$TemporaryDirectory, "latex.wxf"}], latex];
-reloaded = Import[FileNameJoin[{$TemporaryDirectory, "latex.wxf"}]];
+```
+
+```wl
+reloaded = Import[FileNameJoin[{$TemporaryDirectory, "latex.wxf"}]]
+```
+
+```wl
 reloaded["\\frac{a^2 + b^2}{c}"]
 ```
 

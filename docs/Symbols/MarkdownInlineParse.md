@@ -156,7 +156,7 @@ The ellipsis pass rewrites `...` in prose to a single Unicode character:
 MarkdownInlineParse["wait..."]
 ```
 
-<!-- => {<|"Type" -> "Text", "Text" -> "wait…"|>} -->
+<!-- => {<|"Type" -> "Text", "Text" -> "wait\[Ellipsis]"|>} -->
 
 ---
 

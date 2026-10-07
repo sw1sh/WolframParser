@@ -23,38 +23,73 @@ RelatedGuides: [ParserZoo]
 
 ## Basic Examples
 
-Allocate a cell, write a nested-list production that refers to it through [RecRef](), and close the loop with `SetRec`:
+Allocate a cell:
 
 ```wl
-cell = RecCell[];
+cell = RecCell[]
+```
+
+Write a nested-list production that refers to the cell through [RecRef]():
+
+```wl
 list = ParseBetween[
     ParseLiteral["["],
     ParseSepBy[ParseChoice[ParseRegex["[0-9]+"], RecRef[cell]], ParseLiteral[","]],
     ParseLiteral["]"]
-];
-SetRec[cell, list];
+]
+```
+
+Close the loop - `SetRec` binds the cell and returns the parser:
+
+```wl
+SetRec[cell, list]
+```
+
+The production now parses nested input:
+
+```wl
 Parse[list, "[1,[2,3]]"]
 ```
 
 <!-- => {"1", {"2", "3"}} -->
 
-`SetRec` returns the parser it was handed, so it composes as the tail of a grammar builder:
+`SetRec` returns the parser it was handed unchanged, so it composes as the tail of a grammar builder:
 
 ```wl
-SetRec[RecCell[], ParseLiteral["x"]]
+SetRec[RecCell[], ParseLiteral["x"]] === ParseLiteral["x"]
 ```
 
-<!-- => ParserCombinator["Literal", "x", <||>] -->
+<!-- => True -->
 
 ## Scope
 
-Two cells bind two mutually-recursive productions - a value is a number or a list, and a list holds values. Each `SetRec` closes one loop, and they resolve through each other:
+Two cells bind two mutually-recursive productions. A cell for values:
 
 ```wl
-valueCell = RecCell[];
-listCell = RecCell[];
-SetRec[valueCell, ParseChoice[ParseRegex["[0-9]+"], RecRef[listCell]]];
-SetRec[listCell, ParseBetween[ParseLiteral["("], ParseSepBy[RecRef[valueCell], ParseLiteral[","]], ParseLiteral[")"]]];
+valueCell = RecCell[]
+```
+
+A cell for lists:
+
+```wl
+listCell = RecCell[]
+```
+
+A value is a number or a list:
+
+```wl
+SetRec[valueCell, ParseChoice[ParseRegex["[0-9]+"], RecRef[listCell]]]
+```
+
+A list holds values:
+
+```wl
+SetRec[listCell, ParseBetween[ParseLiteral["("], ParseSepBy[RecRef[valueCell], ParseLiteral[","]], ParseLiteral[")"]]]
+```
+
+Each `SetRec` closes one loop, and the two resolve through each other:
+
+```wl
 Parse[RecRef[valueCell], "(1,(2,3),4)"]
 ```
 
@@ -67,5 +102,3 @@ An input whose list never closes is an honest [Failure](), reporting the positio
 ```wl
 Parse[RecRef[valueCell], "(1,2"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 5, "Expected" -> {")"}, "Found" -> "<end of input>"|>] -->

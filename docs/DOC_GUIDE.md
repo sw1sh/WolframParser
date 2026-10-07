@@ -22,10 +22,19 @@ wl -f build.wls
 ```
 
 `build.wls` auto-discovers every `docs/**/*.md`, so a new file builds with no
-wiring. Probe each example against the live paclet first and paste the **real**
-result into the `<!-- => ... -->` hint after the cell — a wrong hint is worse
-than none. To iterate on one page without rebuilding the whole set, call
+wiring. To iterate on one page without rebuilding the whole set, call
 `MarkdownToNotebook[src, out, "EvaluateSeparator" -> None]` on it directly.
+
+Two gates hold the cells to the rules below; run both before committing a doc
+change:
+
+```
+python3 dev/check-doc-cells.py           # cell shape: compounds, bundles, bare first use
+wl -f dev/run-doc-examples.wls           # evaluates every cell: messages, echoes, hints
+wl -f dev/run-doc-examples.wls --write   # ... and rewrites the value hints from the outputs
+```
+
+Both take page paths to check just those pages.
 
 ## State threads across sections — `EvaluateSeparator -> None`
 
@@ -84,8 +93,6 @@ still carry `$p_1$` for whole-word args predate this and should migrate when nex
 - **No `Needs`.** MTN loads the package from the frontmatter `Context:`
   (`Context: Wolfram``Parser```) before it evaluates the cells, so an example
   never needs `Needs["Wolfram``Parser```"]`.
-- **One output per cell.** Never show `{Parse[p, "a"], Parse[p, "b"]}` to save a
-  cell — split into two.
 - **Show the combinator, not its guts.** A `ParserCombinator` renders as a
   summary box (icon + `Type` / `Arity` / `Compiled`). Where the box aids the
   reader, display the combinator itself rather than extracting
@@ -95,6 +102,71 @@ still carry `$p_1$` for whole-word args predate this and should migrate when nex
   "Found" -> …|>]`. Show the real failure (it round-trips and renders), and in
   prose explain *why* it failed — a mis-ordered [ParseChoice](), leftover input,
   and so on.
+
+## Showing input and output
+
+Adapted from the PureMath documentation rules, minus the reset-boundary rules
+that state threading makes moot here.
+
+- **Show what a symbol returns, bare, before anything derived from it.** The
+  first cell of a Symbol page that uses its symbol applies it with nothing
+  applied to the result: a combinator constructor shows the combinator
+  (`ParseMany[ParseCharacter[DigitCharacter]]`, a summary box) before a
+  [Parse]() runs it, and a grammar builder shows the grammar it builds. A symbol
+  that is a value shows itself (`MarkdownInlineParser`), or, for an algebra whose
+  builders would print as a wall of private-context code, its `Keys`.
+  Reductions (`Head`, `Length`, `Keys @ Last[...]`, an `=== expected` check)
+  come after the raw value, never instead of it.
+- **An honest slice for a large output.** Before reducing a big result, show a
+  representative piece: `Take[cases, 3]`, `First[tree]`, or the smallest input
+  that makes the point (`LambdaAST["\\x.x"]`, not a three-term application).
+  A wall of InputForm, such as a box dump or a private-context closure, is shown
+  through its summary box or a property instead.
+- **One value per cell.** No `a = …; f[a]` compound: the binding is its own
+  cell whose output shows the object, and the use follows in the next cell. No
+  `{f[a], g[b]}` bundle either: each value gets its own cell and caption. A list
+  is the right single output only when the list *is* the showcase, a progression
+  of short values. Cells are cheap and state threads, so split freely. A cell of
+  delayed definitions (`f[x_] := …`) shows nothing and may group them.
+- **Captions say what the output shows.** A binding sits under a sentence naming
+  what it makes, and the cell that uses it may follow directly; any other cell
+  gets its own lead-in. The prose agrees with the output it describes: check it
+  against the evaluated value, not the intent.
+- **A side effect with nothing to show ends in `;`, in its own cell**, as an
+  `Export` or a `CreateDirectory` does. Its value would be a path under
+  `$TemporaryDirectory`, which differs on every machine; write files there
+  (`FileNameJoin[{$TemporaryDirectory, "greeting.bnf"}]`), never into the
+  working directory. So does a binding whose value would print as private
+  implementation, such as an algebra of closures, when the next cell shows what
+  it does; a private symbol an output may show is one the page's prose names.
+- **A listing is `#| eval: false`.** Code shown for reading rather than running
+  (a sketch of generated code, a definition quoted from the source, a call that
+  needs software the build machine lacks) is marked so, and the gates skip it.
+  A `#| collapse: true` setup cell of helper definitions that shows nothing
+  (its last statement ends in `;`) may group them.
+- **A message example shows its message.** Never wrap the point of an example
+  in [Quiet](); its hint names the message: `<!-- => the message
+  GrammarApply::arg1 is issued and the expression returns unevaluated -->`.
+  `Quiet` is only for an incidental warning that is not the example's point, and
+  then it names that message (`Quiet[expr, Solve::ifun]`).
+
+### Hints
+
+The `<!-- => … -->` comment after a cell is for the reader of the source; the
+converter drops it. It holds the output's `ToString[…, InputForm]`, ASCII
+encoded so a special character reads `\[Alpha]` or `\:211d`, character for
+character, written by evaluating the cell, never from memory: a wrong hint is
+worse than none. `dev/run-doc-examples.wls --write` writes them.
+
+- **No hint on an output that renders rather than reads**: a summary box
+  ([ParserCombinator](), a recursion cell, [Failure]()), a graphic, a color, a
+  link such as a [CloudObject](), a typeset form ([DisplayForm](),
+  [TraditionalForm]()), a layout ([Grid](), [Column]()).
+- **No hint on a value that varies** between runs (a timing, a random draw, a
+  date, a fresh `x$123` temporary), and none needed past 400 characters of
+  InputForm.
+- **Every short value gets one**: an output whose InputForm fits in 160
+  characters carries its hint.
 
 ## Output types that round-trip
 
@@ -106,6 +178,13 @@ in the `.nb`. Typeset math round-trips too — delimited matrices
 tutorials lean on. What does **not** round-trip cleanly is a *bare* `Association`
 (`<|…|>` with no wrapping head) or an `InputForm[…]` box — project those to a
 list/string (`Keys[…]`, `ToString[…, InputForm]`) only when you must.
+
+Examples evaluate in a private per-page context, with the frontmatter contexts on
+`$ContextPath`, so a symbol an example creates in `` Global` `` prints qualified.
+[TPTPImport]() makes its variables there, and a bare page would show
+``"p"[Global`X_]`` where a reader's session shows `"p"[X_]`. A page whose outputs
+carry such symbols lists the context in its frontmatter, `` ContextPath: [Global`] ``,
+and prints what the reader sees.
 
 ## Headless rasterization caveat
 

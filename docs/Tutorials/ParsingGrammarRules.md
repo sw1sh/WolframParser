@@ -91,17 +91,23 @@ Bare slot captures a word run:
 Parse[GrammarRules[{"the weather in <city>" -> city}], "the weather in NYC"]
 ```
 
+<!-- => "NYC" -->
+
 Typed slots and arithmetic in the rule body:
 
 ```wl
 Parse[GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}], "add 3 and 5"]
 ```
 
+<!-- => 8 -->
+
 Multi-slot template with a list-shaped result:
 
 ```wl
 Parse[GrammarRules[{"<verb:Word> <obj:Word>" :> {verb, obj}}], "eat sushi"]
 ```
+
+<!-- => {"eat", "sushi"} -->
 
 ### (b) The pattern form (matches the built-in's surface syntax)
 
@@ -139,17 +145,23 @@ Parse[
 ]
 ```
 
+<!-- => 8 -->
+
 `Alternatives` with a captured choice:
 
 ```wl
 Parse[GrammarRules[{appl : ("stove" | "oven" | "fridge") :> appl}], "fridge"]
 ```
 
+<!-- => "fridge" -->
+
 `DelimitedSequence` collecting a list of numbers:
 
 ```wl
 Parse[GrammarRules[{nums : DelimitedSequence[GrammarToken["Number"], ","] :> Total[nums]}], "1,2,3,4"]
 ```
+
+<!-- => 10 -->
 
 `OptionalElement` with a default:
 
@@ -162,17 +174,23 @@ Parse[
 ]
 ```
 
+<!-- => "stove" -->
+
 `AnyOrder` matching any permutation of three literals:
 
 ```wl
 Parse[GrammarRules[{AnyOrder["red", "green", "blue"] :> "all three"}], "blue red green"]
 ```
 
+<!-- => "all three" -->
+
 `RegularExpression` as a slot:
 
 ```wl
 Parse[GrammarRules[{n : RegularExpression["\\d+"] :> ToExpression[n]}], "42"]
 ```
+
+<!-- => 42 -->
 
 Subsidiary-domain definitions via the two-argument `GrammarRules[rules, defs]`:
 
@@ -186,15 +204,21 @@ Parse[
 ]
 ```
 
-A semantic `GrammarToken[type]` resolves via [Interpreter]():
+<!-- => "Paris" -->
+
+A semantic `GrammarToken[type]` resolves via [Interpreter]() - a color:
 
 ```wl
 Parse[GrammarRules[{c : GrammarToken["Color"] :> c}], "red"]
 ```
 
+A number written out as a word:
+
 ```wl
 Parse[GrammarRules[{n : GrammarToken["SemanticNumber"] :> n}], "five"]
 ```
+
+<!-- => 5 -->
 
 The rule head is either [Rule]() or [RuleDelayed](). With [Rule](), the body evaluates at lowering:
 
@@ -202,11 +226,15 @@ The rule head is either [Rule]() or [RuleDelayed](). With [Rule](), the body eva
 Parse[GrammarRules[{"<n:Number>" -> n}], "42"]
 ```
 
+<!-- => 42 -->
+
 With [RuleDelayed](), the body re-evaluates per match (useful when the body is non-trivial):
 
 ```wl
 Parse[GrammarRules[{"<n:Number>" :> n+1}], "42"]
 ```
+
+<!-- => 43 -->
 
 [Parse]() is strict - input must match the *whole* template, not just a prefix:
 
@@ -223,6 +251,8 @@ A [GrammarRules]() lowers to a [ParserCombinator](); [ParserCompile]() then mate
 ```wl
 ParserCompile[GrammarRules[{"<n:Integer>" :> n^2}]]["42"]
 ```
+
+<!-- => 1764 -->
 
 Same syntax, same result, faster on hot paths.
 
@@ -286,9 +316,15 @@ co = CloudDeploy[applianceRule, "TestGrammar_3", Permissions -> "Public"]
 GrammarApply[co, "turn the stove on"]
 ```
 
+<!-- => {"stove", "on"} -->
+
+Without the article:
+
 ```wl
 GrammarApply[co, "turn oven off"]
 ```
+
+<!-- => {"oven", "off"} -->
 
 **Local, same expression**, via [Parse]() with no network round-trip:
 
@@ -296,14 +332,22 @@ GrammarApply[co, "turn oven off"]
 Parse[applianceRule, "turn the stove on"]
 ```
 
+<!-- => {"stove", "on"} -->
+
+Without the article:
+
 ```wl
 Parse[applianceRule, "turn oven off"]
 ```
+
+<!-- => {"oven", "off"} -->
 
 The local path also compiles:
 
 ```wl
 ParserCompile[applianceRule]["turn the fridge on"]
 ```
+
+<!-- => {"fridge", "on"} -->
 
 No rewrite, no separate combinator shape - the `applianceRule` value flows through [CloudDeploy]() + [GrammarApply](), [Parse](), or [ParserCompile]() interchangeably. Where the cloud and local paths still diverge is the semantic-token wall: replace one of the alternatives with <code>c : [GrammarToken]()["City"]</code> and you'd need the cloud's [Interpreter]() access (or the in-body workaround) to resolve "Boston" into a city [Entity](). Everything else lowers identically.

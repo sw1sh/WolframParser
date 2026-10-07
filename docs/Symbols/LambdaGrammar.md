@@ -27,10 +27,8 @@ RelatedGuides: [ParserZoo]
 Building the grammar over an algebra yields a [ParserCombinator]():
 
 ```wl
-Head[LambdaGrammar[LambdaSemantic]]
+LambdaGrammar[LambdaSemantic]
 ```
-
-<!-- => ParserCombinator -->
 
 Over [LambdaSemantic](), the same input compiles to a closure and the kernel reduces it - the K combinator projects its first argument:
 
@@ -60,13 +58,15 @@ LambdaGrammar[LambdaSemantic]["(\\f.\\x.f (f x)) g y"]
 
 ## Properties and Relations
 
-[LambdaEval]() is exactly this grammar over [LambdaSemantic](); calling either gives the same reduction:
+[LambdaEval]() is exactly this grammar over [LambdaSemantic]():
 
 ```wl
 LambdaEval["(\\x y.x) a b"]
 ```
 
 <!-- => a -->
+
+The grammar applied directly gives the same reduction:
 
 ```wl
 LambdaGrammar[LambdaSemantic]["(\\x y.x) a b"]
@@ -81,5 +81,3 @@ A grammar built over [LambdaSemantic]() returns an honest [Failure]() on input i
 ```wl
 LambdaGrammar[LambdaSemantic]["\\.x"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 2, "Expected" -> {"regex /[A-Za-z][A-Za-z0-9_]*/"}, "Found" -> "."|>] -->

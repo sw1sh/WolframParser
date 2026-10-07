@@ -73,7 +73,7 @@ Parse[GrammarRules[{"add <a:Number> and <b:Number>" :> a + b}], "add 3 and 5"]
 LaTeXMathParse["\\frac{x^2}{y^2} = z^2"]
 ```
 
-<!-- => RowBox[{FractionBox[SuperscriptBox["x", "2"], SuperscriptBox["y", "2"]], "=", SuperscriptBox["z", "2"]}] -->
+<!-- => RowBox[{FractionBox[SuperscriptBox[StyleBox["x", "TI"], "2"], SuperscriptBox[StyleBox["y", "TI"], "2"]], "=", SuperscriptBox[StyleBox["z", "TI"], "2"]}] -->
 
 Wrap those boxes in [RawBoxes]() to typeset them in a cell, and restyle
 with [LaTeXMathStyle]() into the same Computer-Modern face LaTeX itself uses:
@@ -94,11 +94,15 @@ A bare-literal parser is the smallest non-trivial example - it matches its argum
 Parse[ParseLiteral["wolfram"], "wolfram"]
 ```
 
+<!-- => "wolfram" -->
+
 [ParseCharacter]() matches one character against a pattern (a literal, an alternation, or a named character class):
 
 ```wl
 Parse[ParseSome[ParseCharacter[LetterCharacter]], "abc"]
 ```
+
+<!-- => {"a", "b", "c"} -->
 
 [ParseSequence]() runs combinators in order, returning the list of their results; [ParseChoice]() returns the first one that succeeds (PEG-ordered):
 
@@ -106,11 +110,15 @@ Parse[ParseSome[ParseCharacter[LetterCharacter]], "abc"]
 Parse[ParseSequence[ParseLiteral["x"], ParseLiteral["="], ParseSome[ParseCharacter[DigitCharacter]]], "x=42"]
 ```
 
+<!-- => {"x", "=", {"4", "2"}} -->
+
 [ParseAction]() wraps a parser with a transformer; the transformer is splatted across the parser's result list, so [ParseSome]() followed by [StringJoin]() rejoins the matched chars:
 
 ```wl
 Parse[ParseAction[ParseSome[ParseCharacter[DigitCharacter]], StringJoin], "12345"]
 ```
+
+<!-- => "12345" -->
 
 ### Lookahead and backtracking
 
@@ -128,15 +136,22 @@ Parse[
 
 ### Recursion
 
-[ParseRecursive]() defers binding until parse time, so a parser may name itself or its peers without pre-declaration. A balanced-parentheses parser is one line:
+[ParseRecursive]() defers binding until parse time, so a parser may name itself or its peers without pre-declaration. A balanced-parentheses parser that counts its nesting depth:
 
 ```wl
 parens = ParseChoice[
-    ParseAction[ParseSequence[ParseLiteral["("], ParseRecursive[parens], ParseLiteral[")"]], #2 &],
-    ParseLiteral[""]
-];
+    ParseAction[ParseSequence[ParseLiteral["("], ParseRecursive[parens], ParseLiteral[")"]], #2 + 1 &],
+    ParseAction[ParseLiteral[""], 0 &]
+]
+```
+
+Three levels of nesting:
+
+```wl
 Parse[parens, "((()))"]
 ```
+
+<!-- => 3 -->
 
 ### Declarative grammars
 
@@ -146,17 +161,25 @@ A [GrammarRules]() expression lowers to a [ParserCombinator]() and runs locally 
 Parse[GrammarRules[{"weather in <city>" -> city}], "weather in Boston"]
 ```
 
+<!-- => "Boston" -->
+
 The pattern form accepts the same shapes [CloudDeploy]()'d [GrammarRules]() does - [FixedOrder](), [AnyOrder](), [OptionalElement](), [DelimitedSequence](), [RegularExpression](), [Pattern](), and [GrammarToken](). The [Parsing GrammarRules Locally](paclet:Wolfram/Parser/tutorial/ParsingGrammarRules) tech note walks through every pattern.
 
 ### Compilation
 
-[ParserCompile]() lowers a [ParserCombinator]() to a [FunctionCompile]() function for the small / non-recursive case, or to a PEG-VM instruction table for large / recursive grammars (LaTeX, TPTP). The choice is opt-in via `Method -> "PEGVM"`:
+[ParserCompile]() lowers a [ParserCombinator]() to a [FunctionCompile]() function for the small / non-recursive case, or to a PEG-VM instruction table for large / recursive grammars (LaTeX, TPTP). The choice is opt-in via `Method -> "PEGVM"`. A compiled digit run:
 
 ```wl
-With[{cf = ParserCompile[ParseSome[ParseCharacter[DigitCharacter]]]},
-    Parse[cf, "12345"]
-]
+digits = ParserCompile[ParseSome[ParseCharacter[DigitCharacter]]]
 ```
+
+It parses exactly as the uncompiled parser does:
+
+```wl
+Parse[digits, "12345"]
+```
+
+<!-- => {"1", "2", "3", "4", "5"} -->
 
 The compiled artifact can be `Export`'d to a WXF file and `Import`'d without recompiling - that is how [LaTeXMathParse]() ships its compiled core (`Assets/LaTeXMathParserCompiled.wxf`).
 
@@ -227,6 +250,8 @@ The combinators operate uniformly on strings, on lists of tokens, and on lists o
 Parse[ParseChoice[ParseLiteral["northwest"], ParseLiteral["north"]], "northwest"]
 ```
 
+<!-- => "northwest" -->
+
 ### Recursive grammars
 
 [FunctionCompile]() inlines combinator graphs, so a recursive grammar (LaTeX, TPTP) hits the inliner's size cap and either compiles slowly or aborts. Use `Method -> "PEGVM"` for those: the PEG-VM lowers to an integer instruction table that is recursive at runtime, not at compile time.
@@ -283,6 +308,8 @@ Parse[
     "turn the stove on"
 ]
 ```
+
+<!-- => {"stove", "on"} -->
 
 ## Hero Image
 

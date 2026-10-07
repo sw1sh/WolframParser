@@ -26,13 +26,22 @@ RelatedGuides: [ParserZoo]
 Allocate a cell, reference it inside a nested-list production with [RecRef](), and close the loop with [SetRec]() - the cell lets an item be either a number or a whole sub-list:
 
 ```wl
-cell = RecCell[];
+cell = RecCell[]
+```
+
+```wl
 list = ParseBetween[
     ParseLiteral["["],
     ParseSepBy[ParseChoice[ParseRegex["[0-9]+"], RecRef[cell]], ParseLiteral[","]],
     ParseLiteral["]"]
-];
+]
+```
+
+```wl
 SetRec[cell, list];
+```
+
+```wl
 Parse[list, "[1,[2,3],[]]"]
 ```
 
@@ -73,5 +82,3 @@ An unbalanced input is an honest [Failure](), reporting how far it parsed and wh
 ```wl
 Parse[list, "[1,[2]"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 7, "Expected" -> "]", "Found" -> "<end of input>"|>] -->

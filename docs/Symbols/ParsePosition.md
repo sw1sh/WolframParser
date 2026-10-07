@@ -30,8 +30,6 @@ Bracketing a sub-parser, `ParsePosition[] ~~ p ~~ ParsePosition[]`, captures the
 ParsePosition[]
 ```
 
-<!-- => ParserCombinator["Position", {}, <||>] -->
-
 Bracket a number parser to capture the span it covers - start `1`, the matched text, end `4` (one past the last digit):
 
 ```wl
@@ -43,10 +41,16 @@ Parse[ParseSequence[ParsePosition[], ParseRegex["[0-9]+"], ParsePosition[]], "12
 Because it consumes nothing, a `ParsePosition[]` *after* a whitespace skip reports the position the next token actually starts at. Reshape with [ParseAction]() to keep just the `{start, value, end}` triple:
 
 ```wl
-ws = ParseMany[ParseCharacter[WhitespaceCharacter]];
+ws = ParseMany[ParseCharacter[WhitespaceCharacter]]
+```
+
+```wl
 spanned = ParseAction[
     ws ~~ ParsePosition[] ~~ ParseRegex["[0-9]+"] ~~ ParsePosition[],
-    Function[{skip, s, v, e}, {s, v, e}]];
+    Function[{skip, s, v, e}, {s, v, e}]]
+```
+
+```wl
 Parse[spanned, "  123"]
 ```
 

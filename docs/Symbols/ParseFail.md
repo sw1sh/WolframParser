@@ -29,8 +29,6 @@ The constructor holds its message in a `"Fail"` combinator:
 ParseFail["nope"]
 ```
 
-<!-- => ParserCombinator[Fail, "nope", <||>] -->
-
 <!-- #| annotation: 26.07.26: Design review - ParseFail is the parser monad's zero: the always-failing parser, the dual of ParseSucceed and the identity of ParseChoice. Modelled on Parsec's parserZero / fail, but instead of raising it surfaces the same structured Failure["ParseError", ...] every other parse failure does, so it composes with Confirm / Enclose and pattern-matches uniformly. The message is data (the "Expected" field), not a thrown string. -->
 
 Running it fails with that message whatever the input, with an empty `"Found"`:
@@ -38,8 +36,6 @@ Running it fails with that message whatever the input, with an empty `"Found"`:
 ```wl
 Parse[ParseFail["boom"], "anything"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "boom", "Found" -> ""|>] -->
 
 ## Scope
 
@@ -49,15 +45,11 @@ Used after a matched prefix, [ParseFail]() attaches a custom message at the posi
 Parse[ParseLiteral["("] ~~ ParseFail["empty groups not allowed"] ~~ ParseLiteral[")"], "()"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 2, "Expected" -> "empty groups not allowed", "Found" -> ""|>] -->
-
 As the last branch of a [ParseChoice](), it contributes its message to the diagnostic when every real alternative has failed:
 
 ```wl
 Parse[ParseChoice[ParseLiteral["yes"], ParseFail["expected yes/no"]], "maybe"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> {"yes", "expected yes/no"}, "Found" -> "m"|>] -->
 
 ## Properties and Relations
 

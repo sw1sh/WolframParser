@@ -24,6 +24,14 @@ RelatedGuides: [ParserZoo]
 
 ## Basic Examples
 
+The algebra has nine builders, keyed by node kind:
+
+```wl
+Keys[ASTAlgebra]
+```
+
+<!-- => {"Leaf", "Prefix", "Postfix", "Binary", "Infix", "Ternary", "Call", "Group", "Container"} -->
+
 The `"Binary"` builder makes a [BinaryNode]() from an operator descriptor and two children:
 
 ```wl
@@ -39,14 +47,6 @@ ASTAlgebra["Leaf"]["Integer", "42"]
 ```
 
 <!-- => LeafNode["Integer", "42", <||>] -->
-
-The nine builder keys:
-
-```wl
-Keys[ASTAlgebra]
-```
-
-<!-- => {"Leaf", "Prefix", "Postfix", "Binary", "Infix", "Ternary", "Call", "Group", "Container"} -->
 
 ## Scope
 

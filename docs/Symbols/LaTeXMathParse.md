@@ -30,17 +30,29 @@ LaTeXMathParse["\\frac{a}{b}"]
 
 <!-- => FractionBox[StyleBox["a", "TI"], StyleBox["b", "TI"]] -->
 
-Subscript / superscript / both:
+A superscript:
 
 ```wl
-{
-    LaTeXMathParse["x^2"],
-    LaTeXMathParse["a_i"],
-    LaTeXMathParse["x_i^2"]
-}
+LaTeXMathParse["x^2"]
 ```
 
-<!-- => {SuperscriptBox[StyleBox["x", "TI"], "2"], SubscriptBox[StyleBox["a", "TI"], StyleBox["i", "TI"]], SubsuperscriptBox[StyleBox["x", "TI"], StyleBox["i", "TI"], "2"]} -->
+<!-- => SuperscriptBox[StyleBox["x", "TI"], "2"] -->
+
+A subscript:
+
+```wl
+LaTeXMathParse["a_i"]
+```
+
+<!-- => SubscriptBox[StyleBox["a", "TI"], StyleBox["i", "TI"]] -->
+
+Both at once:
+
+```wl
+LaTeXMathParse["x_i^2"]
+```
+
+<!-- => SubsuperscriptBox[StyleBox["x", "TI"], StyleBox["i", "TI"], "2"] -->
 
 A named function:
 
@@ -48,7 +60,7 @@ A named function:
 LaTeXMathParse["\\sin x + \\cos y"]
 ```
 
-<!-- => RowBox[{StyleBox["sin", FontSlant -> "Plain"], StyleBox["x", "TI"], "+", StyleBox["cos", FontSlant -> "Plain"], StyleBox["y", "TI"]}] -->
+<!-- => RowBox[{StyleBox["sin", FontSlant -> "Plain"], "\[ThinSpace]", StyleBox["x", "TI"], "+", StyleBox["cos", FontSlant -> "Plain"], "\[ThinSpace]", StyleBox["y", "TI"]}] -->
 
 A matrix environment:
 
@@ -74,19 +86,31 @@ Greek letters, named constants:
 LaTeXMathParse["\\alpha + \\beta = \\pi"]
 ```
 
-<!-- => RowBox[{"\[Alpha]", "+", "\[Beta]", "=", "\[Pi]"}] -->
+<!-- => RowBox[{StyleBox["\[Alpha]", "TI"], "+", StyleBox["\[Beta]", "TI"], "=", "\[Pi]"}] -->
 
-Font styles `\mathbb`, `\mathcal`, `\mathfrak`:
+Font styles map to their letterlike characters - `\mathbb` to double-struck:
 
 ```wl
-{
-    LaTeXMathParse["\\mathbb{R}"],
-    LaTeXMathParse["\\mathcal{L}"],
-    LaTeXMathParse["\\mathfrak{g}"]
-}
+LaTeXMathParse["\\mathbb{R}"]
 ```
 
-<!-- => {"\[DoubleStruckCapitalR]", "\[ScriptCapitalL]", "\[GothicSmallG]"} -->
+<!-- => "\:211d" -->
+
+`\mathcal` to script:
+
+```wl
+LaTeXMathParse["\\mathcal{L}"]
+```
+
+<!-- => "\[ScriptCapitalL]" -->
+
+`\mathfrak` to Gothic:
+
+```wl
+LaTeXMathParse["\\mathfrak{g}"]
+```
+
+<!-- => "\|01d524" -->
 
 A `\left...\right` group with independent open / close delimiters:
 
@@ -112,8 +136,6 @@ The result is a tree of WL boxes - drop into a notebook cell verbatim, or wrap w
 DisplayForm @ LaTeXMathParse["\\sum_{i=1}^{n} \\frac{1}{i^2}"]
 ```
 
-<!-- => the Basel-problem sum, rendered as typeset math -->
-
 For the markdown-to-notebook pipeline, `LaTeXMathParse` is the routing target for `$...$` blocks: any time the markdown source contains inline LaTeX, [MarkdownToNotebook]() routes it through this parser to produce a proper math cell rather than a code-as-text cell.
 
 ## Possible Issues
@@ -134,15 +156,32 @@ DisplayForm @ LaTeXMathParse[
 ]
 ```
 
-<!-- => the integral form of Gauss's law, typeset -->
-
 End-to-end: count how many of KaTeX's own test cases parse cleanly:
 
 ```wl
 cases = Association @ Import[
     FileNameJoin[{PacletObject["Wolfram/Parser"]["Location"], "Tests", "katex-cases.json"}]
 ];
+```
+
+The first three cases, by name:
+
+```wl
+Take[cases, 3]
+```
+
+All of them:
+
+```wl
+Length[cases]
+```
+
+<!-- => 126 -->
+
+The cases that parse with no failure:
+
+```wl
 Count[Values[cases], _ ? (! FailureQ[LaTeXMathParse[#]] &)]
 ```
 
-<!-- => 126  (out of 126 total) -->
+<!-- => 126 -->

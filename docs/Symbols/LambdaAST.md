@@ -31,7 +31,7 @@ The identity term is a [CallNode]() headed by the lambda leaf, binding `x` over 
 LambdaAST["\\x.x"]
 ```
 
-<!-- => ContainerNode["String", {CallNode[LeafNode["Symbol", "λ", <||>], {LeafNode["Symbol", "x", <||>], LeafNode["Symbol", "x", <|"Source" -> {{1, 4}, {1, 5}}|>]}, <|"Source" -> {{1, 4}, {1, 5}}|>]}, <|"Source" -> {{1, 4}, {1, 5}}|>] -->
+<!-- => ContainerNode["String", {CallNode[LeafNode["Symbol", "\[Lambda]", <||>], {LeafNode["Symbol", "x", <||>], LeafNode["Symbol", "x", <|"Source" -> {{1, 4}, {1, 5}}|>]}, <|"Source" -> {{1, 4}, {1, 5}}|>]}, <|"Source" -> {{1, 4}, {1, 5}}|>] -->
 
 Nodes carry a `"Source"` span of `{{`*startLine*`, `*startCol*`}, {`*endLine*`, `*endCol*`}}` ([CodeParser]() LineColumn). An abstraction is special: its `λ` head and its bound-name leaf are *synthesized* by the builder, not lexed from a token, so they have no source and keep empty metadata `<||>`. Only the parsed variable occurrence in the body - here the trailing `x` at columns `4`-`5` - carries a span, and the abstraction node inherits that body span (the binder is not included).
 
@@ -41,7 +41,7 @@ The K combinator `\x.\y.x` nests one abstraction inside another:
 LambdaAST["\\x.\\y.x"]
 ```
 
-<!-- => ContainerNode["String", {CallNode[LeafNode["Symbol", "λ", <||>], {LeafNode["Symbol", "x", <||>], CallNode[LeafNode["Symbol", "λ", <||>], {LeafNode["Symbol", "y", <||>], LeafNode["Symbol", "x", <|"Source" -> {{1, 7}, {1, 8}}|>]}, <|"Source" -> {{1, 7}, {1, 8}}|>]}, <|"Source" -> {{1, 7}, {1, 8}}|>]}, <|"Source" -> {{1, 7}, {1, 8}}|>] -->
+<!-- => ContainerNode["String", {CallNode[LeafNode["Symbol", "\[Lambda]", <||>], {LeafNode["Symbol", "x", <||>], CallNode[LeafNode["Symbol", "\[Lambda]", <||>], {LeafNode["Symbol", "y", <||>], LeafNode["Symbol", "x", <|"Source" -> {{1, 7}, {1, 8}}|>]}, <|"Source" -> {{1, 7}, {1, 8}}|>]}, <|"Source" -> {{1, 7}, {1, 8}}|>]}, <|"Source" -> {{1, 7}, {1, 8}}|>] -->
 
 The same source through [LambdaEval]() reduces to a value, not a tree:
 
@@ -67,7 +67,7 @@ The `\x y. b` sugar folds to nested single-binder abstractions, so it produces t
 LambdaAST["\\x y.x"]
 ```
 
-<!-- => ContainerNode["String", {CallNode[LeafNode["Symbol", "λ", <||>], {LeafNode["Symbol", "x", <||>], CallNode[LeafNode["Symbol", "λ", <||>], {LeafNode["Symbol", "y", <||>], LeafNode["Symbol", "x", <|"Source" -> {{1, 6}, {1, 7}}|>]}, <|"Source" -> {{1, 6}, {1, 7}}|>]}, <|"Source" -> {{1, 6}, {1, 7}}|>]}, <|"Source" -> {{1, 6}, {1, 7}}|>] -->
+<!-- => ContainerNode["String", {CallNode[LeafNode["Symbol", "\[Lambda]", <||>], {LeafNode["Symbol", "x", <||>], CallNode[LeafNode["Symbol", "\[Lambda]", <||>], {LeafNode["Symbol", "y", <||>], LeafNode["Symbol", "x", <|"Source" -> {{1, 6}, {1, 7}}|>]}, <|"Source" -> {{1, 6}, {1, 7}}|>]}, <|"Source" -> {{1, 6}, {1, 7}}|>]}, <|"Source" -> {{1, 6}, {1, 7}}|>] -->
 
 The unicode `λ` is accepted as an alternative to the `\` token and yields an identical tree:
 
@@ -75,7 +75,7 @@ The unicode `λ` is accepted as an alternative to the `\` token and yields an id
 LambdaAST["\[Lambda]x.x"]
 ```
 
-<!-- => ContainerNode["String", {CallNode[LeafNode["Symbol", "λ", <||>], {LeafNode["Symbol", "x", <||>], LeafNode["Symbol", "x", <|"Source" -> {{1, 4}, {1, 5}}|>]}, <|"Source" -> {{1, 4}, {1, 5}}|>]}, <|"Source" -> {{1, 4}, {1, 5}}|>] -->
+<!-- => ContainerNode["String", {CallNode[LeafNode["Symbol", "\[Lambda]", <||>], {LeafNode["Symbol", "x", <||>], LeafNode["Symbol", "x", <|"Source" -> {{1, 4}, {1, 5}}|>]}, <|"Source" -> {{1, 4}, {1, 5}}|>]}, <|"Source" -> {{1, 4}, {1, 5}}|>] -->
 
 A free variable parses to a bare [LeafNode]() with no surrounding [CallNode]():
 
@@ -93,8 +93,6 @@ LambdaAST["x"]
 LambdaAST["(\\f.\\x.f (f x)) g y"]
 ```
 
-<!-- => ContainerNode["String", {CallNode[CallNode[CallNode[LeafNode["Symbol", "λ", <||>], {LeafNode["Symbol", "f", <||>], CallNode[LeafNode["Symbol", "λ", <||>], {LeafNode["Symbol", "x", <||>], CallNode[LeafNode["Symbol", "f", <|"Source" -> {{1, 8}, {1, 9}}|>], {CallNode[LeafNode["Symbol", "f", <|"Source" -> {{1, 11}, {1, 12}}|>], {LeafNode["Symbol", "x", <|"Source" -> {{1, 13}, {1, 14}}|>]}, <|"Source" -> {{1, 11}, {1, 14}}|>]}, <|"Source" -> {{1, 8}, {1, 14}}|>]}, <|"Source" -> {{1, 8}, {1, 14}}|>]}, <|"Source" -> {{1, 8}, {1, 14}}|>], {LeafNode["Symbol", "g", <|"Source" -> {{1, 17}, {1, 18}}|>]}, <|"Source" -> {{1, 8}, {1, 18}}|>], {LeafNode["Symbol", "y", <|"Source" -> {{1, 19}, {1, 20}}|>]}, <|"Source" -> {{1, 8}, {1, 20}}|>]}, <|"Source" -> {{1, 8}, {1, 20}}|>] -->
-
 The same term through [LambdaEval]() beta-reduces to a stable value:
 
 ```wl
@@ -110,5 +108,3 @@ A partial parse is an honest [Failure](), reporting how far it got and what it e
 ```wl
 LambdaAST["\\x."]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> {"\\", "λ", "(", "regex /[A-Za-z][A-Za-z0-9_]*/"}, "Found" -> "<end of input>"|>] -->

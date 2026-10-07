@@ -22,6 +22,8 @@ The corpus is graded - atoms, operators, sub/superscripts, fractions and radical
 
 ## Gold vs. parser, by tier
 
+The helpers behind each column - MaTeX for gold, the stock importer, and this paclet's boxes restyled into a Computer-Modern face - and the graded corpus:
+
 ```wl
 #| collapse: true
 (* MaTeX is the gold standard: it shells out to a real LaTeX install and
@@ -30,9 +32,11 @@ The corpus is graded - atoms, operators, sub/superscripts, fractions and radical
    LaTeXMathParse's boxes - and lay them side by side.  Guard the load so the
    note still builds where LaTeX/MaTeX is absent.  Load best-effort (Needs can
    emit a benign first-run message that a Check gate would mistake for failure)
-   and decide availability purely by whether MaTeX actually returns Graphics. *)
+   and decide availability purely by whether MaTeX actually returns Graphics.
+   MaTeX`MaTeX is spelled out in full so it resolves however the cell is read -
+   a cell parsed whole binds its symbols before its Needs has run. *)
 Quiet @ Check[Needs["MaTeX`"], Null];
-$hasMaTeX = MatchQ[Quiet @ MaTeX["x"], _Graphics];
+$hasMaTeX = MatchQ[Quiet @ MaTeX`MaTeX["x"], _Graphics];
 
 (* Render our boxes in a Computer-Modern-family font so the comparison is
    about structure and spacing, not typeface (the FE's default math face is
@@ -99,7 +103,7 @@ darkSafe[g_Graphics] := g /. Graphics[p_, o___] :> Graphics[
     {LightDarkSwitched[Black, White], p}, o];
 gold[src_String] := If[! $hasMaTeX,
     Style["(needs MaTeX)", Gray, FontSize -> 10],
-    With[{r = Quiet @ MaTeX[src, FontSize -> 18]},
+    With[{r = Quiet @ MaTeX`MaTeX[src, FontSize -> 18]},
         If[MatchQ[r, _Graphics], darkSafe[r], Style["LaTeX error", Red, FontSize -> 10]]]];
 
 (* the raw box tree behind the parser column - the actual Wolfram boxes
@@ -242,7 +246,11 @@ srcCell[s_String] := Pane[
 tierRow[name_String] := {
     Item[Style[name, Bold, 11], Background -> GrayLevel[0.5, 0.13]],
     SpanFromLeft, SpanFromLeft, SpanFromLeft, SpanFromLeft};
+```
 
+The comparison, one row per expression and one band per tier:
+
+```wl
 Grid[
     Join[
         {Style[#, Bold] & /@ {"LaTeX source", "MaTeX (gold)", "ImportString", "LaTeXMathParse", "Boxes"}},

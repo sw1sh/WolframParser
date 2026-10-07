@@ -28,7 +28,13 @@ RelatedGuides: [WolframParser]
 
 ## Basic Examples
 
-Two alternatives share the prefix `ab`; longest-match takes the branch that consumes the whole input:
+Two alternatives that share the prefix `ab`:
+
+```wl
+ParseChoiceLongest[ParseLiteral["ab"], ParseLiteral["abc"]]
+```
+
+Longest-match takes the branch that consumes the whole input:
 
 ```wl
 Parse[ParseChoiceLongest[ParseLiteral["ab"], ParseLiteral["abc"]], "abc"]
@@ -46,8 +52,6 @@ The same two alternatives under [ParseChoice]() pick the shorter branch first, l
 Parse[ParseChoice[ParseLiteral["ab"], ParseLiteral["abc"]], "abc"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 3, "Expected" -> "<end of input>", "Found" -> "c"|>] -->
-
 ---
 
 Longest-match is independent of the order the alternatives are listed — the longer branch wins even when it comes first:
@@ -63,14 +67,18 @@ Parse[ParseChoiceLongest[ParseLiteral["abc"], ParseLiteral["ab"]], "abc"]
 The grammar case longest-match is for: a *plain* atom and an *infix-equality* atom that share the same leading term, the shape of TPTP's `<fof_atomic_formula>`. `eqAtom[#1, #3]&` keeps the two operands and drops the `"="` at position 2:
 
 ```wl
-plain = ParseAction[ParseRegex["[a-z]+"], plainAtom];
-infix = ParseAction[
-   ParseSequence[ParseRegex["[a-z]+"], ParseLiteral["="], ParseRegex["[a-z]+"]],
-   eqAtom[#1, #3] &];
-Parse[ParseChoice[plain, infix], "a=b"]
+plain = ParseAction[ParseRegex["[a-z]+"], plainAtom]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 2, "Expected" -> "<end of input>", "Found" -> "="|>] -->
+```wl
+infix = ParseAction[
+   ParseSequence[ParseRegex["[a-z]+"], ParseLiteral["="], ParseRegex["[a-z]+"]],
+   eqAtom[#1, #3] &]
+```
+
+```wl
+Parse[ParseChoice[plain, infix], "a=b"]
+```
 
 [ParseChoice]() commits to *plain* — it matches the leading `a` and never reaches the `= b`. Longest-match runs both and keeps the branch that consumed further:
 
@@ -108,8 +116,6 @@ A single-branch choice is the branch itself:
 ParseChoiceLongest[ParseLiteral["foo"]]
 ```
 
-<!-- => ParserCombinator[Literal, "foo", <||>] -->
-
 ---
 
 A [ParseChoiceLongest]() nested directly in another flattens to one combinator over all the leaves:
@@ -117,8 +123,6 @@ A [ParseChoiceLongest]() nested directly in another flattens to one combinator o
 ```wl
 ParseChoiceLongest[ParseLiteral["a"], ParseChoiceLongest[ParseLiteral["b"], ParseLiteral["c"]]]
 ```
-
-<!-- => ParserCombinator[ChoiceLongest, {ParserCombinator[Literal, "a", <||>], ParserCombinator[Literal, "b", <||>], ParserCombinator[Literal, "c", <||>]}, <||>] -->
 
 ---
 
@@ -138,8 +142,6 @@ The `|` operator is [ParseChoice](), not [ParseChoiceLongest]() — to get longe
 ParseLiteral["a"] | ParseLiteral["b"]
 ```
 
-<!-- => ParserCombinator[Choice, {ParserCombinator[Literal, "a", <||>], ParserCombinator[Literal, "b", <||>]}, <||>] -->
-
 ---
 
 [ParserCompile]() preserves longest-match semantics — each alternative is measured and the furthest-reaching one committed, so the compiled parser agrees with [Parse]():
@@ -157,8 +159,6 @@ When no alternative matches, the failure is the furthest-advanced one and its `E
 ```wl
 Parse[ParseChoiceLongest[ParseLiteral["foo"], ParseLiteral["bar"]], "xyz"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> {"foo", "bar"}, "Found" -> "x"|>] -->
 
 ---
 

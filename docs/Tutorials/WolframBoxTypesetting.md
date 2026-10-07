@@ -46,12 +46,18 @@ Three round-trips connect expressions, boxes, and rendered output:
 | boxes → rendered | `DisplayForm[box]`, `RawBoxes[box]` | `DisplayForm[FractionBox["a","b"]]` shows a fraction |
 | boxes → expression | `ToExpression[box]`, `MakeExpression[box, form]` | parses the box back to a value |
 
+From an expression to its boxes:
+
 ```wl
 ToBoxes[Sqrt[x]/2]
-(* FractionBox[SqrtBox["x"], "2"] *)
+```
 
+<!-- => FractionBox[SqrtBox["x"], "2"] -->
+
+From boxes to their rendering:
+
+```wl
 DisplayForm @ RowBox[{"a", "+", SuperscriptBox["b", "2"]}]
-(* renders:  a + b^2  *)
 ```
 
 `DisplayForm` is the workhorse when you have a box tree in hand and want to
@@ -138,10 +144,22 @@ boxes (strings or nested boxes), never as raw expressions.
 | `SqrtBox[x]` | square root | √x | `MinSize` (minimum radical height) |
 | `RadicalBox[x, n]` | n-th root | ⁿ√x | `MinSize` |
 
+A fraction, with its bar:
+
 ```wl
-DisplayForm @ FractionBox["a", "b"]               (* a/b with bar      *)
-DisplayForm @ FractionBox["a", "b", FractionLine -> 0]   (* a over b, no bar  *)
-DisplayForm @ RadicalBox["x", "3"]                (* cube root of x    *)
+DisplayForm @ FractionBox["a", "b"]
+```
+
+`FractionLine -> 0` keeps the stack and drops the bar:
+
+```wl
+DisplayForm @ FractionBox["a", "b", FractionLine -> 0]
+```
+
+A cube root:
+
+```wl
+DisplayForm @ RadicalBox["x", "3"]
 ```
 
 Note `FractionLine -> 0` is the textbook way to get an `\atop` / `\binom` stack
@@ -180,9 +198,16 @@ in inline/script size and stack in display size, mirroring `\displaystyle`
 behaviour. Generators usually pick the box explicitly (as above) rather than
 relying on `LimitsPositioning`.
 
+A `SubsuperscriptBox` sets the bounds at the side:
+
 ```wl
-DisplayForm @ SubsuperscriptBox["\[Integral]", "a", "b"]   (* side bounds  *)
-DisplayForm @ UnderoverscriptBox["\[Sum]", "a", "b"]       (* stacked      *)
+DisplayForm @ SubsuperscriptBox["\[Integral]", "a", "b"]
+```
+
+An `UnderoverscriptBox` stacks them:
+
+```wl
+DisplayForm @ UnderoverscriptBox["\[Sum]", "a", "b"]
 ```
 
 ---
@@ -213,7 +238,7 @@ The named-style form, `StyleBox[boxes, "TI"]`, pulls the option settings for a
 stylesheet style instead of spelling out directives. From the default stylesheet
 (`Core.nb`), the math letterform styles are literally Times faces:
 
-```wl
+```
 StyleData["TR"]                → FontFamily->"Times", FontWeight->"Plain", FontSlant->"Plain"
 StyleData["TI" inherits "TR"]  → FontSlant->"Italic"          (* Times Italic *)
 StyleData["TB"] / "TBI"        → +Bold / +Bold+Italic
@@ -253,6 +278,7 @@ out-of-memory raster). `Magnification -> 1.8` scales the box uniformly relative
 to the surrounding text and rasterizes correctly:
 
 ```wl
+#| eval: false
 (* \big( \Big( \bigg( \Bigg(  ~ 1.2 / 1.8 / 2.4 / 3.0x *)
 StyleBox["(", Magnification -> 1.8]      (* robust          *)
 StyleBox["(", FontSize -> Scaled[1.8]]   (* blows up under Rasterize *)
@@ -276,6 +302,8 @@ uses a negative right margin to overlay a `/` on a glyph for a generic `\not`:
 RowBox[{AdjustmentBox["=", BoxMargins -> {{0, -0.55}, {0, 0}}], "/"}]
 (* the slash sits on top of the "=" -> a "not equal" built by overlap *)
 ```
+
+<!-- => RowBox[{AdjustmentBox["=", BoxMargins -> {{0, -0.55}, {0, 0}}], "/"}] -->
 
 `BoxBaselineShift` raises (`> 0`) or lowers (`< 0`) the box relative to the
 baseline, in em units - useful for fine vertical alignment that the script

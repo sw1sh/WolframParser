@@ -47,8 +47,6 @@ The same term through [LambdaAST]() is a tree, not a value:
 LambdaAST["(\\x.\\y.x) a b"]
 ```
 
-<!-- => ContainerNode["String", {CallNode[CallNode[CallNode[LeafNode["Symbol", "λ", <||>], {LeafNode["Symbol", "x", <||>], CallNode[LeafNode["Symbol", "λ", <||>], {LeafNode["Symbol", "y", <||>], LeafNode["Symbol", "x", <|"Source" -> {{1, 8}, {1, 9}}|>]}, <|"Source" -> {{1, 8}, {1, 9}}|>]}, <|"Source" -> {{1, 8}, {1, 9}}|>], {LeafNode["Symbol", "a", <|"Source" -> {{1, 11}, {1, 12}}|>]}, <|"Source" -> {{1, 8}, {1, 12}}|>], {LeafNode["Symbol", "b", <|"Source" -> {{1, 13}, {1, 14}}|>]}, <|"Source" -> {{1, 8}, {1, 14}}|>]}, <|"Source" -> {{1, 8}, {1, 14}}|>] -->
-
 ## Scope
 
 A free variable stays symbolic, folding to the matching Wolfram [Symbol]():
@@ -116,5 +114,3 @@ A partial parse is an honest [Failure](), reporting how far it got and what it e
 ```wl
 LambdaEval["(\\x.x"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 6, "Expected" -> {")"}, "Found" -> "<end of input>"|>] -->

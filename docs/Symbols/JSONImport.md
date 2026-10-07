@@ -39,8 +39,6 @@ JSONImport["{\"a\": [1, true]}"]
 JSONImport["null"]
 ```
 
-<!-- => Null -->
-
 A bare number reads as a Wolfram number:
 
 ```wl
@@ -59,13 +57,15 @@ JSONImport["{\"name\": \"Ann\", \"age\": 30, \"tags\": [\"x\", \"y\"]}"]
 
 <!-- => <|"name" -> "Ann", "age" -> 30, "tags" -> {"x", "y"}|> -->
 
-The empty object is an empty [Association](); the empty array is an empty [List]():
+The empty object is an empty [Association]():
 
 ```wl
 JSONImport["{}"]
 ```
 
 <!-- => <||> -->
+
+The empty array is an empty [List]():
 
 ```wl
 JSONImport["[]"]
@@ -123,12 +123,8 @@ A truncated array is an honest [Failure](), reporting how far it parsed and what
 JSONImport["[1, 2"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 6, "Expected" -> {"]"}, "Found" -> "<end of input>"|>] -->
-
 JSON object keys must be quoted strings; a bare identifier key does not parse:
 
 ```wl
 JSONImport["{a: 1}"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 2, "Expected" -> {"}"}, "Found" -> "a"|>] -->

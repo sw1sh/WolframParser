@@ -24,11 +24,27 @@ RelatedGuides: [WolframParser]
 
 ## Basic Examples
 
-Left-associative subtraction — the chain `1-2-3` folds as `(1-2)-3`:
+Left-associative subtraction. An operand parser reads one digit as a number:
 
 ```wl
-num = ParseAction[ParseCharacter[DigitCharacter], FromDigits];
-sub = ParseAction[ParseLiteral["-"], (Subtract &)];
+num = ParseAction[ParseCharacter[DigitCharacter], FromDigits]
+```
+
+The operator parser returns the function that combines two operands:
+
+```wl
+sub = ParseAction[ParseLiteral["-"], (Subtract &)]
+```
+
+The chain of the two:
+
+```wl
+ParseChainLeft[num, sub]
+```
+
+The chain `1-2-3` folds as `(1-2)-3`:
+
+```wl
 Parse[ParseChainLeft[num, sub], "1-2-3"]
 ```
 
@@ -49,7 +65,10 @@ Parse[ParseChainLeft[num, sub], "5"]
 A longer additive chain, with an operator that returns [Plus]():
 
 ```wl
-plus = ParseAction[ParseLiteral["+"], (Plus &)];
+plus = ParseAction[ParseLiteral["+"], (Plus &)]
+```
+
+```wl
 Parse[ParseChainLeft[num, plus], "1+2+3+4"]
 ```
 
@@ -70,7 +89,10 @@ Parse[ParseChainLeft[num, ParseAction[ParseLiteral["-"], (minus &)]], "1-2-3"]
 Multi-character operands — here a regex operand parser handles multi-digit numbers:
 
 ```wl
-numR = ParseAction[ParseRegex["[0-9]+"], FromDigits];
+numR = ParseAction[ParseRegex["[0-9]+"], FromDigits]
+```
+
+```wl
 Parse[ParseChainLeft[numR, sub], "10-3-2"]
 ```
 
@@ -81,7 +103,10 @@ Parse[ParseChainLeft[numR, sub], "10-3-2"]
 Operators that share a precedence level go in one [ParseChoice](); `+` and `-` then associate together, left to right:
 
 ```wl
-addsub = ParseChoice[plus, sub];
+addsub = ParseChoice[plus, sub]
+```
+
+```wl
 Parse[ParseChainLeft[numR, addsub], "10-2+3"]
 ```
 
@@ -94,8 +119,6 @@ The constructor returns a [ParserCombinator](), rendered as a summary box:
 ```wl
 ParseChainLeft[num, sub]
 ```
-
-<!-- => ParserCombinator[ChainLeft] -->
 
 ## Properties and Relations
 
@@ -144,8 +167,6 @@ At least one operand is required, so empty input fails:
 ```wl
 Parse[ParseChainLeft[num, sub], ""]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<digit>", "Found" -> "<end of input>"|>] -->
 
 ## Neat Examples
 

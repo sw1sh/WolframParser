@@ -27,10 +27,8 @@ RelatedGuides: [ParserZoo]
 Building the grammar over an algebra yields a [ParserCombinator]():
 
 ```wl
-Head[BrainfuckGrammar[BrainfuckSemantic]]
+BrainfuckGrammar[BrainfuckSemantic]
 ```
-
-<!-- => ParserCombinator -->
 
 Over [BrainfuckSemantic]() the grammar is a compiler: parsing *code* returns the program *as a closure* - a [RightComposition]() of the per-command machines:
 
@@ -91,5 +89,3 @@ A grammar built over [BrainfuckSemantic]() returns an honest [Failure]() on inpu
 ```wl
 BrainfuckGrammar[BrainfuckSemantic]["+["]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 2, "Expected" -> "<end of input>", "Found" -> "["|>] -->

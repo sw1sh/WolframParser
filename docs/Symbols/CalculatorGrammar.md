@@ -27,10 +27,8 @@ RelatedGuides: [ParserZoo]
 Building the grammar over an algebra yields a [ParserCombinator]():
 
 ```wl
-Head[CalculatorGrammar[CalculatorSemantic]]
+CalculatorGrammar[CalculatorSemantic]
 ```
-
-<!-- => ParserCombinator -->
 
 The two algebras share this one grammar. Over [CalculatorSemantic](), the same input folds to a number:
 
@@ -68,13 +66,15 @@ CalculatorGrammar[ASTAlgebra]["-x"]
 
 ## Properties and Relations
 
-[CalculatorAST]() wraps the [ASTAlgebra]() grammar's result in a [ContainerNode]() root and resolves each `"Source"` span into a line-column pair `{{line, col}, {line, col}}`; the grammar alone returns the bare node, whose leaves still carry the raw character offsets `{start, end}`:
+[CalculatorAST]() wraps the [ASTAlgebra]() grammar's result in a [ContainerNode]() root and resolves each `"Source"` span into a line-column pair `{{line, col}, {line, col}}`:
 
 ```wl
 CalculatorAST["1+2"]
 ```
 
 <!-- => ContainerNode["String", {BinaryNode["+", {LeafNode["Integer", "1", <|"Source" -> {{1, 1}, {1, 2}}|>], LeafNode["Integer", "2", <|"Source" -> {{1, 3}, {1, 4}}|>]}, <|"Source" -> {{1, 1}, {1, 4}}|>]}, <|"Source" -> {{1, 1}, {1, 4}}|>] -->
+
+The grammar alone returns the bare node, whose leaves still carry the raw character offsets `{start, end}`:
 
 ```wl
 CalculatorGrammar[ASTAlgebra]["1+2"]
@@ -89,5 +89,3 @@ A grammar built over [CalculatorSemantic]() returns an honest [Failure]() on inp
 ```wl
 CalculatorGrammar[CalculatorSemantic]["1 +"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> {"(", "regex /[0-9]+\\.[0-9]+|[0-9]+/", "regex /[A-Za-z][A-Za-z0-9]*/"}, "Found" -> "<end of input>"|>] -->

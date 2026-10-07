@@ -106,6 +106,9 @@ Because the algebra is a plain [Association](), a single key can be overridden t
 
 ```wl
 twist = <|BrainfuckSemantic, "Op" -> Function[c, If[c === ".", Function[m, <|m, "out" -> Append[m["out"], Mod[-Lookup[m["tape"], m["ptr"], 0], 256]]|>], BrainfuckSemantic["Op"][c]]]|>;
+```
+
+```wl
 Lookup[BrainfuckGrammar[twist]["++++++[>++++++++++<-]>+++++."][<|"tape" -> <||>, "ptr" -> 0, "in" -> {}, "out" -> {}|>], "out"]
 ```
 

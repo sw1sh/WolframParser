@@ -21,7 +21,13 @@ RelatedGuides: [WolframParser]
 
 ## Basic Examples
 
-A two-element sequence:
+A two-element sequence is a parser of its own:
+
+```wl
+ParseSequence[ParseLiteral["foo"], ParseLiteral["bar"]]
+```
+
+Run on input, it gives the list of its parts' results:
 
 ```wl
 Parse[ParseSequence[ParseLiteral["foo"], ParseLiteral["bar"]], "foobar"]
@@ -39,13 +45,11 @@ Parse[ParseLiteral["foo"] ~~ ParseLiteral["bar"], "foobar"]
 
 ## Scope
 
-Three-element sequence flattens:
+A three-element `~~` chain flattens into one sequence of arity 3:
 
 ```wl
 ParseLiteral["a"] ~~ ParseLiteral["b"] ~~ ParseLiteral["c"]
 ```
-
-<!-- => ParserCombinator[Sequence, {ParserCombinator[Literal, "a", <||>], ParserCombinator[Literal, "b", <||>], ParserCombinator[Literal, "c", <||>]}, <||>] -->
 
 Mixed with a character class:
 
@@ -80,8 +84,6 @@ A single-element sequence is the parser itself (the `Sequence` head is dropped b
 ParseSequence[ParseLiteral["foo"]]
 ```
 
-<!-- => ParserCombinator[Literal, "foo", <||>] -->
-
 ## Possible Issues
 
 A partial-match failure on $p_2$ does *not* backtrack what $p_1$ already consumed (PEG semantics). Wrap with [ParseTry]() if you need full backtracking on failure of a later branch:
@@ -108,7 +110,7 @@ Parse[
         ParseCharacter[LetterCharacter].. ~~
             ParseLiteral["="] ~~
             ParseCharacter[DigitCharacter]..,
-        Function[{lhs, _, rhs}, StringJoin[lhs] -> FromDigits @ StringJoin[rhs]]
+        Function[{lhs, eq, rhs}, StringJoin[lhs] -> FromDigits @ StringJoin[rhs]]
     ],
     "x=42"
 ]

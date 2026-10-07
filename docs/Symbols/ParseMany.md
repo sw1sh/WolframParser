@@ -22,7 +22,13 @@ RelatedGuides: [WolframParser]
 
 ## Basic Examples
 
-Zero or more digits, greedy:
+Zero or more digits:
+
+```wl
+ParseMany[ParseCharacter[DigitCharacter]]
+```
+
+Run on input, it matches greedily:
 
 ```wl
 Parse[ParseMany[ParseCharacter[DigitCharacter]], "123"]
@@ -68,11 +74,19 @@ ParsePartial[ParseMany[ParseCharacter[DigitCharacter]], "12x"]
 
 `ParseMany[$p$]` is `ParseSome[$p$] | ParseSucceed[{}]`. The empty-match success is the only difference from [ParseSome]():
 
+On the empty input, [ParseMany]() succeeds with no matches:
+
 ```wl
-{Parse[ParseMany[ParseLiteral["x"]], ""], Parse[ParseSome[ParseLiteral["x"]], ""]}
+Parse[ParseMany[ParseLiteral["x"]], ""]
 ```
 
-<!-- => {{}, Failure["ParseError", <|"Position" -> 1, "Expected" -> "x", "Found" -> "<end of input>"|>]} -->
+<!-- => {} -->
+
+while [ParseSome]() needs at least one, and fails:
+
+```wl
+Parse[ParseSome[ParseLiteral["x"]], ""]
+```
 
 Combined with [StringJoin]() / [ParseAction]() to flatten a string lex:
 
@@ -90,7 +104,7 @@ A `ParseMany` over a parser that succeeds *without consuming* loops forever. The
 ParserCompile[ParseMany[ParseSucceed["nothing"]]]
 ```
 
-<!-- => ParserCompile::infloop message + $Failed -->
+<!-- => $Failed -->
 
 ## Neat Examples
 

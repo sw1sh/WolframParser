@@ -26,9 +26,18 @@ RelatedGuides: [ParserZoo]
 Build a reference before the production exists, then close the loop with [SetRec]() - a self-describing s-expression grammar where an expression is an atom or a parenthesised list of expressions:
 
 ```wl
-expr = RecCell[];
-ref = RecRef[expr];
+expr = RecCell[]
+```
+
+```wl
+ref = RecRef[expr]
+```
+
+```wl
 SetRec[expr, ParseChoice[ParseRegex["[a-z]+"], ParseBetween[ParseLiteral["("], ParseSepBy[ref, ParseLiteral[" "]], ParseLiteral[")"]]]];
+```
+
+```wl
 Parse[ref, "(a (b c) d)"]
 ```
 
@@ -67,5 +76,3 @@ An unbalanced form is an honest [Failure](), reported at the position where the 
 ```wl
 Parse[ref, "(a b"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 5, "Expected" -> {")"}, "Found" -> "<end of input>"|>] -->

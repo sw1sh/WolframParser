@@ -72,8 +72,6 @@ calc[alg_] := Module[{ws, tok, number, ident, unit, bin, pre, expr},
 ]
 ```
 
-<!-- => Null -->
-
 Every semantic action - the [Function]() inside each [ParseAction]() - calls `alg[...]`. `number` calls `alg["Leaf"]["Integer", s]`, `bin[op]` returns a function that calls `alg["Binary"][op, l, r]`, and `pre[op]` returns one that calls `alg["Prefix"][op, x]`. Nothing in `calc` commits to what a "Leaf", "Binary", or "Prefix" *is*. That is decided entirely by the algebra passed in.
 
 A note on the operator parsers: [ParseOperatorTable]() expects each *opParser* to **return its combining function**, not the operator string. That is the extra `&` in `bin` and `pre` - `(Function[{l, r}, ...]) &` is a function that, when the operator token matches, *returns* the binary builder. The table then applies that builder to the operands it has parsed.
@@ -154,8 +152,6 @@ depthParser = Module[{nest},
 ]
 ```
 
-<!-- => ParserCombinator summary box, Type: "Recursive", Arity: 1 -->
-
 The action receives three pieces - the `"("`, the list of inner depths from the [ParseMany](), and the `")"`. The body adds one for the current pair and takes the deepest child (or `0` if there are none). Fully nested input is as deep as it is wide:
 
 ```wl
@@ -171,6 +167,8 @@ depthParser["(()())"]
 ```
 
 <!-- => 2 -->
+
+A single pair is depth 1:
 
 ```wl
 depthParser["()"]
@@ -221,8 +219,6 @@ The top-level [Parse]() failure carries a position independently of any of this 
 ```wl
 calc[ASTAlgebra]["1 +"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> {"(", "regex /[0-9]+/", "regex /[A-Za-z][A-Za-z0-9]*/"}, "Found" -> "<end of input>"|>] -->
 
 ---
 

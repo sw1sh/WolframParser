@@ -25,6 +25,12 @@ RelatedGuides: [WolframParser]
 One or more digits:
 
 ```wl
+ParseSome[ParseCharacter[DigitCharacter]]
+```
+
+Run on input, it matches greedily:
+
+```wl
 Parse[ParseSome[ParseCharacter[DigitCharacter]], "123"]
 ```
 
@@ -44,8 +50,6 @@ The empty input fails:
 Parse[ParseSome[ParseCharacter[DigitCharacter]], ""]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<digit>", "Found" -> "<end of input>"|>] -->
-
 ## Scope
 
 A single match is fine:
@@ -61,10 +65,10 @@ Parse[ParseSome[ParseCharacter[DigitCharacter]], "5"]
 `ParseSome[p]` and `ParseMany[p]` differ only at the empty match:
 
 ```wl
-{Parse[ParseSome[ParseLiteral["x"]], "xxx"], Parse[ParseMany[ParseLiteral["x"]], "xxx"]}
+Parse[ParseSome[ParseLiteral["x"]], "xxx"] === Parse[ParseMany[ParseLiteral["x"]], "xxx"]
 ```
 
-<!-- => {{"x", "x", "x"}, {"x", "x", "x"}} -->
+<!-- => True -->
 
 `ParseSome[p]` is `p ~~ ParseMany[p]` reshaped to a flat list:
 
@@ -95,4 +99,4 @@ Parse[
 ]
 ```
 
-<!-- => 12345 -->
+<!-- => 1 -->

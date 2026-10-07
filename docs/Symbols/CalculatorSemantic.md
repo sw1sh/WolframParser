@@ -106,6 +106,9 @@ Because the algebra is a plain [Association](), a single key can be overridden t
 
 ```wl
 twist = <|CalculatorSemantic, "Binary" -> Function[{op, l, r}, If[op === "+", l - r, CalculatorSemantic["Binary"][op, l, r]]]|>;
+```
+
+```wl
 CalculatorGrammar[twist]["10 + 3"]
 ```
 

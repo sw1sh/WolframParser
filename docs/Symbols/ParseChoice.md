@@ -25,6 +25,12 @@ RelatedGuides: [WolframParser]
 A two-branch choice:
 
 ```wl
+ParseChoice[ParseLiteral["foo"], ParseLiteral["bar"]]
+```
+
+Run on input, the first branch that matches gives the result:
+
+```wl
 Parse[ParseChoice[ParseLiteral["foo"], ParseLiteral["bar"]], "bar"]
 ```
 
@@ -44,8 +50,6 @@ PEG-ordered - the first matching branch wins:
 Parse[ParseLiteral["foo"] | ParseLiteral["foobar"], "foobar"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> "<end of input>", "Found" -> "b"|>] -->
-
 (The `ParseLiteral["foo"]` branch matched, then `Parse` rejected the leftover `"bar"`. Swap the order to make `ParseLiteral["foobar"]` the first try.)
 
 ## Scope
@@ -55,8 +59,6 @@ A three-way choice flattens through the `|` chain:
 ```wl
 ParseLiteral["a"] | ParseLiteral["b"] | ParseLiteral["c"]
 ```
-
-<!-- => ParserCombinator[Choice, {ParserCombinator[Literal, "a", <||>], ParserCombinator[Literal, "b", <||>], ParserCombinator[Literal, "c", <||>]}, <||>] -->
 
 Choice can mix combinator types:
 
@@ -80,15 +82,11 @@ A single-branch choice is the branch itself (canonicalisation):
 ParseChoice[ParseLiteral["foo"]]
 ```
 
-<!-- => ParserCombinator[Literal, "foo", <||>] -->
-
 The failure diagnostic accumulates across branches:
 
 ```wl
 Parse[ParseLiteral["foo"] | ParseLiteral["bar"], "xyz"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> {"foo", "bar"}, "Found" -> "x"|>] -->
 
 ## Possible Issues
 
@@ -98,8 +96,6 @@ PEG ordering matters. The classic pitfall is putting a shorter literal before a 
 (* WRONG: "fo" matches first, leaves "o" unmatched *)
 Parse[ParseLiteral["fo"] | ParseLiteral["foo"], "foo"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 3, "Expected" -> "<end of input>", "Found" -> "o"|>] -->
 
 The fix is to order longest-first:
 
@@ -114,7 +110,10 @@ Parse[ParseLiteral["foo"] | ParseLiteral["fo"], "foo"]
 A keyword parser:
 
 ```wl
-keyword = ParseChoice @@ (ParseLiteral /@ {"if", "else", "while", "return"});
+keyword = ParseChoice @@ (ParseLiteral /@ {"if", "else", "while", "return"})
+```
+
+```wl
 Parse[keyword, "while"]
 ```
 

@@ -30,8 +30,6 @@ The reference holds a symbol and looks it up at parse time, so it can be built b
 ParseRecursive[expr]
 ```
 
-<!-- => ParserCombinator[Recursive, Hold[expr], <||>] -->
-
 ---
 
 A self-referential grammar - a value is a number, or a bracketed comma-separated list of values - refers back to itself through `ParseRecursive`:
@@ -42,7 +40,12 @@ value = ParseChoice[
     ParseBetween[ParseLiteral["["],
         ParseSepBy[ParseRecursive[value], ParseLiteral[","]],
         ParseLiteral["]"]]
-];
+]
+```
+
+A nested list parses to the nested Wolfram list:
+
+```wl
 Parse[value, "[1,[2,3],4]"]
 ```
 
@@ -65,19 +68,29 @@ Recursion nests to any depth. Here an action rebuilds the nesting it matched, so
 ```wl
 parens = ParseAction[
     ParseBetween[ParseLiteral["("], ParseOptional[ParseRecursive[parens]], ParseLiteral[")"]],
-    "(" <> ToString[#] <> ")" &
-];
+    "(" <> Replace[#, _Missing -> ""] <> ")" &
+]
+```
+
+Each level of nesting rebuilds its own pair of parentheses:
+
+```wl
 Parse[parens, "((()))"]
 ```
 
-<!-- => "(((Missing[NoMatch])))" -->
+<!-- => "((()))" -->
 
 ---
 
 At the bottom of the nest the [ParseOptional]() matches nothing, so the innermost result is [Missing]()`["NoMatch"]`:
 
 ```wl
-nestBrackets = ParseBetween[ParseLiteral["["], ParseOptional[ParseRecursive[nestBrackets]], ParseLiteral["]"]];
+nestBrackets = ParseBetween[ParseLiteral["["], ParseOptional[ParseRecursive[nestBrackets]], ParseLiteral["]"]]
+```
+
+[ParseBetween]() keeps only its middle result, so the innermost empty pair's missing match is what comes out:
+
+```wl
 Parse[nestBrackets, "[[[]]]"]
 ```
 
@@ -88,8 +101,14 @@ Parse[nestBrackets, "[[[]]]"]
 Two symbols that refer to each other form a mutually-recursive grammar - an `"a"`-rule that may be followed by a `"b"`-rule, and vice versa:
 
 ```wl
-ruleA = ParseLiteral["a"] ~~ ParseOptional[ParseRecursive[ruleB]];
-ruleB = ParseLiteral["b"] ~~ ParseOptional[ParseRecursive[ruleA]];
+ruleA = ParseLiteral["a"] ~~ ParseOptional[ParseRecursive[ruleB]]
+```
+
+```wl
+ruleB = ParseLiteral["b"] ~~ ParseOptional[ParseRecursive[ruleA]]
+```
+
+```wl
 Parse[ruleA, "abab"]
 ```
 
@@ -100,8 +119,14 @@ Parse[ruleA, "abab"]
 Because the symbol is resolved at parse time, a parser may refer to one defined *after* it - here `wrap` refers to `body`, which is defined on the next line:
 
 ```wl
-wrap = ParseBetween[ParseLiteral["<"], ParseRecursive[body], ParseLiteral[">"]];
-body = ParseChoice[ParseCharacter[LetterCharacter].., wrap];
+wrap = ParseBetween[ParseLiteral["<"], ParseRecursive[body], ParseLiteral[">"]]
+```
+
+```wl
+body = ParseChoice[ParseCharacter[LetterCharacter].., wrap]
+```
+
+```wl
 Parse[wrap, "<<abc>>"]
 ```
 
@@ -115,15 +140,14 @@ The reference holds the symbol *name* even when the symbol is already bound - it
 ParseRecursive[value]
 ```
 
-<!-- => ParserCombinator[Recursive, Hold[value], <||>] -->
-
 ## Possible Issues
 
 A *left-recursive* rule - one that re-enters itself before consuming any input - recurses until the depth guard stops it, returning a clean [Failure]() instead of overflowing the stack:
 
 ```wl
-badLeft = ParseRecursive[badLeft] ~~ ParseLiteral["a"];
-Parse[badLeft, "aaa"]
+badLeft = ParseRecursive[badLeft] ~~ ParseLiteral["a"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 1, "Expected" -> "<input within nesting limit>", "Found" -> "a"|>] -->
+```wl
+Parse[badLeft, "aaa"]
+```

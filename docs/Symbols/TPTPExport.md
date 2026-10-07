@@ -2,6 +2,7 @@
 Template: Symbol
 Name: TPTPExport
 Context: Wolfram`Parser`
+ContextPath: [Global`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/ref/TPTPExport
 Keywords: [tptp, theorem prover, atp, automated reasoning, szs, derivation, proof, cnf, export, serialize]
@@ -36,7 +37,15 @@ cnf(left_id, axiom, mult(e, X) = X, file('GRP001.p', left_id)).
 cnf(goal, plain, mult(a, b) = c, inference(superposition, [status(thm)], [left_id])).
 cnf(bot, plain, $false, inference(cr, [status(thm)], [goal])).
 % SZS output end Refutation for GRP001";
-szs = TPTPImport[szsText, "SZS"];
+```
+
+```wl
+szs = TPTPImport[szsText, "SZS"]
+```
+
+Rendered back to TPTP text:
+
+```wl
 TPTPExport[szs]
 ```
 

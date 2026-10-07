@@ -85,13 +85,15 @@ CalculatorEval["2*x + 3*y"]
 
 ## Properties and Relations
 
-`CalculatorEval` and [CalculatorAST]() share one grammar and differ only in the algebra. The tree form keeps the literal source text and structure; the eval form collapses it to a value:
+`CalculatorEval` and [CalculatorAST]() share one grammar and differ only in the algebra. The tree form keeps the literal source text and structure:
 
 ```wl
 CalculatorAST["1 + 2*3"]
 ```
 
 <!-- => ContainerNode["String", {BinaryNode["+", {LeafNode["Integer", "1", <|"Source" -> {{1, 1}, {1, 2}}|>], BinaryNode["*", {LeafNode["Integer", "2", <|"Source" -> {{1, 5}, {1, 6}}|>], LeafNode["Integer", "3", <|"Source" -> {{1, 7}, {1, 8}}|>]}, <|"Source" -> {{1, 5}, {1, 8}}|>]}, <|"Source" -> {{1, 1}, {1, 8}}|>]}, <|"Source" -> {{1, 1}, {1, 8}}|>] -->
+
+The eval form collapses it to a value:
 
 ```wl
 CalculatorEval["1 + 2*3"]
@@ -115,12 +117,8 @@ A partial parse is an honest [Failure](), reporting how far it got and what it e
 CalculatorEval["1 +"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> {"(", "regex /[0-9]+\\.[0-9]+|[0-9]+/", "regex /[A-Za-z][A-Za-z0-9]*/"}, "Found" -> "<end of input>"|>] -->
-
 An unexpected character fails at its position rather than being silently dropped:
 
 ```wl
 CalculatorEval["1 + @"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 5, "Expected" -> {"(", "regex /[0-9]+\\.[0-9]+|[0-9]+/", "regex /[A-Za-z][A-Za-z0-9]*/"}, "Found" -> "@"|>] -->

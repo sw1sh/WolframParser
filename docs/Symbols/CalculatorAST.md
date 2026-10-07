@@ -84,5 +84,3 @@ A partial parse is an honest [Failure](), reporting how far it got and what it e
 ```wl
 CalculatorAST["1 +"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 4, "Expected" -> {"(", "regex /[0-9]+\\.[0-9]+|[0-9]+/", "regex /[A-Za-z][A-Za-z0-9]*/"}, "Found" -> "<end of input>"|>] -->

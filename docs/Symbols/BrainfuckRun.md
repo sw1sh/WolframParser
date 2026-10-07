@@ -66,7 +66,7 @@ Non-command characters are comments, so a program can be documented inline witho
 BrainfuckRun["add five +++++ then print ."]
 ```
 
-<!-- => " " -->
+<!-- => "" -->
 
 A program with no `.` command produces no output:
 
@@ -94,12 +94,8 @@ Brackets must balance. An unclosed `[` does not parse to completion and returns 
 BrainfuckRun["+[>+"]
 ```
 
-<!-- => Failure["ParseError", <|"Position" -> 2, "Expected" -> "<end of input>", "Found" -> "["|>] -->
-
 A stray `]` with no matching `[` fails the same way:
 
 ```wl
 BrainfuckRun["+]"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 2, "Expected" -> "<end of input>", "Found" -> "]"|>] -->

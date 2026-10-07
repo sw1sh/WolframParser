@@ -25,21 +25,11 @@ RelatedGuides: [ParserZoo]
 
 ## Basic Examples
 
-Building the grammar over an algebra yields a [ParserCombinator]():
-
-```wl
-Head[LispGrammar[LispSemantic]]
-```
-
-<!-- => ParserCombinator -->
-
-The built combinator is a summary box you can run directly:
+Building the grammar over an algebra yields a [ParserCombinator](), which runs directly on input:
 
 ```wl
 LispGrammar[LispSemantic]
 ```
-
-<!-- => ParserCombinator[Action, ...] -->
 
 Over [LispSemantic](), input reads to the list of top-level forms as native data:
 
@@ -92,5 +82,3 @@ A grammar built over [LispSemantic]() returns an honest [Failure]() on input it 
 ```wl
 LispGrammar[LispSemantic]["(a b"]
 ```
-
-<!-- => Failure["ParseError", <|"Position" -> 5, "Expected" -> {")"}, "Found" -> "<end of input>"|>] -->
