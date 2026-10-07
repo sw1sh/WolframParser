@@ -69,6 +69,16 @@ RecCell[]            := With[{s = Unique["Wolfram`Parser`Private`rec$"]}, RC[s]]
 RecRef[RC[s_]]       := ParseRecursive[s]
 SetRec[RC[s_], p_]   := (s = p)
 
+(* A cell displays as a summary box rather than its private handle: whether
+   SetRec has given it a parser yet, and, opened, that parser. *)
+RC /: MakeBoxes[c : RC[s_Symbol], form : StandardForm | TraditionalForm] :=
+    BoxForm`ArrangeSummaryBox[
+        RecCell, c, parserIcon["Recursive"],
+        {BoxForm`SummaryItem[{"Bound: ", OwnValues[s] =!= {}}]},
+        If[OwnValues[s] =!= {}, {BoxForm`SummaryItem[{"Parser: ", s}]}, {}],
+        form
+    ]
+
 (* The nine node heads are inert DATA - they carry no down-values. They exist
    only to give parsed output a uniform, inspectable shape. *)
 
