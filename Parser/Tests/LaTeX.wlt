@@ -768,6 +768,21 @@ VerificationTest[
 ]
 
 
+(* === \Box, the d'Alembertian's box, is the same glyph as \square === *)
+VerificationTest[
+    LaTeXMathParse /@ {"\\Box", "\\square"},
+    {"\[EmptySquare]", "\[EmptySquare]"},
+    TestID -> "KaTeX symbols: \\Box is the box \\square is"
+]
+
+VerificationTest[
+    With[{boxes = LaTeXMathParse["\\Box = \\partial_t^2 - \\partial_x^2"]},
+        {FreeQ[boxes, s_String /; StringContainsQ[s, "Box"]], ! FreeQ[boxes, "\[EmptySquare]"]}],
+    {True, True},
+    TestID -> "KaTeX symbols: the wave operator \\Box = \\partial_t^2 - \\partial_x^2 shows its box"
+]
+
+
 (* === diagonal arrows, harpoons, hook / squiggle / two-headed / dashed ===
    Diagonal arrows and harpoons map to Wolfram named chars; the rest have no
    named char and use the raw Unicode arrow codepoint. *)

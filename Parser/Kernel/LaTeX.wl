@@ -1445,6 +1445,7 @@ namedSymbolChars = <|
     "\\bot"     -> "\[DownTee]",       "\\therefore" -> "\[Therefore]",
     "\\because" -> "\[Because]",       "\\angle" -> "\[Angle]",
     "\\triangle" -> "\[EmptyUpTriangle]", "\\square" -> "\[EmptySquare]",
+    "\\Box"   -> "\[EmptySquare]",
     "\\diamond" -> "\[Diamond]",       "\\flat" -> "\[Flat]",
     "\\sharp"   -> "\[Sharp]",         "\\natural" -> "\[Natural]",
     "\\clubsuit" -> "\[ClubSuit]",     "\\spadesuit" -> "\[SpadeSuit]",
