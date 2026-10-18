@@ -366,3 +366,12 @@ VerificationTest[
     {LeafNode["Symbol", "ab", <|"Source" -> {1, 3}|>], LeafNode["Symbol", "cd", <|"Source" -> {6, 8}|>], {1, 8}},
     TestID -> "EBNF classic: a token's node carries its source span, and a rule in Spans gets the span it matched"]
 
+VerificationTest[
+    Block[{$Context = "EBNFProbe`", $ContextPath = {"Wolfram`Parser`", "System`"}},
+        EBNFParse["<a> ::= x <b>\n<b> ::= y", "Tokens" -> {"b"}];
+        Names["EBNFProbe`*"]
+    ],
+    {},
+    TestID -> "EBNF: the symbols a grammar's rules use are made in a private context, not the caller's"
+]
+

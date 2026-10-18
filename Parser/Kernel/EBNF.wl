@@ -721,8 +721,9 @@ EBNFParse[source_String, OptionsPattern[]] :=
             Intersection[tokens, Keys[structuredGram]]
         ];
         allNames = Union[Keys[structuredGram], Keys[tokenGram]];
-        symMap = AssociationMap[Function[Unique["ebnfRule$"]], allNames];
-        $ebnfTokenText = AssociationMap[Function[Unique["ebnfToken$"]], Intersection[tokens, Keys[structuredGram]]];
+        (* the rules' symbols live here, not in the caller's $Context *)
+        symMap = AssociationMap[Function[Unique["Wolfram`Parser`EBNFPrivate`ebnfRule$"]], allNames];
+        $ebnfTokenText = AssociationMap[Function[Unique["Wolfram`Parser`EBNFPrivate`ebnfToken$"]], Intersection[tokens, Keys[structuredGram]]];
         parsers = Association[
             Join[
                 KeyValueMap[
