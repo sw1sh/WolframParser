@@ -10,6 +10,10 @@ shape.
 
 WL package context: `` Wolfram`Parser` ``. Top-level entry point: `Parse[grammar, input]`.
 
+Documentation: the [WolframParser site](https://www.wolframcloud.com/obj/wolframinstitute/WolframParser),
+over the paclet resource
+[Wolfram/Parser](https://www.wolframcloud.com/obj/wolframinstitute/DeployedResources/Paclet/Wolfram/Parser).
+
 ## Why
 
 The Wolfram Language has rich *piecewise* parsing support
