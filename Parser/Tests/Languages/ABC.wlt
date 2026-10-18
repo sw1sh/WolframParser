@@ -24,8 +24,14 @@ VerificationTest[ABCRun["print 1 + 2 * 3 * 0"], {1},
     TestID -> "abc: lazy multiplication keeps precedence (the 2008 machine printed 3)"]
 VerificationTest[ABCRun["a = 1\na = 2\nprint a"], {1},
     TestID -> "abc: a calculation defined twice keeps its first definition"]
-VerificationTest[ABCRun["PRINT Max\nmax = A - b + B", {3, 8}], {8},
-    TestID -> "abc: names and keywords are case insensitive"]
+VerificationTest[ABCRun["print Max\nmax = A - b + B", {3, 8}], {8},
+    TestID -> "abc: names are case insensitive"]
+VerificationTest[Head @ ABCRun["PRINT 1"], Failure, {ABCRun::syntax},
+    TestID -> "abc: keywords are written as the grammar writes them"]
+VerificationTest[ABCRun["  \n\n  print 1  \n   \n\tprint 2\t\r\n\n  "], {1, 2},
+    TestID -> "abc: spaces and tabs are ignored and blank lines skipped, around lines and at the ends"]
+VerificationTest[{Head @ ABCAST["print a b"], Head @ ABCAST["print 1 2"], Head @ ABCAST["print(1)"]}, {Failure, Failure, Failure},
+    TestID -> "abc: names and numbers are tokens, and print needs a space after it"]
 VerificationTest[ABCRun["print a - b + b", "3 8"], {8},
     TestID -> "abc: the inputs can be a string of numbers"]
 
@@ -72,8 +78,19 @@ VerificationTest[{ABCRun["a = 1\nprint a", "Mode" -> 1][[1]], ABCRun["a = 1\npri
 VerificationTest[Head @ ABCRun["print"], Failure, {ABCRun::syntax},
     TestID -> "abc: print needs an expression"]
 
+(* === the grammar the specification publishes, read by EBNFParse === *)
+VerificationTest[
+    {StringStartsQ[ABCBNF, "<Program>    ::   [<NL>] <Line> [<NL>] [<NL> Program]"],
+        Sort[First /@ EBNFRules[ABCBNF, "Dialect" -> "Classic"]]},
+    {True, Sort[{"Program", "Line", "NamedCalc", "StopOp", "PrintOp", "Calc", "CalcList", "OP", "Name",
+        "SymbolList", "Symbol", "Letter", "DigitList", "Digit", "NL", "SP"}]},
+    TestID -> "abc: ABCBNF is the published grammar, sixteen rules in the classic dialect"]
+VerificationTest[Parse[ABCGrammar[ABCSemantic], "print 1 + 2 * 3 * 0 - 4 / 2 % 3"],
+    {{"print", {"-", {"+", 1, {"*", {"*", 2, 3}, 0}}, {"%", {"/", 4, 2}, 3}}}},
+    TestID -> "abc: the grammar sets no precedence; * / % bind before + -, each left to right"]
+
 (* === the plain data and the standard AST === *)
-VerificationTest[Parse[ABCGrammar[ABCSemantic], "x = 1\nPRINT X(2) * 3\nstop"],
+VerificationTest[Parse[ABCGrammar[ABCSemantic], "x = 1\nprint X(2) * 3\nstop"],
     {{"define", "x", 1}, {"print", {"*", {"call", "x", {2}}, 3}}, {"stop"}},
     TestID -> "abc: the semantic algebra builds plain data"]
 VerificationTest[

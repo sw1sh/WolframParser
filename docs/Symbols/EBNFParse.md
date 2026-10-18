@@ -5,7 +5,7 @@ Context: Wolfram`Parser`
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/ref/EBNFParse
 Keywords: [ebnf, bnf, grammar, meta-grammar, parser generator, lowering, left recursion, tptp, syntaxbnf, combinator]
-SeeAlso: [EBNFRules, Parse, ParseAction, ParseChoice, ParseRecursive, ParseOperatorTable, TPTPImport, ParserCombinator]
+SeeAlso: [EBNFRules, Parse, ParseAction, ParseChoice, ParseRecursive, ParseOperatorTable, TPTPImport, ABCBNF, ParserCombinator]
 RelatedGuides: [WolframParser]
 ---
 
@@ -24,6 +24,8 @@ RelatedGuides: [WolframParser]
 - Four arrow kinds are recognized: `::=` (syntactic), `:==` (semantic, same surface shape), `::-` (token construction), and `:::` (character class). The `::-` and `:::` bodies compile through a regex-style meta-parser that handles classes (`[a-z]`, `[^*]`), grouping (`(x|y)`), references (`<name>`), and the postfix operators `*`, `+`, `?`.
 - A directly left-recursive rule `A ::= A r | b` is rewritten to the equivalent `A ::= b (r)*` before lowering; indirect (mutual) left recursion is not rewritten.
 - Each rule's alternatives are sorted longest-first by element count, so a longer shared-prefix alternative is tried before a shorter one.
+- With `"Dialect" -> "Classic"` the grammar is in the BNF of many language reports: `<name> ::=` or `<name> ::`, terminals in double or single quotes with `\n` `\r` `\t` escapes, non-terminals as `<name>` or a bare name, `[...]` for an optional part, `{...}` for a repeated one, `(...)` for a group, and `"a" | ... | "z"` for the characters from `a` to `z`. An optional part that is absent gives `Missing["NoMatch"]`.
+- `"Whitespace"` names the characters skipped between elements; an element that itself begins with one of them, such as a space the grammar writes out, is not preceded by the skip. A rule in `"Tokens"` is matched without skipping, as is every rule it reaches, and its value is the text it matched; an AST node its action builds from that text carries the token's source span. A rule in `"Spans"` hands its action the `{start, end}` character span it matched, after its values.
 - The BNF source is itself parsed by a grammar built entirely from `Parse*` combinators — see the tutorial [Parsing BNF Grammars](paclet:Wolfram/Parser/tutorial/ParsingBNFGrammars).
 
 | Option | Default | Description |
@@ -31,6 +33,10 @@ RelatedGuides: [WolframParser]
 | `"PrimitiveOverrides"` | `<||>` | an association of parsers to bind for named non-terminals — used to plug in lexical primitives (or override any rule) |
 | `"Actions"` | `<||>` | an association of per-rule functions that transform a rule's parse result, wrapping that rule's parser in [ParseAction]() |
 | `"ChoiceMode"` | `"Auto"` | how alternatives combine: `"PEG"` (first match wins), `"Longest"` (longest match wins), or `"Auto"` (longest match only when alternatives have equal element counts) |
+| `"Dialect"` | `"TPTP"` | the grammar's notation: `"TPTP"`, the one the TPTP project publishes, or `"Classic"` |
+| `"Whitespace"` | `Automatic` | the characters skipped between elements, a pattern such as `" " \| "\t"`; `Automatic` skips any whitespace |
+| `"Tokens"` | `{}` | rules matched without skipping, whose values are the text they matched |
+| `"Spans"` | `{}` | rules whose actions also get the span they matched |
 
 ## Basic Examples
 
@@ -207,6 +213,83 @@ Parse[lngTok["tok"], "ab"]
 
 <!-- => "ab" -->
 
+### The "Dialect" option
+
+`"Dialect" -> "Classic"` reads quoted terminals, an optional part in `[...]` and a repeated one in `{...}`:
+
+```wl
+greet = EBNFParse["
+    <greeting> :: 'hello' [\", \" <who>] { \"!\" }
+    <who>      :: \"world\" | \"you\"",
+    "Dialect" -> "Classic"]
+```
+
+The optional part present, and the exclamation repeated:
+
+```wl
+Parse[greet["greeting"], "hello, world!!"]
+```
+
+<!-- => {"hello", {", ", "world"}, {"!", "!"}} -->
+
+An alternative that is only `...` between two one-character terminals stands for the characters between them:
+
+```wl
+digit = EBNFParse["<digit> :: \"0\" | ... | \"9\"", "Dialect" -> "Classic"]
+```
+
+```wl
+Parse[digit["digit"], "7"]
+```
+
+<!-- => "7" -->
+
+### The "Whitespace" and "Tokens" options
+
+Here the space after `say` is part of the grammar, a word is a token, and spaces are skipped everywhere else:
+
+```wl
+say = EBNFParse["
+    <say>    :: \"say\" <sp> <word>
+    <sp>     :: \" \" [<sp>]
+    <word>   :: <letter> [<word>]
+    <letter> :: \"a\" | ... | \"z\"",
+    "Dialect" -> "Classic", "Whitespace" -> " ", "Tokens" -> {"word"}]
+```
+
+The word comes back as the text it matched:
+
+```wl
+Parse[say["say"], "say   hi"]
+```
+
+<!-- => {"say", {" ", {" ", {" ", Missing["NoMatch"]}}}, "hi"} -->
+
+The space after `say` is required, since the skip does not go before an element that begins with a space:
+
+```wl
+Parse[say["say"], "sayhi"]
+```
+
+### The "Spans" option
+
+A rule in `"Spans"` gets the span it matched after its values, and a token's node carries its own:
+
+```wl
+assign = EBNFParse["
+    <assign> :: <word> \"=\" <word>
+    <word>   :: <letter> [<word>]
+    <letter> :: \"a\" | ... | \"z\"",
+    "Dialect" -> "Classic", "Whitespace" -> " ", "Tokens" -> {"word"}, "Spans" -> {"assign"},
+    "Actions" -> <|"word" -> (LeafNode["Symbol", #, <||>] &), "assign" -> Function[{l, eq, r, span}, {l, r, span}]|>]
+```
+
+```wl
+Parse[assign["assign"], "ab = cd"]
+```
+
+<!-- => {LeafNode["Symbol", "ab", <|"Source" -> {1, 3}|>], LeafNode["Symbol", "cd", <|"Source" -> {6, 8}|>], {1, 8}} -->
+
 ## Properties and Relations
 
 [EBNFRules]() exposes the same rules *before* lowering; the keys of the [EBNFParse]() result are exactly the rule names it lists:
@@ -217,6 +300,10 @@ Keys @ EBNFParse["<digit> ::= 0 | 1
 ```
 
 <!-- => {"digit", "number"} -->
+
+---
+
+[ABCGrammar]() is [EBNFParse]() applied to [ABCBNF](), the grammar the ABC specification publishes, in the classic dialect, with `"Whitespace"`, `"Tokens"`, `"Spans"` and `"Actions"` for the prose around it; the ABC tech note covers it.
 
 ---
 

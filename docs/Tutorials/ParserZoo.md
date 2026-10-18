@@ -140,11 +140,12 @@ BrainfuckRun["++++++[>++++++++++<-]>+++++."]
 
 ### ABC
 
-The language of the Arithmetic Branchless Calculator, from the Ural contests EACP 2008 and K:-)M 2009: lines of `print`, `stop` and named calculations over non-negative integers, with no branches at all. A name that names no calculation is a parameter read from the machine's stack, and a recursion ends because `*` does not evaluate its left operand when its right one is `0`. The ParsingABC tech note runs every example of those contests.
+The language of the Arithmetic Branchless Calculator, from the Ural contests EACP 2008 and K:-)M 2009: lines of `print`, `stop` and named calculations over non-negative integers, with no branches at all. A name that names no calculation is a parameter read from the machine's stack, and a recursion ends because `*` does not evaluate its left operand when its right one is `0`. Its parser is not written by hand: [EBNFParse]() generates it from the grammar the specification publishes. The ParsingABC tech note runs every example of those contests.
 
 - [ABCAST]() parse to a standard AST, a [CallNode]() per line
 - [ABCRun]() run a program on the ABC machine and return the numbers it prints
-- [ABCGrammar]() the grammar, parameterised over an algebra
+- [ABCGrammar]() the parser [EBNFParse]() generates from the published grammar, parameterised over an algebra
+- [ABCBNF]() the grammar the specification publishes
 - [ABCSemantic]() the algebra that builds the program as plain data
 
 ```wl

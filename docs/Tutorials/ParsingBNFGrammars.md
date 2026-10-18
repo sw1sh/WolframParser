@@ -15,11 +15,12 @@ RelatedTutorials: [DesignAndCompilationStrategy, ParsingGrammarRules]
 
 A grammar definition file - the kind tool authors publish to describe their input language - is itself a string with structure. The TPTP project's [SyntaxBNF-v9.2.1.4](https://github.com/TPTPWorld/SyntaxBNF/blob/da4fbddc9da7b066f03a4fd47edb148fa6e17c91/SyntaxBNF-v9.2.1.4) is 735 lines and 338 rules of the shape `<name> ::= <alt1> | <alt2> | ...`. If we have a parser combinator library, the natural question is: can we use it to parse the BNF file, then turn the parsed rules back into combinators that parse the language the grammar describes? The answer is "yes, with caveats" - this note works the example end-to-end and is honest about where the bootstrap breaks down.
 
-Three parts:
+Four parts:
 
 1. **The EBNF parser.** `Wolfram\`Parser\`EBNF\`` reads a BNF source file using nothing but `Parse*` combinators - no regex `StringCases`, no hand-cracked line scanning. The output is an `Association[name -> ParserCombinator]`. Tested against TPTP's full 354-rule grammar.
 2. **Bootstrapping TPTP.** The whole TPTP grammar lowers in one call, its regex-style token and character-class rules included, and the generated parsers read real clauses. An `"Actions"` map lifts each rule's raw parse tree to a Wolfram Language value - which is how [TPTPImport]() is built.
 3. **The PEG wall.** Where a grammar written for an LALR parser needs rewriting for PEG, which rewrites the lowering does itself, and what still takes a hand-written parser.
+4. **Another notation.** The classic BNF of a language report, with quoted terminals and `[...]` optional parts, read with `"Dialect" -> "Classic"`: the grammar the ABC language's specification publishes becomes that language's parser.
 
 ---
 
@@ -211,6 +212,16 @@ After both rewrites land, real TPTP inputs parse via the auto-generated parser:
 | `include('Axioms/SET006-0.ax').`                              | OK     |
 
 What the lowering does not fix is the cost of a shared prefix. The higher-order rule `<thf_binary_assoc>` is an ordered choice whose three alternatives all begin with the same operand; lowered to a PEG with no memo, that operand is re-parsed once per alternative, and since an operand can itself be a parenthesised formula the cost grows as $3^{\text{depth}}$. [TPTPImport]() replaces `<thf_logic_formula>` with a [ParseOperatorTable]() through the `"PrimitiveOverrides"` option, so each operand is parsed once and the connectives are consumed by precedence - every other rule is the lowered grammar.
+
+---
+
+## Part 4 - The classic notation of a language report
+
+Many language reports write their BNF differently from TPTP: terminals in quotes, `[...]` for an optional part, `{...}` for a repeated one, `(...)` for a group, `<name> ::` or `<name> ::=` for a rule, and `"a" | ... | "z"` for a range of characters. `"Dialect" -> "Classic"` reads that notation, with [EBNFRules]() and [EBNFParse]() alike.
+
+A grammar of that kind usually leaves its lexical conventions to the prose around it, and three more options state them. `"Whitespace"` names the characters skipped between elements; an element that itself begins with one of them, a space the grammar writes out, is not preceded by the skip, so it stays required. `"Tokens"` names the rules matched character by character, whose values are the text they matched. `"Spans"` hands a rule's action the source span it matched.
+
+The ABC language of the Ural contests is the worked example: [ABCBNF]() is the grammar its specification publishes, and [ABCGrammar]() is what [EBNFParse]() makes of it, with those options and an `"Actions"` map. Its one PEG rewrite is the program rule, whose optional trailing newline would otherwise take the newline the next line needs. The ABC tech note covers it, and runs every program the contests published.
 
 ---
 

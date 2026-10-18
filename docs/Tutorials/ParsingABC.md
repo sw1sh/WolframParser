@@ -6,9 +6,9 @@ Context: Wolfram`Parser`Languages`ABC`
 ContextPath: [Wolfram`Parser`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/tutorial/ParsingABC
-Keywords: [ABC, Arithmetic Branchless Calculator, EACP 2008, K:-)M 2009, Club of Merry Machinists, Ural State University, esoteric language, stack machine, contest problems]
+Keywords: [ABC, Arithmetic Branchless Calculator, EACP 2008, K:-)M 2009, Club of Merry Machinists, Ural State University, esoteric language, stack machine, contest problems, BNF, EBNFParse]
 RelatedGuides: [WolframParser]
-RelatedTutorials: [ParserZoo, BuildingLanguageFrontEnds]
+RelatedTutorials: [ParserZoo, ParsingBNFGrammars, BuildingLanguageFrontEnds]
 ---
 
 ## What this note covers
@@ -19,7 +19,37 @@ EACP 2008, a system-programming competition, planned a *Coding* battle on the ma
 
 This note parses and runs every program the page published: the examples of the specification, the classic examples, and the solutions contestants published, each on its problem's samples. The problems no one published a solution for are given with their samples, and five problems of 2009 get solutions written for this note.
 
-[ABCRun]() parses a program with [ABCGrammar]() over [ABCSemantic]() and runs it on the ABC machine, with the inputs on its stack, the first on top; it gives the list of numbers the program prints. [ABCAST]() gives the program's standard syntax tree instead.
+[ABCRun]() parses a program with [ABCGrammar]() over [ABCSemantic]() and runs it on the ABC machine, with the inputs on its stack, the first on top; it gives the list of numbers the program prints. [ABCAST]() gives the program's standard syntax tree instead. [ABCGrammar]() is not written by hand: [EBNFParse]() generates it from the grammar the specification publishes.
+
+## The grammar
+
+The specification gives the language's syntax as a BNF grammar, and [ABCBNF]() is that grammar as published:
+
+```wl
+ABCBNF
+```
+
+[EBNFParse]() reads it in its classic dialect, with `::` arrows, quoted terminals, `[...]` for an optional part and `"a" | ... | "z"` for a range of characters, and lowers every rule to a parser:
+
+```wl
+abcRules = EBNFParse[ABCBNF, "Dialect" -> "Classic"];
+```
+
+`<Digit>` reads one digit:
+
+```wl
+Parse[abcRules["Digit"], "7"]
+```
+
+<!-- => "7" -->
+
+The prose around the grammar says what it leaves out, and [ABCGrammar]() supplies it. Spaces and tabs are ignored between elements, except the space `<SP>` that `print` requires, and names and numbers are tokens, matched without skipping. `<Calc> <OP> <Calc>` sets no precedence, so a calculation's operands and operators are combined `*` `/` `%` before `+` `-`, each left to right. And read as a PEG, `<Program>` would end after its first line, its optional `<NL>` taking every newline; [ABCGrammar]() reads it with its last two elements swapped, which describes the same programs. The result, over [ABCSemantic](), is the plain data [ABCRun]() executes:
+
+```wl
+Parse[ABCGrammar[ABCSemantic], "max = a - b + b\nprint max"]
+```
+
+<!-- => {{"define", "max", {"+", {"-", "a", "b"}, "b"}}, {"print", "max"}} -->
 
 ## The language
 
@@ -29,7 +59,7 @@ A program is lines, each one of three statements:
 - `stop` ends the program: nothing after it prints.
 - *name* `=` *expression* names a calculation, from mode 2.
 
-An expression is numbers, names, the operators `+` `-` `*` `/` `%`, parentheses, and, from mode 3, calls *name*`(`*arguments*`)`. `*` `/` `%` bind tighter than `+` `-`. Names, and the keywords, are case insensitive. The machine runs in mode 1, 2 or 3, each adding to the one before, and each problem of EACP 2008 said which mode it is solved in.
+An expression is numbers, names, the operators `+` `-` `*` `/` `%`, parentheses, and, from mode 3, calls *name*`(`*arguments*`)`. `*` `/` `%` bind tighter than `+` `-`. Names are case insensitive; the keywords are written in lower case, as the grammar writes them. The machine runs in mode 1, 2 or 3, each adding to the one before, and each problem of EACP 2008 said which mode it is solved in.
 
 Numbers are non-negative integers, and the arithmetic stays there: a subtraction that would go below `0` gives `0`, and `/` and `%` are the integer quotient and remainder:
 

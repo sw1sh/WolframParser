@@ -317,3 +317,52 @@ fof(goal, conjecture, ! [X] : multiply(X, identity) = X).";
     ),
     TestID -> "EBNF: comprehensive TPTP action map produces TPTPImport-shaped output"
 ]
+
+
+(* ===== the classic dialect ===== *)
+
+VerificationTest[
+    EBNFRules["<digit> :: \"0\" | ... | \"9\"\n<num> ::= <digit> [num]", "Dialect" -> "Classic"],
+    {Wolfram`Parser`EBNFPrivate`EBNFRule["digit", "::", {{Wolfram`Parser`EBNFPrivate`CharRange["0", "9"]}}],
+     Wolfram`Parser`EBNFPrivate`EBNFRule["num", "::=", {{Wolfram`Parser`EBNFPrivate`NonTerm["digit"],
+        Wolfram`Parser`EBNFPrivate`Opt[{{Wolfram`Parser`EBNFPrivate`NonTerm["num"]}}]}}]},
+    TestID -> "EBNF classic: :: and ::= arrows, a range of characters, bare names and [optional] parts"]
+
+VerificationTest[
+    Module[{g = EBNFParse["<greeting> :: 'hello' [\", \" <who>] { \"!\" }\n<who> :: \"world\" | \"you\"", "Dialect" -> "Classic"]},
+        {Parse[g["greeting"], "hello, world!!"], Parse[g["greeting"], "hello"]}
+    ],
+    {{"hello", {", ", "world"}, {"!", "!"}}, {"hello", Missing["NoMatch"], {}}},
+    TestID -> "EBNF classic: quoted terminals, an optional part and a repeated one"]
+
+VerificationTest[
+    Module[{g = EBNFParse["<pair> :: ( \"a\" | \"b\" ) \"=\" ( \"1\" | \"2\" )", "Dialect" -> "Classic"]},
+        Parse[g["pair"], "b = 2"]
+    ],
+    {"b", "=", "2"},
+    TestID -> "EBNF classic: grouped alternatives"]
+
+VerificationTest[
+    Module[{g = EBNFParse["
+        <say>    :: \"say\" <sp> <word>
+        <sp>     :: \" \" [<sp>]
+        <word>   :: <letter> [<word>]
+        <letter> :: \"a\" | ... | \"z\"",
+        "Dialect" -> "Classic", "Whitespace" -> " ", "Tokens" -> {"word"}]},
+        {Parse[g["say"], "say   hi"], FailureQ[Parse[g["say"], "sayhi"]], FailureQ[Parse[g["say"], "say h i"]]}
+    ],
+    {{"say", {" ", {" ", {" ", Missing["NoMatch"]}}}, "hi"}, True, True},
+    TestID -> "EBNF classic: a whitespace element keeps its meaning, and a token is its text, matched without skipping"]
+
+VerificationTest[
+    Module[{g = EBNFParse["
+        <assign> :: <word> \"=\" <word>
+        <word>   :: <letter> [<word>]
+        <letter> :: \"a\" | ... | \"z\"",
+        "Dialect" -> "Classic", "Whitespace" -> " ", "Tokens" -> {"word"}, "Spans" -> {"assign"},
+        "Actions" -> <|"word" -> (LeafNode["Symbol", #, <||>] &), "assign" -> Function[{l, eq, r, span}, {l, r, span}]|>]},
+        Parse[g["assign"], "ab = cd"]
+    ],
+    {LeafNode["Symbol", "ab", <|"Source" -> {1, 3}|>], LeafNode["Symbol", "cd", <|"Source" -> {6, 8}|>], {1, 8}},
+    TestID -> "EBNF classic: a token's node carries its source span, and a rule in Spans gets the span it matched"]
+

@@ -1,0 +1,23 @@
+<Program>    ::   [<NL>] <Line> [<NL>] [<NL> Program]
+<Line>       ::   <StopOp>
+                | <PrintOp>
+                | <NamedCalc>
+<NamedCalc>  ::   <Name> "=" <Calc>
+<StopOp>     ::   "stop"
+<PrintOp>    ::   "print" <SP> <Calc>
+<Calc>       ::   <DigitList>
+                | <Calc> <OP> <Calc>
+                | "(" <Calc> ")"
+                | <Name>
+                | <Name> "(" [<CalcList>] ")"
+<CalcList>   ::   <Calc> ["," <CalcList>]
+<OP>         ::   "+" | "-" | "*" | "/" | "%"
+<Name>       ::   <Letter> [<SymbolList>]
+<SymbolList> ::   <Symbol> [<SymbolList>]
+<Symbol>     ::   <Letter> | <Digit>
+<Letter>     ::   "_" | "a" | ... | "z" | "A" | ... | "Z"
+<DigitList>  ::   <Digit> [<DigitList>]
+<Digit>      ::   "0" | ... | "9"
+<NL>         ::   ["\r"] "\n" [<NL>]
+<SP>         ::   " "  [<SP>]
+                | "\t" [<SP>]

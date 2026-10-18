@@ -15,7 +15,12 @@
    demonstration that the combinator core is enough to parse its own
    meta-grammar.
 
-   The output of `EBNFParseFile[path]` / `EBNFParseString[source]` is an
+   A second dialect, "Classic", reads the BNF of many language reports:
+   `<name> ::=` or `<name> ::`, terminals in quotes, `[...]` optional,
+   `{...}` repeated, `(...)` grouped, and `"a" | ... | "z"` for a range of
+   characters - the grammar the ABC language's specification publishes.
+
+   The output of `EBNFParse[File[path]]` / `EBNFParse[source]` is an
    `Association[name -> ParserCombinator]` covering every rule in the
    file. The caller wires up lexical primitives (rules whose body is a
    `:::` regex-style char class, or `::-` token construction) by
@@ -156,9 +161,111 @@ ruleP = ParseAction[
 grammarP = ParseAction[wsc ~~ ParseMany[ParseAction[ruleP ~~ wsc, #1 &]], #2 &]
 
 
+(* ===== the classic dialect =====
+
+   `<name> ::= ...` or `<name> :: ...`; terminals in double or single quotes,
+   with \n \r \t escapes; non-terminals as `<name>` or a bare name; `[...]`
+   optional, `{...}` repeated, `(...)` grouped; and an alternative that is
+   only `...` between two one-character terminals stands for the characters
+   between them, as in `"a" | ... | "z"`. Whitespace, newlines included,
+   separates elements; a rule ends where the next `<name> ::` begins. *)
+
+classicWs = ParseMany[space]
+
+classicArrow = ParseChoice[ParseLiteral["::="], ParseLiteral["::"]]
+
+classicName = ParseChoice[nonTerm, ParseAction[ident, NonTerm[#] &]]
+
+classicRuleStart = ParseAction[classicName ~~ classicWs ~~ classicArrow, Null &]
+
+classicEscaped = ParseAction[
+    ParseLiteral["\\"] ~~ ParseCharacter[_],
+    Replace[#2, {"n" -> "\n", "r" -> "\r", "t" -> "\t"}] &
+]
+
+classicQuoted[q_String] := ParseAction[
+    ParseLiteral[q] ~~
+        ParseMany[ParseChoice[classicEscaped, ParseCharacter[_ ? (# =!= q && # =!= "\\" && # =!= "\n" &)]]] ~~
+        ParseLiteral[q],
+    Lit[StringJoin[#2]] &
+]
+
+classicLiteral = ParseChoice[classicQuoted["\""], classicQuoted["'"]]
+
+classicGroup[open_String, close_String, wrap_] := ParseAction[
+    ParseLiteral[open] ~~ classicWs ~~ ParseRecursive[classicAlts] ~~ ParseLiteral[close],
+    wrap[#3] &
+]
+
+classicElt = ParseChoice[
+    classicLiteral,
+    classicGroup["[", "]", Opt],
+    classicGroup["{", "}", Rep["ManyAlts", #] &],
+    classicGroup["(", ")", Group],
+    ParseAction[ParseLiteral["..."], EBNFEllipsis &],
+    classicName
+]
+
+classicSeq = ParseAction[
+    ParseMany[ParseAction[ParseNotFollowedBy[classicRuleStart] ~~ classicElt ~~ classicWs, #2 &]],
+    {##} &
+]
+
+classicAlts = ParseAction[
+    ParseSepBy1[classicSeq, ParseAction[ParseLiteral["|"] ~~ classicWs, Null &]],
+    characterRanges[{##}] &
+]
+
+(* "a" | ... | "z": the alternatives from a to z *)
+characterRanges[alts_List] := alts //. {pre___, {Lit[a_String]}, {EBNFEllipsis}, {Lit[b_String]}, post___} /;
+    StringLength[a] === 1 && StringLength[b] === 1 :> {pre, {CharRange[a, b]}, post}
+
+classicRuleP = ParseAction[
+    classicName ~~ classicWs ~~ classicArrow ~~ classicWs ~~ classicAlts,
+    EBNFRule[#1[[1]], #3, #5] &
+]
+
+classicGrammarP = ParseAction[classicWs ~~ ParseMany[ParseAction[classicRuleP ~~ classicWs, #1 &]], #2 &]
+
+
 (* ===== Lowering ===== *)
 
-ws$lowered := ParseMany[ParseCharacter[WhitespaceCharacter]]
+(* What the lowering skips between elements, and what is set while lowering one
+   rule: the characters the skip matches (None when the default whitespace
+   skips any), whether the rule is matched without skipping, and the grammar,
+   for what an element can begin with. *)
+$ebnfSkip = ParseMany[ParseCharacter[WhitespaceCharacter]]
+$ebnfSkipChars = None
+$ebnfContiguous = False
+$ebnfGram = <||>
+$ebnfVisiting = {}
+$ebnfTokenText = <||>
+
+(* whether the skip goes before an element: never inside a contiguous rule, and
+   not before an element that can begin with a character the skip would take,
+   so that whitespace a grammar writes out keeps its meaning *)
+skipBeforeQ[elt_] := ! TrueQ[$ebnfContiguous] && ! startsWithSkipQ[elt]
+
+startsWithSkipQ[_] /; $ebnfSkipChars === None := False
+startsWithSkipQ[Lit[s_String]] := StringLength[s] > 0 && StringMatchQ[StringTake[s, 1], $ebnfSkipChars]
+startsWithSkipQ[CharRange[a_String, b_String]] := AnyTrue[CharacterRange[a, b], StringMatchQ[#, $ebnfSkipChars] &]
+startsWithSkipQ[NonTerm[name_String]] := If[ MemberQ[$ebnfVisiting, name], False,
+    Block[{$ebnfVisiting = Append[$ebnfVisiting, name]}, AnyTrue[Lookup[$ebnfGram, name, {}], altStartsWithSkipQ]]]
+startsWithSkipQ[(Opt | Group)[alts_List] | Rep["ManyAlts", alts_List]] := AnyTrue[alts, altStartsWithSkipQ]
+startsWithSkipQ[Rep["Many", inner_]] := startsWithSkipQ[inner]
+startsWithSkipQ[_] := False
+
+altStartsWithSkipQ[{first_, ___}] := startsWithSkipQ[first]
+altStartsWithSkipQ[_] := False
+
+(* one repetition of a repeated element, with the skip before it when it goes there *)
+repetition[elt_, lowered_] := If[ skipBeforeQ[elt], ParseAction[$ebnfSkip ~~ lowered, #2 &], lowered]
+
+lowerElt[Opt[alts_List], symMap_, overrides_] := ParseOptional[lowerBody[alts, symMap, overrides]]
+
+lowerElt[Group[alts_List], symMap_, overrides_] := lowerBody[alts, symMap, overrides]
+
+lowerElt[CharRange[a_String, b_String], _, _] := ParseCharacter[Alternatives @@ CharacterRange[a, b]]
 
 lowerElt[Lit[s_String], _, _] := ParseLiteral[s]
 
@@ -166,6 +273,9 @@ lowerElt[NonTerm[name_String], symMap_, overrides_] :=
     Which[
         KeyExistsQ[overrides, name],
             overrides[name],
+        (* inside a token, a token is its text, not what its action makes of it *)
+        TrueQ[$ebnfContiguous] && KeyExistsQ[$ebnfTokenText, name],
+            With[{sym = $ebnfTokenText[name]}, ParseRecursive[sym]],
         KeyExistsQ[symMap, name],
             With[{sym = symMap[name]}, ParseRecursive[sym]],
         True,
@@ -178,23 +288,13 @@ lowerElt[NonTerm[name_String], symMap_, overrides_] :=
    start, so a bare ParseMany would stop at the first ws of the
    continuation. Prepend a ws-consumer per iteration. *)
 lowerElt[Rep["Many", inner_], symMap_, overrides_] :=
-    ParseMany[
-        ParseAction[
-            ws$lowered ~~ lowerElt[inner, symMap, overrides],
-            #2 &
-        ]
-    ]
+    ParseMany[repetition[inner, lowerElt[inner, symMap, overrides]]]
 
 (* ManyAlts holds a list-of-alt-bodies (each alt body is a list of
    elements). Emitted by the left-recursion-elimination rewrite for
    the repeating tail of an originally-left-recursive rule. *)
 lowerElt[Rep["ManyAlts", altsList_List], symMap_, overrides_] :=
-    ParseMany[
-        ParseAction[
-            ws$lowered ~~ lowerBody[altsList, symMap, overrides],
-            #2 &
-        ]
-    ]
+    ParseMany[repetition[Rep["ManyAlts", altsList], lowerBody[altsList, symMap, overrides]]]
 
 (* Lower one alternative sequence - lowered elements separated by an
    optional-whitespace parser, then drop the whitespace pieces from the
@@ -206,14 +306,20 @@ lowerSeq[{}, _, _] := ParseSucceed[Null]
 lowerSeq[{single_}, symMap_, overrides_] :=
     lowerElt[single, symMap, overrides]
 
-lowerSeq[elts_List, symMap_, overrides_] :=
-    ParseAction[
-        ParseSequence @@ Riffle[
-            lowerElt[#, symMap, overrides] & /@ elts,
-            ws$lowered
+lowerSeq[elts_List, symMap_, overrides_] := Module[{parts},
+    parts = Join @@ MapIndexed[
+        Function[{elt, i},
+            If[ First[i] > 1 && skipBeforeQ[elt],
+                {{$ebnfSkip, False}, {lowerElt[elt, symMap, overrides], True}},
+                {{lowerElt[elt, symMap, overrides], True}}
+            ]
         ],
-        Function[{##}[[Range[1, Length[{##}], 2]]]]
+        elts
+    ];
+    With[{keep = Flatten @ Position[parts[[All, 2]], True]},
+        ParseAction[ParseSequence @@ parts[[All, 1]], Function[{##}[[keep]]]]
     ]
+]
 
 (* The combinator used to fold lowered alternatives. `ChoiceLongest`
    (POSIX longest-match) is the right semantics for grammars that
@@ -538,21 +644,44 @@ regexCompile[body_String, sm_Association, ov_Association] :=
 
 (* Parse the BNF source via the combinator grammar above and return the
    raw rule list. Useful for tests and inspection. *)
-EBNFRules[source_String] := Parse[grammarP, source]
-EBNFRules[File[path_String]] := EBNFRules[Import[path, "Text"]]
+Options[EBNFRules] = {"Dialect" -> "TPTP"}
+
+EBNFRules[source_String, OptionsPattern[]] :=
+    Parse[If[OptionValue["Dialect"] === "Classic", classicGrammarP, grammarP], source]
+EBNFRules[File[path_String], opts : OptionsPattern[]] := EBNFRules[Import[path, "Text"], opts]
 
 Options[EBNFParse] = {
     "PrimitiveOverrides" -> <||>,
     "Actions" -> <||>,
-    "ChoiceMode" -> "Auto"
+    "ChoiceMode" -> "Auto",
+    "Dialect" -> "TPTP",
+    "Whitespace" -> Automatic,
+    "Tokens" -> {},
+    "Spans" -> {}
 }
 
+(* the text a token matched: the characters in its parse tree, in order *)
+tokenText[parts___] := StringJoin[Cases[DeleteCases[{parts}, _Missing, Infinity], _String, Infinity]]
+
+(* a rule whose action is also handed the {start, end} character span it matched *)
+spanned[parser_, action_] := ParseAction[
+    ParsePosition[] ~~ parser ~~ ParsePosition[],
+    Function[{start, value, end}, If[ListQ[value], action @@ Append[value, {start, end}], action[value, {start, end}]]]
+]
+
 EBNFParse[source_String, OptionsPattern[]] :=
-    Block[{rules, structuredGram, tokenGram, overrides, actions, allNames, symMap, parsers,
-            $choiceMode = OptionValue["ChoiceMode"]},
+    Block[{rules, structuredGram, tokenGram, overrides, actions, allNames, symMap, parsers, tokens, spans, contiguous,
+            $choiceMode = OptionValue["ChoiceMode"], $ebnfSkip = $ebnfSkip, $ebnfSkipChars = None, $ebnfGram = <||>,
+            $ebnfTokenText = <||>},
         overrides = OptionValue["PrimitiveOverrides"];
         actions   = OptionValue["Actions"];
-        rules = EBNFRules[source];
+        tokens    = OptionValue["Tokens"];
+        spans     = OptionValue["Spans"];
+        If[ OptionValue["Whitespace"] =!= Automatic,
+            $ebnfSkipChars = OptionValue["Whitespace"];
+            $ebnfSkip = ParseMany[ParseCharacter[$ebnfSkipChars]]
+        ];
+        rules = EBNFRules[source, "Dialect" -> OptionValue["Dialect"]];
         If[ FailureQ[rules],
             Return[rules]
         ];
@@ -569,7 +698,7 @@ EBNFParse[source_String, OptionsPattern[]] :=
             Association @ Cases[rules,
                 EBNFRule[name_, ":==", body_] :> (name -> body)],
             Association @ Cases[rules,
-                EBNFRule[name_, "::=", body_] :> (name -> body)]
+                EBNFRule[name_, "::=" | "::", body_] :> (name -> body)]
         ];
         tokenGram = Association @ Cases[rules,
             EBNFRule[name_, "::-" | ":::", body_] :> (name -> reconstructBody[body])
@@ -585,13 +714,22 @@ EBNFParse[source_String, OptionsPattern[]] :=
            alt pair like `<constant> | <functor>(<fof_arguments>)` tries
            the longer (and more specific) form before the bare prefix. *)
         structuredGram = sortAltsLongestFirst /@ structuredGram;
+        $ebnfGram = structuredGram;
+        (* a token is matched character by character, and so is every rule it reaches *)
+        contiguous = FixedPoint[
+            Union[#, Cases[Lookup[structuredGram, #, {}], NonTerm[n_String] :> n, Infinity]] &,
+            Intersection[tokens, Keys[structuredGram]]
+        ];
         allNames = Union[Keys[structuredGram], Keys[tokenGram]];
         symMap = AssociationMap[Function[Unique["ebnfRule$"]], allNames];
+        $ebnfTokenText = AssociationMap[Function[Unique["ebnfToken$"]], Intersection[tokens, Keys[structuredGram]]];
         parsers = Association[
             Join[
                 KeyValueMap[
                     Function[{name, body},
-                        name -> applyAction[lowerBody[body, symMap, overrides], actions, name]
+                        name -> Block[{$ebnfContiguous = MemberQ[contiguous, name]},
+                            finishRule[name, lowerBody[body, symMap, overrides], actions, spans]
+                        ]
                     ],
                     structuredGram
                 ],
@@ -631,6 +769,21 @@ applyAction[parser_, actions_Association, name_String] :=
         ParseAction[parser, actions[name]],
         parser
     ]
+
+(* A token's value is the text it matched, and an AST node its action builds from
+   that text carries the token's source span; a rule in "Spans" hands its action
+   the span it matched after its values; any other rule takes its action as is. *)
+finishRule[name_String, parser_, actions_Association, spans_List] := Which[
+    KeyExistsQ[$ebnfTokenText, name],
+        With[{sym = $ebnfTokenText[name]},
+            Set[sym, ParseAction[parser, tokenText]];
+            SpannedToken[ParseRecursive[sym], ParseSucceed[Null], Lookup[actions, name, Identity]]
+        ],
+    MemberQ[spans, name] && KeyExistsQ[actions, name],
+        spanned[parser, actions[name]],
+    True,
+        applyAction[parser, actions, name]
+]
 
 EBNFParse[File[path_String], opts : OptionsPattern[]] :=
     EBNFParse[Import[path, "Text"], opts]

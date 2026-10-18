@@ -6,21 +6,22 @@ ContextPath: [Wolfram`Parser`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/ref/ABCGrammar
 Keywords: [ABC, grammar, algebra, operator precedence, parser zoo]
-SeeAlso: [ABCSemantic, ABCAST, ABCRun, ParseOperatorTable, ParseSepBy]
+SeeAlso: [ABCBNF, ABCSemantic, ABCAST, ABCRun, EBNFParse]
 RelatedGuides: [WolframParser]
 RelatedTutorials: [ParsingABC, ParserZoo]
 ---
 
 ## Usage
 
-<code>[ABCGrammar]()[*alg*]</code> builds the ABC parser over the algebra *alg*, an [Association]() of builder functions.
+<code>[ABCGrammar]()[*alg*]</code> builds the ABC parser over the algebra *alg*, an [Association]() of builder functions, from the grammar the ABC specification publishes.
 
 ## Details & Options
 
-- The grammar is written once and run over different algebras: [ABCSemantic]() builds the plain data [ABCRun]() executes, and [ASTAlgebra]() with three statement builders gives the tree of [ABCAST]().
+- The grammar is [ABCBNF](), the one the ABC specification publishes, read by [EBNFParse]() in its classic dialect; *alg* gives each rule its value. The grammar is run over different algebras: [ABCSemantic]() builds the plain data [ABCRun]() executes, and [ASTAlgebra]() with three statement builders gives the tree of [ABCAST]().
 - *alg* supplies `"Leaf"` (with a kind, `"Integer"`, `"Symbol"` or `"Keyword"`, and the source text), `"Binary"` (an operator and two operands), `"Call"` (the name's leaf and the argument list), `"Print"` (the keyword's leaf and the expression), `"Stop"` (the keyword's leaf), `"Define"` (the name's leaf and the expression) and `"Program"` (the list of statements).
-- Expressions are built with [ParseOperatorTable](): `*` `/` `%` bind tighter than `+` `-`, all left associative. A unit is a number, a parenthesized expression, a call, or a name.
-- Statements are separated by line breaks; blank lines are allowed anywhere. Spaces and tabs separate tokens and are otherwise ignored, except that `print` needs one before its expression. `print` and `stop` are case insensitive.
+- The specification's prose supplies what the grammar leaves out. Spaces and tabs are skipped between elements, but not before the space `<SP>` that `print` requires, nor inside names and numbers, the grammar's tokens. Names are case insensitive; the keywords are written in lower case, as the grammar writes them.
+- `<Calc> <OP> <Calc>` sets no precedence, so a calculation's operands and operators are combined `*` `/` `%` before `+` `-`, each left to right.
+- Statements are separated by line breaks, and blank lines are allowed anywhere. Read as a PEG, the published `<Program>` ends after its first line, its optional `<NL>` taking every newline; [ABCGrammar]() reads it with its last two elements swapped, which describes the same programs.
 
 ## Basic Examples
 
@@ -57,7 +58,7 @@ printer = <|
 The parenthesization shows the precedence the grammar gives each operator:
 
 ```wl
-Parse[ABCGrammar[printer], "PRINT a%2+a/2%2*10"]
+Parse[ABCGrammar[printer], "print a%2+a/2%2*10"]
 ```
 
 <!-- => "print ((a % 2) + (((a / 2) % 2) * 10))" -->

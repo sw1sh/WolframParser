@@ -6,7 +6,7 @@ PacletObject[<|
     "Creator" -> "Nikolay Murzin, Claude (Anthropic)",
     "PublisherID" -> "Wolfram",
     "License" -> "MIT",
-    "Version" -> "1.2.0",
+    "Version" -> "1.3.0",
     "WolframVersion" -> "14.0+",
     "PrimaryContext" -> "Wolfram`Parser`",
     "Extensions" -> {
@@ -98,6 +98,7 @@ PacletObject[<|
                 "Wolfram`Parser`Languages`Brainfuck`BrainfuckRun",
                 "Wolfram`Parser`Languages`Brainfuck`BrainfuckSemantic",
                 "Wolfram`Parser`Languages`ABC`ABCAST",
+                "Wolfram`Parser`Languages`ABC`ABCBNF",
                 "Wolfram`Parser`Languages`ABC`ABCGrammar",
                 "Wolfram`Parser`Languages`ABC`ABCRun",
                 "Wolfram`Parser`Languages`ABC`ABCSemantic"
