@@ -96,7 +96,11 @@ PacletObject[<|
                 "Wolfram`Parser`Languages`Brainfuck`BrainfuckAST",
                 "Wolfram`Parser`Languages`Brainfuck`BrainfuckGrammar",
                 "Wolfram`Parser`Languages`Brainfuck`BrainfuckRun",
-                "Wolfram`Parser`Languages`Brainfuck`BrainfuckSemantic"
+                "Wolfram`Parser`Languages`Brainfuck`BrainfuckSemantic",
+                "Wolfram`Parser`Languages`ABC`ABCAST",
+                "Wolfram`Parser`Languages`ABC`ABCGrammar",
+                "Wolfram`Parser`Languages`ABC`ABCRun",
+                "Wolfram`Parser`Languages`ABC`ABCSemantic"
             }
         },
         {

@@ -3,11 +3,11 @@ Template: TechNote
 Name: ParserZoo
 Title: The Parser Zoo - language front-ends over a shared algebra
 Context: Wolfram`Parser`
-ContextPath: [Wolfram`Parser`Languages`Calculator`, Wolfram`Parser`Languages`JSON`, Wolfram`Parser`Languages`Lisp`, Wolfram`Parser`Languages`Lambda`, Wolfram`Parser`Languages`Brainfuck`]
+ContextPath: [Wolfram`Parser`Languages`Calculator`, Wolfram`Parser`Languages`JSON`, Wolfram`Parser`Languages`Lisp`, Wolfram`Parser`Languages`Lambda`, Wolfram`Parser`Languages`Brainfuck`, Wolfram`Parser`Languages`ABC`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/tutorial/ParserZoo
-Description: "A showcase suite that battle-tests Wolfram/Parser by building a spread of language front-ends - calculator, JSON, Lisp, lambda calculus, Brainfuck - each grammar written once over a shared algebra and run two ways: with the language's meaningful actions, or with the shared ASTAlgebra to get a standard, CodeParser-shaped syntax tree."
-Keywords: [parser zoo, language front-ends, AST, algebra, calculator, JSON, Lisp, lambda calculus, Brainfuck]
+Description: "A showcase suite that battle-tests Wolfram/Parser by building a spread of language front-ends - calculator, JSON, Lisp, lambda calculus, Brainfuck, ABC - each grammar written once over a shared algebra and run two ways: with the language's meaningful actions, or with the shared ASTAlgebra to get a standard, CodeParser-shaped syntax tree."
+Keywords: [parser zoo, language front-ends, AST, algebra, calculator, JSON, Lisp, lambda calculus, Brainfuck, ABC]
 RelatedGuides: [WolframParser]
 ---
 
@@ -137,6 +137,21 @@ BrainfuckRun["++++++[>++++++++++<-]>+++++."]
 ```
 
 <!-- => "A" -->
+
+### ABC
+
+The language of the Arithmetic Branchless Calculator, from the Ural contests EACP 2008 and K:-)M 2009: lines of `print`, `stop` and named calculations over non-negative integers, with no branches at all. A name that names no calculation is a parameter read from the machine's stack, and a recursion ends because `*` does not evaluate its left operand when its right one is `0`. The ParsingABC tech note runs every example of those contests.
+
+- [ABCAST]() parse to a standard AST, a [CallNode]() per line
+- [ABCRun]() run a program on the ABC machine and return the numbers it prints
+- [ABCGrammar]() the grammar, parameterised over an algebra
+- [ABCSemantic]() the algebra that builds the program as plain data
+
+```wl
+ABCRun["fact = fact(t - 1) * t + (1 - t)\nprint fact", {5}]
+```
+
+<!-- => {120} -->
 
 ## Building your own front-end
 

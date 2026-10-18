@@ -36,8 +36,8 @@ KaTeX's screenshotter corpus ([`LaTeX.wl`](Parser/Kernel/LaTeX.wl)), a Markdown 
 ([`Markdown.wl`](Parser/Kernel/Markdown.wl)), an EBNF grammar reader
 ([`EBNF.wl`](Parser/Kernel/EBNF.wl)), a TPTP importer/exporter
 ([`TPTP.wl`](Parser/Kernel/TPTP.wl)), and the AST vocabulary — `LeafNode` / `CallNode` /
-… / `ToCodeParser` ([`AST.wl`](Parser/Kernel/AST.wl)). A `Languages/` showcase builds five
-example front-ends (Calculator, JSON, Lisp, Lambda, Brainfuck, plus OpenQASM) on the core.
+… / `ToCodeParser` ([`AST.wl`](Parser/Kernel/AST.wl)). A `Languages/` showcase builds six
+example front-ends (Calculator, JSON, Lisp, Lambda, Brainfuck, ABC), plus OpenQASM, on the core.
 
 The kernel is dependency-free — no C library — with performance from `FunctionCompile`'s
 LLVM backend. It ships as a full paclet (`Guides` / `Symbols` / `Tutorials` documentation,

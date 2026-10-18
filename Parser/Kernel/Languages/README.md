@@ -20,7 +20,7 @@ is swapped.
 
 ```wl
 PacletDirectoryLoad["/path/to/WolframParser/Parser"];
-Get["/path/to/WolframParser/Languages/init.wl"];
+Needs["Wolfram`Parser`"];      (* loads the languages too *)
 
 CalculatorEval["1 + 2*3"]          (* 7                                    *)
 CalculatorAST["1 + 2*3"]           (* ContainerNode[.. BinaryNode["+", ..] *)
@@ -29,9 +29,10 @@ JSONImport["{\"a\": [1, true]}"]   (* <|"a" -> {1, True}|>                 *)
 LispRead["(+ 1 (max 2 3))"]        (* {LispSymbol["+"], 1, {LispSymbol["max"], 2, 3}} *)
 LambdaEval["(\\x.\\y.x) a b"]      (* a                                    *)
 BrainfuckRun["++++++[>++++++++++<-]>+++++."]  (* "A"                       *)
+ABCRun["max = a - b + b\nprint max", {3, 8}]  (* {8}                     *)
 ```
 
-Run the test suite with `wl -f Languages/run-tests.wls` (53 tests).
+Their tests are in `Parser/Tests/Languages/`, which the repository's `run-tests.wls` runs with the rest.
 
 ## The languages
 
@@ -42,6 +43,7 @@ Run the test suite with `wl -f Languages/run-tests.wls` (53 tests).
 | [Lisp.wl](Lisp.wl) | uniform recursion, the quote reader macro, `;` comments | `CallNode`/`LeafNode`, `'` as `PrefixNode` | `LispRead` -> nested data + `LispSymbol[..]` |
 | [Lambda.wl](Lambda.wl) | binders, the application/abstraction precedence split, unicode (`\[Lambda]`) | `CallNode` headed by lambda | `LambdaEval` -> a native closure the kernel beta-reduces |
 | [Brainfuck.wl](Brainfuck.wl) | esoteric lexing, arbitrarily nested loops, comments | `LeafNode` commands + `GroupNode["Loop", ..]` | `BrainfuckRun` -> compiles to a `machine -> machine` closure and runs it |
+| [ABC.wl](ABC.wl) | a line-based language with no branches: lazy multiplication, parameters read from a stack by order of appearance, recursion through calls, case-insensitive names | `CallNode` per line, `BinaryNode["=", ..]` for a definition | `ABCRun` -> runs the ABC machine of the Ural contests EACP 2008 / K:-)M 2009 on its inputs, giving the printed numbers |
 | [OpenQASM.wl](OpenQASM.wl) | a real DSL: statement grammar, two dialects (v2/v3), gate modifiers, gate defs, two measure syntaxes, angle expressions, `//` and `/* */` comments | `ContainerNode` of per-statement `CallNode`s | `OpenQASMRead` -> a neutral circuit IR (`<|"Version", "Includes", "Registers", "GateDefs", "Statements"|>`) as plain Wolfram data |
 
 The shared vocabulary and algebra live in [AST.wl](AST.wl). OpenQASM is the full-fledged
