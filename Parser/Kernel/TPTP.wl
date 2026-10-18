@@ -70,6 +70,9 @@ TPTPExport::usage =
 TPTPImport::badparse =
     "TPTP parse failed in `1`: `2`"
 
+TPTPImport::grammar =
+    "The TPTP grammar could not be read from `1`: `2`. TPTPImport reads it over the network once per session."
+
 TPTPImport::badinclude =
     "Could not resolve TPTP include path `1` (searched relative to `2` " <>
     "and the $TPTP / $TPTP/Problems env-var roots)."
@@ -86,21 +89,41 @@ Begin["`Private`"]
 $tptpBnfURL =
     "https://raw.githubusercontent.com/TPTPWorld/SyntaxBNF/da4fbddc9da7b066f03a4fd47edb148fa6e17c91/SyntaxBNF-v9.2.1.4"
 
-ensureTptpParser[] := (
-    $tptpParsers = EBNFParse[
-        Import[$tptpBnfURL, "Text"],
+(* the grammar's text, or $Failed with TPTPImport::grammar: a page that is not
+   the grammar, such as GitHub's "404: Not Found", would lower to no rules *)
+tptpGrammar[url_String] := Module[{response = URLRead[url]},
+    Which[
+        ! MatchQ[response, _HTTPResponse],
+            Message[TPTPImport::grammar, url, response]; $Failed,
+        response["StatusCode"] =!= 200,
+            Message[TPTPImport::grammar, url, "HTTP " <> ToString[response["StatusCode"]]]; $Failed,
+        True,
+            response["Body"]
+    ]
+]
+
+(* the parser of <TPTP_file>, built once per session; a grammar that could not be
+   read leaves nothing memoized, so a later call tries again *)
+ensureTptpParser[] := Module[{bnf = tptpGrammar[$tptpBnfURL], parsers},
+    If[ ! StringQ[bnf], Return[$Failed, Module]];
+    parsers = EBNFParse[bnf,
         "PrimitiveOverrides" -> <|"thf_logic_formula" -> $thfLogicOverride|>,
         "Actions" -> Join[
             $tptpTermActions, $tptpConnActions, $tptpThfActions,
             $tptpQuantActions, $tptpCnfActions, $tptpFileActions]
     ];
+    If[ ! AssociationQ[parsers] || ! KeyExistsQ[parsers, "TPTP_file"],
+        Message[TPTPImport::grammar, $tptpBnfURL, "it has no <TPTP_file> rule"];
+        Return[$Failed, Module]
+    ];
+    $tptpParsers = parsers;
     (* close the Pratt override's forward reference: thfUnitary$ now resolves
        to the lowered <thf_unitary_formula> parser at parse time. *)
     thfUnitary$ = $tptpParsers["thf_unitary_formula"];
     $tptpParser = $tptpParsers["TPTP_file"];
     ensureTptpParser[] := $tptpParser;
     $tptpParser
-)
+]
 
 
 (* ===== shared action helpers ===== *)
@@ -455,10 +478,10 @@ stripTypeDecls[text_String] := StringReplace[text,
 (* ===== entry points ===== *)
 
 parseFileRaw[path_String] := Block[{text, parsed},
-    ensureTptpParser[];
+    If[ FailureQ[ensureTptpParser[]], Return[$Failed]];
     text = stripTypeDecls @ stripComments @ Import[path, "Text"];
     parsed = Quiet @ Parse[$tptpParser, StringTrim @ text];
-    If[ FailureQ[parsed],
+    If[ FailureQ[parsed] || ! AssociationQ[parsed],
         Message[TPTPImport::badparse, path, parsed];
         Return[$Failed]
     ];
@@ -466,10 +489,10 @@ parseFileRaw[path_String] := Block[{text, parsed},
 ]
 
 parseTextRaw[text_String] := Block[{stripped, parsed},
-    ensureTptpParser[];
+    If[ FailureQ[ensureTptpParser[]], Return[$Failed]];
     stripped = stripTypeDecls @ stripComments @ text;
     parsed = Quiet @ Parse[$tptpParser, StringTrim @ stripped];
-    If[ FailureQ[parsed],
+    If[ FailureQ[parsed] || ! AssociationQ[parsed],
         Message[TPTPImport::badparse, "(text)", parsed];
         Return[$Failed]
     ];
@@ -607,7 +630,7 @@ szsScan[text_String] := Block[{st, blk},
 ]
 
 szsImport[rawText_String] := Block[{scan, clauseStrs, deriv},
-    ensureTptpParser[];
+    If[ FailureQ[ensureTptpParser[]], Return[$Failed]];
     scan = szsScan[rawText];
     clauseStrs = Select[
         splitTopLevel[stripComments[scan["Body"]], {"."}],

@@ -300,3 +300,10 @@ VerificationTest[
     "cnf(d, plain, p(X) | q(X) | ~r(X), inference(split, [status(thm)], [c1])).\n",
     TestID -> "TPTP: SZS emit cnf disjunction with negative literal"
 ]
+
+VerificationTest[
+    Wolfram`Parser`Private`tptpGrammar["https://raw.githubusercontent.com/TPTPWorld/SyntaxBNF/master/SyntaxBNF-v9.2.1.4"],
+    $Failed,
+    {TPTPImport::grammar},
+    TestID -> "TPTP: a grammar URL that answers 404 reports TPTPImport::grammar instead of failing silently"
+]
