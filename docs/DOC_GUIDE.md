@@ -3,8 +3,9 @@
 How to write the WolframParser documentation sources under `docs/` — the
 `Template: Symbol` reference pages, the `Template: Guide` guide, and the
 `Template: TechNote` tutorials. They are literate-markdown files that
-[`build.wls`](../build.wls) turns into evaluated Wolfram notebooks via
-`MarkdownToNotebook` (MTN), landing under `Parser/Documentation/English/`.
+[`build.wls`](../build.wls) turns into evaluated Wolfram notebooks with PacletPage's
+`BuildPacletDocumentation`, which converts them with `MarkdownToNotebook` (MTN), landing
+under `Parser/Documentation/English/`.
 This is the house style. It is adapted from the THVMLink doc guide and
 overrides the upstream
 [wolfram-symbol-page skill](https://github.com/WolframInstitute/MarkdownToNotebook/blob/main/skills/wolfram-symbol-page/SKILL.md)
@@ -21,9 +22,10 @@ its init can wedge kernels), and confirm each cell's value:
 wl -f build.wls
 ```
 
-`build.wls` auto-discovers every `docs/**/*.md`, so a new file builds with no
-wiring. To iterate on one page without rebuilding the whole set, call
-`MarkdownToNotebook[src, out, "EvaluateSeparator" -> None]` on it directly.
+`build.wls` finds every `docs/**/*.md`, so a new file builds with no wiring, and
+a page whose source, the paclet's code and the converter did not change comes from
+the page cache, so a rebuild converts only what changed (`--no-cache` evaluates
+every example afresh).
 
 Two gates hold the cells to the rules below; run both before committing a doc
 change:
@@ -39,13 +41,13 @@ Both take page paths to check just those pages.
 ## State threads across sections — `EvaluateSeparator -> None`
 
 This is the one rule that **inverts** the upstream skill. `build.wls` builds
-every page with `"EvaluateSeparator" -> None`, so the per-heading context reset
-is **off**: a parser built in `## Basic Examples` is still bound in
-`## Properties and Relations`. Pages may — and the tutorials do — carry one
-parser across sections. Do not redundantly rebuild a grammar in each section,
-and do not reuse a name for two different parsers across sections (the later
-binding wins for the whole notebook). Build a grammar once, then refer back to
-it.
+every page with `"EvaluateSeparator" -> None` (the resource definition alone keeps
+the default), so the per-heading context reset is **off**: a parser built in
+`## Basic Examples` is still bound in `## Properties and Relations`. Pages may —
+and the tutorials do — carry one parser across sections. Do not redundantly
+rebuild a grammar in each section, and do not reuse a name for two different
+parsers across sections (the later binding wins for the whole notebook). Build a
+grammar once, then refer back to it.
 
 ## Symbols are autolinked, never bare backticks
 
@@ -189,9 +191,9 @@ and prints what the reader sees.
 ## Headless rasterization caveat
 
 A headless `wl` session **cannot rasterize** text or typeset boxes — `Rasterize`
-of a `RawBoxes` / `Style` expression comes back all white. `build.wls` pins the
-front end to Light so the example outputs that *do* rasterize (LaTeX render
-samples in the tutorials) are not inverted. If a page needs to show typeset math
+of a `RawBoxes` / `Style` expression comes back all white. MarkdownToNotebook
+renders the example outputs in the Light appearance, so the outputs that *do*
+rasterize (LaTeX render samples in the tutorials) are not inverted. If a page needs to show typeset math
 or a box rendering, verify it by exporting a PDF and converting with `sips`, not
 by `Rasterize`.
 

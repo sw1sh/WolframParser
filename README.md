@@ -41,8 +41,13 @@ example front-ends (Calculator, JSON, Lisp, Lambda, Brainfuck, ABC), plus OpenQA
 
 The kernel is dependency-free — no C library — with performance from `FunctionCompile`'s
 LLVM backend. It ships as a full paclet (`Guides` / `Symbols` / `Tutorials` documentation,
-built from `docs/` by [`build.wls`](build.wls)) and is covered by ~360 core + ~70 language
-tests (`wl -f run-tests.wls`).
+built from `docs/` with [PacletPage](https://github.com/WolframInstitute/PacletPage)) and is
+covered by ~420 core + ~100 language tests (`wl -f run-tests.wls`).
+
+[`build.wls`](build.wls) builds the documentation, [`release.wls`](release.wls) builds it,
+deploys the paclet resource and publishes the documentation site, and
+[`submit.wls`](submit.wls) submits the paclet to the Paclet Repository; they share
+[`pacletpage.wl`](pacletpage.wl).
 
 ## Layout
 
@@ -53,12 +58,16 @@ WolframParser/
 |   |-- Kernel/                     AST.wl EBNF.wl LaTeX.wl Markdown.wl Parser.wl TPTP.wl (+ Languages/)
 |   |-- Assets/                     hero.png, LaTeXMathParserCompiled.wxf
 |   |-- Tests/                      *.wlt, per subsystem
-|   `-- Documentation/English/      built ref pages / guides / tutorials (from docs/)
+|   `-- Documentation/English/      ref pages / guides / tutorials, built from docs/
 |-- docs/                           literate-markdown documentation sources
 |   |-- DOC_GUIDE.md                house style for these sources
 |   |-- ResourceDefinition.md       the paclet resource page
 |   `-- Guides/  Symbols/  Tutorials/
-|-- build.wls                       docs/*.md -> notebooks via MarkdownToNotebook
+|-- build.wls                       docs/*.md -> notebooks, with PacletPage
+|-- release.wls                     build, deploy the resource, publish the site
+|-- submit.wls                      submit to the Paclet Repository
+|-- pacletpage.wl                   what the three share
+|-- run-tests.wls                   every Parser/Tests/**/*.wlt
 `-- README.md
 ```
 

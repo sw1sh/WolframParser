@@ -45,9 +45,8 @@ $ProgressReporting = False
 rootDir = ParentDirectory[DirectoryName[$InputFileName]]
 PacletDirectoryLoad[FileNameJoin[{rootDir, "Parser"}]]
 Needs["Wolfram`Parser`"]
-(* build.wls warms the compiler before it converts anything; the first
-   FunctionCompile of a session issues a one-time General::shdw, here rather than
-   inside the first ParserCompile cell. *)
+(* the first FunctionCompile of a session can issue a one-time General::shdw as
+   CompileUtilities` loads; issued here, it stays out of the first ParserCompile cell *)
 ParserCompile[ParseLiteral["x"]];
 
 (* pages are read and written as exact UTF-8 bytes, so a rewrite changes nothing
