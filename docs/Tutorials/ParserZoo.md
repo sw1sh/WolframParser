@@ -3,11 +3,11 @@ Template: TechNote
 Name: ParserZoo
 Title: The Parser Zoo - language front-ends over a shared algebra
 Context: Wolfram`Parser`
-ContextPath: [Wolfram`Parser`Languages`Calculator`, Wolfram`Parser`Languages`JSON`, Wolfram`Parser`Languages`Lisp`, Wolfram`Parser`Languages`Lambda`, Wolfram`Parser`Languages`Brainfuck`, Wolfram`Parser`Languages`ABC`]
+ContextPath: [Wolfram`Parser`Languages`Calculator`, Wolfram`Parser`Languages`JSON`, Wolfram`Parser`Languages`Lisp`, Wolfram`Parser`Languages`Lambda`, Wolfram`Parser`Languages`Brainfuck`, Wolfram`Parser`Languages`ABC`, Wolfram`Parser`Languages`WolframLanguage`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/tutorial/ParserZoo
-Description: "A showcase suite that battle-tests Wolfram/Parser by building a spread of language front-ends - calculator, JSON, Lisp, lambda calculus, Brainfuck, ABC - each grammar written once over a shared algebra and run two ways: with the language's meaningful actions, or with the shared ASTAlgebra to get a standard, CodeParser-shaped syntax tree."
-Keywords: [parser zoo, language front-ends, AST, algebra, calculator, JSON, Lisp, lambda calculus, Brainfuck, ABC]
+Description: "A showcase suite that battle-tests Wolfram/Parser by building a spread of language front-ends - calculator, JSON, Lisp, lambda calculus, Brainfuck, ABC, the Wolfram Language itself - each grammar written once over a shared algebra and run two ways: with the language's meaningful actions, or with the shared ASTAlgebra to get a standard, CodeParser-shaped syntax tree."
+Keywords: [parser zoo, language front-ends, AST, algebra, calculator, JSON, Lisp, lambda calculus, Brainfuck, ABC, Wolfram Language]
 RelatedGuides: [WolframParser]
 ---
 
@@ -153,6 +153,21 @@ ABCRun["fact = fact(t - 1) * t + (1 - t)\nprint fact", {5}]
 ```
 
 <!-- => {120} -->
+
+### Wolfram Language
+
+The Wolfram Language itself, as a package file is written: its operators at the precedences [CodeParser]() publishes, flat chains such as `a + b - c` and `a < b <= c`, `a ~f~ b`, patterns, spans, comments, and the rule that a newline ends an expression outside brackets wherever the expression could end. Held, it reads every source as the kernel does, the zoo's own included.
+
+- [WolframLanguageHeld]() parse to the list of top-level expressions, each in [HoldComplete](), as [ImportString]() reads them
+- [WolframLanguageAST]() parse to a standard AST, each operator named by its head
+- [WolframLanguageGrammar]() the grammar, parameterised over an algebra
+- [WolframLanguageSemantic]() the algebra that builds each expression held
+
+```wl
+WolframLanguageHeld["f[x_] := a - b x /; x > 0"]
+```
+
+<!-- => {HoldComplete[f[x_] := a - b*x /; x > 0]} -->
 
 ## Building your own front-end
 
