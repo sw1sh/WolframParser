@@ -369,7 +369,14 @@ held[e_HoldComplete] := <|"Expr" -> e, "Literal" -> False, "Chain" -> False|>
 heldCall[HoldComplete[h_], args_List] :=
     Replace[Join @@ Prepend[args, HoldComplete[]], HoldComplete[a___] :> HoldComplete[h[a]]]
 
-heldSymbol[name_String] := heldSymbol[name] = ToExpression["System`" <> name, InputForm, HoldComplete]
+(* A symbol from its name, held: the one place the grammar asks the
+   kernel's reader for an expression. Nothing else makes a symbol without
+   evaluating it, since Symbol[name] gives the symbol's value; the name is
+   one the grammar has read whole, and it is read under HoldComplete. A
+   kernel with a primitive that interns a name gives it here instead. *)
+heldName[name_String] := ToExpression[name, InputForm, HoldComplete]
+
+heldSymbol[name_String] := heldSymbol[name] = heldName["System`" <> name]
 
 symbolCall[name_String, args_List] := heldCall[heldSymbol[name], args]
 
@@ -388,8 +395,8 @@ blankExpression[s_String] := Module[{name, rest, underscores, head, blank, named
     underscores = StringLength[First[StringCases[rest, StartOfString ~~ ("_" ..), 1]]];
     head = StringDrop[rest, underscores];
     blank = symbolCall[{"Blank", "BlankSequence", "BlankNullSequence"}[[underscores]],
-        If[head === "" || head === ".", {}, {ToExpression[head, InputForm, HoldComplete]}]];
-    named = If[name === "", blank, symbolCall["Pattern", {ToExpression[name, InputForm, HoldComplete], blank}]];
+        If[head === "" || head === ".", {}, {heldName[head]}]];
+    named = If[name === "", blank, symbolCall["Pattern", {heldName[name], blank}]];
     If[head === ".", symbolCall["Optional", {named}], named]
 ]
 
@@ -404,14 +411,87 @@ outExpression[s_String] := With[{count = StringCount[s, "%"], digits = StringDel
         count === 1, {},
         True, {HoldComplete @@ {-count}}]]]
 
+(* --- numbers --- *)
+
+(* The value of a number's text: b^^digits in base b, a . for a real, a `
+   and its precision or a `` and its accuracy, in digits of the base, and
+   *^e for a power of the base. A real without a mark is a machine real,
+   unless its digits are more than a machine real holds; it then keeps
+   the accuracy its digits give [WL 15.0.0]. *)
+numberValue[s_String] := Module[{base = 10, text = s, exponent = 0, mark = None, markText = "", int, frac, exact},
+    If[ StringContainsQ[text, "^^"],
+        {base, text} = {FromDigits[First[StringSplit[text, "^^"]]], Last[StringSplit[text, "^^"]]}];
+    If[ StringContainsQ[text, "*^"],
+        {text, exponent} = {First[StringSplit[text, "*^"]], signedValue[Last[StringSplit[text, "*^"]]]}];
+    If[ StringContainsQ[text, "`"],
+        With[{at = First[First[StringPosition[text, "`", 1]]]},
+            {mark, markText} = If[StringTake[text, {at, Min[at + 1, StringLength[text]]}] === "``",
+                {"Accuracy", StringDrop[text, at + 1]},
+                {"Precision", StringDrop[text, at]}];
+            text = StringTake[text, at - 1]]];
+    {int, frac} = If[StringContainsQ[text, "."], StringSplit[text, ".", All][[{1, 2}]], {text, ""}];
+    exact = FromDigits[int <> frac, base] * base^(exponent - StringLength[frac]);
+    Which[
+        mark === None && ! StringContainsQ[text, "."], exact,
+        mark === "Accuracy", SetAccuracy[exact, digitsInBase[signedValue[markText], base]],
+        mark === "Precision" && markText =!= "" && exact == 0, 0.,
+        mark === "Precision" && markText =!= "", SetPrecision[exact, digitsInBase[signedValue[markText], base]],
+        mark === None && significantDigits[int <> frac, base], SetAccuracy[exact, digitsInBase[StringLength[frac] - exponent, base]],
+        True, machineReal[exact]]
+]
+
+(* "-12", "3.5", ".5" -> the exact value *)
+signedValue[t_String] := With[{unsigned = StringDelete[t, "+" | "-"]},
+    If[StringStartsQ[t, "-"], -1, 1] * If[StringContainsQ[unsigned, "."],
+        With[{parts = StringSplit[unsigned, ".", All]}, FromDigits[parts[[1]] <> parts[[2]]] / 10^StringLength[parts[[2]]]],
+        FromDigits[unsigned]]]
+
+(* a count of digits of the base, in decimal digits *)
+digitsInBase[n_, 10] := n
+digitsInBase[n_, base_Integer] := N[n Log10[base]]
+
+(* more digits than a machine real holds: 17 decimal ones [WL 15.0.0] *)
+significantDigits[digits_String, base_Integer] := With[{count = StringLength[StringDelete[digits, StartOfString ~~ "0" ..]]},
+    If[base === 10, count > 17, N[count Log10[base]] > 18.5]]
+
+(* the machine real nearest the value; below the least one, zero *)
+machineReal[x_] := If[x != 0 && Abs[x] < $MinMachineNumber, 0., N[x]]
+
+(* --- strings --- *)
+
+(* The characters of a string's text: its escapes decoded, an unknown one
+   kept as written [WL 15.0.0]. *)
+stringValue[s_String] := With[{inner = StringTake[s, {2, -2}]},
+    If[StringFreeQ[inner, "\\"], inner, StringReplace[inner, $escapes]]]
+
+$escapes = {
+    "\\\r\n" -> "", "\\\n" -> "", "\\<" -> "", "\\>" -> "",
+    "\\\\" -> "\\", "\\\"" -> "\"", "\\n" -> "\n", "\\t" -> "\t", "\\r" -> "\r", "\\b" -> "\b", "\\f" -> "\f", "\\ " -> " ",
+    "\\" ~~ digits : Repeated[CharacterRange["0", "7"], {3}] :> FromCharacterCode[FromDigits[digits, 8]],
+    "\\." ~~ digits : Repeated[HexadecimalCharacter, {2}] :> FromCharacterCode[FromDigits[digits, 16]],
+    "\\:" ~~ digits : Repeated[HexadecimalCharacter, {4}] :> FromCharacterCode[FromDigits[digits, 16]],
+    "\\|" ~~ digits : Repeated[HexadecimalCharacter, {6}] :> FromCharacterCode[FromDigits[digits, 16]],
+    "\\[" ~~ name : (LetterCharacter | DigitCharacter) .. ~~ "]" /; KeyExistsQ[longNameCharacters[], name] :> longNameCharacters[][name],
+    (* the escapes of linear box syntax *)
+    "\\!" -> "\:f7c1", "\\(" -> "\:f7c9", "\\)" -> "\:f7c0", "\\*" -> "\:f7c8", "\\@" -> "\:f7c2", "\\^" -> "\:f7c6",
+    "\\_" -> "\:f7ca", "\\%" -> "\:f7c5", "\\&" -> "\:f7c7", "\\+" -> "\:f7cb", "\\/" -> "\:f7cc", "\\`" -> "\:f7cd"
+}
+
+(* the character of each long name, "Alpha" -> the letter alpha, built at
+   the first long name a string holds *)
+longNameCharacters[] := longNameCharacters[] = Association[Select[
+    Table[With[{c = FromCharacterCode[n]}, Quiet[CharacterName[c]] -> c], {n, 0, 65535}],
+    StringQ[First[#]] &]]
+
 heldLeaf["Integer" | "Real", s_String] :=
-    <|"Expr" -> ToExpression[s, InputForm, HoldComplete], "Literal" -> True, "Chain" -> False|>
-heldLeaf["String" | "Symbol", s_String] := held[ToExpression[s, InputForm, HoldComplete]]
+    <|"Expr" -> HoldComplete @@ {numberValue[s]}, "Literal" -> True, "Chain" -> False|>
+heldLeaf["String", s_String] := held[HoldComplete @@ {stringValue[s]}]
+heldLeaf["Symbol", s_String] := held[heldName[s]]
 heldLeaf["Blank", s_String] := held[blankExpression[s]]
 heldLeaf["Slot", s_String] := held[slotExpression[s]]
 heldLeaf["Out", s_String] := held[outExpression[s]]
 heldLeaf["Tag", s_String] := held[HoldComplete[s]]
-heldLeaf["File", s_String] := held[If[StringStartsQ[s, "\""], ToExpression[s, InputForm, HoldComplete], HoldComplete[s]]]
+heldLeaf["File", s_String] := held[HoldComplete @@ {If[StringStartsQ[s, "\""], stringValue[s], s]}]
 
 expressions[xs_List] := Map[#["Expr"] &, xs]
 

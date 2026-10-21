@@ -20,7 +20,7 @@ RelatedGuides: [ParserZoo]
 - Outside brackets a newline ends an expression wherever the expression could end, so `a` on one line and `+ b` on the next are two expressions, while `a +` followed by `b` is one. Inside brackets a newline is whitespace. Comments, nested ones included, are whitespace.
 - The forms come out as the kernel builds them: `a - b` is `Plus[a, Times[-1, b]]`, `a/b` is `Times[a, Power[b, -1]]`, a minus folds into a number (`-2` is the integer `-2`), and a chain of one flat operator is one call (`a + b + c` is `Plus[a, b, c]`).
 - The binding powers are the precedences [CodeParser]() publishes; [WolframLanguageGrammar]() generates the levels of its [ParseOperatorTable]() from them.
-- Numbers, strings and names are read with [ToExpression]() on their text, so a name is made in [$Context](), as the kernel makes it.
+- The algebra reads numbers and strings from their text itself: a real keeps the precision or accuracy its marks give, or that its digits give past a machine real's, and a string's escapes are decoded, an unknown one kept as written. A name is the one leaf read by the kernel's reader, under [HoldComplete](), so it is made in [$Context]() as the kernel makes it.
 - `WolframLanguageHeld` runs [WolframLanguageGrammar]() over [WolframLanguageSemantic](). [WolframLanguageAST]() runs the same grammar over [ASTAlgebra]().
 - Source that cannot be read gives a <code>[Failure]()["ParseError", ...]</code> whose `"Position"` is the character offset in *code* where reading stopped.
 
