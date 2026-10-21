@@ -1092,3 +1092,14 @@ VerificationTest[
     42,
     TestID -> "GrammarRules: GrammarToken[Number] stays on the digit-fast-path"
 ]
+
+
+(* === a regex token longer than the match window === *)
+
+VerificationTest[
+    (* ParseRegex matches within a window of the input that doubles while
+       the token reaches its end, so a token longer than the window is
+       read whole *)
+    StringLength @ Parse[ParseRegex["a+"] ~~ ParseLiteral["b"], StringRepeat["a", 10000] <> "b"][[1]],
+    10000,
+    TestID -> "ParseRegex: a token longer than the match window"]

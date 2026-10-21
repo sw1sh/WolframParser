@@ -413,13 +413,31 @@ interpretDispatch[ParserCombinator["Character", pat_, _], input_, pos_] :=
    match the regex allows.  Returns the matched substring and advances
    the position by its length; failure is a per-cell parseErr with the
    regex as the expected token. *)
+(* The match is sought in a window of the input from the current position,
+   not in all of the rest, which taking at every token made a long input
+   quadratic. The window doubles while it cuts the input and the regex
+   either finds no match or matches to its very end, so a token the window
+   cut is seen whole; only a token longer than the window whose regex
+   would also match a shorter prefix of it, by another alternative, could
+   be taken short. *)
+$regexWindow = 4096
+
 interpretDispatch[ParserCombinator["Regex", r_String, _], input_, pos_] :=
-    Block[{remaining, m},
-        remaining = If[ pos > StringLength[input], "", StringTake[input, {pos, -1}] ];
-        m = Quiet @ StringCases[remaining, StartOfString ~~ RegularExpression[r], 1];
-        If[ MatchQ[m, {_String}],
-            parseOk[First[m], pos + StringLength[First[m]]],
-            parseErr[pos, "regex /" <> r <> "/", safeChar[input, pos]]
+    regexMatchAt[r, input, pos, $regexWindow]
+
+regexMatchAt[r_String, input_String, pos_Integer, window_Integer] :=
+    Block[{length = StringLength[input], last, m, cut},
+        last = Min[length, pos + window - 1];
+        cut = last < length;
+        m = If[ pos > length, Quiet @ StringCases["", StartOfString ~~ RegularExpression[r], 1],
+            Quiet @ StringCases[StringTake[input, {pos, last}], StartOfString ~~ RegularExpression[r], 1] ];
+        Which[
+            cut && (! MatchQ[m, {_String}] || StringLength[First[m]] === last - pos + 1),
+                regexMatchAt[r, input, pos, 2 window],
+            MatchQ[m, {_String}],
+                parseOk[First[m], pos + StringLength[First[m]]],
+            True,
+                parseErr[pos, "regex /" <> r <> "/", safeChar[input, pos]]
         ]
     ]
 
