@@ -20,6 +20,9 @@ It is the [Pratt / top-down-operator-precedence](https://tdop.github.io/) ("prec
 ## Details & Options
 
 - *fixity* is one of the strings `"InfixL"` (left-associative), `"InfixR"` (right-associative), `"Prefix"`, or `"Postfix"`.
+- <code>{"InfixN", *opParser*, *combine*}</code> is a *flat* operator: a run of `"InfixN"` operators of one level that share *combine* builds one node, <code>*combine*[{*operand1*, *operand2*, …}, {*opResult1*, …}]</code>, so `a + b - c` can be one sum and `a < b <= c` one chain. Without *combine*, a run continues only across the same operator, and the first operator's result is applied to the operands.
+- <code>{"Ternary", *op1Parser*, *op2Parser*}</code> parses *left* *op1* *middle* *op2* *right*, and *op2Parser*'s result is applied to the three operands; it is left-associative, and `"TernaryR"` is right-associative.
+- *Dispatch on the first character.* The table is built with the characters each operator parser can begin with, so at each position it tries only the operators that could begin there, in table order. An operator whose first character cannot be told (one beginning with a [ParseRegex]() or a [ParseRecursive]()) is tried everywhere.
 - *Operator parsers return their combining function* — the same convention as [ParseChainLeft](). *opParser* matches the operator token and yields a function: **binary** <code>*f*[*left*, *right*]</code> for infix, **unary** <code>*f*[*operand*]</code> for prefix / postfix. Use [ParseAction]() to attach the function, e.g. `ParseAction[ParseLiteral["+"], (Plus &)]`.
 - *Precedence is the level position.* The first level binds tightest; the last binds loosest. Operators that share a level share a precedence (e.g. `+` and `-`).
 - *A lone spec stands in for a one-operator level*: `{"InfixL", op}` is accepted as shorthand for `{{"InfixL", op}}`.
@@ -162,6 +165,35 @@ Parse[fac, "3!+4!"]
 
 <!-- => plus[fact[3], fact[4]] -->
 
+**Flat chains.** `"+"` and `"-"` sharing one *combine* gather a whole sum into one node; *combine* gets the operands and what the operator parsers returned:
+
+```wl
+sum = ParseOperatorTable[ParseAction[ParseRegex["[0-9]+"], FromDigits], {
+   {{"InfixN", ParseAction[ParseLiteral["+"], "+" &], (terms[#1, #2] &)},
+    {"InfixN", ParseAction[ParseLiteral["-"], "-" &], (terms[#1, #2] &)}}
+}]
+```
+
+```wl
+Parse[sum, "1+2-3+4"]
+```
+
+<!-- => terms[{1, 2, 3, 4}, {"+", "-", "+"}] -->
+
+**Ternary operators.** `?` and `:` around a middle operand, left-associative:
+
+```wl
+cond = ParseOperatorTable[ParseAction[ParseRegex["[0-9]+"], FromDigits], {
+   {"Ternary", ParseLiteral["?"], ParseAction[ParseLiteral[":"], (if &)]}
+}]
+```
+
+```wl
+Parse[cond, "1?2:3?4:5"]
+```
+
+<!-- => if[if[1, 2, 3], 4, 5] -->
+
 ## Properties and Relations
 
 A one-level, one-operator table is exactly [ParseChainLeft]() / [ParseChainRight]():
@@ -190,7 +222,7 @@ Parse[calc, "10-2+3"]
 - *Levels are tightest-first.* The first level in the list binds most tightly. Reversing the list inverts every precedence relationship.
 - *Operator-token prefixes.* If `<=` and `<` are both operators, order the [ParseChoice]() / table so the longer token is tried first, exactly as with [ParseChoice]() — `<` would otherwise shadow `<=`.
 - *Left recursion in unit.* *unit* must not be able to match the empty string at the start of an operand, or the climber cannot make progress. Keep *unit* to atoms and bracketed groups; let the table own the operators.
-- *Non-associative operators* (`"InfixN"`, forbidding `a = b = c`) are not yet a distinct fixity; model a single comparison with `"InfixL"` or wrap the result to reject chaining.
+- *`"InfixN"` is flat, not non-associative.* It gathers `a = b = c` into one node rather than rejecting it; a grammar that forbids the chain checks the operand count in *combine*.
 
 ## Neat Examples
 

@@ -190,3 +190,65 @@ VerificationTest[
     Fold[app, ConstantArray[a, 200]],
     TestID -> "ParseOperatorTable: wide flat chain"
 ]
+
+
+(* === flat n-ary chains ("InfixN") and ternary forms === *)
+
+ClearAll[sumOp, relOp, sumTable, relTable, flatTable, tern, ternR]
+
+(* a + b - c: "+" and "-" share the combining function, so they build one
+   node; its operands and the operators' results come to the combine *)
+sumOp[op_] := ParseAction[ParseLiteral[op], op &];
+sumTable = ParseOperatorTable[num, {
+    {{"InfixL", ParseAction[ParseLiteral["*"], (times &)]}},
+    {{"InfixN", sumOp["+"], (sum[#1, #2] &)}, {"InfixN", sumOp["-"], (sum[#1, #2] &)}}}];
+
+(* without a combine, a chain continues only across the same operator, and
+   the operator's result is applied to the operands *)
+flatTable = ParseOperatorTable[num, {
+    {{"InfixN", ParseAction[ParseLiteral["&"], (and &)]}, {"InfixN", ParseAction[ParseLiteral["|"], (or &)]}}}];
+
+tern  = ParseOperatorTable[num, {{"Ternary", ParseLiteral["?"], ParseAction[ParseLiteral[":"], (cond &)]}}];
+ternR = ParseOperatorTable[num, {{"TernaryR", ParseLiteral["?"], ParseAction[ParseLiteral[":"], (cond &)]}}];
+
+VerificationTest[
+    Parse[sumTable, "1+2-3+4"],
+    sum[{1, 2, 3, 4}, {"+", "-", "+"}],
+    TestID -> "ParseOperatorTable: InfixN chain of two operators sharing a combine"]
+
+VerificationTest[
+    Parse[sumTable, "1+2*3-4"],
+    sum[{1, times[2, 3], 4}, {"+", "-"}],
+    TestID -> "ParseOperatorTable: InfixN operands bind tighter levels"]
+
+VerificationTest[
+    Parse[flatTable, "1&2&3|4|5&6"],
+    and[or[and[1, 2, 3], 4, 5], 6],
+    TestID -> "ParseOperatorTable: InfixN without combine chains one operator"]
+
+VerificationTest[
+    Parse[tern, "1?2:3?4:5"],
+    cond[cond[1, 2, 3], 4, 5],
+    TestID -> "ParseOperatorTable: Ternary is left-associative"]
+
+VerificationTest[
+    Parse[ternR, "1?2:3?4:5"],
+    cond[1, 2, cond[3, 4, 5]],
+    TestID -> "ParseOperatorTable: TernaryR is right-associative"]
+
+
+(* === first-character dispatch === *)
+
+VerificationTest[
+    (* operators sharing a first character, an operator that begins with
+       a regex (its first character unknown, so tried everywhere), and a
+       prefix one: the dispatch only skips operators that cannot begin at
+       the current character *)
+    Parse[ParseOperatorTable[num, {
+        {{"Prefix", ParseAction[ParseLiteral["-"], (neg &)]}},
+        {{"InfixL", ParseAction[ParseLiteral["**"], (pow &)]}},
+        {{"InfixL", ParseAction[ParseLiteral["*"], (times &)]}, {"InfixL", ParseAction[ParseRegex["[@#]"], (at &)]}},
+        {{"InfixL", ParseAction[ParseLiteral["-"], (minus &)]}}}],
+        "-1**2*3#4-5@6"],
+    minus[at[times[pow[neg[1], 2], 3], 4], at[5, 6]],
+    TestID -> "ParseOperatorTable: dispatch by first character keeps every match"]

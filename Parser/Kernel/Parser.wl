@@ -72,7 +72,7 @@ ParseChainLeft::usage = "ParseChainLeft[p, op] parses a left-associative chain: 
 
 ParseChainRight::usage = "ParseChainRight[p, op] parses a right-associative chain."
 
-ParseOperatorTable::usage = "ParseOperatorTable[unit, levels] parses an operator-precedence expression grammar by Pratt-style binding-power climbing - a single left-to-right pass instead of a hand-written ParseChainLeft / ParseChainRight cascade. unit is the parser for an operand (an atom, a parenthesised sub-expression via ParseRecursive, a prefix-quantifier, ...). levels is a list of precedence levels, TIGHTEST binding first; each level is a list of operator specs {fixity, opParser} (a lone spec may stand in for a one-operator level) where fixity is \"InfixL\" | \"InfixR\" | \"Prefix\" | \"Postfix\" and opParser's RESULT is the combining function - binary for infix, unary for prefix / postfix - the same op-returns-a-function convention as ParseChainLeft. Stays linear on grammars where a PEG choice over or / and / apply re-parses the shared leading operand and backtracks exponentially (e.g. TPTP THF)."
+ParseOperatorTable::usage = "ParseOperatorTable[unit, levels] parses an operator-precedence expression grammar by Pratt-style binding-power climbing - a single left-to-right pass instead of a hand-written ParseChainLeft / ParseChainRight cascade. unit is the parser for an operand (an atom, a parenthesised sub-expression via ParseRecursive, a prefix-quantifier, ...). levels is a list of precedence levels, TIGHTEST binding first; each level is a list of operator specs {fixity, opParser} (a lone spec may stand in for a one-operator level) where fixity is \"InfixL\" | \"InfixR\" | \"Prefix\" | \"Postfix\" and opParser's RESULT is the combining function - binary for infix, unary for prefix / postfix - the same op-returns-a-function convention as ParseChainLeft. {\"InfixN\", opParser, combine} is a flat n-ary chain: a run of \"InfixN\" operators of one level sharing combine (or, without combine, the same operator) builds one node, combine[{operand1, operand2, ...}, {opResult1, ...}], or opResult1 @@ operands without combine - for a + b - c into one sum, or a < b <= c into one chain. {\"Ternary\", op1Parser, op2Parser} parses left op1 middle op2 right and gives op2's result applied to {left, middle, right}, left-associative; \"TernaryR\" is right-associative. Stays linear on grammars where a PEG choice over or / and / apply re-parses the shared leading operand and backtracks exponentially (e.g. TPTP THF)."
 
 ParseLookahead::usage = "ParseLookahead[p] succeeds iff p would match at the current position, consuming nothing."
 
@@ -162,10 +162,68 @@ ParseChainRight[p_ParserCombinator, op_ParserCombinator] :=
    specs {fixity, opParser}. A lone {fixity, opParser} stands in for a
    single-operator level. See the "OperatorTable" interpret clause. *)
 ParseOperatorTable[unit_ParserCombinator, levels_List] :=
-    ParserCombinator["OperatorTable", {unit, normalizeOpLevels[levels]}, <||>]
+    With[{normal = normalizeOpLevels[levels]},
+        ParserCombinator["OperatorTable", {unit, normal}, <|"Dispatch" -> operatorDispatch[normal]|>]]
 
 normalizeOpLevels[levels_List] :=
-    Replace[levels, spec : {_String, _ParserCombinator} :> {spec}, {1}]
+    Replace[levels, spec : {_String, _ParserCombinator, ___} :> {spec}, {1}]
+
+(* The table's specs, each {bindingPower, fixity, opParser, ...}, split
+   into the prefix ones and the ones that continue an operand, each kept
+   in table order and looked up by the character an operator there could
+   begin with: <|"Prefix" -> {byCharacter, rest}, "Led" -> {byCharacter,
+   rest}|>, rest being the specs whose first character cannot be told,
+   which every character's list holds too. Built once, when the table is. *)
+operatorDispatch[levels_List] :=
+    Module[{n = Length[levels], specs},
+        specs = Catenate @ MapIndexed[
+            Function[{lvl, ix}, With[{bp = n - First[ix] + 1},
+                Map[Join[{bp}, #] &, lvl]]],
+            levels
+        ];
+        <|
+            "Prefix" -> byFirstCharacter[Select[specs, #[[2]] === "Prefix" &]],
+            "Led"    -> byFirstCharacter[Select[specs, MatchQ[#[[2]], "InfixL" | "InfixR" | "InfixN" | "Ternary" | "TernaryR" | "Postfix"] &]]
+        |>
+    ]
+
+byFirstCharacter[specs_List] :=
+    Module[{firsts = firstCharacters[#[[3]]] & /@ specs, characters, rest},
+        characters = Union @@ Cases[firsts, _List];
+        rest = Pick[specs, Map[# === All &, firsts]];
+        {
+            AssociationMap[
+                Function[c, Pick[specs, Map[# === All || MemberQ[#, c] &, firsts]]],
+                characters],
+            rest
+        }
+    ]
+
+(* The characters input a parser matches can begin with, or All where that
+   cannot be told (a regex, a recursion, a parser matching the empty
+   string); a superset is safe, it only costs a try. *)
+firstCharacters[ParserCombinator["Literal", s_String, _]] :=
+    If[ s === "", All, {StringTake[s, 1]} ]
+firstCharacters[ParserCombinator["Character", s_String, _]] := {s}
+firstCharacters[ParserCombinator["Character", Verbatim[Alternatives][cs__String], _]] := {cs}
+firstCharacters[ParserCombinator["Choice" | "ChoiceLongest", pcs_List, _]] :=
+    unionOfFirsts[firstCharacters /@ pcs]
+firstCharacters[ParserCombinator["Sequence", pcs_List, _]] := sequenceFirsts[pcs]
+firstCharacters[ParserCombinator["Action", {p_, _}, _]] := firstCharacters[p]
+firstCharacters[ParserCombinator["Some" | "Lookahead" | "Try", p_, _]] := firstCharacters[p]
+firstCharacters[ParserCombinator["Between", {open_, _, _}, _]] := firstCharacters[open]
+firstCharacters[_] := All
+
+(* a sequence begins where its first part that must consume does; a part
+   that consumes nothing is skipped, and one that may (Optional, Many)
+   adds its own characters to those of the rest *)
+sequenceFirsts[{}] := All
+sequenceFirsts[{ParserCombinator["NotFollowedBy" | "Position", _, _], rest___}] := sequenceFirsts[{rest}]
+sequenceFirsts[{ParserCombinator["Optional" | "Many", p_, _], rest___}] :=
+    unionOfFirsts[{firstCharacters[p], sequenceFirsts[{rest}]}]
+sequenceFirsts[{p_, ___}] := firstCharacters[p]
+
+unionOfFirsts[sets_List] := If[ MemberQ[sets, All], All, Union @@ sets ]
 
 ParseLookahead[p_ParserCombinator] :=
     ParserCombinator["Lookahead", p, <||>]
@@ -707,15 +765,13 @@ interpretDispatch[ParserCombinator["ChainRight", {p_, op_}, _], input_, pos_] :=
    helpers; climb carries the same $parseDepth guard as interpret so deep
    right-nesting returns a clean parseErr instead of tripping
    $RecursionLimit. *)
-interpretDispatch[ParserCombinator["OperatorTable", {unit_, levels_List}, _], input_, pos_] :=
-    Module[{n = Length[levels], specs, prefixSpecs, ledSpecs, noOp, nud, tryOps, climb},
-        specs = Catenate @ MapIndexed[
-            Function[{lvl, ix}, With[{bp = n - First[ix] + 1},
-                Map[{bp, #[[1]], #[[2]]} &, lvl]]],
-            levels
-        ];
-        prefixSpecs = Select[specs, #[[2]] === "Prefix" &];
-        ledSpecs    = Select[specs, MatchQ[#[[2]], "InfixL" | "InfixR" | "Postfix"] &];
+interpretDispatch[ParserCombinator["OperatorTable", {unit_, levels_List}, opts_], input_, pos_] :=
+    Module[{dispatch = Lookup[opts, "Dispatch", operatorDispatch[levels]], len = StringLength[input],
+            specsAt, noOp, nud, tryOps, climb, naryChain, ternary},
+        (* the specs of a kind ("Prefix" or "Led") whose operator could
+           begin at p, in table order *)
+        specsAt[kind_, p_] := With[{d = dispatch[kind]},
+            If[ p > len, d[[2]], Lookup[d[[1]], StringTake[input, {p, p}], d[[2]]] ]];
 
         (* null denotation: try the prefix operators (table order), else
            fall through to the operand parser. *)
@@ -723,7 +779,7 @@ interpretDispatch[ParserCombinator["OperatorTable", {unit_, levels_List}, _], in
             Do[
                 r = interpret[s[[3]], input, p];
                 If[ MatchQ[r, _parseOk], hit = {s, r}; Break[] ],
-                {s, prefixSpecs}
+                {s, specsAt["Prefix", p]}
             ];
             If[ hit === noOp,
                 interpret[unit, input, p],
@@ -741,7 +797,7 @@ interpretDispatch[ParserCombinator["OperatorTable", {unit_, levels_List}, _], in
                     r = interpret[s[[3]], input, p];
                     If[ MatchQ[r, _parseOk], found = {s, r}; Break[] ]
                 ],
-                {s, ledSpecs}
+                {s, specsAt["Led", p]}
             ];
             found
         ];
@@ -754,17 +810,73 @@ interpretDispatch[ParserCombinator["OperatorTable", {unit_, levels_List}, _], in
                     left = leftR[[1]]; cur = leftR[[2]];
                     While[ (opHit = tryOps[rbp, cur]) =!= noOp,
                         s = opHit[[1]]; fn = opHit[[2, 1]]; opEnd = opHit[[2, 2]];
-                        If[ s[[2]] === "Postfix",
-                            left = fn[left]; cur = opEnd,
-                            rightRbp = If[ s[[2]] === "InfixR", s[[1]] - 1, s[[1]] ];
-                            rightR = climb[rightRbp, opEnd];
-                            If[ MatchQ[rightR, _parseErr], Return[rightR, Module] ];
-                            left = fn[left, rightR[[1]]]; cur = rightR[[2]]
+                        Switch[ s[[2]],
+                            "Postfix",
+                                left = fn[left]; cur = opEnd,
+                            "InfixN",
+                                rightR = naryChain[s, left, fn, opEnd];
+                                If[ MatchQ[rightR, _parseErr], Return[rightR, Module] ];
+                                left = rightR[[1]]; cur = rightR[[2]],
+                            "Ternary" | "TernaryR",
+                                rightR = ternary[s, left, opEnd];
+                                If[ MatchQ[rightR, _parseErr], Return[rightR, Module] ];
+                                left = rightR[[1]]; cur = rightR[[2]],
+                            _,
+                                rightRbp = If[ s[[2]] === "InfixR", s[[1]] - 1, s[[1]] ];
+                                rightR = climb[rightRbp, opEnd];
+                                If[ MatchQ[rightR, _parseErr], Return[rightR, Module] ];
+                                left = fn[left, rightR[[1]]]; cur = rightR[[2]]
                         ]
                     ];
                     parseOk[left, cur]
                 ]
             ]
+        ];
+
+        (* An n-ary chain: an "InfixN" operator, then its operand, then
+           each further "InfixN" operator of the same level that shares the
+           chain's combining function (or, without one, is the same
+           operator) and its operand; combine[operands, operatorResults]
+           builds the node, or the first operator's result applied to the
+           operands when the spec has no combine. *)
+        naryChain[s_, left_, first_, opEnd_] := Module[
+            {key = If[ Length[s] >= 4, {"Combine", s[[4]]}, {"Operator", s[[3]]}],
+             operands = {left}, results = {first}, cur = opEnd, r, next, more = True},
+            r = climb[s[[1]], cur];
+            If[ MatchQ[r, _parseErr], Return[r, Module] ];
+            operands = Append[operands, r[[1]]]; cur = r[[2]];
+            While[ more,
+                next = noOp;
+                Do[
+                    If[ t[[1]] === s[[1]] && t[[2]] === "InfixN" &&
+                        If[ Length[t] >= 4, {"Combine", t[[4]]}, {"Operator", t[[3]]}] === key,
+                        r = interpret[t[[3]], input, cur];
+                        If[ MatchQ[r, _parseOk], next = r; Break[] ]
+                    ],
+                    {t, specsAt["Led", cur]}
+                ];
+                If[ next === noOp,
+                    more = False,
+                    r = climb[s[[1]], next[[2]]];
+                    If[ MatchQ[r, _parseErr], Return[r, Module] ];
+                    results = Append[results, next[[1]]];
+                    operands = Append[operands, r[[1]]]; cur = r[[2]]
+                ]
+            ];
+            parseOk[If[ Length[s] >= 4, s[[4]][operands, results], First[results] @@ operands], cur]
+        ];
+
+        (* left op1 middle op2 right: the middle binds as an operand of the
+           level, the right too ("Ternary") or one level looser
+           ("TernaryR"); op2's result combines the three. *)
+        ternary[s_, left_, opEnd_] := Module[{middle, second, right},
+            middle = climb[s[[1]], opEnd];
+            If[ MatchQ[middle, _parseErr], Return[middle, Module] ];
+            second = interpret[s[[4]], input, middle[[2]]];
+            If[ MatchQ[second, _parseErr], Return[second, Module] ];
+            right = climb[If[ s[[2]] === "TernaryR", s[[1]] - 1, s[[1]] ], second[[2]]];
+            If[ MatchQ[right, _parseErr], Return[right, Module] ];
+            parseOk[second[[1]][left, middle[[1]], right[[1]]], right[[2]]]
         ];
 
         climb[0, pos]
