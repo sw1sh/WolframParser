@@ -480,7 +480,7 @@ $escapes = {
 (* the character of each long name, "Alpha" -> the letter alpha, built at
    the first long name a string holds *)
 longNameCharacters[] := longNameCharacters[] = Association[Select[
-    Table[With[{c = FromCharacterCode[n]}, Quiet[CharacterName[c]] -> c], {n, 0, 65535}],
+    Table[With[{c = FromCharacterCode[n]}, CharacterName[c] -> c], {n, 0, 65535}],
     StringQ[First[#]] &]]
 
 heldLeaf["Integer" | "Real", s_String] :=
