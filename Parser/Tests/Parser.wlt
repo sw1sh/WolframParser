@@ -1103,3 +1103,20 @@ VerificationTest[
     StringLength @ Parse[ParseRegex["a+"] ~~ ParseLiteral["b"], StringRepeat["a", 10000] <> "b"][[1]],
     10000,
     TestID -> "ParseRegex: a token longer than the match window"]
+
+VerificationTest[
+    (* a lookahead past the window's end sees the input's own, not the
+       window's: the regex is matched against the whole rest *)
+    FailureQ @ Parse[ParseRegex["x(?!y{4500})"] ~~ ParseRegex["y+"], "x" <> StringRepeat["y", 4600]],
+    True,
+    TestID -> "ParseRegex: a lookahead looks past the match window"]
+
+VerificationTest[
+    Parse[ParseRegex["x(?!y{4500})"] ~~ ParseRegex["y+"], "x" <> StringRepeat["y", 4400]][[2]],
+    StringRepeat["y", 4400],
+    TestID -> "ParseRegex: a lookahead that holds within a long input"]
+
+VerificationTest[
+    Wolfram`Parser`Private`regexLooksPastQ /@ {"[A-Za-z0-9$`]+", "a\\$", "ab$", "a(?=b)", "a\\z", "[^\"\\\\]+"},
+    {False, False, True, True, True, False},
+    TestID -> "ParseRegex: which regexes look past their match"]

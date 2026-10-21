@@ -42,7 +42,7 @@ ParseLiteral::usage = "ParseLiteral[s] returns the ParserCombinator that matches
 
 ParseCharacter::usage = "ParseCharacter[pat] returns the ParserCombinator that matches a single character against the character-class pattern pat."
 
-ParseRegex::usage = "ParseRegex[regex] returns the ParserCombinator that matches as much input as the regex consumes from the current position, returning the matched string.  regex is a string (PCRE-style, the same shape `RegularExpression` takes)."
+ParseRegex::usage = "ParseRegex[regex] returns the ParserCombinator that matches as much input as the regex consumes from the current position, returning the matched string.  regex is a string (PCRE-style, the same shape `RegularExpression` takes). The match is sought in a window of the input from the current position, 4096 characters that double while the match reaches the window's end, so reading a long input stays linear; a regex that looks past its match, by a lookahead (?= (?! or an end anchor $ \\z \\Z, is matched against the whole rest."
 
 ParseSucceed::usage = "ParseSucceed[val] returns the ParserCombinator that always succeeds with val, consuming nothing."
 
@@ -481,9 +481,24 @@ interpretDispatch[ParserCombinator["Character", pat_, _], input_, pos_] :=
 $regexWindow = 4096
 
 interpretDispatch[ParserCombinator["Regex", r_String, _], input_, pos_] :=
-    regexMatchAt[r, input, pos, $regexWindow]
+    If[ regexLooksPastQ[r],
+        regexMatchAt[r, input, pos, Infinity],
+        regexMatchAt[r, input, pos, $regexWindow]
+    ]
 
-regexMatchAt[r_String, input_String, pos_Integer, window_Integer] :=
+(* A regex that looks past its match - a lookahead (?= or (?!, or an end
+   anchor $, \z or \Z - would see the window's end as the input's, so it
+   matches the whole rest. Decided once per regex: escapes are dropped
+   (keeping \z and \Z), then bracket expressions, and what is left is
+   searched. *)
+regexLooksPastQ[r_String] := regexLooksPastQ[r] =
+    StringContainsQ[
+        StringReplace[
+            StringReplace[r, "\\" ~~ c_ :> If[c === "z" || c === "Z", "\\z", "e"]],
+            "[" ~~ Shortest[__] ~~ "]" -> "e"],
+        "(?=" | "(?!" | "$" | "\\z"]
+
+regexMatchAt[r_String, input_String, pos_Integer, window : (_Integer | Infinity)] :=
     Block[{length = StringLength[input], last, m, cut},
         last = Min[length, pos + window - 1];
         cut = last < length;
