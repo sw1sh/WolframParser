@@ -505,7 +505,9 @@ regexMatchAt[r_String, input_String, pos_Integer, window : (_Integer | Infinity)
         m = If[ pos > length, Quiet @ StringCases["", StartOfString ~~ RegularExpression[r], 1],
             Quiet @ StringCases[StringTake[input, {pos, last}], StartOfString ~~ RegularExpression[r], 1] ];
         Which[
-            cut && (! MatchQ[m, {_String}] || StringLength[First[m]] === last - pos + 1),
+            cut && MatchQ[m, {_String}] && StringLength[First[m]] === last - pos + 1,
+                regexMatchAt[r, input, pos, 2 window],
+            cut && ! MatchQ[m, {_String}] && ! regexFailureFinalQ[r, input, pos, window],
                 regexMatchAt[r, input, pos, 2 window],
             MatchQ[m, {_String}],
                 parseOk[First[m], pos + StringLength[First[m]]],
@@ -513,6 +515,92 @@ regexMatchAt[r_String, input_String, pos_Integer, window : (_Integer | Infinity)
                 parseErr[pos, "regex /" <> r <> "/", safeChar[input, pos]]
         ]
     ]
+
+(* A regex that fails in a window could match given more input only when some
+   match of it is longer than the window. That cannot be when the window's first
+   character cannot begin a match, by the regex's first atom, or when no match of
+   the regex is longer than the window. Most failures of a token's regex are of
+   the first kind, at the first character, and taking a wider window for them made
+   each failure cost the whole rest of the input. *)
+regexFailureFinalQ[r_String, input_String, pos_Integer, window_Integer] :=
+    With[{first = regexFirstAtom[r]},
+        (StringQ[first] && ! StringMatchQ[StringTake[input, {pos}], RegularExpression[first]]) ||
+            regexMaxLength[r] <= window
+    ]
+
+(* The regex that matches the one character a match of r begins with - r's
+   first atom, with r's leading flags - or None where that cannot be told: an
+   alternation at the top, a group, an anchor, or a first atom that may match
+   nothing. *)
+regexFirstAtom[r_String] := regexFirstAtom[r] = Module[{flags = "", rest = r, atom, after},
+    If[ StringStartsQ[rest, "(?" ~~ ("i" | "m" | "s" | "x") .. ~~ ")"],
+        flags = First[StringCases[rest, StartOfString ~~ f : ("(?" ~~ ("i" | "m" | "s" | "x") .. ~~ ")") :> f, 1]];
+        rest = StringDrop[rest, StringLength[flags]]
+    ];
+    atom = Which[
+        regexTopLevelAlternationQ[rest] || rest === "", None,
+        StringStartsQ[rest, "["], regexBracketExpression[rest],
+        StringStartsQ[rest, "\\"],
+            If[ StringLength[rest] >= 2 && StringMatchQ[StringTake[rest, {2}], Except[DigitCharacter | Alternatives @@ Characters["bBAzZGKXRxupPNQEkgco"]]],
+                StringTake[rest, 2], None],
+        StringContainsQ["()|*+?{}^$", StringTake[rest, 1]], None,
+        True, StringTake[rest, 1]
+    ];
+    If[ ! StringQ[atom], Return[None, Module]];
+    after = StringDrop[rest, StringLength[atom]];
+    If[ StringStartsQ[after, "?" | "*" | "{0"], None, flags <> atom]
+]
+
+(* the bracket expression r begins with, [...] or [^...] with escapes and POSIX
+   classes inside, or None *)
+regexBracketExpression[r_String] := Module[{chars = Characters[r], i = 2, n},
+    n = Length[chars];
+    If[ i <= n && chars[[i]] === "^", i++];
+    If[ i <= n && chars[[i]] === "]", i++];
+    While[ i <= n,
+        Which[
+            chars[[i]] === "\\", i += 2,
+            chars[[i]] === "[" && i < n && chars[[i + 1]] === ":",
+                With[{close = StringPosition[StringDrop[r, i], ":]", 1]},
+                    If[ close === {}, Return[None, Module]];
+                    i += close[[1, 2]] + 1],
+            chars[[i]] === "]", Return[StringTake[r, i], Module],
+            True, i++
+        ]
+    ];
+    None
+]
+
+(* whether r has a | outside its groups and bracket expressions *)
+regexTopLevelAlternationQ[r_String] := Module[{chars = Characters[r], i = 1, depth = 0, n},
+    n = Length[chars];
+    While[ i <= n,
+        Which[
+            chars[[i]] === "\\", i += 2,
+            chars[[i]] === "[", With[{b = regexBracketExpression[StringDrop[r, i - 1]]},
+                i += If[ StringQ[b], StringLength[b], 1]],
+            chars[[i]] === "(", depth++; i++,
+            chars[[i]] === ")", depth--; i++,
+            chars[[i]] === "|" && depth === 0, Return[True, Module],
+            True, i++
+        ]
+    ];
+    False
+]
+
+(* A bound on the length of a match of r, Infinity for an unbounded repeat or a
+   back reference: each character of r's source matches at most one character
+   in each repetition its bounded repeats allow. *)
+regexMaxLength[r_String] := regexMaxLength[r] = Module[{plain},
+    plain = StringReplace[StringReplace[r, "\\" ~~ c_ :> If[DigitQ[c] || MemberQ[{"k", "g", "X"}, c], "\\1", "e"]],
+        "[" ~~ Shortest[__] ~~ "]" -> "e"];
+    If[ StringContainsQ[plain, "*" | "+" | ("{" ~~ DigitCharacter .. ~~ ",}") | "\\1"],
+        Infinity,
+        StringLength[r] * Times @@ Map[FromDigits, StringCases[plain, {
+            "{" ~~ DigitCharacter .. ~~ "," ~~ n : (DigitCharacter ..) ~~ "}" :> n,
+            "{" ~~ n : (DigitCharacter ..) ~~ "}" :> n}]]
+    ]
+]
 
 (* Semantic GrammarToken[type] dispatch: consume a word-ish run from the
    current position and feed it to Interpreter[type].  Letters, digits,

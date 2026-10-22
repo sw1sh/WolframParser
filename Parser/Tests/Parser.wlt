@@ -1120,3 +1120,23 @@ VerificationTest[
     Wolfram`Parser`Private`regexLooksPastQ /@ {"[A-Za-z0-9$`]+", "a\\$", "ab$", "a(?=b)", "a\\z", "[^\"\\\\]+"},
     {False, False, True, True, True, False},
     TestID -> "ParseRegex: which regexes look past their match"]
+
+VerificationTest[
+    Module[{fa = Wolfram`Parser`Private`regexFirstAtom, ml = Wolfram`Parser`Private`regexMaxLength},
+        {fa /@ {"[0-9]+", "[^\"\\\\]+", "(?i)stop", "\\d{3}", "a|b", "(ab)c", "x?y", "\\bfoo", "[]x]y"},
+         ml /@ {"[0-9]+", "ab{2,3}c", "\\d{3}-\\d{4}", "a*"}}
+    ],
+    {{"[0-9]", "[^\"\\\\]", "(?i)s", "\\d", None, None, None, None, "[]x]"}, {Infinity, 24, 132, Infinity}},
+    TestID -> "ParseRegex: a regex's first atom and a bound on its match length, where they can be told"
+]
+
+VerificationTest[
+    Block[{Wolfram`Parser`Private`$regexWindow = 8},
+        {Parse[ParseRegex["[0-9]+"], StringRepeat["7", 40]],
+         Parse[ParseChoice[ParseRegex["[0-9]+"], ParseRegex["[a-z]+"]], StringRepeat["q", 40]],
+         Parse[ParseRegex["\"[^\"]*\""], "\"" <> StringRepeat["s", 30] <> "\""]}
+    ],
+    {StringRepeat["7", 40], StringRepeat["q", 40], "\"" <> StringRepeat["s", 30] <> "\""},
+    TestID -> "ParseRegex: a token longer than the window is read whole, and a failure at its first character does not widen the window"
+]
+
