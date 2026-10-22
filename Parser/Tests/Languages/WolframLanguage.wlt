@@ -211,7 +211,16 @@ $wlCases = {
     {"x_\\\nInteger", List[HoldComplete[x_Integer]]},
     {"a:\\\n=b", List[HoldComplete[a := b]]},
     {"a\\\n+ b", List[HoldComplete[a + b]]},
-    {"1\\\n.5\\\n", List[HoldComplete[1.5]]}
+    {"1\\\n.5\\\n", List[HoldComplete[1.5]]},
+    {"a; ? b", List[HoldComplete[CompoundExpression[a, Information["b", Rule[LongForm, False]]]]]},
+    {"?Plot*", List[HoldComplete[Information["Plot*", Rule[LongForm, False]]]]},
+    {"??x\ty z", List[HoldComplete[Information["x y z", Rule[LongForm, True]]]]},
+    {"f[?x, ? \"y\" z]", List[HoldComplete[f[Information["x", Rule[LongForm, False]], Times[Information["y", Rule[LongForm, False]], z]]]]},
+    {"a.5", List[HoldComplete[Times[a, 0.5]]]},
+    {"1.5.2", List[HoldComplete[Times[1.5, 0.2]]]},
+    {"f[x].5", List[HoldComplete[Times[f[x], 0.5]]]},
+    {"a. 5", List[HoldComplete[Dot[a, 5]]]},
+    {"a.b5", List[HoldComplete[Dot[a, b5]]]}
 };
 
 (* === forms: precedence, flat chains, minus and quotients, patterns, spans,

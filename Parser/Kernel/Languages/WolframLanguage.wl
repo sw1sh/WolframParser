@@ -149,6 +149,11 @@ $blank = text[ParseChoice[ParseLiteral["___"], ParseLiteral["__"], ParseLiteral[
 
 $slot = ParseAction[ParseLookahead[ParseLiteral["#"]] ~~ ParseRegex["##?([0-9]+|[A-Za-z][A-Za-z0-9]*)?"], #2 &]
 
+(* what a ? or ?? asks about: words of letters, digits and the * and @
+   of a name pattern, the spaces and tabs between them too *)
+$informationWord = text[ParseSome[ParseChoice[ParseRegex["[A-Za-z0-9$`*@]+"], $letter]]]
+$informationName = text[$informationWord ~~ ParseMany[ParseRegex["[ \t]+"] ~~ $informationWord]]
+
 $out = ParseAction[ParseLookahead[ParseLiteral["%"]] ~~ ParseRegex["%+[0-9]*"], #2 &]
 
 (* the file of << and >>: a string, or the characters of a path or a
@@ -196,7 +201,7 @@ grammar[alg_] := Module[{space, wsLine, wsAll, nested, top, statement},
 expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     {after, operator, postfixOperator, leaf, nullLeaf, symbolLeaf, blankLeaf, otherUnits, plainUnit, unit, patternUnit,
      items, comma, call, part, messageName, tag, derivative, span, spanStart, compound, tagSet, put,
-     binary, prefix, postfix, flat, plus, relation, relationOp, implicit, specs, table,
+     binary, prefix, postfix, flat, plus, relation, relationOp, implicit, specs, table, information, dot,
      patternRight, spanOperand, compoundOperand, tagLeft, tagRight},
 
     after[p_, w_] := ParseAction[p ~~ w, #1 &];
@@ -223,6 +228,12 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
         Function[{name, pattern}, If[MissingQ[pattern], name, alg["Binary"]["Pattern", name, pattern]]]];
     (* ;; b and ;; at the start: Span[1, ...] *)
     spanStart = ParseAction[span, Function[f, f[alg["Leaf"]["Integer", "1"]]]];
+    (* ?name and ??name, the query Information["name", LongForm -> ...] of
+       the words after it, a tab among them a space, or of a string *)
+    information = ParseAction[ParseChoice[ParseLiteral["??"], ParseLiteral["?"]] ~~ ParseRegex["[ \t]*"] ~~
+            ParseChoice[$string, ParseAction[$informationName, "\"" <> StringReplace[#, "\t" -> " "] <> "\"" &]] ~~ ws,
+        Function[{query, spaces, name, w}, alg["Call"][alg["Leaf"]["Symbol", "Information"], {alg["Leaf"]["String", name],
+            alg["Binary"]["Rule", alg["Leaf"]["Symbol", "LongForm"], alg["Leaf"]["Symbol", If[query === "??", "True", "False"]]]}]]];
     otherUnits = ParseChoice[
         blankLeaf,
         ParseAction[ParseLookahead[ParseCharacter[DigitCharacter | "."]] ~~ SpannedToken[$number, ws, alg["Leaf"][numberKind[#], #] &], #2 &],
@@ -236,7 +247,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
         ParseAction[after[ParseLiteral["<|"], wsAll] ~~ items["|>"] ~~ after[ParseLiteral["|>"], ws],
             alg["Group"]["Association", #2] &],
         ParseAction[operator["<<"] ~~ leaf[$file, "File"], alg["Prefix"]["Get", #2] &],
-        spanStart];
+        spanStart, information];
     plainUnit = ParseChoice[symbolLeaf, otherUnits];
     unit = ParseChoice[patternUnit, otherUnits];
 
@@ -293,7 +304,10 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     implicit = ParseAction[ParseLookahead[ParseChoice[
         ParseCharacter[LetterCharacter | DigitCharacter | "$" | "`" | "\"" | "_" | "#" | "%" | "(" | "{"],
         ParseLiteral["<|"],
+        ParseLiteral["."] ~~ ParseCharacter[DigitCharacter],
         $letter]], "*" &];
+    (* a . not before a digit, which begins a number *)
+    dot = after[ParseAction[longest["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]], #1 &], wsAll];
 
     specs = {
         {"ColonColon", {"Postfix", messageName}},
@@ -318,7 +332,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
         {"LessGreater", {"InfixN", operator["<>"], flat["StringJoin"]}},
         {"Caret", {"InfixR", binary["^", "Power"]}},
         {"StarStar", {"InfixN", operator["**"], flat["NonCommutativeMultiply"]}},
-        {"Dot", {"InfixN", operator["."], flat["Dot"]}},
+        {"Dot", {"InfixN", dot, flat["Dot"]}},
         {"Prefix`Minus", {"Prefix", prefix["-", "Minus"]}},
         {"Prefix`Minus", {"Prefix", prefix["+", "Plus"]}},
         {"Slash", {"InfixL", binary["/", "Divide"]}},
