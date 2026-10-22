@@ -201,7 +201,11 @@ $wlCases = {
     {"\"\\777\"", List[HoldComplete["\:01ff"]]},
     {"\"x\\\\\"", List[HoldComplete["x\\"]]},
     {"f::\"tag\"", List[HoldComplete[MessageName[f, "tag"]]]},
-    {"<<\"a\\\\b.m\"", List[HoldComplete[Get["a\\b.m"]]]}
+    {"<<\"a\\\\b.m\"", List[HoldComplete[Get["a\\b.m"]]]},
+    {"<<a\\b.m", List[HoldComplete[Get["a\\b.m"]]]},
+    {"<<a!b*c?", List[HoldComplete[Get["a!b*c?"]]]},
+    {"<<a\\[Alpha]\\:0041", List[HoldComplete[Get["a\[Alpha]A"]]]},
+    {"x >> a\\b", List[HoldComplete[Put[x, "a\\b"]]]}
 };
 
 (* === forms: precedence, flat chains, minus and quotients, patterns, spans,

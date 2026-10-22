@@ -151,8 +151,12 @@ $slot = ParseAction[ParseLookahead[ParseLiteral["#"]] ~~ ParseRegex["##?([0-9]+|
 
 $out = ParseAction[ParseLookahead[ParseLiteral["%"]] ~~ ParseRegex["%+[0-9]*"], #2 &]
 
-(* the file of << and >>: a string, or the characters of a path or a context *)
-$file = ParseChoice[$string, ParseRegex["[A-Za-z0-9$`_./~:-]+"]]
+(* the file of << and >>: a string, or the characters of a path or a
+   context, a \ among them, \[Name] one character; and one whose \[ is
+   not closed *)
+$fileCharacters = "(?:[A-Za-z0-9$`_./~:!*?-]|\\\\\\[[A-Za-z0-9]+\\]|\\\\(?!\\[))"
+$file = ParseChoice[$string, ParseRegex[$fileCharacters <> "+"]]
+$unterminatedFile = ParseRegex[$fileCharacters <> "*\\\\\\[[A-Za-z0-9]*+(?!\\])"]
 
 (* a comment, the comments nested in it too *)
 commentParser[] := With[{comment = RecCell[]},
@@ -514,7 +518,14 @@ heldLeaf["Blank", s_String] := held[blankExpression[s]]
 heldLeaf["Slot", s_String] := held[slotExpression[s]]
 heldLeaf["Out", s_String] := held[outExpression[s]]
 heldLeaf["Tag", s_String] := held[HoldComplete[s]]
-heldLeaf["File", s_String] := held[HoldComplete @@ {If[StringStartsQ[s, "\""], stringValue[s], s]}]
+heldLeaf["File", s_String] := held[HoldComplete @@ {If[StringStartsQ[s, "\""], stringValue[s], fileValue[s]]}]
+
+(* the file a name of << or >> gives: its long names and its \: and \.
+   escapes decoded, another \ kept *)
+fileValue[s_String] := If[StringFreeQ[s, "\\"], s, StringReplace[s, {
+    "\\." ~~ digits : Repeated[HexadecimalCharacter, {2}] :> FromCharacterCode[FromDigits[digits, 16]],
+    "\\:" ~~ digits : Repeated[HexadecimalCharacter, {4}] :> FromCharacterCode[FromDigits[digits, 16]],
+    "\\[" ~~ name : (LetterCharacter | DigitCharacter) .. ~~ "]" /; KeyExistsQ[longNameCharacters[], name] :> longNameCharacters[][name]}]]
 
 expressions[xs_List] := Map[#["Expr"] &, xs]
 
@@ -924,6 +935,7 @@ concreteParser[ws_, wsAll_, nested_] := Module[
     longGroups = Map[groupOf[longNameSpellings[#[[1]]], #[[2]], longNameSpellings[#[[2]]], #[[3]]] &, $longNameTable["Groups"]];
     longCalls = Map[{"Call", {"Postfix", callOf[longNameSpellings[#[[1]]], #[[2]], longNameSpellings[#[[2]]], #[[3]]]}} &, $longNameTable["Calls"]];
     fileItem = ParseChoice[
+        ParseAction[$unterminatedFile ~~ ws, errorTokenItem[Token`Error`UnterminatedFileString, #1, #2] &],
         ParseAction[$file ~~ ws, item[concreteLeaf[String, #1], #2] &],
         unterminatedStringItem,
         ParseAction[ParseSucceed[Null], errorItem[Token`Error`ExpectedFile] &]];
