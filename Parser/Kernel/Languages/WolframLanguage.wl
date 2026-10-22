@@ -524,16 +524,11 @@ $escapes = {
     "\\_" -> "\:f7ca", "\\%" -> "\:f7c5", "\\&" -> "\:f7c7", "\\+" -> "\:f7cb", "\\/" -> "\:f7cc", "\\`" -> "\:f7cd"
 }
 
-(* the character of each long name, "Alpha" -> the letter alpha, built at
-   the first long name a string holds: of the characters CharacterName
-   names with a long name of the language, the one the kernel reads, which
-   where two share a name is the one it writes as the name *)
-longNameCharacters[] := longNameCharacters[] = Association[Map[
-    Function[g, With[{codes = If[Length[g] === 1, g[[All, 2]], Select[g[[All, 2]], writtenAsNameQ[#, g[[1, 1]]] &]]},
-        If[codes === {}, Nothing, g[[1, 1]] -> FromCharacterCode[First[codes]]]]],
-    GatherBy[Select[Table[{CharacterName[FromCharacterCode[n]], n}, {n, 0, 65535}], StringQ[First[#]] && KeyExistsQ[$longNames, First[#]] &], First]]]
-
-writtenAsNameQ[n_Integer, name_String] := ToString[FromCharacterCode[n], InputForm, CharacterEncoding -> "ASCII"] === "\"\\[" <> name <> "]\""
+(* the character of each long name, "Alpha" -> the letter alpha, as
+   Wolfram 15 reads it (Languages/LongNameCharacters.wl, recorded by
+   dev/freeze-longname-characters.wls), read at the first long name a
+   string holds *)
+longNameCharacters[] := longNameCharacters[] = Map[FromCharacterCode, Get[FileNameJoin[{$languagesDirectory, "LongNameCharacters.wl"}]]]
 
 heldLeaf["Integer" | "Real", s_String] :=
     <|"Expr" -> HoldComplete @@ {numberValue[s]}, "Literal" -> True, "Chain" -> False|>
