@@ -56,10 +56,38 @@ errorForms = {
     "a;;b;;", "a;;;;", "a; ;b", "a; ;", "a; ??", "a; )", "a; \"abc", "a;; ??", "f[a; )]", "#\"a"
 };
 
+(* long names that are no letters: operators, brackets, integrals,
+   whitespace and newlines, and what CodeParser does not read *)
+longNameForms = {
+    (* operators, spelled as long names and as their characters *)
+    "a \\[RightArrow] b \\[LeftArrow] c", "a \\[Union] b \\[Intersection] c", "a + b \\[PlusMinus] c", "a \\[Minus] b + c", "\\[Minus] a",
+    "a \\[InvisibleTimes] b c", "a \\[Element] b \\[Subset] c", "a < b \\[LessLess] c", "a \\[Cross] b \\[Cross] c", "\\[Not] a && b",
+    "a \\[Implies] b \\[Implies] c", "a\\[Transpose]\\[Conjugate]", "\\[ForAll] x", "a \\[Divides] b", "a \\[Divide] b / c",
+    "a \\[Therefore] b \\[Therefore] c", "a \\[Because] b \\[Because] c", "\\[Sum] a + b", "a \\[CircleTimes] \\[CircleTimes] b", "\\[Sqrt] 2 x",
+    "a\[RightTriangle]b", "a\[VerticalTilde]b", "a \[Times] b \[CenterDot] c", "\[Not]a", "a\[Transpose]", "\\[Del] f", "a\[Rule]b\[RuleDelayed]c",
+    (* brackets and calls *)
+    "\\[LeftAngleBracket]a, b\\[RightAngleBracket]", "\\[LeftFloor]x\\[RightFloor]", "\\[LeftCeiling]x\\[RightCeiling]", "\\[LeftBracketingBar]x\\[RightBracketingBar]",
+    "\\[LeftDoubleBracketingBar]x\\[RightDoubleBracketingBar]", "\\[LeftAssociation]a -> 1\\[RightAssociation]", "\\[OpenCurlyQuote]a\\[CloseCurlyQuote]",
+    "\\[OpenCurlyDoubleQuote]a\\[CloseCurlyDoubleQuote]", "\\[LeftDoubleBracket]a\\[RightDoubleBracket]", "f\\[LeftDoubleBracket]1, 2\\[RightDoubleBracket]",
+    "\[LeftAngleBracket]a\[RightAngleBracket]", "f\[LeftDoubleBracket]1\[RightDoubleBracket]", "\[LeftFloor]x\[RightFloor] + 1",
+    (* brackets left open, and closers that close none *)
+    "\\[LeftAngleBracket]a", "{a\\[RightAngleBracket]}", "\\[LeftCeiling]a]", "f[\\[LeftFloor]a\\[RightFloor]]", "a\\[RightFloor]", "(a\\[RightCeiling])",
+    (* integrals *)
+    "\\[Integral] f", "\\[Integral]f g\\[DifferentialD]x", "a \\[DifferentialD] x", "\\[Integral] f \\[DifferentialD] x + 1", "\\[ContourIntegral] f \\[DifferentialD] z",
+    "\\[Integral]\\[Integral] f \\[DifferentialD] x \\[DifferentialD] y", "\[Integral]f\[DifferentialD]x",
+    (* whitespace, newlines and the invisible comma *)
+    "a\\[InvisibleSpace]b", "a\\[NonBreakingSpace]b", "a\[NonBreakingSpace]b", "a\\[IndentingNewLine]b", "a\[LineSeparator]b", "f[a\\[InvisibleComma]b]", "a\\[InvisibleComma]b",
+    (* what CodeParser does not read *)
+    "\\[PartialD]", "\\[PartialD] a", "\\[Limit] x", "a \\[DiscreteShift] b",
+    (* letters *)
+    "\\[Alpha]\\[Beta]", "\[Alpha]\[Beta] \[Element] \[DoubleStruckCapitalR]", "\\[FormalX] + \\[DoubleStruckCapitalR]"
+};
+
 (* whole containers, Source included *)
 containerForms = {
     "f[x_] := x^2 (* c *)\n", "a; \nb", "a b", "f[x, ]", ";;b", "{1, 2}[[1]]", "a\r\nb", "\ta\tb", "x\n(* a\n b *)\n\n",
     "\"a\nb\" (*\t*)", "\"c\\\nd\"", "\\[Alpha]b \\[Rule] c", "a +\n  b",
+    "\[LeftAngleBracket]a\[RightAngleBracket] \\[Element] b\[NonBreakingSpace]\n",
     (* what CodeParser reads again: an open group or token, up to its chunk *)
     "f[x\ny = 1", "f[x\ng[y]", "{1,\n2\n\nf[3]", "f[x \n", "(* abc\n", "\"abc\n", "a = 1\nb = (c", "f[x\nBegin[\"a`\"]"
 };
@@ -70,7 +98,7 @@ shown[e_] := Block[{$ContextPath = {"System`"}}, ToString[e, InputForm, Characte
 entries[list_, f_] := StringRiffle[Map["    {" <> shown[#] <> ", " <> shown[f[#]] <> "}" &, list], ",\n"]
 
 block = StringJoin[
-    "$concreteTrees = {\n", entries[Join[forms, errorForms], noSource[dropIssues[CodeConcreteParse[#]]] &], "\n};\n\n",
+    "$concreteTrees = {\n", entries[Join[forms, errorForms, longNameForms], noSource[dropIssues[CodeConcreteParse[#]]] &], "\n};\n\n",
     "$concreteContainers = {\n", entries[containerForms, dropIssues[CodeConcreteParse[#]] &], "\n};\n"];
 
 text = ByteArrayToString[ReadByteArray[testFile], "UTF-8"];
@@ -79,4 +107,4 @@ If[ ! StringContainsQ[text, "(* BEGIN frozen" ~~ Shortest[___] ~~ "(* END frozen
 updated = StringReplace[text,
     start : ("(* BEGIN frozen" ~~ Shortest[___] ~~ "*)\n") ~~ Shortest[___] ~~ end : "(* END frozen *)" :> start <> block <> end, 1];
 With[{stream = OpenWrite[testFile, CharacterEncoding -> "UTF-8"]}, WriteString[stream, updated]; Close[stream]];
-Print["froze ", Length[forms] + Length[errorForms], " trees and ", Length[containerForms], " containers into ", testFile];
+Print["froze ", Length[forms] + Length[errorForms] + Length[longNameForms], " trees and ", Length[containerForms], " containers into ", testFile];
