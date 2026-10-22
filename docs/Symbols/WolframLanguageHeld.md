@@ -16,12 +16,12 @@ RelatedGuides: [ParserZoo]
 
 ## Details & Options
 
-- The result is what <code>[ImportString]()[*code*, {"WL", "HeldExpressions"}]</code> gives: the expressions as the kernel reads them, before any of them evaluates.
+- The result is what <code>[ImportString]()[*code*, {"WL", "HeldExpressions"}]</code> gives: the expressions as the kernel reads them, before any of them evaluates. A statement that is `Null` alone is left out, as the kernel leaves it out.
 - Outside brackets a newline ends an expression wherever the expression could end, so `a` on one line and `+ b` on the next are two expressions, while `a +` followed by `b` is one. Inside brackets a newline is whitespace. Comments, nested ones included, are whitespace. A `\` at the end of a line, outside a string, continues it: `a\` and `b` on the next line are the name `ab`. A `?` or `??` where an operand begins asks about the words after it, as `?Plot*` is `Information["Plot*", LongForm -> False]`, and a `.` before a digit begins a number, so `a.5` is `a*0.5`.
 - The forms come out as the kernel builds them: `a - b` is `Plus[a, Times[-1, b]]`, `a/b` is `Times[a, Power[b, -1]]`, a minus folds into a number (`-2` is the integer `-2`), and a chain of one flat operator is one call (`a + b + c` is `Plus[a, b, c]`).
 - The binding powers are the precedences [CodeParser]() publishes; [WolframLanguageGrammar]() generates the levels of its [ParseOperatorTable]() from them.
 - The algebra reads numbers and strings from their text itself: a real keeps the precision or accuracy its marks give, or that its digits give past a machine real's, and a string's escapes are decoded, an unknown one kept as written. The file of `<<` and `>>` keeps a `\` in it, as in `<<a\b.m`, and decodes its long names. A name is the one leaf read by the kernel's reader, under [HoldComplete](), so it is made in [$Context]() as the kernel makes it.
-- `WolframLanguageHeld` runs [WolframLanguageGrammar]() over [WolframLanguageSemantic](). [WolframLanguageAST]() runs the same grammar over [ASTAlgebra]().
+- `WolframLanguageHeld` reads *code* in time linear in its length: one compiled pass over the character codes makes the tokens, and precedence climbing over the tokens, by the levels [WolframLanguageGrammar]() generates, makes the expressions with the builders of [WolframLanguageSemantic](). Source that this reader does not take, and source that is no Wolfram Language, [WolframLanguageGrammar]() reads over [WolframLanguageSemantic](), so the result and a failure are the grammar's. [WolframLanguageAST]() runs the grammar over [ASTAlgebra]().
 - Source that cannot be read gives a <code>[Failure]()["ParseError", ...]</code> whose `"Position"` is the character offset in *code* where reading stopped.
 
 ## Basic Examples

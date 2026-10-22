@@ -1392,9 +1392,18 @@ WolframLanguageAST[s_String] := With[{spans = lineContinuations[s]},
         With[{r = parsed[$astGrammar, StringReplacePart[s, "", spans]], kept = keptPositions[s, spans]},
             If[FailureQ[r], continuedFailure[r, kept, s], ASTAddSource[continuedOffsets[ASTContainer[r], kept], s]]]]]
 
+(* The held expressions read first by the reader of WolframLanguageFast.wl,
+   which reads the grammar's source in one pass over its tokens; source it
+   does not take the grammar reads. *)
+$fastHeldReader = True
+
 WolframLanguageHeld[s_String] := With[{spans = lineContinuations[s]},
-    With[{r = parsed[$heldGrammar, If[spans === {}, s, StringReplacePart[s, "", spans]]]},
-        Which[! FailureQ[r], DeleteCases[expressions[r], HoldComplete[Null]], spans === {}, r, True, continuedFailure[r, keptPositions[s, spans], s]]]]
+    With[{clean = If[spans === {}, s, StringReplacePart[s, "", spans]]},
+        With[{fast = If[TrueQ[$fastHeldReader], fastHeld[clean], None]},
+            If[ ListQ[fast],
+                DeleteCases[fast, HoldComplete[Null]],
+                With[{r = parsed[$heldGrammar, clean]},
+                    Which[! FailureQ[r], DeleteCases[expressions[r], HoldComplete[Null]], spans === {}, r, True, continuedFailure[r, keptPositions[s, spans], s]]]]]]]
 
 $concreteGrammar := $concreteGrammar = concreteGrammar[]
 
