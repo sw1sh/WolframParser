@@ -33,7 +33,7 @@ Target use cases:
 
 ## Status
 
-**v1.5.0** — a working library. The `` Wolfram`Parser` `` kernel is six files under
+**v1.6.0** — a working library. The `` Wolfram`Parser` `` kernel is six files under
 `Parser/Kernel/`: a Parsec-style combinator core plus the `GrammarRules` lowering
 ([`Parser.wl`](Parser/Kernel/Parser.wl)), a LaTeX math-mode parser at 126 / 126 on
 KaTeX's screenshotter corpus ([`LaTeX.wl`](Parser/Kernel/LaTeX.wl)), a Markdown parser
@@ -46,7 +46,7 @@ example front-ends (Calculator, JSON, Lisp, Lambda, Brainfuck, ABC), plus OpenQA
 The kernel is dependency-free — no C library — with performance from `FunctionCompile`'s
 LLVM backend. It ships as a full paclet (`Guides` / `Symbols` / `Tutorials` documentation,
 built from `docs/` with [PacletPage](https://github.com/WolframInstitute/PacletPage)) and is
-covered by 442 core and 569 language tests (`wl -f run-tests.wls`).
+covered by 446 core and 830 language tests (`wl -f run-tests.wls`).
 
 [`build.wls`](build.wls) builds the documentation, [`release.wls`](release.wls) builds it,
 deploys the paclet resource and publishes the documentation site, and
