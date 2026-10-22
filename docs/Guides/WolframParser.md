@@ -59,6 +59,9 @@ Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_co
 - [ParseLookahead]() succeed iff `p` would match, consuming nothing
 - [ParseNotFollowedBy]() succeed iff `p` would not match, consuming nothing
 - [ParseTry]() backtrack on failure even after partial consumption
+- [ParseCondition]() keep a parser's result only where a test holds for it
+- [ParseScoped]() run a parser with a label in its scope
+- [ParseScope]() the labels of the scoped parsers around, consuming nothing
 
 ### Action / recursion
 

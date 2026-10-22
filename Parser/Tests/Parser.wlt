@@ -1153,3 +1153,24 @@ VerificationTest[
     "\[Beta]",
     TestID -> "Parse: a failure names the character past ASCII it found"
 ]
+
+VerificationTest[
+    {Parse[ParseScoped["a", ParseScoped["b", ParseScope[]]], ""], Parse[ParseScoped["a", ParseLiteral["x"]] ~~ ParseScope[], "x"]},
+    {{"a", "b"}, {"x", {}}},
+    TestID -> "ParseScoped: labels nest innermost last, and hold only while their parser runs"
+]
+
+VerificationTest[
+    With[{stray = ParseAction[ParseLiteral["]"] ~~ ParseCondition[ParseScope[], FreeQ[#, "]"] &], "stray" &]},
+        {Parse[ParseScoped[")", ParseMany[ParseChoice[stray, ParseRegex["[a-z]+"]]]], "ab]cd"],
+         FailureQ[Parse[ParseScoped["]", ParseMany[ParseChoice[stray, ParseRegex["[a-z]+"]]]], "ab]cd"]]}],
+    {{"ab", "stray", "cd"}, True},
+    TestID -> "ParseScope: a closer is stray only where no group around it is closed by it"
+]
+
+VerificationTest[
+    With[{even = ParseCondition[ParseRegex["[0-9]+"], EvenQ[FromDigits[#]] &]},
+        {Parse[even, "42"], FailureQ[Parse[even, "43"]], Parse[ParseChoice[even, ParseAction[ParseRegex["[0-9]+"], {"odd", #} &]], "43"]}],
+    {"42", True, {"odd", "43"}},
+    TestID -> "ParseCondition: a result the test rejects is a failure a choice goes past"
+]

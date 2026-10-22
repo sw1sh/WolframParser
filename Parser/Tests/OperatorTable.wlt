@@ -248,6 +248,17 @@ VerificationTest[
     TestID -> "ParseOperatorTable: an InfixN chain reads its later operators with a parser of their own"]
 
 
+(* an operand the table's FinalOperand test holds for ends the expression
+   it begins; the operators around that expression still apply *)
+VerificationTest[
+    With[{t = ParseOperatorTable[ParseChoice[num, ParseAction[ParseLiteral["?"], (err &)]], {
+            {{"InfixL", ParseAction[ParseLiteral["*"], (times &)]}},
+            {{"InfixL", ParseAction[ParseLiteral["+"], (plus &)]}}}, "FinalOperand" -> (# === err &)]},
+        {Parse[t, "1+?*2"], Parse[t, "1+2*3"]}],
+    {times[plus[1, err], 2], plus[1, times[2, 3]]},
+    TestID -> "ParseOperatorTable: a final operand takes no operator where it begins"]
+
+
 (* === first-character dispatch === *)
 
 VerificationTest[

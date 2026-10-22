@@ -72,12 +72,15 @@ ParseChainLeft::usage = "ParseChainLeft[p, op] parses a left-associative chain: 
 
 ParseChainRight::usage = "ParseChainRight[p, op] parses a right-associative chain."
 
-ParseOperatorTable::usage = "ParseOperatorTable[unit, levels] parses an operator-precedence expression grammar by Pratt-style binding-power climbing - a single left-to-right pass instead of a hand-written ParseChainLeft / ParseChainRight cascade. unit is the parser for an operand (an atom, a parenthesised sub-expression via ParseRecursive, a prefix-quantifier, ...). levels is a list of precedence levels, TIGHTEST binding first; each level is a list of operator specs {fixity, opParser} (a lone spec may stand in for a one-operator level) where fixity is \"InfixL\" | \"InfixR\" | \"Prefix\" | \"Postfix\" and opParser's RESULT is the combining function - binary for infix, unary for prefix / postfix - the same op-returns-a-function convention as ParseChainLeft. {\"InfixN\", opParser, combine} is a flat n-ary chain: a run of \"InfixN\" operators of one level sharing combine (or, without combine, the same operator) builds one node, combine[{operand1, operand2, ...}, {opResult1, ...}], or opResult1 @@ operands without combine - for a + b - c into one sum, or a < b <= c into one chain. {\"InfixN\", opParser, combine, nextParser} reads the chain's operators after the first with nextParser, for a chain whose later operators may follow what its first may not (a newline); its result stands in the operator results combine gets. {\"Ternary\", op1Parser, op2Parser} parses left op1 middle op2 right and gives op2's result applied to {left, middle, right}, left-associative; \"TernaryR\" is right-associative. Stays linear on grammars where a PEG choice over or / and / apply re-parses the shared leading operand and backtracks exponentially (e.g. TPTP THF)."
+ParseOperatorTable::usage = "ParseOperatorTable[unit, levels] parses an operator-precedence expression grammar by Pratt-style binding-power climbing - a single left-to-right pass instead of a hand-written ParseChainLeft / ParseChainRight cascade. unit is the parser for an operand (an atom, a parenthesised sub-expression via ParseRecursive, a prefix-quantifier, ...). levels is a list of precedence levels, TIGHTEST binding first; each level is a list of operator specs {fixity, opParser} (a lone spec may stand in for a one-operator level) where fixity is \"InfixL\" | \"InfixR\" | \"Prefix\" | \"Postfix\" and opParser's RESULT is the combining function - binary for infix, unary for prefix / postfix - the same op-returns-a-function convention as ParseChainLeft. {\"InfixN\", opParser, combine} is a flat n-ary chain: a run of \"InfixN\" operators of one level sharing combine (or, without combine, the same operator) builds one node, combine[{operand1, operand2, ...}, {opResult1, ...}], or opResult1 @@ operands without combine - for a + b - c into one sum, or a < b <= c into one chain. {\"InfixN\", opParser, combine, nextParser} reads the chain's operators after the first with nextParser, for a chain whose later operators may follow what its first may not (a newline); its result stands in the operator results combine gets. {\"Ternary\", op1Parser, op2Parser} parses left op1 middle op2 right and gives op2's result applied to {left, middle, right}, left-associative; \"TernaryR\" is right-associative. Stays linear on grammars where a PEG choice over or / and / apply re-parses the shared leading operand and backtracks exponentially (e.g. TPTP THF). ParseOperatorTable[unit, levels, \"FinalOperand\" -> test] ends an expression that begins with an operand unit gives a result test gives True for: no operator takes it as its left operand there, while the operators around the expression still apply, as an error token ends what it begins."
 
 ParseLookahead::usage = "ParseLookahead[p] succeeds iff p would match at the current position, consuming nothing."
 
 ParseNotFollowedBy::usage = "ParseNotFollowedBy[p] succeeds iff p would NOT match at the current position, consuming nothing."
 
+ParseScoped::usage = "ParseScoped[label, p] runs p with label added to the scope: the list of the labels of the ParseScoped parsers around a parser, innermost last, {} where a parse begins. p's result is ParseScoped's. With ParseScope and ParseCondition a parser can match differently inside a construct, as a closing bracket that closes no group around it."
+ParseScope::usage = "ParseScope[] gives the scope, the labels of the ParseScoped parsers around it, innermost last, consuming no input."
+ParseCondition::usage = "ParseCondition[p, test] runs p and succeeds with its result where test applied to the result gives True, and fails where it does not: a parser of what a grammar alone cannot tell, as a name one table knows."
 ParseTry::usage = "ParseTry[p] runs p; on failure, the input position is restored to where ParseTry started (no commitment to partial consumption). Use to opt back into full-backtracking semantics when PEG-ordered choice is too eager."
 
 ParseRecursive::usage = "ParseRecursive[symbol] is a lazy reference to a parser bound to symbol; the symbol is looked up at parse time so cyclic / mutually-recursive grammars can be written without pre-declaring every node."
@@ -161,9 +164,12 @@ ParseChainRight[p_ParserCombinator, op_ParserCombinator] :=
    list of precedence levels (tightest first), each a list of operator
    specs {fixity, opParser}. A lone {fixity, opParser} stands in for a
    single-operator level. See the "OperatorTable" interpret clause. *)
-ParseOperatorTable[unit_ParserCombinator, levels_List] :=
+Options[ParseOperatorTable] = {"FinalOperand" -> None}
+
+ParseOperatorTable[unit_ParserCombinator, levels_List, opts : OptionsPattern[]] :=
     With[{normal = normalizeOpLevels[levels]},
-        ParserCombinator["OperatorTable", {unit, normal}, <|"Dispatch" -> operatorDispatch[normal]|>]]
+        ParserCombinator["OperatorTable", {unit, normal},
+            <|"Dispatch" -> operatorDispatch[normal], "FinalOperand" -> OptionValue["FinalOperand"]|>]]
 
 normalizeOpLevels[levels_List] :=
     Replace[levels, spec : {_String, _ParserCombinator, ___} :> {spec}, {1}]
@@ -213,6 +219,8 @@ firstCharacters[ParserCombinator["Choice" | "ChoiceLongest", pcs_List, _]] :=
     unionOfFirsts[firstCharacters /@ pcs]
 firstCharacters[ParserCombinator["Sequence", pcs_List, _]] := sequenceFirsts[pcs]
 firstCharacters[ParserCombinator["Action", {p_, _}, _]] := firstCharacters[p]
+firstCharacters[ParserCombinator["Scoped", {_, p_}, _]] := firstCharacters[p]
+firstCharacters[ParserCombinator["Condition", {p_, _}, _]] := firstCharacters[p]
 firstCharacters[ParserCombinator["Some" | "Lookahead" | "Try", p_, _]] := firstCharacters[p]
 firstCharacters[ParserCombinator["Between", {open_, _, _}, _]] := firstCharacters[open]
 firstCharacters[_] := All
@@ -221,7 +229,7 @@ firstCharacters[_] := All
    that consumes nothing is skipped, and one that may (Optional, Many)
    adds its own characters to those of the rest *)
 sequenceFirsts[{}] := All
-sequenceFirsts[{ParserCombinator["NotFollowedBy" | "Position", _, _], rest___}] := sequenceFirsts[{rest}]
+sequenceFirsts[{ParserCombinator["NotFollowedBy" | "Position" | "Scope", _, _], rest___}] := sequenceFirsts[{rest}]
 sequenceFirsts[{ParserCombinator["Optional" | "Many", p_, _], rest___}] :=
     unionOfFirsts[{firstCharacters[p], sequenceFirsts[{rest}]}]
 sequenceFirsts[{p_, ___}] := firstCharacters[p]
@@ -236,6 +244,14 @@ ParseNotFollowedBy[p_ParserCombinator] :=
 
 ParseTry[p_ParserCombinator] :=
     ParserCombinator["Try", p, <||>]
+
+ParseScoped[label_, p_ParserCombinator] :=
+    ParserCombinator["Scoped", {label, p}, <||>]
+
+ParseScope[] := ParserCombinator["Scope", {}, <||>]
+
+ParseCondition[p_ParserCombinator, test_] :=
+    ParserCombinator["Condition", {p, test}, <||>]
 
 (* Recursive reference: hold the symbol so the user can write
    `expr = ParseLiteral["x"] | ParseLiteral["("] ~~ ParseRecursive[expr] ~~ ParseLiteral[")"]`
@@ -348,7 +364,7 @@ parseMemoInit[_, _]    := None
 Parse[pc_ParserCombinator, input_String, opts : OptionsPattern[]] :=
     Module[{r, len = StringLength[input],
             memo = parseMemoInit[OptionValue["Memoize"], pc]},
-        r = Block[{$RecursionLimit = $maxParseRecursion, $parseMemo = memo, $inputCodes = inputCodes[input]},
+        r = Block[{$RecursionLimit = $maxParseRecursion, $parseMemo = memo, $inputCodes = inputCodes[input], $parseScope = {}},
             interpret[pc, input, 1]];
         Which[
             MatchQ[r, _TerminatedEvaluation],
@@ -367,7 +383,7 @@ Parse[pc_ParserCombinator, input_String, opts : OptionsPattern[]] :=
 
 ParsePartial[pc_ParserCombinator, input_String, opts : OptionsPattern[]] :=
     Module[{r, memo = parseMemoInit[OptionValue["Memoize"], pc]},
-        r = Block[{$RecursionLimit = $maxParseRecursion, $parseMemo = memo, $inputCodes = inputCodes[input]},
+        r = Block[{$RecursionLimit = $maxParseRecursion, $parseMemo = memo, $inputCodes = inputCodes[input], $parseScope = {}},
             interpret[pc, input, 1]];
         Which[
             MatchQ[r, _TerminatedEvaluation],
@@ -884,7 +900,7 @@ interpretDispatch[ParserCombinator["ChainRight", {p_, op_}, _], input_, pos_] :=
    right-nesting returns a clean parseErr instead of tripping
    $RecursionLimit. *)
 interpretDispatch[ParserCombinator["OperatorTable", {unit_, levels_List}, opts_], input_, pos_] :=
-    Module[{dispatch = Lookup[opts, "Dispatch", operatorDispatch[levels]], len = StringLength[input],
+    Module[{dispatch = Lookup[opts, "Dispatch", operatorDispatch[levels]], final = Lookup[opts, "FinalOperand", None], len = StringLength[input],
             specsAt, noOp, nud, tryOps, climb, naryChain, ternary},
         (* the specs of a kind ("Prefix" or "Led") whose operator could
            begin at p, in table order *)
@@ -925,6 +941,7 @@ interpretDispatch[ParserCombinator["OperatorTable", {unit_, levels_List}, opts_]
                 parseErr[p, "<input within nesting limit>", safeChar[input, p]],
                 Module[{leftR = nud[p], left, cur, opHit, s, fn, opEnd, rightRbp, rightR},
                     If[ MatchQ[leftR, _parseErr], Return[leftR, Module] ];
+                    If[ final =!= None && TrueQ[final[leftR[[1]]]], Return[leftR, Module] ];
                     left = leftR[[1]]; cur = leftR[[2]];
                     While[ (opHit = tryOps[rbp, cur]) =!= noOp,
                         s = opHit[[1]]; fn = opHit[[2, 1]]; opEnd = opHit[[2, 2]];
@@ -1027,12 +1044,33 @@ interpretDispatch[ParserCombinator["NotFollowedBy", p_, _], input_, pos_] :=
 interpretDispatch[ParserCombinator["Try", p_, _], input_, pos_] :=
     interpret[p, input, pos]
 
+(* The scope: the labels of the ParseScoped parsers being run, innermost
+   last. It is dynamic, so a parser that fails or backtracks leaves it as
+   it was. *)
+$parseScope = {}
+
+interpretDispatch[ParserCombinator["Scoped", {label_, p_}, _], input_, pos_] :=
+    Block[{$parseScope = Append[$parseScope, label]}, interpret[p, input, pos]]
+
+interpretDispatch[ParserCombinator["Scope", _, _], _, pos_] :=
+    parseOk[$parseScope, pos]
+
+interpretDispatch[ParserCombinator["Condition", {p_, test_}, _], input_, pos_] :=
+    Block[{r = interpret[p, input, pos]},
+        Which[
+            MatchQ[r, _parseErr], r,
+            TrueQ[test[r[[1]]]], r,
+            True, parseErr[pos, "<condition>", safeChar[input, pos]]
+        ]
+    ]
+
 (* Recursive: look up the held symbol's current value and interpret it.
-   When packrat memoisation is on, cache the result by {rule-symbol, pos}. *)
+   When packrat memoisation is on, cache the result by {rule-symbol, pos,
+   scope}. *)
 interpretDispatch[ParserCombinator["Recursive", Hold[s_Symbol], _], input_, pos_] :=
     If[ $parseMemo === None,
         interpret[s, input, pos],
-        With[{key = {Hold[s], pos}},
+        With[{key = {Hold[s], pos, $parseScope}},
             If[ KeyExistsQ[$parseMemo, key],
                 $parseMemo[key],
                 $parseMemo[key] = interpret[s, input, pos]

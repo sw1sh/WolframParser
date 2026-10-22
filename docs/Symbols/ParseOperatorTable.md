@@ -31,6 +31,7 @@ It is the [Pratt / top-down-operator-precedence](https://tdop.github.io/) ("prec
 - *Linear time.* The leading operand is parsed **once**; operators are then consumed while their binding power exceeds the caller's. A [ParseChoice]() over `or | and | apply` re-parses the shared leading operand once per alternative and backtracks exponentially (the TPTP THF blow-up); [ParseOperatorTable]() does not.
 - *Depth guard.* Right-nested recursion carries the same nesting limit as the rest of the interpreter, returning a clean <code>[Failure]()["ParseError", …]</code> rather than tripping [$RecursionLimit]().
 - *Generalises the chain combinators.* A single-level table of one `"InfixL"` operator is exactly [ParseChainLeft](); one `"InfixR"` operator is [ParseChainRight](). The table adds multiple precedence levels and prefix / postfix in one pass.
+- The option `"FinalOperand" -> test` ends an expression at its first operand where *test* gives [True]() for what *unit* read: no operator takes that operand as its left one, and the operators of the expression it is an operand of still apply. An error token of a language is such an operand.
 
 ## Basic Examples
 
@@ -216,6 +217,21 @@ Parse[cond, "1?2:3?4:5"]
 ```
 
 <!-- => if[if[1, 2, 3], 4, 5] -->
+
+**Final operands.** A `?` the operand parser reads as an error ends the expression it begins, so the `*` after it takes the whole sum:
+
+```wl
+final = ParseOperatorTable[ParseChoice[ParseAction[ParseRegex["[0-9]+"], FromDigits], ParseAction[ParseLiteral["?"], error &]], {
+   {"InfixL", ParseAction[ParseLiteral["*"], (times &)]},
+   {"InfixL", ParseAction[ParseLiteral["+"], (plus &)]}
+}, "FinalOperand" -> (# === error &)]
+```
+
+```wl
+Parse[final, "1+?*2"]
+```
+
+<!-- => times[plus[1, error], 2] -->
 
 ## Properties and Relations
 
