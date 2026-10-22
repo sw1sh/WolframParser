@@ -345,7 +345,7 @@ parseMemoInit[_, _]    := None
 Parse[pc_ParserCombinator, input_String, opts : OptionsPattern[]] :=
     Module[{r, len = StringLength[input],
             memo = parseMemoInit[OptionValue["Memoize"], pc]},
-        r = Block[{$RecursionLimit = $maxParseRecursion, $parseMemo = memo},
+        r = Block[{$RecursionLimit = $maxParseRecursion, $parseMemo = memo, $inputCodes = inputCodes[input]},
             interpret[pc, input, 1]];
         Which[
             MatchQ[r, _TerminatedEvaluation],
@@ -364,7 +364,7 @@ Parse[pc_ParserCombinator, input_String, opts : OptionsPattern[]] :=
 
 ParsePartial[pc_ParserCombinator, input_String, opts : OptionsPattern[]] :=
     Module[{r, memo = parseMemoInit[OptionValue["Memoize"], pc]},
-        r = Block[{$RecursionLimit = $maxParseRecursion, $parseMemo = memo},
+        r = Block[{$RecursionLimit = $maxParseRecursion, $parseMemo = memo, $inputCodes = inputCodes[input]},
             interpret[pc, input, 1]];
         Which[
             MatchQ[r, _TerminatedEvaluation],
@@ -400,8 +400,20 @@ errToFailure[parseErr[pos_, expected_, found_]] := makeFailure[pos, expected, fo
 safeChar[input_, pos_] :=
     If[ pos > StringLength[input],
         "<end of input>",
-        StringTake[input, {pos, pos}]
+        inputTake[input, pos, pos]
     ]
+
+(* The input's characters from a to b. Taking characters from a string
+   that holds one past ASCII costs time in proportion to where they are
+   [WL 15.0.0], which made reading such an input quadratic; Parse then
+   reads the input's character codes, $inputCodes, instead. *)
+$inputCodes = None
+
+inputCodes[input_String] := With[{codes = ToCharacterCode[input]},
+    If[ codes === {} || Max[codes] < 128, None, codes ]]
+
+inputTake[input_String, a_Integer, b_Integer] :=
+    If[ $inputCodes === None, StringTake[input, {a, b}], FromCharacterCode[$inputCodes[[a ;; b]]] ]
 
 
 (* === interpretive engine ===
@@ -447,7 +459,7 @@ interpretDispatch[ParserCombinator["Literal", s_String, _], input_, pos_] :=
     Block[{len = StringLength[s]},
         If[ pos + len - 1 > StringLength[input],
             parseErr[pos, s, "<end of input>"],
-            If[ StringTake[input, {pos, pos + len - 1}] === s,
+            If[ inputTake[input, pos, pos + len - 1] === s,
                 parseOk[s, pos + len],
                 parseErr[pos, s, safeChar[input, pos]]
             ]
@@ -457,7 +469,7 @@ interpretDispatch[ParserCombinator["Literal", s_String, _], input_, pos_] :=
 interpretDispatch[ParserCombinator["Character", pat_, _], input_, pos_] :=
     If[ pos > StringLength[input],
         parseErr[pos, charPatName[pat], "<end of input>"],
-        Block[{ch = StringTake[input, {pos, pos}]},
+        Block[{ch = inputTake[input, pos, pos]},
             If[ charMatchesQ[ch, pat],
                 parseOk[ch, pos + 1],
                 parseErr[pos, charPatName[pat], ch]
@@ -503,7 +515,7 @@ regexMatchAt[r_String, input_String, pos_Integer, window : (_Integer | Infinity)
         last = Min[length, pos + window - 1];
         cut = last < length;
         m = If[ pos > length, Quiet @ StringCases["", StartOfString ~~ RegularExpression[r], 1],
-            Quiet @ StringCases[StringTake[input, {pos, last}], StartOfString ~~ RegularExpression[r], 1] ];
+            Quiet @ StringCases[inputTake[input, pos, last], StartOfString ~~ RegularExpression[r], 1] ];
         Which[
             cut && MatchQ[m, {_String}] && StringLength[First[m]] === last - pos + 1,
                 regexMatchAt[r, input, pos, 2 window],
@@ -524,7 +536,7 @@ regexMatchAt[r_String, input_String, pos_Integer, window : (_Integer | Infinity)
    each failure cost the whole rest of the input. *)
 regexFailureFinalQ[r_String, input_String, pos_Integer, window_Integer] :=
     With[{first = regexFirstAtom[r]},
-        (StringQ[first] && ! StringMatchQ[StringTake[input, {pos}], RegularExpression[first]]) ||
+        (StringQ[first] && ! StringMatchQ[inputTake[input, pos, pos], RegularExpression[first]]) ||
             regexMaxLength[r] <= window
     ]
 
@@ -610,7 +622,7 @@ regexMaxLength[r_String] := regexMaxLength[r] = Module[{plain},
    FixedOrder or DelimitedSequence at the rule level. *)
 interpretDispatch[ParserCombinator["InterpreterSlot", type_String, _], input_, pos_] :=
     Block[{remaining, m},
-        remaining = If[ pos > StringLength[input], "", StringTake[input, {pos, -1}] ];
+        remaining = If[ pos > StringLength[input], "", inputTake[input, pos, StringLength[input]] ];
         m = Quiet @ StringCases[
             remaining,
             StartOfString ~~ RegularExpression["[A-Za-z0-9][A-Za-z0-9_'.\\-]*"],
@@ -874,7 +886,7 @@ interpretDispatch[ParserCombinator["OperatorTable", {unit_, levels_List}, opts_]
         (* the specs of a kind ("Prefix" or "Led") whose operator could
            begin at p, in table order *)
         specsAt[kind_, p_] := With[{d = dispatch[kind]},
-            If[ p > len, d[[2]], Lookup[d[[1]], StringTake[input, {p, p}], d[[2]]] ]];
+            If[ p > len, d[[2]], Lookup[d[[1]], inputTake[input, p, p], d[[2]]] ]];
 
         (* null denotation: try the prefix operators (table order), else
            fall through to the operand parser. *)

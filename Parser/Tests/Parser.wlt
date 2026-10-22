@@ -1140,3 +1140,16 @@ VerificationTest[
     TestID -> "ParseRegex: a token longer than the window is read whole, and a failure at its first character does not widen the window"
 ]
 
+VerificationTest[
+    (* an input with a character past ASCII is read from its character codes *)
+    With[{s = StringRepeat["ab", 3000] <> "\[Alpha]\[Beta]" <> StringRepeat["7", 50] <> "\[Gamma]"},
+        Parse[ParseLiteral[StringRepeat["ab", 3000]] ~~ ParseCharacter["\[Alpha]"] ~~ ParseLiteral["\[Beta]"] ~~ ParseRegex["[0-9]+"] ~~ ParseCharacter[_], s]],
+    {StringRepeat["ab", 3000], "\[Alpha]", "\[Beta]", StringRepeat["7", 50], "\[Gamma]"},
+    TestID -> "Parse: literals, characters and regexes read an input that holds characters past ASCII"
+]
+
+VerificationTest[
+    Parse[ParseLiteral["a"] ~~ ParseLiteral["\[Alpha]"], "a\[Beta]"]["Found"],
+    "\[Beta]",
+    TestID -> "Parse: a failure names the character past ASCII it found"
+]
