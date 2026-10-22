@@ -33,7 +33,7 @@ Target use cases:
 
 ## Status
 
-**v1.6.0** — a working library. The `` Wolfram`Parser` `` kernel is six files under
+**v1.6.1** — a working library. The `` Wolfram`Parser` `` kernel is six files under
 `Parser/Kernel/`: a Parsec-style combinator core plus the `GrammarRules` lowering
 ([`Parser.wl`](Parser/Kernel/Parser.wl)), a LaTeX math-mode parser at 126 / 126 on
 KaTeX's screenshotter corpus ([`LaTeX.wl`](Parser/Kernel/LaTeX.wl)), a Markdown parser
