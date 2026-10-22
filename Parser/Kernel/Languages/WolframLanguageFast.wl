@@ -431,15 +431,32 @@ fastNext[] := $ft++
 (* a newline ends the expression here: outside brackets, before the token at hand *)
 fastLineEndQ[] := $fbrackets === 0 && $fn[[$ft]] === 1
 
-(* the token at hand an operand begins with, so a product goes on *)
-fastOperandStartQ[] := With[{k = $fk[[$ft]]},
-    MemberQ[{$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation}, k] ||
-        (k === $tkOperator && KeyExistsQ[$fastPrefixOnly, $fo[[$ft]]] && ! ($fintegrand && KeyExistsQ[$fastDifferentials, $fo[[$ft]]]))]
+(* The spec of the operator after an operand, by token: all the led specs
+   in a list, and each token's index in it, 0 if it is none; and the
+   tokens that are a differential, at which no product in an integrand
+   goes on. A token's spec is the operator's it is, or that of the call, a
+   derivative or a product for its kind; = before . is an unset. *)
+$fastSpecList := $fastSpecList = DeleteDuplicates[Join[Values[$fastLedTable],
+    {{176, "Call", "Call"}, {154, "Derivative", "Derivative"}, {$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}, {9, "Unset", "Unset"}}]]
+fastSpecIndex[spec_] := First[FirstPosition[$fastSpecList, spec, {0}, {1}, Heads -> False]]
+$fastOpSpecIndex := $fastOpSpecIndex = With[{n = $fastNotId + 1},
+    Table[Which[KeyExistsQ[$fastLedTable, k], fastSpecIndex[$fastLedTable[k]],
+        KeyExistsQ[$fastPrefixOnly, k], fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}], True, 0], {k, 0, n}]]
+$fastKindSpecIndex := $fastKindSpecIndex = ReplacePart[ConstantArray[0, 20], Join[
+    {($tkOpenSquare + 1) -> fastSpecIndex[{176, "Call", "Call"}], ($tkPrimes + 1) -> fastSpecIndex[{154, "Derivative", "Derivative"}]},
+    Map[(# + 1) -> fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}] &,
+        {$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation}]]]
+fastLedIndices[kinds_List, ops_List] := Module[{index, unset},
+    index = $fastKindSpecIndex[[kinds + 1]] + $fastOpSpecIndex[[ops + 1]] (1 - Unitize[kinds - $tkOperator]);
+    unset = (1 - Unitize[ops - $fastEqual]) (1 - Unitize[RotateLeft[ops] - $fastDot]) (1 - Unitize[RotateLeft[kinds] - $tkOperator]);
+    index (1 - unset) + unset fastSpecIndex[{9, "Unset", "Unset"}]]
+fastDifferentialMarks[ops_List] := Total[Map[1 - Unitize[ops - #] &, Keys[$fastDifferentials]]]
 
 (* the source's top-level expressions, held *)
 fastHeld[s_String] := Replace[Catch[Catch[Module[{codes = ToCharacterCode[s], tokens, out = Internal`Bag[]},
     tokens = fastTokens[codes];
     Block[{$fcodes = codes, $fk = tokens[[1]], $fo = tokens[[2]], $fs = tokens[[3]], $fe = tokens[[4]], $fn = tokens[[5]],
+           $fled = fastLedIndices[tokens[[1]], tokens[[2]]], $fdiff = fastDifferentialMarks[tokens[[2]]], $fspecs = $fastSpecList,
            $ft = 1, $fbrackets = 0, $fdepth = 0, $fintegrand = False, $falg = WolframLanguageSemantic},
         While[$fk[[$ft]] =!= $tkEnd, Internal`StuffBag[out, fastExpression[0, 0, False]]];
         expressions[Internal`BagPart[out, All]]]], $fastFail], $fastGiveUp], $fastFail -> $fastGiveUp]
@@ -457,15 +474,11 @@ fastExpression[min_Integer, rbp_Integer, plain_] := Block[{$fdepth = $fdepth + 1
                 left = fastLed[left, spec, min, plain]]];
         left]]
 
-(* the operator after an operand at hand: {precedence, fixity, head}, None *)
-fastLedSpec[] := Which[
-    fastLineEndQ[], None,
-    fastSpacedUnsetQ[], {9, "Unset", "Unset"},
-    $fk[[$ft]] === $tkOperator && KeyExistsQ[$fastLedTable, $fo[[$ft]]], $fastLedTable[$fo[[$ft]]],
-    $fk[[$ft]] === $tkOpenSquare, {176, "Call", "Call"},
-    $fk[[$ft]] === $tkPrimes, {154, "Derivative", "Derivative"},
-    fastOperandStartQ[], {$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"},
-    True, None]
+(* the operator after an operand at hand: {precedence, fixity, head}, None;
+   none past a newline outside brackets, nor at a differential in an
+   integrand *)
+fastLedSpec[] := With[{i = $fled[[$ft]]},
+    If[ i === 0 || ($fbrackets === 0 && $fn[[$ft]] === 1) || ($fintegrand && $fdiff[[$ft]] === 1), None, $fspecs[[i]]]]
 
 fastLeaf[kind_String, text_String] := $falg["Leaf"][kind, text]
 
