@@ -33,7 +33,7 @@ Target use cases:
 
 ## Status
 
-**v1.6.1** — a working library. The `` Wolfram`Parser` `` kernel is six files under
+**v1.7.0** — a working library. The `` Wolfram`Parser` `` kernel is six files under
 `Parser/Kernel/`: a Parsec-style combinator core plus the `GrammarRules` lowering
 ([`Parser.wl`](Parser/Kernel/Parser.wl)), a LaTeX math-mode parser at 126 / 126 on
 KaTeX's screenshotter corpus ([`LaTeX.wl`](Parser/Kernel/LaTeX.wl)), a Markdown parser
@@ -41,12 +41,14 @@ KaTeX's screenshotter corpus ([`LaTeX.wl`](Parser/Kernel/LaTeX.wl)), a Markdown 
 ([`EBNF.wl`](Parser/Kernel/EBNF.wl)), a TPTP importer/exporter
 ([`TPTP.wl`](Parser/Kernel/TPTP.wl)), and the AST vocabulary — `LeafNode` / `CallNode` /
 … / `ToCodeParser` ([`AST.wl`](Parser/Kernel/AST.wl)). A `Languages/` showcase builds six
-example front-ends (Calculator, JSON, Lisp, Lambda, Brainfuck, ABC), plus OpenQASM and the Wolfram Language itself, on the core.
+example front-ends (Calculator, JSON, Lisp, Lambda, Brainfuck, ABC), plus OpenQASM and the Wolfram Language itself, on the core;
+`WolframLanguageHeld` reads the 7,000 sources of a Wolfram installation as the kernel's reader does, in one pass over the
+tokens a compiled lexer makes.
 
 The kernel is dependency-free — no C library — with performance from `FunctionCompile`'s
 LLVM backend. It ships as a full paclet (`Guides` / `Symbols` / `Tutorials` documentation,
 built from `docs/` with [PacletPage](https://github.com/WolframInstitute/PacletPage)) and is
-covered by 446 core and 830 language tests (`wl -f run-tests.wls`).
+covered by 446 core and 883 language tests (`wl -f run-tests.wls`).
 
 [`build.wls`](build.wls) builds the documentation, [`release.wls`](release.wls) builds it,
 deploys the paclet resource and publishes the documentation site, and
