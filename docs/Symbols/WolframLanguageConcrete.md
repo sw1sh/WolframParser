@@ -24,8 +24,8 @@ RelatedGuides: [ParserZoo]
 - Outside brackets a newline ends an expression wherever the expression could end, but for a chain of one operator (`a + b`, `a; b`, `a::b`, `a == b`), the second `~` of `a ~f~ b` and the `=` of `t /: lhs = rhs`, which continue past it, as CodeParser's do. [WolframLanguageHeld]() reads such source as the kernel does, which ends them at the newline.
 - Every node carries `CodeParser``Source` <code>-> {{*line*, *column*}, {*line*, *column*}}</code>, the second just past the node; a token for what was left out takes no room. The container lists where the tokens are that hold a line continuation, as `"SimpleLineContinuations"` outside a string and `"ComplexLineContinuations"` inside one, and the strings and comments that hold a newline (`"EmbeddedNewlines"`) or a tab (`"EmbeddedTabs"`).
 - The container of <code>[File]()[*file*]</code> is a `File` one whose `"FileName"` is the full path of *file*.
-- The binding powers are those [WolframLanguageGrammar]() uses, CodeParser's published precedences, and the tokens are its tokens. Every long name that is an operator reads as CodeParser reads it, at CodeParser's precedence for it, spelled out (`\[CircleTimes]`) or as its character.
-- A long name that is a bracket opens or closes a group as a bracket does: `\[LeftAngleBracket]a\[RightAngleBracket]` is an `AngleBracket` group and `f\[LeftDoubleBracket]1\[RightDoubleBracket]` a call. An integral with its differential, `\[Integral] f \[DifferentialD] x`, is a `PrefixBinaryNode`. A long name that is whitespace or a newline, such as `\[InvisibleSpace]` or `\[IndentingNewLine]`, is a leaf of that kind, and `\[InvisibleComma]` separates as a comma does.
+- The binding powers are those [WolframLanguageGrammar]() uses, CodeParser's published precedences, and the tokens are its tokens. Every long name that is an operator reads as CodeParser reads it, at CodeParser's precedence for it, whether the source spells out its name or holds its character: `a \[CircleTimes] b` is an `InfixNode` of `CircleTimes`.
+- A long name that is a bracket opens or closes a group as a bracket does: `\[LeftAngleBracket]a\[RightAngleBracket]` is an `AngleBracket` group and `f\[LeftDoubleBracket]1\[RightDoubleBracket]` a call. An integral with its differential, `\[Integral] f \[DifferentialD] x`, is a `PrefixBinaryNode`. A long name that is whitespace or a newline, as InvisibleSpace and IndentingNewLine are, is a leaf of that kind, and InvisibleComma separates as a comma does.
 - Source that is not Wolfram Language reads as CodeParser reads it, and nothing fails:
   - An operand left out is a `Token``Error``ExpectedOperand`.
   - A group not closed is a `GroupMissingCloserNode`. One still open at the end of the source keeps, as CodeParser's does, the leaves on its lines up to a line that begins a new definition, a directive or an annotation comment; the rest of the source is in no node.
@@ -98,6 +98,8 @@ A line continuation inside a name, the name keeping it, and the container listin
 ```wl
 ASTStripSource[WolframLanguageConcrete["ab\\\ncd"]]
 ```
+
+<!-- => CodeParser`ContainerNode[String, {CodeParser`LeafNode[Symbol, "ab\\\ncd", <||>]}, <|"SimpleLineContinuations" -> {{1, 1}}|>] -->
 
 A source file of the paclet:
 
