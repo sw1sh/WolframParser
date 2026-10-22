@@ -42,8 +42,8 @@ KaTeX's screenshotter corpus ([`LaTeX.wl`](Parser/Kernel/LaTeX.wl)), a Markdown 
 ([`TPTP.wl`](Parser/Kernel/TPTP.wl)), and the AST vocabulary — `LeafNode` / `CallNode` /
 … / `ToCodeParser` ([`AST.wl`](Parser/Kernel/AST.wl)). A `Languages/` showcase builds six
 example front-ends (Calculator, JSON, Lisp, Lambda, Brainfuck, ABC), plus OpenQASM and the Wolfram Language itself, on the core;
-`WolframLanguageHeld` reads the 7,000 sources of a Wolfram installation as the kernel's reader does, in one pass over the
-tokens a compiled lexer makes.
+`WolframLanguageHeld` reads the 7,000 sources of a Wolfram installation as the kernel's reader does, by a compiled lexer and
+a compiled parser over packed tokens.
 
 The kernel is dependency-free — no C library — with performance from `FunctionCompile`'s
 LLVM backend. It ships as a full paclet (`Guides` / `Symbols` / `Tutorials` documentation,

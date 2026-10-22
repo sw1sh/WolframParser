@@ -1,20 +1,22 @@
 (* ::Package:: *)
 
-(* :Title: WolframLanguageFast.wl - WolframLanguageHeld in one pass over tokens *)
+(* :Title: WolframLanguageFast.wl - WolframLanguageHeld by typed code over tokens *)
 (* :Context: Wolfram`Parser`Languages`WolframLanguage` *)
 (* :Author: Nikolay Murzin, Claude (Anthropic) *)
 (* :Summary:
     The source WolframLanguageHeld reads, read as its grammar reads it, in
-    two passes: the characters into tokens, one loop over their codes, then
-    the tokens into expressions by precedence climbing over the levels of
-    the grammar's operator table. Each value is built by the held algebra's
-    own builders. Source this reader does not take, and source that is no
-    Wolfram Language, the grammar reads instead, so what WolframLanguageHeld
-    gives, failures too, is the grammar's.
+    three passes: the characters into tokens, one loop over their codes;
+    the tokens into a postfix program, by precedence climbing over the
+    levels of the grammar's operator table; and the program into the held
+    values, each built by the held algebra's own builders. Source this
+    reader does not take, and source that is no Wolfram Language, the
+    grammar reads instead, so what WolframLanguageHeld gives, failures too,
+    is the grammar's.
 
-    The lexer is typed code over packed integers, $fastLexDeclaration, a
-    FunctionDeclaration that a compiler of typed code takes as it is;
-    Wolfram 15 runs it compiled by Compile at its first use.
+    The lexer and the parser are typed code over packed integers,
+    $fastLexDeclaration and $fastParseDeclaration, FunctionDeclarations
+    that a compiler of typed code takes as they are; Wolfram 15 runs them
+    compiled by Compile at their first use.
 *)
 
 BeginPackage["Wolfram`Parser`Languages`WolframLanguage`", {"Wolfram`Parser`"}]
@@ -37,8 +39,6 @@ $fastClasses := $fastClasses = Module[{t = ConstantArray[0, 65536], high = Range
     t[[Pick[high, StringMatchQ[Characters[FromCharacterCode[high]], WhitespaceCharacter]] + 1]] = 0;
     t[[ToCharacterCode[StringJoin[Lookup[$longNameTable["Characters"], $longNameTable["Whitespace"], Nothing]]] + 1]] = 3;
     t]
-
-fastClass[c_Integer] := If[c > 65535, 5, $fastClasses[[c + 1]]]
 
 (* --- operators --- *)
 
@@ -104,24 +104,6 @@ $tkCloseCurly = 15; $tkOpenAssociation = 16; $tkCloseAssociation = 17; $tkComma 
 
 (* the source is not one this reader takes: the grammar reads it *)
 fastGiveUp[] := Throw[$fastGiveUp, $fastGiveUp]
-(* what is read here is no Wolfram Language: where the grammar reads a part
-   that may be left out, it is left out, and elsewhere the grammar reads the
-   source, to its failure *)
-fastFail[] := Throw[$fastFail, $fastFail]
-
-(* past [0-9a-zA-Z] from j *)
-fastBaseDigitsEnd[codes_List, j0_Integer, n_Integer] := Module[{j = j0, c},
-    While[j <= n && ((48 <= (c = codes[[j]]) <= 57) || (65 <= c <= 90) || (97 <= c <= 122)), j++];
-    j]
-
-(* past a \[Name] at j that is a letter, a long name no operator's; j if
-   there is none *)
-fastLetterNameEnd[codes_List, j_Integer, n_Integer] := Module[{k},
-    If[ j + 3 <= n && codes[[j]] === 92 && codes[[j + 1]] === 91,
-        k = fastBaseDigitsEnd[codes, j + 2, n];
-        If[ k > j + 2 && k <= n && codes[[k]] === 93 && Lookup[$fastLongNameOps, FromCharacterCode[codes[[j + 2 ;; k - 1]]], 0] === -1,
-            k + 1, j],
-        j]]
 
 (* The lexer, typed code over packed integers: the codes of a source and
    three zeros after them, so that no look ahead reads past them, the
@@ -326,10 +308,6 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 fastLexFunction := fastLexFunction = With[{f = $fastLexDeclaration[[2, 1]]},
     Replace[Compile @@ Join[Hold[Evaluate[Map[{#, _Integer, 1} &, f[[1]]]]], Extract[f, {2}, Hold]], Except[_CompiledFunction] -> f]]
 
-(* the tokens of the codes of a source: {kinds, operator ids, starts, ends, newline marks} *)
-fastTokens[codes_List] := With[{out = fastLexFunction[Join[codes, {0, 0, 0}], $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial]},
-    If[out[[1]] =!= 0, fastGiveUp[], Transpose[Partition[Drop[out, 2], 5]]]]
-
 (* --- the operator table --- *)
 
 (* The levels of the grammar's specs, by operator: the precedence, the
@@ -416,20 +394,7 @@ $fastPatternColon = 40; $fastSpanOperand = 80; $fastCompoundOperand = 4; $fastTa
 $fastColon = fastOp[":"]; $fastSemiSemi = fastOp[";;"]; $fastSemi = fastOp[";"]; $fastQuestion = fastOp["?"]; $fastColonColon = fastOp["::"]
 $fastColonEqual = fastOp[":="]; $fastEqual = fastOp["="]; $fastEqualDot = fastOp["=."]; $fastTilde = fastOp["~"]; $fastDot = fastOp["."]; $fastMinus = fastOp["-"]
 
-(* --- reading the tokens --- *)
-
-(* The reader's state, Block's: the token arrays, the token at hand, the
-   brackets around it and how deep the reading has gone. *)
-$fastDepthLimit = 400
-
-fastText[a_Integer, b_Integer] := FromCharacterCode[$fcodes[[a ;; b - 1]]]
-fastTokenText[] := fastText[$fs[[$ft]], $fe[[$ft]]]
-fastKind[] := $fk[[$ft]]
-fastOpId[] := $fo[[$ft]]
-fastNext[] := $ft++
-
-(* a newline ends the expression here: outside brackets, before the token at hand *)
-fastLineEndQ[] := $fbrackets === 0 && $fn[[$ft]] === 1
+(* --- the operator after each token --- *)
 
 (* The spec of the operator after an operand, by token: all the led specs
    in a list, and each token's index in it, 0 if it is none; and the
@@ -452,271 +417,464 @@ fastLedIndices[kinds_List, ops_List] := Module[{index, unset},
     index (1 - unset) + unset fastSpecIndex[{9, "Unset", "Unset"}]]
 fastDifferentialMarks[ops_List] := Total[Map[1 - Unitize[ops - #] &, Keys[$fastDifferentials]]]
 
-(* the source's top-level expressions, held *)
-fastHeld[s_String] := Replace[Catch[Catch[Module[{codes = ToCharacterCode[s], tokens, out = Internal`Bag[]},
-    tokens = fastTokens[codes];
-    Block[{$fcodes = codes, $fk = tokens[[1]], $fo = tokens[[2]], $fs = tokens[[3]], $fe = tokens[[4]], $fn = tokens[[5]],
-           $fled = fastLedIndices[tokens[[1]], tokens[[2]]], $fdiff = fastDifferentialMarks[tokens[[2]]], $fspecs = $fastSpecList,
-           $ft = 1, $fbrackets = 0, $fdepth = 0, $fintegrand = False, $falg = WolframLanguageSemantic},
-        While[$fk[[$ft]] =!= $tkEnd, Internal`StuffBag[out, fastExpression[0, 0, False]]];
-        expressions[Internal`BagPart[out, All]]]], $fastFail], $fastGiveUp], $fastFail -> $fastGiveUp]
+(* --- the typed parser --- *)
 
-(* An expression of the table of the levels above min, of its operators
-   those binding more tightly than rbp; plain, its first operand is no
-   name with a pattern after its :. *)
-fastExpression[min_Integer, rbp_Integer, plain_] := Block[{$fdepth = $fdepth + 1},
-    If[$fdepth > $fastDepthLimit, fastGiveUp[]];
-    Module[{left = fastOperand[min, plain], spec, bp, more = True},
-        While[ more,
-            spec = fastLedSpec[];
-            If[ spec === None || (bp = spec[[1]]) <= rbp || bp <= min,
-                more = False,
-                left = fastLed[left, spec, min, plain]]];
-        left]]
+(* The parser, typed code over packed integers, as the lexer is: the
+   lexer's tokens, each token's led spec index and differential mark, the
+   tables of the specs {precedence, fixity, head, chain key}, of the
+   prefix operators {precedence, head} and the brackets {closer, head} by
+   operator, the integral of each operator, the special operators and
+   precedences, heads and chain keys, and the codes and classes the lexer
+   read, for the words of a ? query -> {status, n, then n instructions of
+   three integers}: a postfix program the build pass makes the held values
+   of. Status 1: the tokens are no Wolfram Language; 2: they hold what this
+   parser does not take. It climbs as the grammar's table does, with no
+   recursion: a stack of frames of eight integers, the expression being
+   read and what waits for it, backtracking to a pattern's name or to an
+   operand left out by the token and the program's length a frame saved.
 
-(* the operator after an operand at hand: {precedence, fixity, head}, None;
-   none past a newline outside brackets, nor at a differential in an
-   integrand *)
-fastLedSpec[] := With[{i = $fled[[$ft]]},
-    If[ i === 0 || ($fbrackets === 0 && $fn[[$ft]] === 1) || ($fintegrand && $fdiff[[$ft]] === 1), None, $fspecs[[i]]]]
+   Frames: 1 an expression {min, rbp, plain}; 2 a prefix operator {head};
+   3 an infix one {head}; 4 a chain {precedence, key, head, count, sign,
+   min, plain}; 5 parentheses; 6 a bracket {kind, closer kind, closer
+   operator, count, head}, of kind 1 a call, 2 a part, 3 a list, 4 an
+   association, 5 a long-name group, 6 a long-name part, 7 a type's
+   parameters; 7 a pattern and 8 an operand left out, {token, length,
+   brackets, integrand}; 9 a span {state, count}; 10 a compound {count};
+   11 a ternary {state, precedence, min, plain}; 12 a tag set {state}; 13
+   an integral {state, integral}.
+
+   Instructions: 1 a leaf {kind, token}; 2 prefix {head}; 3 postfix
+   {head}; 4 binary {head}; 5 a flat chain {head, n}; 6 a relation's
+   operator {head}; 7 a relation chain {n}; 8 a call {n}; 9 a group {head,
+   n}; 10 a part {n}; 11 Null; 12 All; 13 the 1 of a span begun with ;;;
+   14 a message name {n}; 15 a type's parameters {n}; 16 a derivative
+   {primes}; 17 a ~f~ b; 18 a span {n}; 19 a compound {n}; 20 a tag set
+   {1 :=, 2 =, 3 =.}; 21 a put {head}; 22 a get; 23 a pattern; 24 an
+   integral {integral, with its differential}; 25 the end of a statement;
+   26 a divisibility chain {n}; 27 !!; 28 the words of a query {start,
+   end}; 29 a query {??}. *)
+$fastParseDeclaration = FunctionDeclaration[fastParse,
+    Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} ->
+        "PackedArray"::["MachineInteger", 1]] @
+    Function[{pTok, pLed, pDiff, pSpecs, pPrefix, pGroups, pIntegrals, pSpecial, pHeads, pKeys, pCodes, pClasses},
+        Module[{n = pTok[[2]], out, fr, maxFrames, sp = 0, on = 0, t = 1, brackets = 0, integrand = 0, status = 0, mode = 0,
+                pMin = 0, pRbp = 0, pPlain = 0, base = 0, k = 0, o = 0, i = 0, bp = 0, fx = 0, hd = 0, ky = 0, mn = 0, rb = 0, pl = 0,
+                ft = 0, cnt = 0, bt = 0, colons = 0, ok = 0, x = 0, lg = 0, e = 0, we = 0, c = 0, cl = 0, tt = 0},
+            out = Table[0, {3 (8 n + 16) + 2}];
+            maxFrames = 4 n + 64;
+            fr = Table[0, {8 maxFrames}];
+            While[ mode != 99,
+                Which[
+                    (* a statement *)
+                    mode == 0,
+                        If[pTok[[5 t - 2]] == 0, mode = 99, pMin = 0; pRbp = 0; pPlain = 0; mode = 1],
+                    (* an expression's frame *)
+                    mode == 1,
+                        If[ sp >= maxFrames, status = 2; mode = 99,
+                            sp++; base = 8 (sp - 1); fr[[base + 1]] = 1; fr[[base + 2]] = pMin; fr[[base + 3]] = pRbp; fr[[base + 4]] = pPlain;
+                            mode = 2],
+                    (* the operand of the expression at the top *)
+                    mode == 2,
+                        base = 8 (sp - 1); mn = fr[[base + 2]]; pl = fr[[base + 4]];
+                        k = pTok[[5 t - 2]]; o = pTok[[5 t - 1]];
+                        Which[
+                            k == 9 && pPrefix[[2 o + 1]] > mn,
+                                hd = pPrefix[[2 o + 2]]; pRbp = pPrefix[[2 o + 1]]; t++;
+                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 2; fr[[base + 2]] = hd;
+                                pMin = mn; pPlain = pl; mode = 1,
+                            k == 1,
+                                on++; out[[3 on]] = 1; out[[3 on + 1]] = 1; out[[3 on + 2]] = t; t++;
+                                If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                                    sp++; base = 8 (sp - 1); fr[[base + 1]] = 7; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets; fr[[base + 5]] = integrand;
+                                    t++; pMin = pSpecial[[16]]; pRbp = 0; pPlain = 1; mode = 1,
+                                    mode = 3],
+                            k >= 2 && k <= 7,
+                                on++; out[[3 on]] = 1; out[[3 on + 1]] = k; out[[3 on + 2]] = t; t++; mode = 3,
+                            k == 10,
+                                t++; brackets++;
+                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 5;
+                                pMin = 0; pRbp = 0; pPlain = 0; mode = 1,
+                            k == 14 || k == 16,
+                                t++; brackets++;
+                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 6; fr[[base + 2]] = If[k == 14, 3, 4]; fr[[base + 3]] = If[k == 14, 15, 17];
+                                fr[[base + 4]] = 0; fr[[base + 5]] = 0; fr[[base + 6]] = 0;
+                                mode = 6,
+                            k == 9 && pGroups[[2 o + 1]] > 0,
+                                t++; brackets++;
+                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 6; fr[[base + 2]] = 5; fr[[base + 3]] = 9; fr[[base + 4]] = pGroups[[2 o + 1]];
+                                fr[[base + 5]] = 0; fr[[base + 6]] = pGroups[[2 o + 2]];
+                                mode = 6,
+                            k == 9 && o == pSpecial[[9]],
+                                t++;
+                                If[ pTok[[5 t - 2]] == 8,
+                                    on++; out[[3 on]] = 1; out[[3 on + 1]] = 8; out[[3 on + 2]] = t; t++;
+                                    on++; out[[3 on]] = 22; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 3,
+                                    mode = 5],
+                            k == 9 && o == pSpecial[[2]],
+                                on++; out[[3 on]] = 13; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 10,
+                            (* ?words, ??words: Information of the words, to the end of their last token, or of a string *)
+                            k == 9 && o == pSpecial[[14]],
+                                t++; lg = 0;
+                                If[pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[14]] && pTok[[5 t]] == pTok[[5 t - 4]], lg = 1; t++];
+                                e = pTok[[5 t - 4]];
+                                While[pCodes[[e]] == 32 || pCodes[[e]] == 9, e++];
+                                If[ pCodes[[e]] == 34,
+                                    If[ pTok[[5 t - 2]] != 5 || pTok[[5 t]] != e, status = 2; mode = 99,
+                                        on++; out[[3 on]] = 1; out[[3 on + 1]] = 5; out[[3 on + 2]] = t; t++;
+                                        on++; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; mode = 3],
+                                    x = e; we = e; ok = 1; tt = t;
+                                    While[ ok == 1,
+                                        c = pCodes[[x]]; cl = If[c > 65535, 5, pClasses[[c + 1]]];
+                                        Which[
+                                            cl == 1 || cl == 2 || cl == 5 || c == 42 || c == 64, x++; we = x,
+                                            (* a letter's long name, in a name's token *)
+                                            c == 92,
+                                                While[pTok[[5 tt + 1]] <= x, tt++];
+                                                If[ pTok[[5 tt - 2]] == 1 && pTok[[5 tt]] <= x && pCodes[[x + 1]] == 91,
+                                                    x += 2;
+                                                    While[(48 <= pCodes[[x]] && pCodes[[x]] <= 57) || (65 <= pCodes[[x]] && pCodes[[x]] <= 90) || (97 <= pCodes[[x]] && pCodes[[x]] <= 122), x++];
+                                                    If[pCodes[[x]] == 93, x++; we = x, ok = 0],
+                                                    ok = 0],
+                                            c == 32 || c == 9, x++,
+                                            True, ok = 0]];
+                                    If[ we == e, mode = 5,
+                                        While[pTok[[5 t - 2]] != 0 && pTok[[5 t]] < we, t++];
+                                        If[ pTok[[5 t - 4]] != we, status = 2; mode = 99,
+                                            on++; out[[3 on]] = 28; out[[3 on + 1]] = e; out[[3 on + 2]] = we;
+                                            on++; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; mode = 3]]],
+                            k == 9 && pIntegrals[[o + 1]] > 0,
+                                x = pIntegrals[[o + 1]]; t++; integrand++;
+                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 13; fr[[base + 2]] = 1; fr[[base + 3]] = x;
+                                pMin = pSpecial[[15]]; pRbp = 0; pPlain = 0; mode = 1,
+                            True, mode = 5],
+                    (* after an operand: the operator that takes it, if one binds tightly enough *)
+                    mode == 3,
+                        base = 8 (sp - 1); mn = fr[[base + 2]]; rb = fr[[base + 3]]; pl = fr[[base + 4]];
+                        i = pLed[[t]];
+                        If[(brackets == 0 && pTok[[5 t + 2]] == 1) || (integrand > 0 && pDiff[[t]] == 1), i = 0];
+                        If[ i == 0, mode = 4,
+                            bp = pSpecs[[4 i - 3]]; fx = pSpecs[[4 i - 2]]; hd = pSpecs[[4 i - 1]]; ky = pSpecs[[4 i]];
+                            If[ bp <= rb || bp <= mn, mode = 4,
+                                Which[
+                                    fx == 1 || fx == 2,
+                                        t++;
+                                        sp++; base = 8 (sp - 1); fr[[base + 1]] = 3; fr[[base + 2]] = hd;
+                                        pMin = mn; pRbp = If[fx == 2, bp - 1, bp]; pPlain = pl; mode = 1,
+                                    fx == 3 || fx == 15,
+                                        sp++; base = 8 (sp - 1); fr[[base + 1]] = 4; fr[[base + 2]] = bp; fr[[base + 3]] = ky; fr[[base + 4]] = hd; fr[[base + 5]] = 1;
+                                        fr[[base + 6]] = If[ky == pKeys[[1]] && pTok[[5 t - 2]] == 9 && (pTok[[5 t - 1]] == pSpecial[[11]] || pTok[[5 t - 1]] == pSpecial[[12]]), 1, 0];
+                                        fr[[base + 7]] = mn; fr[[base + 8]] = pl;
+                                        If[ky == pKeys[[2]], on++; out[[3 on]] = 6; out[[3 on + 1]] = hd; out[[3 on + 2]] = 0];
+                                        If[fx == 3, t++];
+                                        pMin = mn; pRbp = bp; pPlain = pl; mode = 1,
+                                    fx == 4, t++; on++; out[[3 on]] = 3; out[[3 on + 1]] = hd; out[[3 on + 2]] = 0,
+                                    fx == 13, t += 2; on++; out[[3 on]] = 3; out[[3 on + 1]] = pHeads[[2]]; out[[3 on + 2]] = 0,
+                                    fx == 5,
+                                        If[t < n && pTok[[5 t + 3]] == 12, t += 2; bt = 2, t++; bt = 1];
+                                        brackets++;
+                                        sp++; base = 8 (sp - 1); fr[[base + 1]] = 6; fr[[base + 2]] = bt; fr[[base + 3]] = 13; fr[[base + 4]] = 0; fr[[base + 5]] = 0; fr[[base + 6]] = 0;
+                                        mode = 6,
+                                    fx == 14,
+                                        t++; brackets++;
+                                        sp++; base = 8 (sp - 1); fr[[base + 1]] = 6; fr[[base + 2]] = 6; fr[[base + 3]] = 9; fr[[base + 4]] = pSpecial[[13]]; fr[[base + 5]] = 0; fr[[base + 6]] = 0;
+                                        mode = 6,
+                                    fx == 6,
+                                        on++; out[[3 on]] = 16; out[[3 on + 1]] = pTok[[5 t + 1]] - pTok[[5 t]]; out[[3 on + 2]] = 0; t++,
+                                    fx == 7,
+                                        t++;
+                                        sp++; base = 8 (sp - 1); fr[[base + 1]] = 11; fr[[base + 2]] = 1; fr[[base + 3]] = bp; fr[[base + 4]] = mn; fr[[base + 5]] = pl;
+                                        pMin = mn; pRbp = bp; pPlain = pl; mode = 1,
+                                    fx == 8,
+                                        colons = pTok[[5 t + 1]]; t++;
+                                        If[ pTok[[5 t - 2]] == 12 && pTok[[5 t]] == colons,
+                                            t++; brackets++;
+                                            sp++; base = 8 (sp - 1); fr[[base + 1]] = 6; fr[[base + 2]] = 7; fr[[base + 3]] = 13; fr[[base + 4]] = 0; fr[[base + 5]] = 0; fr[[base + 6]] = 0;
+                                            mode = 6,
+                                            cnt = 1; ok = 1; x = 0;
+                                            While[ ok == 1 && x < 2,
+                                                Which[
+                                                    pTok[[5 t]] != colons, ok = 0; mode = 5,
+                                                    pTok[[5 t - 2]] == 1, on++; out[[3 on]] = 1; out[[3 on + 1]] = 100; out[[3 on + 2]] = t; t++; cnt++,
+                                                    pTok[[5 t - 2]] == 5, on++; out[[3 on]] = 1; out[[3 on + 1]] = 5; out[[3 on + 2]] = t; t++; cnt++,
+                                                    pTok[[5 t - 2]] == 2, ok = 0; status = 2; mode = 99,
+                                                    True, ok = 0; mode = 5];
+                                                x++;
+                                                If[ ok == 1 && x < 2,
+                                                    If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[4]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                                                        colons = pTok[[5 t + 1]]; t++,
+                                                        x = 2]]];
+                                            If[ok == 1, on++; out[[3 on]] = 14; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0]],
+                                    fx == 9, mode = 10,
+                                    fx == 10,
+                                        sp++; base = 8 (sp - 1); fr[[base + 1]] = 10; fr[[base + 2]] = 1; mode = 13,
+                                    fx == 11,
+                                        t++;
+                                        sp++; base = 8 (sp - 1); fr[[base + 1]] = 12; fr[[base + 2]] = 1;
+                                        pMin = pSpecial[[19]]; pRbp = 0; pPlain = 0; mode = 1,
+                                    fx == 12,
+                                        t++;
+                                        If[ pTok[[5 t - 2]] == 8,
+                                            on++; out[[3 on]] = 1; out[[3 on + 1]] = 8; out[[3 on + 2]] = t; t++;
+                                            on++; out[[3 on]] = 21; out[[3 on + 1]] = hd; out[[3 on + 2]] = 0,
+                                            mode = 5],
+                                    True, mode = 5]]],
+                    (* the expression at the top is read: what waited for it *)
+                    mode == 4,
+                        sp--;
+                        If[ sp == 0,
+                            on++; out[[3 on]] = 25; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 0,
+                            base = 8 (sp - 1); ft = fr[[base + 1]];
+                            Which[
+                                ft == 2,
+                                    on++;
+                                    If[fr[[base + 2]] == pHeads[[6]], out[[3 on]] = 27; out[[3 on + 1]] = 0, out[[3 on]] = 2; out[[3 on + 1]] = fr[[base + 2]]];
+                                    out[[3 on + 2]] = 0; sp--; mode = 3,
+                                ft == 3,
+                                    on++; out[[3 on]] = 4; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3,
+                                ft == 4,
+                                    If[fr[[base + 6]] == 1, on++; out[[3 on]] = 2; out[[3 on + 1]] = pHeads[[1]]; out[[3 on + 2]] = 0];
+                                    fr[[base + 5]] = fr[[base + 5]] + 1;
+                                    i = pLed[[t]];
+                                    If[(brackets == 0 && pTok[[5 t + 2]] == 1) || (integrand > 0 && pDiff[[t]] == 1), i = 0];
+                                    If[ i > 0 && pSpecs[[4 i - 3]] == fr[[base + 2]] && (pSpecs[[4 i - 2]] == 3 || pSpecs[[4 i - 2]] == 15) && pSpecs[[4 i]] == fr[[base + 3]],
+                                        fr[[base + 6]] = If[fr[[base + 3]] == pKeys[[1]] && pTok[[5 t - 2]] == 9 && (pTok[[5 t - 1]] == pSpecial[[11]] || pTok[[5 t - 1]] == pSpecial[[12]]), 1, 0];
+                                        If[fr[[base + 3]] == pKeys[[2]], on++; out[[3 on]] = 6; out[[3 on + 1]] = pSpecs[[4 i - 1]]; out[[3 on + 2]] = 0];
+                                        If[pSpecs[[4 i - 2]] == 3, t++];
+                                        pMin = fr[[base + 7]]; pRbp = fr[[base + 2]]; pPlain = fr[[base + 8]]; mode = 1,
+                                        on++;
+                                        Which[
+                                            fr[[base + 3]] == pKeys[[2]], out[[3 on]] = 7; out[[3 on + 1]] = fr[[base + 5]]; out[[3 on + 2]] = 0,
+                                            fr[[base + 3]] == pKeys[[3]], out[[3 on]] = 26; out[[3 on + 1]] = fr[[base + 5]]; out[[3 on + 2]] = 0,
+                                            True, out[[3 on]] = 5; out[[3 on + 1]] = fr[[base + 4]]; out[[3 on + 2]] = fr[[base + 5]]];
+                                        sp--; mode = 3],
+                                ft == 5,
+                                    If[ pTok[[5 t - 2]] == 11,
+                                        t++; brackets--; on++; out[[3 on]] = 9; out[[3 on + 1]] = pHeads[[3]]; out[[3 on + 2]] = 1; sp--; mode = 3,
+                                        mode = 5],
+                                ft == 6, fr[[base + 5]] = fr[[base + 5]] + 1; mode = 8,
+                                ft == 7, on++; out[[3 on]] = 23; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; sp--; mode = 3,
+                                ft == 8,
+                                    sp--; base = 8 (sp - 1);
+                                    If[fr[[base + 1]] == 9, mode = 12, fr[[base + 2]] = fr[[base + 2]] + 1; mode = 13],
+                                ft == 11,
+                                    If[ fr[[base + 2]] == 1,
+                                        If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[8]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                                            t++; fr[[base + 2]] = 2; pMin = fr[[base + 4]]; pRbp = fr[[base + 3]]; pPlain = fr[[base + 5]]; mode = 1,
+                                            mode = 5],
+                                        on++; out[[3 on]] = 17; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; sp--; mode = 3],
+                                ft == 12,
+                                    If[ fr[[base + 2]] == 1,
+                                        Which[
+                                            (brackets == 0 && pTok[[5 t + 2]] == 1) || pTok[[5 t - 2]] != 9, mode = 5,
+                                            pTok[[5 t - 1]] == pSpecial[[5]] && t < n && pTok[[5 t + 3]] == 9 && pTok[[5 t + 4]] == pSpecial[[7]],
+                                                t += 2; on++; out[[3 on]] = 20; out[[3 on + 1]] = 3; out[[3 on + 2]] = 0; sp--; mode = 3,
+                                            pTok[[5 t - 1]] == pSpecial[[10]],
+                                                t++; fr[[base + 2]] = 2; pMin = pSpecial[[20]]; pRbp = 0; pPlain = 0; mode = 1,
+                                            pTok[[5 t - 1]] == pSpecial[[5]],
+                                                t++; fr[[base + 2]] = 3; pMin = pSpecial[[20]]; pRbp = 0; pPlain = 0; mode = 1,
+                                            pTok[[5 t - 1]] == pSpecial[[6]],
+                                                t++; on++; out[[3 on]] = 20; out[[3 on + 1]] = 3; out[[3 on + 2]] = 0; sp--; mode = 3,
+                                            True, mode = 5],
+                                        on++; out[[3 on]] = 20; out[[3 on + 1]] = If[fr[[base + 2]] == 2, 1, 2]; out[[3 on + 2]] = 0; sp--; mode = 3],
+                                ft == 13,
+                                    If[ fr[[base + 2]] == 1,
+                                        integrand--;
+                                        If[ pTok[[5 t - 2]] == 9 && pDiff[[t]] == 1 && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                                            fr[[base + 2]] = 2; pMin = pSpecial[[15]]; pRbp = 0; pPlain = 0; mode = 1,
+                                            on++; out[[3 on]] = 24; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; mode = 3],
+                                        on++; out[[3 on]] = 24; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 1; sp--; mode = 3],
+                                True, mode = 5]],
+                    (* no Wolfram Language: back to a pattern's name or an operand left out, else the end *)
+                    mode == 5,
+                        While[sp > 0 && fr[[8 (sp - 1) + 1]] != 7 && fr[[8 (sp - 1) + 1]] != 8, sp--];
+                        If[ sp == 0,
+                            status = 1; mode = 99,
+                            base = 8 (sp - 1);
+                            t = fr[[base + 2]]; on = fr[[base + 3]]; brackets = fr[[base + 4]]; integrand = fr[[base + 5]];
+                            If[ fr[[base + 1]] == 7,
+                                sp--; mode = 3,
+                                sp--; base = 8 (sp - 1);
+                                If[ fr[[base + 1]] == 9,
+                                    on++; out[[3 on]] = 12; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 12,
+                                    on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; fr[[base + 2]] = fr[[base + 2]] + 1; mode = 13]]],
+                    (* a bracket's items: none before the closer, else the first *)
+                    mode == 6,
+                        base = 8 (sp - 1);
+                        If[pTok[[5 t - 2]] == fr[[base + 3]] && (fr[[base + 3]] != 9 || pTok[[5 t - 1]] == fr[[base + 4]]), mode = 9, mode = 7],
+                    (* an item: Null before a comma or the closer, else an expression *)
+                    mode == 7,
+                        base = 8 (sp - 1);
+                        If[ pTok[[5 t - 2]] == 18 || (pTok[[5 t - 2]] == fr[[base + 3]] && (fr[[base + 3]] != 9 || pTok[[5 t - 1]] == fr[[base + 4]])),
+                            on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; fr[[base + 5]] = fr[[base + 5]] + 1; mode = 8,
+                            pMin = 0; pRbp = 0; pPlain = 0; mode = 1],
+                    (* after an item: a comma and the next, else the closer *)
+                    mode == 8,
+                        If[pTok[[5 t - 2]] == 18, t++; mode = 7, mode = 9],
+                    (* the closer, and the bracket's node *)
+                    mode == 9,
+                        base = 8 (sp - 1); bt = fr[[base + 2]]; cnt = fr[[base + 5]];
+                        Which[
+                            bt == 2, If[pTok[[5 t - 2]] == 13 && t < n && pTok[[5 t + 3]] == 13, t += 2; ok = 1, ok = 0],
+                            pTok[[5 t - 2]] == fr[[base + 3]] && (fr[[base + 3]] != 9 || pTok[[5 t - 1]] == fr[[base + 4]]), t++; ok = 1,
+                            True, ok = 0];
+                        If[ ok == 0, mode = 5,
+                            brackets--; on++;
+                            Which[
+                                bt == 1, out[[3 on]] = 8; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0,
+                                bt == 2 || bt == 6, out[[3 on]] = 10; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0,
+                                bt == 3, out[[3 on]] = 9; out[[3 on + 1]] = pHeads[[4]]; out[[3 on + 2]] = cnt,
+                                bt == 4, out[[3 on]] = 9; out[[3 on + 1]] = pHeads[[5]]; out[[3 on + 2]] = cnt,
+                                bt == 5, out[[3 on]] = 9; out[[3 on + 1]] = fr[[base + 6]]; out[[3 on + 2]] = cnt,
+                                True, out[[3 on]] = 15; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0];
+                            sp--; mode = 3],
+                    (* a ;; and the span's frame *)
+                    mode == 10,
+                        t++;
+                        sp++; base = 8 (sp - 1); fr[[base + 1]] = 9; fr[[base + 2]] = 1; fr[[base + 3]] = 1;
+                        mode = 11,
+                    (* a span's operand, All where it is left out *)
+                    mode == 11,
+                        If[ (pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]]) || (brackets == 0 && pTok[[5 t + 2]] == 1) || pTok[[5 t - 2]] == 0,
+                            on++; out[[3 on]] = 12; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 12,
+                            sp++; base = 8 (sp - 1); fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets; fr[[base + 5]] = integrand;
+                            pMin = pSpecial[[17]]; pRbp = 0; pPlain = 0; mode = 1],
+                    (* after a span's operand: a second ;; and its operand, else the span *)
+                    mode == 12,
+                        base = 8 (sp - 1); fr[[base + 3]] = fr[[base + 3]] + 1;
+                        If[ fr[[base + 2]] == 1 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                            t++; fr[[base + 2]] = 2; mode = 11,
+                            on++; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; mode = 3],
+                    (* a ; and its operand, Null where it is left out, else the compound *)
+                    mode == 13,
+                        If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[3]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                            t++;
+                            If[ (brackets == 0 && pTok[[5 t + 2]] == 1) || pTok[[5 t - 2]] == 0,
+                                on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0;
+                                base = 8 (sp - 1); fr[[base + 2]] = fr[[base + 2]] + 1,
+                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets; fr[[base + 5]] = integrand;
+                                pMin = pSpecial[[18]]; pRbp = 0; pPlain = 0; mode = 1],
+                            base = 8 (sp - 1);
+                            on++; out[[3 on]] = 19; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3],
+                    True, status = 2; mode = 99]];
+            out[[1]] = status; out[[2]] = on;
+            Take[out, 2 + 3 on]]]]
+
+(* The parser run here: compiled once, at its first use, where Compile is,
+   else evaluated. *)
+fastParseFunction := fastParseFunction = With[{f = $fastParseDeclaration[[2, 1]]},
+    Replace[Compile @@ Join[Hold[Evaluate[Map[{#, _Integer, 1} &, f[[1]]]]], Extract[f, {2}, Hold]], Except[_CompiledFunction] -> f]]
+
+(* --- the typed parser's tables --- *)
+
+(* the heads, each by the position of its name; the chain keys likewise *)
+$fastHeadNames := $fastHeadNames = DeleteDuplicates[Join[{"Minus", "Unset", "Paren", "List", "Association", "NotNot"},
+    $fastSpecList[[All, 3]], Values[$fastPrefixTable][[All, 2]], Values[$fastGroupTable][[All, 2]]]]
+fastHeadCode[name_String] := First[FirstPosition[$fastHeadNames, name, {0}, {1}]]
+$fastKeyNames := $fastKeyNames = DeleteDuplicates[Join[{"Plus", "Relation", "Divisible"},
+    Map[fastChainKey, Select[$fastSpecList, #[[2]] === "InfixN" &]]]]
+fastKeyCode[key_String] := First[FirstPosition[$fastKeyNames, key, {0}, {1}]]
+$fastFixityCodes = <|"InfixL" -> 1, "InfixR" -> 2, "InfixN" -> 3, "Postfix" -> 4, "Call" -> 5, "Derivative" -> 6, "Ternary" -> 7,
+    "MessageName" -> 8, "Span" -> 9, "Compound" -> 10, "TagSet" -> 11, "Put" -> 12, "Unset" -> 13, "LongPart" -> 14|>
+
+(* each spec: precedence, fixity (15 the product an operand begins), head
+   and chain key *)
+$fastSpecTable := $fastSpecTable = Flatten[Map[{#[[1]], If[Length[#] >= 5, 15, $fastFixityCodes[#[[2]]]], fastHeadCode[#[[3]]],
+    If[#[[2]] === "InfixN", fastKeyCode[fastChainKey[#]], 0]} &, $fastSpecList]]
+(* by operator, from 0: the prefix ones' precedence and head, the
+   brackets' closer and head, and the integral *)
+$fastPrefixArray := $fastPrefixArray = Flatten[Table[
+    If[KeyExistsQ[$fastPrefixTable, o], {$fastPrefixTable[o][[1]], fastHeadCode[$fastPrefixTable[o][[2]]]}, {0, 0}], {o, 0, $fastNotId}]]
+$fastGroupArray := $fastGroupArray = Flatten[Table[
+    If[KeyExistsQ[$fastGroupTable, o], {$fastGroupTable[o][[1]], fastHeadCode[$fastGroupTable[o][[2]]]}, {0, 0}], {o, 0, $fastNotId}]]
+$fastIntegralList := $fastIntegralList = Values[$fastIntegralTable]
+$fastIntegralArray := $fastIntegralArray = Table[
+    If[KeyExistsQ[$fastIntegralTable, o], First[FirstPosition[Keys[$fastIntegralTable], o]], 0], {o, 0, $fastNotId}]
+(* the operators and precedences the parser names, the heads it emits and
+   the chain keys it tells *)
+$fastSpecialArray := $fastSpecialArray = Join[
+    {$fastColon, $fastSemiSemi, $fastSemi, $fastColonColon, $fastEqual, $fastEqualDot, $fastDot, $fastTilde, $fastGet, $fastColonEqual,
+     $fastMinus, $fastLongMinus, $fastRightDoubleBracket, $fastQuestion},
+    {$integralPrecedence, $fastPatternColon, $fastSpanOperand, $fastCompoundOperand, $fastTagLeft, $fastTagRight}]
+$fastHeadCodeArray := $fastHeadCodeArray = fastHeadCode /@ {"Minus", "Unset", "Paren", "List", "Association", "NotNot"}
+$fastKeyCodeArray := $fastKeyCodeArray = fastKeyCode /@ {"Plus", "Relation", "Divisible"}
+
+(* --- the build pass --- *)
+
+fastText[a_Integer, b_Integer] := FromCharacterCode[$fcodes[[a ;; b - 1]]]
 
 fastLeaf[kind_String, text_String] := $falg["Leaf"][kind, text]
-
-(* = then a ., trivia between them: an unset *)
-fastSpacedUnsetQ[] := $fk[[$ft]] === $tkOperator && $fo[[$ft]] === $fastEqual && $ft < Length[$fk] &&
-    $fk[[$ft + 1]] === $tkOperator && $fo[[$ft + 1]] === $fastDot
-
-(* --- operands --- *)
-
-fastOperand[min_Integer, plain_] := Module[{kind = $fk[[$ft]], spec, text, name},
-    If[ kind === $tkOperator && KeyExistsQ[$fastPrefixTable, $fo[[$ft]]] && $fastPrefixTable[$fo[[$ft]]][[1]] > min,
-        spec = $fastPrefixTable[$fo[[$ft]]]; fastNext[];
-        Return[With[{x = fastExpression[min, spec[[1]], plain]},
-            If[spec[[2]] === "NotNot", $falg["Prefix"]["Not", $falg["Prefix"]["Not", x]], $falg["Prefix"][spec[[2]], x]]], Module]];
-    Switch[ kind,
-        $tkName,
-            text = fastTokenText[]; fastNext[];
-            name = fastLeaf["Symbol", text];
-            If[ ! plain && $fk[[$ft]] === $tkOperator && $fo[[$ft]] === $fastColon && ! fastLineEndQ[],
-                fastPattern[name],
-                name],
-        $tkBlank, text = fastTokenText[]; fastNext[]; fastLeaf["Blank", text],
-        $tkInteger, text = fastTokenText[]; fastNext[]; fastLeaf["Integer", text],
-        $tkReal, text = fastTokenText[]; fastNext[]; fastLeaf["Real", text],
-        $tkString, text = fastTokenText[]; fastNext[]; fastLeaf["String", text],
-        $tkSlot, text = fastTokenText[]; fastNext[]; fastLeaf["Slot", text],
-        $tkOut, text = fastTokenText[]; fastNext[]; fastLeaf["Out", text],
-        $tkOpenParen,
-            fastNext[];
-            With[{e = fastBracketed[fastExpression[0, 0, False]]}, fastClose[$tkCloseParen]; $falg["Group"]["Paren", {e}]],
-        $tkOpenCurly, fastNext[]; With[{xs = fastItems[$tkCloseCurly]}, fastClose[$tkCloseCurly]; $falg["Group"]["List", xs]],
-        $tkOpenAssociation, fastNext[]; With[{xs = fastItems[$tkCloseAssociation]}, fastClose[$tkCloseAssociation]; $falg["Group"]["Association", xs]],
-        $tkOperator,
-            Which[
-                $fo[[$ft]] === $fastGet, fastNext[]; $falg["Prefix"]["Get", fastFile[]],
-                $fo[[$ft]] === $fastSemiSemi, fastSpan[fastLeaf["Integer", "1"], min],
-                $fo[[$ft]] === $fastQuestion, fastInformation[],
-                KeyExistsQ[$fastGroupTable, $fo[[$ft]]], fastLongGroup[],
-                KeyExistsQ[$fastIntegralTable, $fo[[$ft]]], fastIntegral[],
-                True, fastFail[]],
-        _, fastFail[]]]
-
-(* n:patt, the name binding the pattern of the levels above : after it; a
-   name alone if none can be read there *)
-fastPattern[name_] := Module[{at = $ft, pattern},
-    fastNext[];
-    pattern = Catch[fastExpression[$fastPatternColon, 0, True], $fastFail];
-    If[pattern === $fastFail, $ft = at; name, $falg["Binary"]["Pattern", name, pattern]]]
-
-(* \[LeftFloor] x \[RightFloor] and the other brackets of long names *)
-fastLongGroup[] := With[{g = $fastGroupTable[$fo[[$ft]]]},
-    fastNext[];
-    With[{xs = fastItems[{$tkOperator, g[[1]]}]}, fastClose[{$tkOperator, g[[1]]}]; $falg["Group"][g[[2]], xs]]]
-
-(* \[Integral] f \[DifferentialD] x: the integrand, in which no product
-   goes on at a differential, then the differential *)
-fastIntegral[] := Module[{spec = $fastIntegralTable[$fo[[$ft]]], f, d = Missing[]},
-    fastNext[];
-    f = Block[{$fintegrand = True}, fastExpression[$integralPrecedence, 0, False]];
-    If[ $fk[[$ft]] === $tkOperator && KeyExistsQ[$fastDifferentials, $fo[[$ft]]] && ! fastLineEndQ[],
-        d = fastExpression[$integralPrecedence, 0, False]];
-    Which[
-        MissingQ[d], $falg["Prefix"][spec[[1]], f],
-        spec[[2]] === Integrate, integralOf[$falg, f, d],
-        True, $falg["Prefix"][spec[[1]], $falg["Infix"]["Times", {f, d}]]]]
-
-(* what is read inside a bracket, where a newline is whitespace *)
-SetAttributes[fastBracketed, HoldFirst]
-fastBracketed[e_] := Block[{$fbrackets = $fbrackets + 1}, e]
-
-(* the closer of a bracket at hand: a token kind, or {operator, its id} *)
-fastAtQ[kind_Integer] := $fk[[$ft]] === kind
-fastAtQ[{kind_Integer, op_Integer}] := $fk[[$ft]] === kind && $fo[[$ft]] === op
-
-(* the closer of the bracket *)
-fastClose[close_] := If[fastAtQ[close], fastNext[], fastFail[]]
-
-(* expressions between commas up to the closer, an empty one Null *)
-fastItems[close_] := fastBracketed[Module[{items = Internal`Bag[], more = True},
-    If[ fastAtQ[close],
-        {},
-        While[ more,
-            Internal`StuffBag[items, If[$fk[[$ft]] === $tkComma || fastAtQ[close], fastLeaf["Symbol", "Null"], fastExpression[0, 0, False]]];
-            If[$fk[[$ft]] === $tkComma, fastNext[], more = False]];
-        Internal`BagPart[items, All]]]]
-
-(* the file of << and >>, a string or the characters of a path *)
-fastFile[] := If[$fk[[$ft]] === $tkFile, With[{text = fastTokenText[]}, fastNext[]; fastLeaf["File", text]], fastFail[]]
-
-(* ?name and ??name: Information of the words after it, or of a string *)
-fastInformation[] := Module[{long = False, j, n = Length[$fcodes], words, endAt},
-    fastNext[];
-    If[ $fk[[$ft]] === $tkOperator && $fo[[$ft]] === $fastQuestion && $fs[[$ft]] === $fe[[$ft - 1]], long = True; fastNext[]];
-    j = $fe[[$ft - 1]];
-    While[j <= n && ($fcodes[[j]] === 32 || $fcodes[[j]] === 9), j++];
-    Which[
-        j <= n && $fcodes[[j]] === 34,
-            If[$fk[[$ft]] =!= $tkString || $fs[[$ft]] =!= j, fastGiveUp[]];
-            words = fastTokenText[]; fastNext[],
-        True,
-            endAt = fastInformationEnd[j];
-            If[endAt === j, fastFail[]];
-            words = "\"" <> StringReplace[fastText[j, endAt], "\t" -> " "] <> "\"";
-            (* the tokens of the words, whose last ends where they do *)
-            While[$fk[[$ft]] =!= $tkEnd && $fs[[$ft]] < endAt, fastNext[]];
-            If[$fe[[$ft - 1]] =!= endAt, fastGiveUp[]]];
-    $falg["Call"][fastLeaf["Symbol", "Information"], {fastLeaf["String", words],
-        $falg["Binary"]["Rule", fastLeaf["Symbol", "LongForm"], fastLeaf["Symbol", If[long, "True", "False"]]]}]]
-
-(* past the words of a query from j: letters, digits, $ ` * @, the spaces
-   and tabs between them *)
-fastInformationEnd[j0_Integer] := Module[{j = j0, n = Length[$fcodes], wordEnd = j0, c, cl, k},
-    While[ j <= n,
-        c = $fcodes[[j]]; cl = fastClass[c];
-        Which[
-            cl === 1 || cl === 2 || cl === 5 || c === 42 || c === 64, j++; wordEnd = j,
-            c === 92 && (k = fastLetterNameEnd[$fcodes, j, n]) > j, j = k; wordEnd = j,
-            c === 32 || c === 9, j++,
-            True, Break[]]];
-    wordEnd]
-
-(* --- operators after an operand --- *)
-
-fastLed[left_, spec : {bp_Integer, fixity_String, head_String, ___}, min_Integer, plain_] := Switch[ fixity,
-    "InfixL", fastNext[]; fastBinary[head, left, fastExpression[min, bp, plain]],
-    "InfixR", fastNext[]; fastBinary[head, left, fastExpression[min, bp - 1, plain]],
-    "InfixN", fastChain[left, spec, min, plain],
-    "LongPart", fastNext[];
-        With[{xs = fastItems[{$tkOperator, $fastRightDoubleBracket}]}, fastClose[{$tkOperator, $fastRightDoubleBracket}];
-            $falg["Infix"]["Part", Prepend[xs, left]]],
-    "Postfix", fastNext[]; $falg["Postfix"][left, head],
-    "Unset", $ft += 2; $falg["Postfix"][left, "Unset"],
-    "Call", fastCall[left],
-    "Derivative",
-        With[{primes = $fe[[$ft]] - $fs[[$ft]]}, fastNext[];
-            $falg["Call"][$falg["Call"][fastLeaf["Symbol", "Derivative"], {fastLeaf["Integer", ToString[primes]]}], {left}]],
-    "Ternary", fastNext[];
-        With[{middle = fastExpression[min, bp, plain]},
-            If[! ($fk[[$ft]] === $tkOperator && $fo[[$ft]] === $fastTilde) || fastLineEndQ[], fastFail[]];
-            fastNext[];
-            $falg["Call"][middle, {left, fastExpression[min, bp, plain]}]],
-    "MessageName", fastMessageName[left],
-    "Span", fastSpan[left, min],
-    "Compound", fastCompound[left, min],
-    "TagSet", fastTagSet[left, min],
-    "Put", fastNext[]; $falg["Binary"][head, left, fastFile[]]]
 
 fastBinary[head_String, l_, r_] := Switch[ head,
     "At", atCall[$falg, l, r],
     "SlashSlash", $falg["Call"][r, {l}],
     _, $falg["Binary"][head, l, r]]
 
-(* a chain of the operators of one key at one level, one node *)
-fastChain[left_, first_List, min_Integer, plain_] := Module[{bp = first[[1]], key = fastChainKey[first], operands = {left}, heads = {}, more = True, spec},
-    While[ more,
-        spec = fastLedSpec[];
-        If[ spec =!= None && spec[[1]] === bp && spec[[2]] === "InfixN" && fastChainKey[spec] === key,
-            heads = Append[heads, If[ key === "Plus",
-                If[$fk[[$ft]] === $tkOperator && ($fo[[$ft]] === $fastMinus || $fo[[$ft]] === $fastLongMinus), "-", "+"],
-                spec[[3]]]];
-            If[Length[spec] < 5, fastNext[]];
-            operands = Append[operands, fastExpression[min, bp, plain]],
-            more = False]];
-    Switch[ key,
-        "Plus", $falg["Infix"]["Plus", Prepend[MapThread[If[#2 === "-", $falg["Prefix"]["Minus", #1], #1] &, {Rest[operands], heads}], First[operands]]],
-        "Relation", relationValue[$falg, operands, heads],
-        "Divisible", $falg["Infix"]["Divisible", Reverse[operands]],
-        _, $falg["Infix"][first[[3]], operands]]]
+$fastLeafKinds = <|1 -> "Symbol", 2 -> "Blank", 3 -> "Integer", 4 -> "Real", 5 -> "String", 6 -> "Slot", 7 -> "Out", 8 -> "File", 100 -> "Tag"|>
 
-(* f[args] and e[[indices]] *)
-fastCall[left_] := Module[{part = $ft + 1 <= Length[$fk] && $fk[[$ft + 1]] === $tkOpenSquare, xs},
-    If[ part,
-        $ft += 2;
-        xs = fastItems[$tkCloseSquare];
-        If[! ($fk[[$ft]] === $tkCloseSquare && $fk[[$ft + 1]] === $tkCloseSquare), fastFail[]];
-        $ft += 2;
-        $falg["Infix"]["Part", Prepend[xs, left]],
-        fastNext[];
-        xs = fastItems[$tkCloseSquare];
-        fastClose[$tkCloseSquare];
-        $falg["Call"][left, xs]]]
+(* the held values of a postfix program, by the held algebra's builders:
+   the statements'. The values wait in an association by their place on
+   the stack, which a write does not copy, as it does a list of them. *)
+fastBuild[prog_List] := Module[{n = prog[[2]], vals = <||>, sp = 0, heads, hp = 0, statements = Internal`Bag[], code, a, b, xs, x, y, z, spec},
+    heads = ConstantArray[0, n + 1];
+    Do[
+        code = prog[[3 j]]; a = prog[[3 j + 1]]; b = prog[[3 j + 2]];
+        Switch[ code,
+            1, sp++; vals[sp] = fastLeaf[$fastLeafKinds[a], fastText[$fs[[b]], $fe[[b]]]],
+            8, xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = $falg["Call"][vals[sp], xs],
+            4, y = vals[sp]; sp--; vals[sp] = fastBinary[$fastHeadNames[[a]], vals[sp], y],
+            9, xs = Lookup[vals, Range[sp - b + 1, sp]]; sp -= b - 1; vals[sp] = $falg["Group"][$fastHeadNames[[a]], xs],
+            25, Internal`StuffBag[statements, vals[sp]]; sp--,
+            19, xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = $falg["Infix"]["CompoundExpression", xs],
+            5, xs = Lookup[vals, Range[sp - b + 1, sp]]; sp -= b - 1; vals[sp] = $falg["Infix"][$fastHeadNames[[a]], xs],
+            3, vals[sp] = $falg["Postfix"][vals[sp], $fastHeadNames[[a]]],
+            2, vals[sp] = $falg["Prefix"][$fastHeadNames[[a]], vals[sp]],
+            14, xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = $falg["Infix"]["MessageName", xs],
+            23, y = vals[sp]; sp--; vals[sp] = $falg["Binary"]["Pattern", vals[sp], y],
+            6, hp++; heads[[hp]] = a,
+            7, xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1;
+                vals[sp] = relationValue[$falg, xs, $fastHeadNames[[heads[[hp - a + 2 ;; hp]]]]]; hp -= a - 1,
+            10, xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = $falg["Infix"]["Part", Prepend[xs, vals[sp]]],
+            11, sp++; vals[sp] = fastLeaf["Symbol", "Null"],
+            12, sp++; vals[sp] = fastLeaf["Symbol", "All"],
+            13, sp++; vals[sp] = fastLeaf["Integer", "1"],
+            15, xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = $falg["Call"][$falg["Call"][fastLeaf["Symbol", "TypeSpecifier"], {vals[sp]}], xs],
+            16, vals[sp] = $falg["Call"][$falg["Call"][fastLeaf["Symbol", "Derivative"], {fastLeaf["Integer", ToString[a]]}], {vals[sp]}],
+            17, z = vals[sp]; y = vals[sp - 1]; x = vals[sp - 2]; sp -= 2; vals[sp] = $falg["Call"][y, {x, z}],
+            18, xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = $falg["Infix"]["Span", xs],
+            20, If[ a === 3,
+                    y = vals[sp]; sp--; vals[sp] = $falg["Binary"]["TagUnset", vals[sp], y],
+                    z = vals[sp]; y = vals[sp - 1]; x = vals[sp - 2]; sp -= 2;
+                    vals[sp] = $falg["Ternary"][If[a === 1, "TagSetDelayed", "TagSet"], x, y, z]],
+            21, y = vals[sp]; sp--; vals[sp] = $falg["Binary"][$fastHeadNames[[a]], vals[sp], y],
+            22, vals[sp] = $falg["Prefix"]["Get", vals[sp]],
+            24, spec = $fastIntegralList[[a]];
+                If[ b === 0,
+                    vals[sp] = $falg["Prefix"][spec[[1]], vals[sp]],
+                    y = vals[sp]; sp--;
+                    vals[sp] = If[spec[[2]] === Integrate, integralOf[$falg, vals[sp], y], $falg["Prefix"][spec[[1]], $falg["Infix"]["Times", {vals[sp], y}]]]],
+            26, xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = $falg["Infix"]["Divisible", Reverse[xs]],
+            27, vals[sp] = $falg["Prefix"]["Not", $falg["Prefix"]["Not", vals[sp]]],
+            28, sp++; vals[sp] = fastLeaf["String", "\"" <> StringReplace[fastText[a, b], "\t" -> " "] <> "\""],
+            29, vals[sp] = $falg["Call"][fastLeaf["Symbol", "Information"], {vals[sp],
+                $falg["Binary"]["Rule", fastLeaf["Symbol", "LongForm"], fastLeaf["Symbol", If[a === 1, "True", "False"]]]}]],
+        {j, n}];
+    expressions[Internal`BagPart[statements, All]]]
 
-(* s::tag, s::tag::tag, t::[a, ...] *)
-fastMessageName[left_] := Module[{colons = $fe[[$ft]], first, second = Missing[]},
-    fastNext[];
-    If[ $fk[[$ft]] === $tkOpenSquare && $fs[[$ft]] === colons,
-        fastNext[];
-        Return[With[{xs = fastItems[$tkCloseSquare]}, fastClose[$tkCloseSquare];
-            $falg["Call"][$falg["Call"][fastLeaf["Symbol", "TypeSpecifier"], {left}], xs]], Module]];
-    first = fastTag[colons];
-    If[ $fk[[$ft]] === $tkOperator && $fo[[$ft]] === $fastColonColon && ! fastLineEndQ[],
-        With[{at = $fe[[$ft]]}, fastNext[]; second = fastTag[at]]];
-    $falg["Infix"]["MessageName", Join[{left, first}, If[MissingQ[second], {}, {second}]]]]
-
-(* the tag right after ::, a name or a string *)
-fastTag[at_Integer] := If[ $fs[[$ft]] =!= at, fastFail[],
-    Switch[ $fk[[$ft]],
-        $tkName, With[{text = fastTokenText[]}, fastNext[]; fastLeaf["Tag", text]],
-        $tkString, With[{text = fastTokenText[]}, fastNext[]; fastLeaf["String", text]],
-        (* the grammar's tag is the name the blank begins with *)
-        $tkBlank, fastGiveUp[],
-        _, fastFail[]]]
-
-(* an operand that may be left out: the expression of the levels above
-   bound, if one can be read here, else Missing[] *)
-fastOptional[bound_Integer] := With[{at = $ft},
-    If[ fastLineEndQ[] || $fk[[$ft]] === $tkEnd,
-        Missing[],
-        Replace[Catch[fastExpression[bound, 0, False], $fastFail], $fastFail :> ($ft = at; Missing[]), {0}]]]
-
-(* a ;; b ;; c, an operand left out All *)
-fastSpan[left_, min_Integer] := Module[{all = fastLeaf["Symbol", "All"], b, c = None},
-    fastNext[];
-    b = fastSpanOperand[];
-    If[ $fk[[$ft]] === $tkOperator && $fo[[$ft]] === $fastSemiSemi && ! fastLineEndQ[],
-        fastNext[]; c = fastSpanOperand[]];
-    $falg["Infix"]["Span", Join[{left, If[MissingQ[b], all, b]}, If[c === None, {}, {If[MissingQ[c], all, c]}]]]]
-
-fastSpanOperand[] := If[$fk[[$ft]] === $tkOperator && $fo[[$ft]] === $fastSemiSemi, Missing[], fastOptional[$fastSpanOperand]]
-
-(* a; b; ..., an operand left out Null *)
-fastCompound[left_, min_Integer] := Module[{parts = Internal`Bag[]},
-    While[ $fk[[$ft]] === $tkOperator && $fo[[$ft]] === $fastSemi && ! fastLineEndQ[],
-        fastNext[];
-        Internal`StuffBag[parts, Replace[fastOptional[$fastCompoundOperand], _Missing :> fastLeaf["Symbol", "Null"]]]];
-    $falg["Infix"]["CompoundExpression", Prepend[Internal`BagPart[parts, All], left]]]
-
-(* t /: lhs = rhs, t /: lhs := rhs, t /: lhs =. *)
-fastTagSet[t_, min_Integer] := Module[{lhs},
-    fastNext[];
-    lhs = fastExpression[$fastTagLeft, 0, False];
-    Which[
-        fastLineEndQ[] || $fk[[$ft]] =!= $tkOperator, fastFail[],
-        fastSpacedUnsetQ[], $ft += 2; $falg["Binary"]["TagUnset", t, lhs],
-        $fo[[$ft]] === $fastColonEqual, fastNext[]; $falg["Ternary"]["TagSetDelayed", t, lhs, fastExpression[$fastTagRight, 0, False]],
-        $fo[[$ft]] === $fastEqual, fastNext[]; $falg["Ternary"]["TagSet", t, lhs, fastExpression[$fastTagRight, 0, False]],
-        $fo[[$ft]] === $fastEqualDot, fastNext[]; $falg["Binary"]["TagUnset", t, lhs],
-        True, fastFail[]]]
+(* the source's top-level expressions, held, by the lexer, the parser and
+   the build pass; the grammar reads what they do not *)
+fastHeld[s_String] := Catch[Module[{codes = ToCharacterCode[s], padded, lexed, kinds, ops, prog},
+    padded = Join[codes, {0, 0, 0}];
+    lexed = fastLexFunction[padded, $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];
+    If[lexed[[1]] =!= 0, fastGiveUp[]];
+    kinds = lexed[[3 ;; ;; 5]]; ops = lexed[[4 ;; ;; 5]];
+    prog = fastParseFunction[lexed, fastLedIndices[kinds, ops], fastDifferentialMarks[ops], $fastSpecTable, $fastPrefixArray, $fastGroupArray,
+        $fastIntegralArray, $fastSpecialArray, $fastHeadCodeArray, $fastKeyCodeArray, padded, $fastClasses];
+    If[prog[[1]] =!= 0, fastGiveUp[]];
+    Block[{$fcodes = codes, $fs = lexed[[5 ;; ;; 5]], $fe = lexed[[6 ;; ;; 5]], $falg = WolframLanguageSemantic},
+        fastBuild[prog]]], $fastGiveUp]
 
 End[]
 
