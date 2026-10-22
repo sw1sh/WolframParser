@@ -39,10 +39,29 @@ forms = {
     "$x", "a`b", "`a", "a`b`c", "Function[x, x]&", "f[n_Integer?Positive] := n f[n - 1]; f[0] = 1; f[20]"
 };
 
+(* source that is not Wolfram Language: an operand left out, a group not
+   closed, a closer that closes none, error tokens, syntax errors *)
+errorForms = {
+    "a +", "a + ", "a +\n", "-", "!", "a =", "a = = b", "a * * b", "&&a", "@a", "a//", "x_:", "x:", "a ~f~", "a.b.", "f[;]", "(;)",
+    "?a", "a\n=b", "a + )", "f[a +]", "a; b +", "a;; b +", "f[a, b +]",
+    "f[x", "f[x,", "f[", "{a, b", "(a", "<|a", "f[[1]", "a[[1", "f[g[x", "{a, {b", "(a + (b", "(\n", "f[x ", "f[x (* c *)",
+    "f[x)", "(a]", "{a)", "(a]b", "(a]+b", "{a, (b]}", "f[(a]]", "[a)", "{(a + b]}", "{(a + b]", "f[a (b + c]]", "(a + b]c + d)", "(a]b]c)", "{f[a)}",
+    "f[x]]", "a)", ")", "]", "}", "|>", "a]b", "f[x]\n]", "(* a *) ]", "f[a, ] ]",
+    "\"abc", "\"abc\ndef", "(* abc", "x \"abc", "f[x, \"abc", "f[x (* abc", "1``", "16^^", "1*^", "2^^3", "37^^1", "1.5``",
+    "??a", "a ?? b", "x + ??", "x + ?? b", "x + ?? + y", "?? + y", "f[??, a]", "f[a ??]", "f[a, ??]", "f[a ?? b]",
+    "\\[Foo]", "\\[Alpha", "\\:00", "a \\", "a\\[Foo]b", "{\\[Foo], 1}", "f[a, \\]", "`", "a``b", "a`1", "1`2`3", "x + a` b", "f[a`, b]",
+    "a ~f", "a ~ b", "a ~f~ b ~g", "a /: b", "a /: b c", "a /: ??", "f[x]:y", "1:2", "x_.:0", "(x_):0", "#:0", "x_:1:2",
+    "a::", "a::1", "a::b::", "a :: b", "a::??", "a::\"b", "<<", "<< ", "a >>", "<<\"a", "a >> \"b",
+    "a,b", ",", ",a", "a,", "a,\nb", "a\n,b", "a, b\n, c", "{,}", "{a,,b}", "f[a,, ]",
+    "a;;b;;", "a;;;;", "a; ;b", "a; ;", "a; ??", "a; )", "a; \"abc", "a;; ??", "f[a; )]", "#\"a"
+};
+
 (* whole containers, Source included *)
 containerForms = {
     "f[x_] := x^2 (* c *)\n", "a; \nb", "a b", "f[x, ]", ";;b", "{1, 2}[[1]]", "a\r\nb", "\ta\tb", "x\n(* a\n b *)\n\n",
-    "\"a\nb\" (*\t*)", "\"c\\\nd\"", "\\[Alpha]b \\[Rule] c", "a +\n  b"
+    "\"a\nb\" (*\t*)", "\"c\\\nd\"", "\\[Alpha]b \\[Rule] c", "a +\n  b",
+    (* what CodeParser reads again: an open group or token, up to its chunk *)
+    "f[x\ny = 1", "f[x\ng[y]", "{1,\n2\n\nf[3]", "f[x \n", "(* abc\n", "\"abc\n", "a = 1\nb = (c", "f[x\nBegin[\"a`\"]"
 };
 
 dropIssues[c_] := MapAt[KeyDrop[#, CodeParser`SyntaxIssues] &, c, 3]
@@ -51,7 +70,7 @@ shown[e_] := Block[{$ContextPath = {"System`"}}, ToString[e, InputForm, Characte
 entries[list_, f_] := StringRiffle[Map["    {" <> shown[#] <> ", " <> shown[f[#]] <> "}" &, list], ",\n"]
 
 block = StringJoin[
-    "$concreteTrees = {\n", entries[forms, noSource[dropIssues[CodeConcreteParse[#]]] &], "\n};\n\n",
+    "$concreteTrees = {\n", entries[Join[forms, errorForms], noSource[dropIssues[CodeConcreteParse[#]]] &], "\n};\n\n",
     "$concreteContainers = {\n", entries[containerForms, dropIssues[CodeConcreteParse[#]] &], "\n};\n"];
 
 text = ByteArrayToString[ReadByteArray[testFile], "UTF-8"];
@@ -60,4 +79,4 @@ If[ ! StringContainsQ[text, "(* BEGIN frozen" ~~ Shortest[___] ~~ "(* END frozen
 updated = StringReplace[text,
     start : ("(* BEGIN frozen" ~~ Shortest[___] ~~ "*)\n") ~~ Shortest[___] ~~ end : "(* END frozen *)" :> start <> block <> end, 1];
 With[{stream = OpenWrite[testFile, CharacterEncoding -> "UTF-8"]}, WriteString[stream, updated]; Close[stream]];
-Print["froze ", Length[forms], " trees and ", Length[containerForms], " containers into ", testFile];
+Print["froze ", Length[forms] + Length[errorForms], " trees and ", Length[containerForms], " containers into ", testFile];

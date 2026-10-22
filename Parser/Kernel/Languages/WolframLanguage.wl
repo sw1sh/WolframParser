@@ -36,7 +36,7 @@ BeginPackage["Wolfram`Parser`Languages`WolframLanguage`", {"Wolfram`Parser`"}]
 WolframLanguageAST::usage      = "WolframLanguageAST[\"code\"] parses Wolfram Language source to a standard AST: a ContainerNode of its top-level expressions, of CallNode / InfixNode / BinaryNode / PrefixNode / PostfixNode / TernaryNode / GroupNode / LeafNode, each operator named by the head it stands for (\"Plus\", \"SetDelayed\", ...)."
 WolframLanguageHeld::usage     = "WolframLanguageHeld[\"code\"] parses Wolfram Language source to the list of its top-level expressions, each in HoldComplete, as ImportString[code, {\"WL\", \"HeldExpressions\"}] gives them."
 WolframLanguageGrammar::usage  = "WolframLanguageGrammar[alg] builds the Wolfram Language parser over the algebra alg, an Association with the keys of ASTAlgebra; the parser gives the list of the top-level expressions."
-WolframLanguageConcrete::usage = "WolframLanguageConcrete[\"code\"] parses Wolfram Language source to its concrete syntax tree, as CodeParser`CodeConcreteParse gives it: a ContainerNode of the top-level expressions and the whitespace, newlines and comments around them, in CodeParser's own nodes, every character of the source in a leaf."
+WolframLanguageConcrete::usage = "WolframLanguageConcrete[\"code\"] parses Wolfram Language source to its concrete syntax tree, as CodeParser`CodeConcreteParse gives it: a ContainerNode of the top-level expressions and the whitespace, newlines and comments around them, in CodeParser's own nodes, every character of the source in a leaf. Source that is not Wolfram Language reads as CodeParser reads it, into its error nodes: nothing fails."
 WolframLanguageSemantic::usage = "WolframLanguageSemantic is the algebra that builds each expression held: its builders give <|\"Expr\" -> HoldComplete[expr], \"Literal\" -> .., \"Chain\" -> ..|>, the flags telling a number literal and a product, into which a minus folds."
 
 Begin["`Private`"]
@@ -535,7 +535,15 @@ WolframLanguageSemantic = <|
    the trivia after it]; a node made of values holds each one's trivia
    after it, but for the last's, which follows the node. A token for what
    was left out (Token`Fake`ImplicitNull, ...) comes after the trivia
-   before it. *)
+   before it.
+
+   What is not Wolfram Language reads as CodeParser reads it, and nothing
+   fails: an operand left out is Token`Error`ExpectedOperand, a group not
+   closed a GroupMissingCloserNode, a closer that closes no group around it
+   Token`Error`UnexpectedCloser, text that is no token an ErrorNode of the
+   kind CodeParser gives it, and a ~ without its second ~, a /: without its
+   = and a : after what is neither a name nor a pattern a SyntaxErrorNode.
+   An error token is the whole of an expression it begins. *)
 
 kids[item[node_, trivia_List]] := Prepend[trivia, node]
 
@@ -556,6 +564,19 @@ implicitItem[token_] := item[concreteLeaf[token, ""], {}]
 
 errorItem[token_] := item[CodeParser`ErrorNode[token, "", <||>], {}]
 
+errorTokenItem[token_, s_String, trivia_List] := item[CodeParser`ErrorNode[token, s, <||>], trivia]
+
+(* an error token of the source, which no operator takes for its left operand *)
+finalOperandQ[item[node_, _]] := errorTokenQ[node]
+finalOperandQ[_] := False
+
+errorTokenQ[CodeParser`ErrorNode[token_, _, _]] := ! MatchQ[token, Token`Error`ExpectedOperand | Token`Error`PrefixImplicitNull]
+errorTokenQ[_] := False
+
+(* commas after an error token, which takes none *)
+commaAfterErrorQ[item[CodeParser`InfixNode[CodeParser`Comma, {first_, ___}, _], _]] := errorTokenQ[first]
+commaAfterErrorQ[_] := False
+
 (* CodeParser names a token by its characters, -> Token`MinusGreater, and
    a long name or its character by the name, Token`LongName`Rule *)
 $tokenCharacterNames = <|
@@ -572,11 +593,102 @@ tokenSymbol[s_String] := tokenSymbol[s] = Symbol["Token`" <> Which[
 
 tokenLeaf[s_String] := concreteLeaf[tokenSymbol[s], s]
 
-(* =. is = then ., trivia between *)
-$concreteSpellings = DeleteCases[$operatorSpellings, "=."]
+(* =. is = then ., trivia between; ?? is a token of its own *)
+$concreteSpellings = Append[DeleteCases[$operatorSpellings, "=."], "??"]
 
 (* a . or a ` makes a real, an exponent below 0 on an integer a rational *)
 concreteNumberKind[s_String] := Which[StringContainsQ[s, "." | "`"], Real, StringContainsQ[s, "*^-"], Rational, True, Integer]
+
+(* --- concrete tokens --- *)
+
+$languagesDirectory = DirectoryName[$InputFileName]
+
+(* The long names of the Wolfram Language, as CodeParser lists them
+   (Resources/Generated/LongNames.wl of the CodeParser paclet,
+   github.com/WolframResearch/codeparser, MIT), read at their first use. *)
+$longNames := $longNames = Association[Thread[DeleteCases[Get[FileNameJoin[{$languagesDirectory, "LongNames.wl"}]], Nothing] -> True]]
+
+(* a long name that is a letter: the language's, and not an operator's *)
+letterNameQ[s_String] := KeyExistsQ[$longNames, StringTake[s, {3, -2}]] && ! MemberQ[$operatorLongNames, s]
+
+(* a letter past ASCII: a long name that is one, or a character past
+   ASCII that is not an operator's nor whitespace *)
+$concreteLetter = ParseChoice[
+    ParseAction[ParseLookahead[ParseLiteral["\\["]] ~~ ParseCondition[ParseRegex["\\\\\\[[A-Za-z0-9]+]"], letterNameQ], #2 &],
+    ParseCharacter[_?nameCharacterQ]]
+
+(* A name: parts of letters, digits and $, each beginning with a letter or
+   $, joined by single `s, a ` before the first naming a context relative
+   to the current one: a`b, `a. The loop after the first run of ASCII is
+   entered only at a letter past ASCII or a `. *)
+nameMoreQ[c_String] := c === "\\" || c === "`" || First[ToCharacterCode[c]] > 127
+$namePartStart = ParseChoice[ParseRegex["[A-Za-z$]"], $concreteLetter]
+$concreteName = text[
+    ParseChoice[
+        ParseRegex["[A-Za-z$][A-Za-z0-9$]*(`[A-Za-z$][A-Za-z0-9$]*)*"],
+        ParseRegex["`[A-Za-z$][A-Za-z0-9$]*(`[A-Za-z$][A-Za-z0-9$]*)*"],
+        ParseOptional[ParseLiteral["`"]] ~~ $concreteLetter ~~ ParseRegex["[A-Za-z0-9$]*"]] ~~
+    ParseMany[ParseAction[ParseLookahead[ParseCharacter[_?nameMoreQ]] ~~
+        ParseChoice[$concreteLetter ~~ ParseRegex["[A-Za-z0-9$]*"], ParseLiteral["`"] ~~ $namePartStart ~~ ParseRegex["[A-Za-z0-9$]*"]], #2 &]]]
+
+(* a name with a ` after it that no part follows: CodeParser's
+   Token`Error`ExpectedLetterlike, up to the ` *)
+$letterlikeError = text[ParseOptional[$concreteName] ~~ ParseLiteral["`"] ~~ ParseNotFollowedBy[$namePartStart]]
+
+(* A number's text, as far as a number could go: digits, or b^^digits, a
+   fraction, then a precision or accuracy and an exponent. *)
+$signedDigits = ParseOptional[ParseCharacter["-" | "+"]] ~~ ParseChoice[
+    $digits ~~ ParseOptional[ParseLiteral["."] ~~ ParseOptional[$digits]],
+    ParseLiteral["."] ~~ $digits]
+$numberText = text[
+    ParseChoice[
+        $digits ~~ ParseOptional[ParseChoice[
+            ParseLiteral["^^"] ~~ ParseRegex["[0-9a-zA-Z]*"] ~~ ParseOptional[ParseLiteral["."] ~~ ParseNotFollowedBy[ParseLiteral["."]] ~~ ParseRegex["[0-9a-zA-Z]*"]],
+            ParseLiteral["."] ~~ ParseNotFollowedBy[ParseLiteral["."]] ~~ ParseOptional[$digits]]],
+        ParseLiteral["."] ~~ $digits]
+    ~~ ParseOptional[ParseLiteral["`"] ~~ ParseOptional[ParseLiteral["`"]] ~~ ParseOptional[$signedDigits]]
+    ~~ ParseOptional[ParseLiteral["*^"] ~~ ParseOptional[ParseOptional[ParseCharacter["-" | "+"]] ~~ $digits]]]
+
+(* A number's text is CodeParser's Token`Error`Number where its base is
+   not 2 to 36, a digit is not one of the base's, or a ^^, a `` or a *^ has
+   nothing after it. *)
+numberTextValidQ[s_String] := Module[{body = s, parts, base},
+    If[ StringContainsQ[body, "*^"],
+        parts = StringSplit[body, "*^", All];
+        If[ ! StringMatchQ[Last[parts], RegularExpression["[-+]?[0-9]+"]], Return[False, Module]];
+        body = First[parts]];
+    If[ StringContainsQ[body, "``"] && Last[StringSplit[body, "``", All]] === "", Return[False, Module]];
+    body = First[StringSplit[body, "`", All]];
+    If[ StringContainsQ[body, "^^"],
+        parts = StringSplit[body, "^^", All];
+        base = FromDigits[First[parts]];
+        If[ ! (2 <= base <= 36) || StringDelete[Last[parts], "."] === "", Return[False, Module]];
+        If[ ! AllTrue[Characters[ToLowerCase[StringDelete[Last[parts], "."]]], digitValue[#] < base &], Return[False, Module]]];
+    True]
+
+digitValue[c_String] := With[{n = First[ToCharacterCode[c]]}, If[n <= 57, n - 48, n - 87]]
+
+(* a string or a comment the source does not close: the rest of the source *)
+$unterminatedString = ParseRegex["\"(?s:.*)"]
+$unterminatedComment = ParseRegex["\\(\\*(?s:.*)"]
+
+(* a \ that begins no letter: a long name not the language's, a \[ not
+   closed, a \: \. \| short of its digits, or a \ and the character after
+   it, none at the end: CodeParser's Token`Error`UnhandledCharacter *)
+$unhandledCharacter = text[ParseChoice[
+    ParseCondition[ParseRegex["\\\\\\[[A-Za-z0-9]+]"], ! letterNameQ[#] && ! MemberQ[$operatorLongNames, #] &],
+    ParseLiteral["\\["] ~~ ParseRegex["[A-Za-z0-9]*"] ~~ ParseNotFollowedBy[ParseLiteral["]"]],
+    ParseLiteral["\\:"] ~~ ParseRegex["[0-9a-fA-F]{0,3}"] ~~ ParseNotFollowedBy[ParseCharacter[HexadecimalCharacter]],
+    ParseLiteral["\\."] ~~ ParseRegex["[0-9a-fA-F]?"] ~~ ParseNotFollowedBy[ParseCharacter[HexadecimalCharacter]],
+    ParseLiteral["\\|"] ~~ ParseRegex["[0-9a-fA-F]{0,5}"] ~~ ParseNotFollowedBy[ParseCharacter[HexadecimalCharacter]],
+    ParseLiteral["\\"] ~~ ParseNotFollowedBy[ParseCharacter["[" | ":" | "." | "|" | "\n" | "\r"]] ~~ ParseOptional[ParseCharacter[_]]]]
+
+(* a character that can begin a leaf, and one that can begin a name *)
+leafStartQ[c_String] := StringContainsQ["_#%{<(\"`$\\.0123456789", c] || nameStartQ[c]
+nameStartQ[c_String] := c === "$" || c === "`" || c === "\\" || StringMatchQ[c, LetterCharacter] || nameCharacterQ[c]
+
+(* a control character, which no token holds *)
+strayCharacterQ[c_String] := With[{n = First[ToCharacterCode[c]]}, (n < 32 && ! MemberQ[{9, 10, 12, 13}, n]) || n === 127]
 
 $blankHeads = <|"_" -> Blank, "__" -> BlankSequence, "___" -> BlankNullSequence|>
 $patternBlankHeads = <|"_" -> CodeParser`PatternBlank, "__" -> CodeParser`PatternBlankSequence,
@@ -588,6 +700,13 @@ blankNode[name_, underscores_String, head_] := With[{blank = If[MissingQ[head],
         CodeParser`CompoundNode[$blankHeads[underscores], {tokenLeaf[underscores], concreteLeaf[Symbol, head]}, <||>]]},
     If[MissingQ[name], blank, CodeParser`CompoundNode[$patternBlankHeads[underscores], {concreteLeaf[Symbol, name], blank}, <||>]]]
 
+(* what a : makes an Optional of: a pattern; after anything else but a
+   name it is a SyntaxErrorNode *)
+patternLikeQ[item[node_, _]] := MatchQ[node,
+    CodeParser`CompoundNode[CodeParser`PatternBlank | CodeParser`PatternBlankSequence | CodeParser`PatternBlankNullSequence | Blank | BlankSequence | BlankNullSequence, _, _] |
+    CodeParser`LeafNode[Token`Under | Token`UnderUnder | Token`UnderUnderUnder, _, _] |
+    CodeParser`BinaryNode[Pattern, _, _]]
+
 (* #, #2, #name, #"name", ##, ##2 *)
 slotNode[hash_String, _Missing] := tokenLeaf[hash]
 slotNode["#", s_String] := CodeParser`CompoundNode[Slot,
@@ -598,39 +717,57 @@ slotNode["##", s_String] := CodeParser`CompoundNode[SlotSequence, {tokenLeaf["##
 outNode["%", _Missing] := tokenLeaf["%"]
 outNode["%", s_String] := CodeParser`CompoundNode[Out, {tokenLeaf["%"], concreteLeaf[Integer, s]}, <||>]
 
-(* What a group holds: nothing, an expression, or expressions between
-   commas, any of them left out: Token`Error`PrefixImplicitNull first,
-   Token`Error`InfixImplicitNull after a comma. *)
-groupInner[first_, {}] := If[MissingQ[first], {}, kids[first]]
-groupInner[first_, rest_List] := With[{elements = MapIndexed[filledElement, Prepend[rest[[All, 2]], first]]},
-    kids[stepsItem[CodeParser`InfixNode, CodeParser`Comma, First[elements],
-        MapThread[step[{}, kids[#1], #2] &, {rest[[All, 1]], Rest[elements]}]]]]
+(* --- groups --- *)
 
-filledElement[_Missing, {1}] := errorItem[Token`Error`PrefixImplicitNull]
-filledElement[_Missing, _] := errorItem[Token`Error`InfixImplicitNull]
-filledElement[e_item, _] := e
+$closers = {"]", ")", "}", "|>"}
+
+(* A group closed: a GroupNode. One its source leaves open, at the end of
+   the source or at the closer of a group around it: a
+   GroupMissingCloserNode, the trivia after its last child outside it, and
+   marked to be read again if it is open at the end. *)
+groupItem[tag_, open_String, close_String, lead_List, children_List, {"Closed", trivia_List}] :=
+    item[CodeParser`GroupNode[tag, Join[{tokenLeaf[open]}, lead, Catenate[kids /@ children], {tokenLeaf[close]}], <||>], trivia]
+groupItem[tag_, open_String, close_String, lead_List, children_List, {end_String}] :=
+    With[{all = Join[{tokenLeaf[open]}, lead, Catenate[kids /@ children]]}, With[{n = trailingTriviaCount[all]},
+        item[CodeParser`GroupMissingCloserNode[tag, Drop[all, -n], If[end === "End", <|unterminated -> True|>, <||>]], Take[all, -n]]]]
+
+trailingTriviaCount[all_List] := Module[{n = 0}, While[n < Length[all] && triviaLeafQ[all[[-n - 1]]], n++]; n]
+
+triviaLeafQ[CodeParser`LeafNode[Whitespace | Token`Newline | Token`Comment, _, _]] := True
+triviaLeafQ[_] := False
 
 (* a ;; b ;; c: a middle left out is Token`Fake`ImplicitAll *)
 spanItem[a_item, semis_item, spanRest[middle_, third_]] := With[{
         steps = {step[{}, kids[semis], If[MissingQ[middle], implicitItem[Token`Fake`ImplicitAll], middle]]}},
-    If[MissingQ[third],
-        stepsItem[CodeParser`BinaryNode, Span, a, steps],
-        stepsItem[CodeParser`TernaryNode, Span, a, Append[steps, third]]]]
+    Which[
+        MissingQ[third], stepsItem[CodeParser`BinaryNode, Span, a, steps],
+        MatchQ[third, _step], stepsItem[CodeParser`TernaryNode, Span, a, Append[steps, third]],
+        (* a ;; b ;; with nothing after: a span, then one beginning at the second ;; *)
+        True, stepsItem[CodeParser`InfixNode, Times, stepsItem[CodeParser`BinaryNode, Span, a, steps],
+            {step[{}, {concreteLeaf[Token`Fake`ImplicitTimes, ""]}, third]}]]]
 
 (* The concrete expression parser: operands and postfix operators are
    followed by the trivia ws, other operators by wsAll; brackets hold
    expressions of nested. Outside brackets, a newline ends an expression
    where it can end, but for a chain of one operator (a + b, a; b, a::b,
    a == b, ...), the ~ ~ of a ~f~ b and the = of t /: lhs = rhs, which
-   continue past it as CodeParser's do. *)
+   continue past it as CodeParser's do. <|"Expression" -> the parser,
+   "Children" -> that of what a group or the source holds between its
+   ends|>. *)
 concreteParser[ws_, wsAll_, nested_] := Module[
     {operatorItem, op, postOp, symbolItem, blankItem, numberItem, stringItem, slotItem, outItem, fileItem, getItem,
-     contents, group, call, typeSpecifier, tag, colons, messageName, tilde, spanOperandItem, spanThird, spanTail, spanStart,
-     semiStep, compound, equalDot, unset, tagSet, put, patternUnit, otherUnits, plainUnit, unit,
-     binary, prefix, postfix, chain, flat, dotOperator, operandStart, implicitTimes, inequality, plus, times, specs, table,
-     patternRight, spanOperand, compoundOperand, tagLeft, tagRight, tildeOperand},
+     letterlikeItem, unterminatedStringItem, unterminatedCommentItem, unsupportedItem, unhandledItem, strayItem, expectedOperand,
+     errorToken, leafAhead, operandAhead, scopedCloser, strayCloser, children, groupEnd, group, commaStep, commaExpression,
+     call, typeSpecifier, tag, colons, messageName, tilde, spanOperandItem, spanThird, spanTail, spanStart,
+     semiStep, compound, equalDot, unset, tagSet, put, patternUnit, otherUnits, plainUnit, unit, errorUnits,
+     binary, prefix, postfix, optionalColon, chain, flat, dotOperator, implicitTimes, inequality, plus, times, specs, table,
+     expression, gap, patternRight, spanOperand, compoundOperand, tagLeft, tagRight, tildeOperand, spanStartCell},
 
-    patternRight = RecCell[]; spanOperand = RecCell[]; compoundOperand = RecCell[]; tagLeft = RecCell[]; tagRight = RecCell[]; tildeOperand = RecCell[];
+    patternRight = RecCell[]; spanOperand = RecCell[]; compoundOperand = RecCell[]; tagLeft = RecCell[]; tagRight = RecCell[];
+    tildeOperand = RecCell[]; spanStartCell = RecCell[];
+    (* the trivia before a chain's later operator that its operand's own
+       does not cover: none where an operand takes all trivia after it *)
+    gap = If[ws === wsAll, ParseSucceed[{}], wsAll];
 
     (* an operator in any of its spellings, then the trivia w: item[token, trivia] *)
     operatorItem[s_String, w_] := ParseChoice @@ Map[
@@ -640,68 +777,128 @@ concreteParser[ws_, wsAll_, nested_] := Module[
     postOp[s_String] := operatorItem[s, ws];
 
     (* --- operands --- *)
-    symbolItem = ParseAction[$name ~~ ParseNotFollowedBy[ParseLiteral["_"]] ~~ ws, item[concreteLeaf[Symbol, #1], #3] &];
-    blankItem = ParseAction[ParseOptional[$name] ~~ ParseChoice[
+    symbolItem = ParseAction[$concreteName ~~ ParseNotFollowedBy[ParseCharacter["_" | "`"]] ~~ ws, item[concreteLeaf[Symbol, #1], #3] &];
+    blankItem = ParseAction[ParseOptional[$concreteName] ~~ ParseChoice[
             ParseAction[ParseLiteral["_."], {"_.", Missing[]} &],
-            ParseAction[ParseChoice[ParseLiteral["___"], ParseLiteral["__"], ParseLiteral["_"]] ~~ ParseOptional[$name], {#1, #2} &]] ~~ ws,
+            ParseAction[ParseChoice[ParseLiteral["___"], ParseLiteral["__"], ParseLiteral["_"]] ~~ ParseOptional[$concreteName], {#1, #2} &]] ~~ ws,
         Function[{name, blank, t}, item[blankNode[name, blank[[1]], blank[[2]]], t]]];
-    numberItem = ParseAction[ParseLookahead[ParseCharacter[DigitCharacter | "."]] ~~ $number ~~ ws,
-        item[concreteLeaf[concreteNumberKind[#2], #2], #3] &];
+    numberItem = ParseAction[ParseLookahead[ParseCharacter[DigitCharacter | "."]] ~~ $numberText ~~ ws,
+        If[numberTextValidQ[#2], item[concreteLeaf[concreteNumberKind[#2], #2], #3], errorTokenItem[Token`Error`Number, #2, #3]] &];
     stringItem = ParseAction[$string ~~ ws, item[concreteLeaf[String, #1], #2] &];
     slotItem = ParseAction[ParseChoice[
             ParseAction[ParseLiteral["##"] ~~ ParseOptional[$digits], slotNode],
-            ParseAction[ParseLiteral["#"] ~~ ParseOptional[ParseChoice[$digits, $string, $name]], slotNode]] ~~ ws,
+            ParseAction[ParseLiteral["#"] ~~ ParseOptional[ParseChoice[$digits, $string, $concreteName]], slotNode]] ~~ ws,
         item[#1, #2] &];
     outItem = ParseAction[ParseChoice[
             ParseAction[ParseRegex["%%+"], concreteLeaf[Token`PercentPercent, #] &],
             ParseAction[ParseLiteral["%"] ~~ ParseOptional[$digits], outNode]] ~~ ws,
         item[#1, #2] &];
-    fileItem = ParseAction[$file ~~ ws, item[concreteLeaf[String, #1], #2] &];
-    getItem = ParseAction[op["<<"] ~~ fileItem, concreteNode[CodeParser`PrefixNode, Get, kids[#1], #2] &];
-    contents = ParseAction[ParseOptional[RecRef[nested]] ~~ ParseMany[ParseAction[op[","] ~~ ParseOptional[RecRef[nested]], {#1, #2} &]],
-        groupInner];
+
+    (* --- error tokens, each the whole of an expression it begins --- *)
+    letterlikeItem = ParseAction[$letterlikeError ~~ ws, errorTokenItem[Token`Error`ExpectedLetterlike, #1, #2] &];
+    unterminatedStringItem = ParseAction[ParseNotFollowedBy[$string] ~~ $unterminatedString ~~ ws, errorTokenItem[Token`Error`UnterminatedString, #2, #3] &];
+    unterminatedCommentItem = ParseAction[$unterminatedComment ~~ ws, errorTokenItem[Token`Error`UnterminatedComment, #1, #2] &];
+    unsupportedItem = ParseAction[ParseLiteral["??"] ~~ ws, errorTokenItem[Token`Error`UnsupportedToken, #1, #2] &];
+    unhandledItem = ParseAction[$unhandledCharacter ~~ ws, errorTokenItem[Token`Error`UnhandledCharacter, #1, #2] &];
+    strayItem = ParseAction[ParseCharacter[_?strayCharacterQ] ~~ ws, errorTokenItem[Token`Error`UnhandledCharacter, #1, #2] &];
+    errorUnits = ParseChoice[letterlikeItem, unterminatedStringItem, unterminatedCommentItem, unsupportedItem, unhandledItem, strayItem];
+    errorToken = ParseChoice[ParseCondition[numberItem, finalOperandQ], errorUnits];
+    (* where no operand begins: an operand left out *)
+    expectedOperand = ParseAction[ParseSucceed[Null], errorItem[Token`Error`ExpectedOperand] &];
+
+    (* what can begin an operand, as CodeParser tells one: a token that is
+       no error, an opener, a prefix operator *)
+    leafAhead = ParseLookahead[ParseCharacter[_?leafStartQ]] ~~ ParseChoice[
+        ParseCharacter["_" | "#" | "%" | "{"], ParseLiteral["<|"],
+        ParseLiteral["("] ~~ ParseNotFollowedBy[ParseLiteral["*"]],
+        ParseRegex["[A-Za-z$][A-Za-z0-9$]*"] ~~ ParseNotFollowedBy[ParseCharacter[_?nameMoreQ]],
+        ParseLookahead[ParseCharacter[_?nameStartQ]] ~~ $concreteName ~~ ParseNotFollowedBy[ParseLiteral["`"]],
+        ParseLookahead[ParseCharacter[DigitCharacter | "."]] ~~ ParseCondition[$numberText, numberTextValidQ],
+        ParseLookahead[ParseLiteral["\""]] ~~ $string];
+    operandAhead = ParseLookahead[ParseChoice[leafAhead, ParseCharacter["[" | "-" | "+" | "!"], ParseLiteral["<<"], ParseLiteral[";;"]]];
+
+    (* --- groups --- *)
+    (* the closer of a group around, or one that closes none:
+       Token`Error`UnexpectedCloser *)
+    scopedCloser = ParseLookahead[ParseCharacter["]" | ")" | "}" | "|"]] ~~
+        ParseChoice @@ Map[Function[c, ParseLiteral[c] ~~ ParseCondition[ParseScope[], MemberQ[#, c] &]], $closers];
+    strayCloser = ParseAction[ParseLookahead[ParseCharacter["]" | ")" | "}" | "|"]] ~~ ParseChoice @@ Map[Function[c,
+        ParseAction[ParseLiteral[c] ~~ ParseCondition[ParseScope[], ! MemberQ[#, c] &] ~~ wsAll, errorTokenItem[Token`Error`UnexpectedCloser, #1, #3] &]], $closers], #2 &];
+    (* an expression, or expressions between commas, any of them left out:
+       Token`Error`PrefixImplicitNull first, Token`Error`InfixImplicitNull
+       after a comma; after a comma an expression is all but a closer, a
+       comma and the end, an error token too *)
+    commaStep[e_] := ParseAction[op[","] ~~ ParseOptional[ParseAction[ParseLookahead[ParseCharacter[_]] ~~ ParseNotFollowedBy[ParseChoice[ParseCharacter["]" | ")" | "}" | ","], ParseLiteral["|>"]]] ~~ e, #3 &]],
+        step[{}, kids[#1], If[MissingQ[#2], errorItem[Token`Error`InfixImplicitNull], #2]] &];
+    commaExpression[e_, g_] := ParseAction[
+        ParseChoice[ParseAction[ParseLookahead[ParseLiteral[","]], errorItem[Token`Error`PrefixImplicitNull] &], e] ~~
+        ParseOptional[ParseAction[commaStep[e] ~~ ParseMany[ParseAction[g ~~ commaStep[e], ReplacePart[#2, 1 -> #1] &]], Prepend[#2, #1] &]],
+        If[MissingQ[#2], #1, stepsItem[CodeParser`InfixNode, CodeParser`Comma, #1, #2]] &];
+    (* what a group or the source holds between its ends: expressions,
+       closers that close no group around, and an error token that begins
+       an expression alone, no comma after it *)
+    children[e_, g_] := ParseMany[ParseAction[ParseLookahead[ParseCharacter[_]] ~~ ParseNotFollowedBy[scopedCloser] ~~
+        ParseChoice[strayCloser, ParseCondition[commaExpression[e, g], ! commaAfterErrorQ[#] &], errorToken] ~~ wsAll,
+        Function[{at, notCloser, child, trivia}, item[child[[1]], Join[child[[2]], trivia]]]]];
+    groupEnd[close_String] := ParseChoice[
+        ParseAction[ParseLiteral[close] ~~ ws, {"Closed", #2} &],
+        ParseAction[ParseNotFollowedBy[ParseCharacter[_]], {"End"} &],
+        ParseAction[ParseSucceed[Null], {"Closer"} &]];
     group[open_String, close_String, tag_] := ParseAction[
-        ParseAction[ParseLiteral[open] ~~ ParseNotFollowedBy[ParseLiteral["*"]], open &] ~~ wsAll ~~ contents ~~ ParseLiteral[close] ~~ ws,
-        Function[{o, lead, inner, c, t}, item[CodeParser`GroupNode[tag, Join[{tokenLeaf[open]}, lead, inner, {tokenLeaf[close]}], <||>], t]]];
+        If[open === "(", ParseAction[ParseLiteral[open] ~~ ParseNotFollowedBy[ParseLiteral["*"]], open &], ParseLiteral[open]] ~~ wsAll ~~
+            ParseScoped[close, children[RecRef[nested], ParseSucceed[{}]]] ~~ groupEnd[close],
+        Function[{o, lead, cs, end}, groupItem[tag, open, close, lead, cs, end]]];
+    fileItem = ParseChoice[
+        ParseAction[$file ~~ ws, item[concreteLeaf[String, #1], #2] &],
+        unterminatedStringItem,
+        ParseAction[ParseSucceed[Null], errorItem[Token`Error`ExpectedFile] &]];
+    getItem = ParseAction[op["<<"] ~~ fileItem, concreteNode[CodeParser`PrefixNode, Get, kids[#1], #2] &];
 
     (* --- postfix operators that read operands of their own --- *)
-    call = ParseAction[ParseLiteral["["] ~~ wsAll ~~ contents ~~ ParseLiteral["]"] ~~ ws,
-        Function[{o, lead, inner, c, t}, Function[h, item[CodeParser`CallNode[kids[h],
-            CodeParser`GroupNode[CodeParser`GroupSquare, Join[{tokenLeaf["["]}, lead, inner, {tokenLeaf["]"]}], <||>], <||>], t]]]];
+    call = ParseAction[ParseLiteral["["] ~~ wsAll ~~ ParseScoped["]", children[RecRef[nested], ParseSucceed[{}]]] ~~ groupEnd["]"],
+        Function[{o, lead, cs, end}, Function[h, With[{g = groupItem[CodeParser`GroupSquare, "[", "]", lead, cs, end]},
+            item[CodeParser`CallNode[kids[h], First[g], <||>], Last[g]]]]]];
     (* t::[a, ...], a type with parameters *)
-    typeSpecifier = ParseAction[ParseLiteral["::["] ~~ wsAll ~~ contents ~~ ParseLiteral["]"] ~~ ws,
-        Function[{o, lead, inner, c, t}, Function[h, item[CodeParser`CallNode[kids[h],
-            CodeParser`GroupNode[CodeParser`GroupTypeSpecifier, Join[{tokenLeaf["::["]}, lead, inner, {tokenLeaf["]"]}], <||>], <||>], t]]]];
+    typeSpecifier = ParseAction[ParseLiteral["::["] ~~ wsAll ~~ ParseScoped["]", children[RecRef[nested], ParseSucceed[{}]]] ~~ groupEnd["]"],
+        Function[{o, lead, cs, end}, Function[h, With[{g = groupItem[CodeParser`GroupTypeSpecifier, "::[", "]", lead, cs, end]},
+            item[CodeParser`CallNode[kids[h], First[g], <||>], Last[g]]]]]];
     (* a::b::c, each tag right after its ::, a name or a string *)
-    tag = ParseAction[ParseChoice[$string, $name] ~~ ws, item[concreteLeaf[String, #1], #2] &];
+    tag = ParseChoice[
+        ParseAction[ParseChoice[$string, $concreteName] ~~ ws, item[concreteLeaf[String, #1], #2] &],
+        unterminatedStringItem,
+        ParseAction[ParseSucceed[Null] ~~ ws, errorTokenItem[Token`Error`ExpectedTag, "", #2] &]];
     colons = ParseAction[ParseLiteral["::"] ~~ ParseNotFollowedBy[ParseLiteral["["]], tokenLeaf["::"] &];
-    messageName = ParseAction[colons ~~ tag ~~ ParseMany[ParseAction[wsAll ~~ colons ~~ tag, step[#1, {#2}, #3] &]],
+    messageName = ParseAction[colons ~~ tag ~~ ParseMany[ParseAction[gap ~~ colons ~~ tag, step[#1, {#2}, #3] &]],
         Function[{c, first, rest}, Function[s, stepsItem[CodeParser`InfixNode, MessageName, s, Prepend[rest, step[{}, {c}, first]]]]]];
-    tilde = ParseAction[op["~"] ~~ RecRef[tildeOperand] ~~ wsAll ~~ op["~"] ~~ RecRef[tildeOperand],
-        Function[{o1, m, gap, o2, r}, Function[l,
-            stepsItem[CodeParser`TernaryNode, CodeParser`TernaryTilde, l, {step[{}, kids[o1], m], step[gap, kids[o2], r]}]]]];
+    tilde = ParseAction[op["~"] ~~ RecRef[tildeOperand] ~~ ParseOptional[ParseAction[gap ~~ op["~"] ~~ RecRef[tildeOperand], step[#1, kids[#2], #3] &]],
+        Function[{o1, m, second}, Function[l, If[MissingQ[second],
+            concreteNode[CodeParser`SyntaxErrorNode, SyntaxError`ExpectedTilde, Join[kids[l], kids[o1]], m],
+            stepsItem[CodeParser`TernaryNode, CodeParser`TernaryTilde, l, {step[{}, kids[o1], m], second}]]]]];
     (* a ;; b ;; c: the ;; after b only with an operand after it *)
-    spanOperandItem = ParseAction[ParseNotFollowedBy[ParseLiteral[";;"]] ~~ RecRef[spanOperand], #2 &];
-    spanThird = ParseAction[postOp[";;"] ~~ spanOperandItem, step[{}, kids[#1], #2] &];
+    spanOperandItem = ParseAction[ParseNotFollowedBy[ParseLiteral[";;"]] ~~ operandAhead ~~ RecRef[spanOperand], #3 &];
+    spanThird = ParseChoice[
+        ParseAction[postOp[";;"] ~~ spanOperandItem, step[{}, kids[#1], #2] &],
+        ParseAction[ParseLookahead[ParseLiteral[";;"]] ~~ RecRef[spanStartCell], #2 &]];
     spanTail = ParseAction[postOp[";;"] ~~ ParseChoice[
             ParseAction[spanOperandItem ~~ ParseOptional[spanThird], spanRest[#1, #2] &],
             ParseAction[ParseOptional[spanThird], spanRest[Missing[], #] &]],
         Function[{semis, rest}, Function[a, spanItem[a, semis, rest]]]];
     (* a; b; c: an operand left out is Token`Fake`ImplicitNull *)
-    semiStep = ParseAction[postOp[";"] ~~ ParseOptional[RecRef[compoundOperand]],
+    semiStep = ParseAction[postOp[";"] ~~ ParseOptional[ParseAction[operandAhead ~~ RecRef[compoundOperand], #2 &]],
         step[{}, kids[#1], If[MissingQ[#2], implicitItem[Token`Fake`ImplicitNull], #2]] &];
-    compound = ParseAction[semiStep ~~ ParseMany[ParseAction[wsAll ~~ semiStep, ReplacePart[#2, 1 -> #1] &]],
+    compound = ParseAction[semiStep ~~ ParseMany[ParseAction[gap ~~ semiStep, ReplacePart[#2, 1 -> #1] &]],
         Function[{first, rest}, Function[a, stepsItem[CodeParser`InfixNode, CompoundExpression, a, Prepend[rest, first]]]]];
     (* =. : the = then the ., trivia between, the . not a number's *)
     equalDot = ParseAction[op["="] ~~ ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter | "."]] ~~ ws,
         step[{}, kids[#1], item[tokenLeaf["."], #4]] &];
     unset = ParseAction[equalDot, Function[s, Function[a, stepsItem[CodeParser`BinaryNode, Unset, a, {s}]]]];
-    tagSet = ParseAction[op["/:"] ~~ RecRef[tagLeft] ~~ wsAll ~~ ParseChoice[
+    tagSet = ParseAction[op["/:"] ~~ RecRef[tagLeft] ~~ ParseOptional[ParseAction[gap ~~ ParseChoice[
             ParseAction[op[":="] ~~ RecRef[tagRight], {TagSetDelayed, step[{}, kids[#1], #2]} &],
             ParseAction[equalDot, {TagUnset, #} &],
-            ParseAction[op["="] ~~ RecRef[tagRight], {TagSet, step[{}, kids[#1], #2]} &]],
-        Function[{slash, lhs, gap, rest}, Function[t,
-            stepsItem[CodeParser`TernaryNode, First[rest], t, {step[{}, kids[slash], lhs], ReplacePart[Last[rest], 1 -> gap]}]]]];
+            ParseAction[op["="] ~~ RecRef[tagRight], {TagSet, step[{}, kids[#1], #2]} &]], {#1, #2} &]],
+        Function[{slash, lhs, rest}, Function[t, If[MissingQ[rest],
+            concreteNode[CodeParser`SyntaxErrorNode, SyntaxError`ExpectedSet, Join[kids[t], kids[slash]], lhs],
+            stepsItem[CodeParser`TernaryNode, rest[[2, 1]], t, {step[{}, kids[slash], lhs], ReplacePart[rest[[2, 2]], 1 -> rest[[1]]]}]]]]];
     put[s_String, head_] := ParseAction[op[s] ~~ fileItem,
         Function[{o, file}, Function[x, stepsItem[CodeParser`BinaryNode, head, x, {step[{}, kids[o], file]}]]]];
 
@@ -713,27 +910,28 @@ concreteParser[ws_, wsAll_, nested_] := Module[
         Function[{name, s}, If[MissingQ[s], name, stepsItem[CodeParser`BinaryNode, Pattern, name, {s}]]]];
     (* ;; b and ;; at the start: Token`Fake`ImplicitOne before it *)
     spanStart = ParseAction[spanTail, #[implicitItem[Token`Fake`ImplicitOne]] &];
+    SetRec[spanStartCell, spanStart];
     otherUnits = ParseChoice[
         blankItem, numberItem, stringItem, slotItem, outItem,
         group["(", ")", CodeParser`GroupParen], group["{", "}", List], group["<|", "|>", Association],
         group["[", "]", CodeParser`GroupSquare], getItem, spanStart];
-    plainUnit = ParseChoice[symbolItem, otherUnits];
-    unit = ParseChoice[patternUnit, otherUnits];
+    plainUnit = ParseChoice[symbolItem, otherUnits, errorUnits, expectedOperand];
+    unit = ParseChoice[patternUnit, otherUnits, errorUnits, expectedOperand];
 
     (* --- operators whose parser gives the combining function --- *)
     binary[s_String, head_] := ParseAction[op[s], Function[o, Function[{l, r}, stepsItem[CodeParser`BinaryNode, head, l, {step[{}, kids[o], r]}]]]];
     prefix[s_String, head_] := ParseAction[op[s], Function[o, Function[x, concreteNode[CodeParser`PrefixNode, head, kids[o], x]]]];
     postfix[s_String, head_] := ParseAction[postOp[s], Function[o, Function[x, concreteNode[CodeParser`PostfixNode, head, kids[x], o]]]];
+    optionalColon = ParseAction[op[":"], Function[o, Function[{l, r}, stepsItem[
+        If[patternLikeQ[l], CodeParser`BinaryNode, CodeParser`SyntaxErrorNode], If[patternLikeQ[l], Optional, SyntaxError`ExpectedSymbol],
+        l, {step[{}, kids[o], r]}]]]];
     (* a chain of one head, its later operators past a newline *)
     chain[head_] := Function[{operands, operators}, stepsItem[CodeParser`InfixNode, head, First[operands],
         MapThread[Append, {operators, Rest[operands]}]]];
-    flat[operator_, combine_] := {"InfixN", ParseAction[operator, step[{}, kids[#]] &], combine, ParseAction[wsAll ~~ operator, step[#1, kids[#2]] &]};
+    flat[operator_, combine_] := {"InfixN", ParseAction[operator, step[{}, kids[#]] &], combine, ParseAction[gap ~~ operator, step[#1, kids[#2]] &]};
     dotOperator = ParseAction[ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter | "."]] ~~ wsAll, item[tokenLeaf["."], #3] &];
     (* a b: a product where an operand follows an operand on its line *)
-    operandStart = ParseChoice[
-        ParseCharacter[LetterCharacter | DigitCharacter | "$" | "`" | "\"" | "_" | "#" | "%" | "(" | "{"],
-        ParseLiteral["<|"], $letter, ParseLiteral["."] ~~ ParseCharacter[DigitCharacter]];
-    implicitTimes = ParseAction[ParseLookahead[operandStart], step[{}, {concreteLeaf[Token`Fake`ImplicitTimes, ""]}] &];
+    implicitTimes = ParseAction[ParseLookahead[leafAhead], step[{}, {concreteLeaf[Token`Fake`ImplicitTimes, ""]}] &];
     inequality = chain[CodeParser`InfixInequality];
     plus = chain[Plus];
     times = chain[Times];
@@ -788,7 +986,7 @@ concreteParser[ws_, wsAll_, nested_] := Module[
         {"DotDot", {"Postfix", postfix["..", Repeated]}},
         {"DotDot", {"Postfix", postfix["...", RepeatedNull]}},
         {"Bar", flat[op["|"], chain[Alternatives]]},
-        {"Fake`OptionalColon", {"InfixL", binary[":", Optional]}},
+        {"Fake`OptionalColon", {"InfixR", optionalColon}},
         {"TildeTilde", flat[op["~~"], chain[StringExpression]]},
         {"SlashSemi", {"InfixL", binary["/;", Condition]}},
         {"LessMinusGreater", {"InfixR", binary["<->", TwoWayRule]}},
@@ -814,14 +1012,15 @@ concreteParser[ws_, wsAll_, nested_] := Module[
         {"Semi", {"Postfix", compound}}
     };
 
-    table[u_, min_Integer] := ParseOperatorTable[u, levelsAbove[specs, min]];
+    table[u_, min_Integer] := ParseOperatorTable[u, levelsAbove[specs, min], "FinalOperand" -> finalOperandQ];
     SetRec[patternRight, table[plainUnit, $codeParserPrecedence["Fake`PatternColon"]]];
     SetRec[spanOperand, table[unit, $codeParserPrecedence["SemiSemi"]]];
     SetRec[compoundOperand, table[unit, $codeParserPrecedence["Semi"]]];
     SetRec[tagLeft, table[unit, $codeParserPrecedence["Equal"]]];
     SetRec[tagRight, table[unit, $codeParserPrecedence["Equal"] - 1]];
     SetRec[tildeOperand, table[unit, $codeParserPrecedence["Tilde"]]];
-    table[unit, 0]
+    expression = table[unit, 0];
+    <|"Expression" -> expression, "Children" -> children[expression, gap]|>
 ]
 
 (* --- the source of each node --- *)
@@ -863,31 +1062,83 @@ advanced[{line_, column_}, s_String] := With[{breaks = StringCount[s, "\r\n" | "
    complex line continuation, its newline not escaped and a comment's
    newline are embedded, and another token's escaped newline is a simple
    line continuation *)
-tokenMarks[String, s_String] := With[{plain = StringDelete[s, "\\" ~~ _]},
+tokenMarks[String | Token`Error`UnterminatedString, s_String] := With[{plain = StringDelete[s, "\\" ~~ _]},
     Join[
         If[StringContainsQ[s, "\\\n" | "\\\r"] && MemberQ[StringCases[s, "\\" ~~ c_ :> c], "\n" | "\r"], {"ComplexLineContinuations"}, {}],
         If[StringContainsQ[plain, "\n" | "\r"], {"EmbeddedNewlines"}, {}],
         If[StringContainsQ[s, "\t"], {"EmbeddedTabs"}, {}]]]
-tokenMarks[Token`Comment, s_String] := Join[
+tokenMarks[Token`Comment | Token`Error`UnterminatedComment, s_String] := Join[
     If[StringContainsQ[s, "\n" | "\r"], {"EmbeddedNewlines"}, {}],
     If[StringContainsQ[s, "\t"], {"EmbeddedTabs"}, {}]]
 tokenMarks[Token`Newline | Whitespace, _String] := {}
 tokenMarks[_, s_String] := If[StringContainsQ[s, "\\\n" | "\\\r"], {"SimpleLineContinuations"}, {}]
 
+(* --- what CodeParser reads again --- *)
+
+(* Of a group the source leaves open at its end, and of a string or a
+   comment it does not close, CodeParser keeps what lies on the lines of
+   the first chunk of its own: up to the last line, but blank ones, before
+   a line that begins an annotation comment, a directive or a definition.
+   The group keeps the leaves in that span, its children's too; the token
+   the text there. The rest of the source is in neither (Error.wl of the
+   CodeParser paclet, MIT). *)
+$chunkPattern = RegularExpression["(?m)(" <> "^\\(\\* *:.*$" <> ")|(" <>
+    "^(BeginPackage|Begin|Needs|End|EndPackage|Clear|ClearAll|SetOptions|SetAttributes|System`Private`NewContextPath|System`Private`RestoreContextPath|Protect|Unprotect|Package|PackageImport|PackageScope|PackageExport|Get|SetDelayed|UpSetDelayed|TagSetDelayed)\\[.*$" <>
+    ")|(" <> "^[a-zA-Z$].*(:?\\=).*$" <> ")"]
+
+reparsed[tree_, s_String] := If[
+    FreeQ[tree, Token`Error`UnterminatedString | Token`Error`UnterminatedComment] &&
+        ! MemberQ[tree, CodeParser`GroupMissingCloserNode[_, _, m_ /; TrueQ[m[unterminated]]], Infinity],
+    tree,
+    readAgain[tree, StringSplit[s, "\r\n" | "\n" | "\r", All]]]
+
+readAgain[CodeParser`ErrorNode[tok : Token`Error`UnterminatedString | Token`Error`UnterminatedComment, _, meta_], lines_] :=
+    With[{b = chunkEnd[meta[CodeParser`Source], lines]},
+        CodeParser`ErrorNode[tok, StringRiffle[Prepend[Rest[b[[2]]], StringDrop[First[b[[2]]], b[[1, 1, 2]] - 1]], "\n"],
+            <|CodeParser`Source -> First[b]|>]]
+readAgain[n : (CodeParser`LeafNode | CodeParser`ErrorNode)[_, _String, _], _] := n
+readAgain[CodeParser`CallNode[head_List, group_, meta_], lines_] :=
+    CodeParser`CallNode[readAgain[#, lines] & /@ head, readAgain[group, lines], meta]
+readAgain[node_[tag_, children_List, meta_], lines_] := With[{c = readAgain[#, lines] & /@ children},
+    If[ TrueQ[meta[unterminated]],
+        With[{b = First[chunkEnd[meta[CodeParser`Source], lines]]},
+            node[tag, Cases[c, (CodeParser`LeafNode | CodeParser`ErrorNode)[_, _, m_ /; sourceWithinQ[b, m[CodeParser`Source]]], Infinity],
+                <|CodeParser`Source -> b|>]],
+        node[tag, c, meta]]]
+readAgain[CodeParser`ContainerNode[kind_, children_List, meta_], lines_] := CodeParser`ContainerNode[kind, readAgain[#, lines] & /@ children, meta]
+
+(* {the span from where the source begins to the end of its chunk's last
+   line, but blank ones, the lines of the chunk up to that one} *)
+chunkEnd[{start_, end_}, lines_List] := Module[{chunk = First[Split[lines[[start[[1]] ;; end[[1]]]], ! StringMatchQ[#2, $chunkPattern] &]], last},
+    last = Length[chunk];
+    While[chunk[[last]] === "", last--];
+    {{start, {start[[1]] + last - 1, StringLength[chunk[[last]]] + 1}}, Take[chunk, last]}]
+
+(* a span within a span, by CodeParser's line and column test *)
+sourceWithinQ[span_, {a_, b_}] := positionWithinQ[span, a] && positionWithinQ[span, b]
+positionWithinQ[{{l1_, c1_}, {l2_, c2_}}, {l_, c_}] := Which[
+    ! (l1 <= l <= l2), False,
+    l == l1 == l2, c1 <= c <= c2,
+    l == l1, c1 <= c,
+    l == l2, c <= c2,
+    True, True]
+
 (* <|"Program" -> the parser of a whole source, the children of its
-   ContainerNode, "Statement" -> that of one top-level expression and the
-   trivia after it|> *)
+   ContainerNode, "Statement" -> that of the source's children|> *)
 concreteGrammar[] := Module[{comment, spaces, newline, lineTrivia, allTrivia, nested, top, statement},
     comment = ParseAction[text[commentParser[]], {concreteLeaf[Token`Comment, #]} &];
     spaces = ParseAction[ParseRegex["[ \t]+"], Function[s, concreteLeaf[Whitespace, #] & /@ Characters[s]]];
     newline = ParseAction[ParseRegex["\r\n|\n|\r"], {concreteLeaf[Token`Newline, #]} &];
-    lineTrivia = ParseAction[ParseMany[ParseChoice[spaces, comment]], Function[Catenate[{##}]]];
-    allTrivia = ParseAction[ParseMany[ParseChoice[spaces, newline, comment]], Function[Catenate[{##}]]];
+    (* each looked for only at a character that can begin it *)
+    lineTrivia = ParseAction[ParseMany[ParseAction[ParseLookahead[ParseCharacter[" " | "\t" | "("]] ~~ ParseChoice[spaces, comment], #2 &]],
+        Function[Catenate[{##}]]];
+    allTrivia = ParseAction[ParseMany[ParseAction[ParseLookahead[ParseCharacter[" " | "\t" | "\n" | "\r" | "("]] ~~ ParseChoice[spaces, newline, comment], #2 &]],
+        Function[Catenate[{##}]]];
     nested = RecCell[];
-    SetRec[nested, concreteParser[allTrivia, allTrivia, nested]];
-    top = concreteParser[lineTrivia, allTrivia, nested];
-    statement = ParseAction[top ~~ allTrivia, Join[kids[#1], #2] &];
-    <|"Program" -> ParseAction[allTrivia ~~ ParseMany[statement], Function[{lead, statements}, Join[lead, Catenate[statements]]]],
+    SetRec[nested, concreteParser[allTrivia, allTrivia, nested]["Expression"]];
+    top = concreteParser[lineTrivia, allTrivia, nested]["Children"];
+    statement = ParseAction[top, Function[Catenate[kids /@ {##}]]];
+    <|"Program" -> ParseAction[allTrivia ~~ top, Function[{lead, items}, Join[lead, Catenate[kids /@ items]]]],
       "Statement" -> statement|>
 ]
 
@@ -905,7 +1156,7 @@ WolframLanguageHeld[s_String] := With[{r = parsed[$heldGrammar, s]},
 $concreteGrammar := $concreteGrammar = concreteGrammar[]
 
 WolframLanguageConcrete[s_String] := With[{r = parsed[$concreteGrammar, s]},
-    If[FailureQ[r], r, withSource[CodeParser`ContainerNode[String, r, <||>]]]]
+    If[FailureQ[r], r, reparsed[withSource[CodeParser`ContainerNode[String, r, <||>]], s]]]
 
 (* a file's text read as UTF-8, its container a File one naming it *)
 WolframLanguageConcrete[File[f_String]] := With[{bytes = ReadByteArray[f]},

@@ -25,8 +25,13 @@ RelatedGuides: [ParserZoo]
 - Every node carries `CodeParser``Source` <code>-> {{*line*, *column*}, {*line*, *column*}}</code>, the second just past the node; a token for what was left out takes no room. The container lists where the tokens are that hold a line continuation, as `"SimpleLineContinuations"` outside a string and `"ComplexLineContinuations"` inside one, and the strings and comments that hold a newline (`"EmbeddedNewlines"`) or a tab (`"EmbeddedTabs"`).
 - The container of <code>[File]()[*file*]</code> is a `File` one whose `"FileName"` is the full path of *file*.
 - The binding powers are those [WolframLanguageGrammar]() uses, CodeParser's published precedences, and the tokens are its tokens.
+- Source that is not Wolfram Language reads as CodeParser reads it, and nothing fails:
+  - An operand left out is a `Token``Error``ExpectedOperand`.
+  - A group not closed is a `GroupMissingCloserNode`. One still open at the end of the source keeps, as CodeParser's does, the leaves on its lines up to a line that begins a new definition, a directive or an annotation comment; the rest of the source is in no node.
+  - A closer that closes none of the groups around it is a `Token``Error``UnexpectedCloser`, and one that closes an outer group ends the inner one.
+  - Text that is no token is an `ErrorNode` of CodeParser's kind for it: `UnterminatedString`, `UnterminatedComment`, `Number`, `UnsupportedToken`, `UnhandledCharacter`, `ExpectedLetterlike`. Such a token is the whole of an expression it begins.
+  - A `~` without its second `~`, a `/:` without its `=` and a `:` after what is neither a name nor a pattern are a `SyntaxErrorNode`.
 - CodeParser's `SyntaxIssues`, the diagnostics it adds to the container (a remark on each character past ASCII, for one), are not given. A line continuation outside a string is not read.
-- Source that cannot be read gives a <code>[Failure]()["ParseError", ...]</code> whose `"Position"` is the character offset in *code* where reading stopped.
 
 ## Basic Examples
 
@@ -89,6 +94,26 @@ FileNameTake[WolframLanguageConcrete[File[brainfuck]][[3, "FileName"]]]
 ```
 
 <!-- => "Brainfuck.wl" -->
+
+An operand left out:
+
+```wl
+ASTStripSource[WolframLanguageConcrete["f[x] ="]]
+```
+
+A group the source does not close:
+
+```wl
+ASTStripSource[WolframLanguageConcrete["{1, 2"]]
+```
+
+A closer that closes no group:
+
+```wl
+ASTStripSource[WolframLanguageConcrete["a)"]]
+```
+
+<!-- => CodeParser`ContainerNode[String, {CodeParser`LeafNode[Symbol, "a", <||>], CodeParser`ErrorNode[Token`Error`UnexpectedCloser, ")", <||>]}, <||>] -->
 
 ## Properties and Relations
 
