@@ -13,7 +13,7 @@ RelatedTutorials: [ParserZoo, PrattVsPEG, BuildingLanguageFrontEnds]
 
 ## What this note covers
 
-[WolframLanguageHeld]() reads Wolfram Language source, the text of a `.wl` or `.m` package, to the expressions the kernel reads from it, and [WolframLanguageAST]() to a standard syntax tree. Both run one grammar, [WolframLanguageGrammar](), built of the paclet's combinators. This note builds a small part of that grammar step by step, to show the four things the language asks of a parser beyond an ordinary expression grammar:
+[WolframLanguageHeld]() reads Wolfram Language source, the text of a `.wl` or `.m` package, to the expressions the kernel reads from it, and [WolframLanguageAST]() to a standard syntax tree. [WolframLanguageConcrete]() reads it to the concrete syntax tree [CodeParser]() gives, with a parser of its own built of the same tokens and precedences. Both run one grammar, [WolframLanguageGrammar](), built of the paclet's combinators. This note builds a small part of that grammar step by step, to show the four things the language asks of a parser beyond an ordinary expression grammar:
 
 - operators that gather a whole chain into one call, `a + b - c` into one sum;
 - an operator with three operands, `a ~f~ b`;

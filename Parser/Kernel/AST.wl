@@ -53,7 +53,7 @@ SetRec::usage  = "SetRec[cell, parser] gives a recursion cell its parser."
 
 SpannedToken::usage = "SpannedToken[token, ws, build] matches token, captures the source span it covered (excluding trailing whitespace ws via ParsePosition), builds the leaf with build, and stamps Source -> {start, end} (character offsets) onto it. A non-node build result - the value a semantic algebra returns - passes through unstamped."
 ASTAddSource::usage = "ASTAddSource[tree, source] finalizes source metadata: it fills every composite node's Source by spanning its children (leaves carry the offsets SpannedToken captured), then converts every offset span to a {{startLine, startColumn}, {endLine, endColumn}} pair against the source string - CodeParser's LineColumn convention."
-ASTStripSource::usage = "ASTStripSource[tree] clears the Source metadata from every node, leaving the bare structure (useful for structural comparison)."
+ASTStripSource::usage = "ASTStripSource[tree] clears the Source metadata from every node, the \"Source\" of the standard AST and the CodeParser`Source of CodeParser's nodes, leaving the bare structure (useful for structural comparison)."
 
 Begin["`Private`"]
 
@@ -153,7 +153,8 @@ lcKids[x_, _]                 := x
 
 ASTAddSource[tree_, input_String] := toLineCol[fillSpans[tree], input]
 
-ASTStripSource[tree_] := tree /. (a_Association /; KeyExistsQ[a, "Source"]) :> KeyDrop[a, "Source"]
+(* the spans of the standard AST and the Source of CodeParser's nodes *)
+ASTStripSource[tree_] := tree /. (a_Association /; KeyExistsQ[a, "Source"] || KeyExistsQ[a, CodeParser`Source]) :> KeyDrop[a, {"Source", CodeParser`Source}]
 
 (* --- best-effort projection onto CodeParser`-exact nodes --- *)
 

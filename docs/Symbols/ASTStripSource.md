@@ -5,7 +5,7 @@ Context: Wolfram`Parser`
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/ref/ASTStripSource
 Keywords: [AST, source, strip, clear, structural, comparison, test, parser zoo]
-SeeAlso: [ASTAddSource, SpannedToken, ASTNodeQ, LeafNode]
+SeeAlso: [ASTAddSource, SpannedToken, ASTNodeQ, LeafNode, WolframLanguageConcrete]
 RelatedGuides: [ParserZoo]
 ---
 
@@ -19,6 +19,7 @@ RelatedGuides: [ParserZoo]
 - It is the practical tool for *structural comparison and tests*: two trees that differ only in where they came from compare equal once both are stripped, so a test can assert on shape without pinning exact line/column spans.
 - It does not change a tree's shape - same heads, same children, same descriptors - only the `Source` entries are removed. A stripped tree is still a valid standard AST, so [ASTNodeQ]() still accepts it.
 - A node that never carried `Source` (a literally-built `LeafNode["Integer", "1", <||>]`) is unaffected.
+- The `CodeParser``Source` of [CodeParser]()'s own nodes, as [WolframLanguageConcrete]() gives them, is dropped too.
 
 ## Basic Examples
 
