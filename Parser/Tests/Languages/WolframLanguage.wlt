@@ -220,7 +220,17 @@ $wlCases = {
     {"1.5.2", List[HoldComplete[Times[1.5, 0.2]]]},
     {"f[x].5", List[HoldComplete[Times[f[x], 0.5]]]},
     {"a. 5", List[HoldComplete[Dot[a, 5]]]},
-    {"a.b5", List[HoldComplete[Dot[a, b5]]]}
+    {"a.b5", List[HoldComplete[Dot[a, b5]]]},
+    {"x //= f //= g", List[HoldComplete[ApplyTo[x, ApplyTo[f, g]]]]},
+    {"f[#\"key\"]&", List[HoldComplete[Function[f[Slot["key"]]]]]},
+    {"a = .; b =\n.", List[HoldComplete[CompoundExpression[Unset[a], Unset[b]]]]},
+    {"a=.5", List[HoldComplete[Set[a, 0.5]]]},
+    {"t /: a = .", List[HoldComplete[TagUnset[t, a]]]},
+    {"a[[1]\n ]", List[HoldComplete[Part[a, 1]]]},
+    {"\"a\\\r\nb\"", List[HoldComplete["a\nb"]]},
+    {"a\nNull\nb", List[HoldComplete[a], HoldComplete[b]]},
+    {"a <> StringJoin @ b + Plus @ c", List[HoldComplete[Plus[StringJoin[a, b], c]]]},
+    {"a <> (StringJoin @ b)", List[HoldComplete[StringJoin[a, StringJoin[b]]]]}
 };
 
 (* === forms: precedence, flat chains, minus and quotients, patterns, spans,

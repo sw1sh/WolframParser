@@ -55,7 +55,7 @@ $codeParserPrecedence = <|
     "EqualEqualEqual" -> 70, "Class`SetRelations" -> 68, "Prefix`Bang" -> 64, "AmpAmp" -> 62,
     "BarBar" -> 58, "DotDot" -> 44, "Bar" -> 42, "Fake`PatternColon" -> 40, "Fake`OptionalColon" -> 38,
     "TildeTilde" -> 36, "SlashSemi" -> 34, "LessMinusGreater" -> 33, "MinusGreater" -> 31,
-    "SlashDot" -> 28, "PlusEqual" -> 27, "Amp" -> 24, "SlashSlash" -> 18, "SlashColon" -> 11,
+    "SlashDot" -> 28, "PlusEqual" -> 27, "Amp" -> 24, "SlashSlashEqual" -> 21, "SlashSlash" -> 18, "SlashColon" -> 11,
     "Equal" -> 9, "GreaterGreater" -> 6, "Semi" -> 4
 |>
 
@@ -75,7 +75,7 @@ precedenceValue[value_Integer] := value
 (* Every operator spelt in ASCII. An operator token is the longest one
    there: - is not read where ->, -- or -= is. *)
 $operatorSpellings = {
-    ">>>", "===", "=!=", "//@", "//.", "@@@", "^:=", "...", "|->", "<->", "->", ":>", ":=", "^=", "/:",
+    ">>>", "===", "=!=", "//@", "//.", "//=", "@@@", "^:=", "...", "|->", "<->", "->", ":>", ":=", "^=", "/:",
     "=.", "==", "!=", "<=", ">=", "&&", "||", "<>", "/@", "@@", "@*", "/*", "//", "/.", "/;", "..", "::",
     "++", "--", "+=", "-=", "*=", "/=", ";;", "~~", "**", "!!", "<<", ">>", "<|", "|>", "+", "-", "*",
     "/", "^", "=", "<", ">", "!", "&", "@", "?", ":", ";", ".", "'", "~", "|"
@@ -147,7 +147,7 @@ $string = text[ParseLiteral["\""] ~~ ParseMany[ParseChoice[
 (* _, __, ___, then an optional . or a head *)
 $blank = text[ParseChoice[ParseLiteral["___"], ParseLiteral["__"], ParseLiteral["_"]] ~~ ParseOptional[ParseChoice[ParseLiteral["."], $name]]]
 
-$slot = ParseAction[ParseLookahead[ParseLiteral["#"]] ~~ ParseRegex["##?([0-9]+|[A-Za-z][A-Za-z0-9]*)?"], #2 &]
+$slot = ParseAction[ParseLookahead[ParseLiteral["#"]] ~~ ParseChoice[text[ParseLiteral["#"] ~~ $string], ParseRegex["##?([0-9]+|[A-Za-z][A-Za-z0-9]*)?"]], #2 &]
 
 (* what a ? or ?? asks about: words of letters, digits and the * and @
    of a name pattern, the spaces and tabs between them too *)
@@ -201,7 +201,7 @@ grammar[alg_] := Module[{space, wsLine, wsAll, nested, top, statement},
 expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     {after, operator, postfixOperator, leaf, nullLeaf, symbolLeaf, blankLeaf, otherUnits, plainUnit, unit, patternUnit,
      items, comma, call, part, messageName, tag, derivative, span, spanStart, compound, tagSet, put,
-     binary, prefix, postfix, flat, plus, relation, relationOp, implicit, specs, table, information, dot,
+     binary, prefix, postfix, flat, plus, relation, relationOp, implicit, specs, table, information, dot, setOperator, unset,
      patternRight, spanOperand, compoundOperand, tagLeft, tagRight},
 
     after[p_, w_] := ParseAction[p ~~ w, #1 &];
@@ -252,10 +252,12 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     unit = ParseChoice[patternUnit, otherUnits];
 
     (* --- postfix operators that read operands of their own --- *)
-    call = ParseAction[after[longest["["] ~~ ParseNotFollowedBy[ParseLiteral["["]], wsAll] ~~ items["]"] ~~ after[ParseLiteral["]"], ws],
-        Function[{open, args, close}, Function[h, alg["Call"][h, args]]]];
-    part = ParseAction[after[ParseLiteral["[["], wsAll] ~~ items["]]"] ~~ after[ParseLiteral["]]"], ws],
-        Function[{open, indices, close}, Function[e, alg["Infix"]["Part", Prepend[indices, e]]]]];
+    call = ParseAction[after[longest["["], wsAll] ~~ ParseNotFollowedBy[ParseLiteral["["]] ~~ items["]"] ~~ after[ParseLiteral["]"], ws],
+        Function[{open, look, args, close}, Function[h, alg["Call"][h, args]]]];
+    (* e[[i, ...]]: a call whose one argument is a bracket of square
+       brackets, trivia between them too *)
+    part = ParseAction[after[ParseLiteral["["], wsAll] ~~ after[ParseLiteral["["], wsAll] ~~ items["]"] ~~ after[ParseLiteral["]"], wsAll] ~~ after[ParseLiteral["]"], ws],
+        Function[{open, open2, indices, close, close2}, Function[e, alg["Infix"]["Part", Prepend[indices, e]]]]];
     tag = ParseChoice[leaf[$string, "String"], leaf[$name, "Tag"]];
     messageName = ParseChoice[
         (* t::[a, ...], a type with parameters *)
@@ -277,10 +279,16 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     ];
     compound = ParseAction[ParseSome[ParseAction[postfixOperator[";"] ~~ ParseOptional[RecRef[compoundOperand]], {#2} &]],
         Function[With[{parts = nullLeaf /@ Map[First, {##}]}, Function[a, alg["Infix"]["CompoundExpression", Prepend[parts, a]]]]]];
+    (* the = of a set, before a number its . begins too; and = then a .
+       not a number's, trivia between them, an unset *)
+    setOperator = after[ParseLiteral["="] ~~
+        ParseNotFollowedBy[ParseChoice[ParseLiteral["="], ParseLiteral["!="], ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]]]], wsAll];
+    unset = after[ParseLiteral["="] ~~ ParseNotFollowedBy[ParseChoice[ParseLiteral["="], ParseLiteral["!="]]] ~~ wsAll ~~
+        ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter | "."]], ws];
     tagSet = ParseAction[operator["/:"] ~~ RecRef[tagLeft] ~~ ParseChoice[
+            ParseAction[unset, {"TagUnset"} &],
             ParseAction[operator[":="] ~~ RecRef[tagRight], {"TagSetDelayed", #2} &],
-            ParseAction[operator["="] ~~ RecRef[tagRight], {"TagSet", #2} &],
-            ParseAction[postfixOperator["=."], {"TagUnset"} &]],
+            ParseAction[setOperator ~~ RecRef[tagRight], {"TagSet", #2} &]],
         Function[{slash, lhs, rest}, Function[t, If[First[rest] === "TagUnset",
             alg["Binary"]["TagUnset", t, lhs],
             alg["Ternary"][First[rest], t, lhs, Last[rest]]]]]];
@@ -320,7 +328,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
         {"Prefix`PlusPlus", {"Prefix", prefix["--", "PreDecrement"]}},
         {"AtStar", {"InfixN", operator["@*"], flat["Composition"]}},
         {"SlashStar", {"InfixN", operator["/*"], flat["RightComposition"]}},
-        {"At", {"InfixR", ParseAction[operator["@"], Function[o, Function[{l, r}, alg["Call"][l, {r}]]]]}},
+        {"At", {"InfixR", ParseAction[operator["@"], Function[o, Function[{l, r}, atCall[alg, l, r]]]]}},
         {"Tilde", {"Ternary", operator["~"], ParseAction[operator["~"], Function[o, Function[{l, m, r}, alg["Call"][m, {l, r}]]]]}},
         {"SlashAt", {"InfixR", binary["/@", "Map"]}},
         {"SlashAt", {"InfixR", binary["//@", "MapAll"]}},
@@ -372,14 +380,15 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
         {"PlusEqual", {"InfixR", binary["*=", "TimesBy"]}},
         {"PlusEqual", {"InfixR", binary["/=", "DivideBy"]}},
         {"Amp", {"Postfix", postfix["&", "Function"]}},
+        {"SlashSlashEqual", {"InfixR", binary["//=", "ApplyTo"]}},
         {"SlashSlash", {"InfixL", ParseAction[operator["//"], Function[o, Function[{l, r}, alg["Call"][r, {l}]]]]}},
         {"SlashColon", {"Postfix", tagSet}},
-        {"Equal", {"InfixR", binary["=", "Set"]}},
+        {"Equal", {"Postfix", ParseAction[unset, Function[o, Function[x, alg["Postfix"][x, "Unset"]]]]}},
+        {"Equal", {"InfixR", ParseAction[setOperator, Function[o, Function[{l, r}, alg["Binary"]["Set", l, r]]]]}},
         {"Equal", {"InfixR", binary[":=", "SetDelayed"]}},
         {"Equal", {"InfixR", binary["^=", "UpSet"]}},
         {"Equal", {"InfixR", binary["^:=", "UpSetDelayed"]}},
         {"Equal", {"InfixR", binary["|->", "Function"]}},
-        {"Equal", {"Postfix", postfix["=.", "Unset"]}},
         {"GreaterGreater", {"Postfix", put}},
         {"Semi", {"Postfix", compound}}
     };
@@ -436,6 +445,7 @@ blankExpression[s_String] := Module[{name, rest, underscores, head, blank, named
     If[head === ".", symbolCall["Optional", {named}], named]
 ]
 
+slotExpression[s_String] /; StringStartsQ[s, "#\""] := symbolCall["Slot", {HoldComplete @@ {stringValue[StringDrop[s, 1]]}}]
 slotExpression[s_String] := With[{rest = StringDelete[s, "#"]},
     symbolCall[If[StringStartsQ[s, "##"], "SlotSequence", "Slot"],
         {Which[rest === "", HoldComplete[1], StringMatchQ[rest, DigitCharacter ..], HoldComplete @@ {FromDigits[rest]}, True, HoldComplete @@ {rest}]}]]
@@ -496,12 +506,13 @@ machineReal[x_] := If[x != 0 && Abs[x] < $MinMachineNumber, 0., N[x]]
 (* --- strings --- *)
 
 (* The characters of a string's text: its escapes decoded, an unknown one
-   kept as written [WL 15.0.0]. *)
+   kept as written [WL 15.0.0]. A \ before a return or a newline continues
+   the line, the newline after a return staying. *)
 stringValue[s_String] := With[{inner = StringTake[s, {2, -2}]},
     If[StringFreeQ[inner, "\\"], inner, StringReplace[inner, $escapes]]]
 
 $escapes = {
-    "\\\r\n" -> "", "\\\n" -> "", "\\<" -> "", "\\>" -> "",
+    "\\\r" -> "", "\\\n" -> "", "\\<" -> "", "\\>" -> "",
     "\\\\" -> "\\", "\\\"" -> "\"", "\\n" -> "\n", "\\t" -> "\t", "\\r" -> "\r", "\\b" -> "\b", "\\f" -> "\f", "\\ " -> " ",
     "\\" ~~ digits : Repeated[CharacterRange["0", "7"], {3}] :> FromCharacterCode[FromDigits[digits, 8]],
     "\\." ~~ digits : Repeated[HexadecimalCharacter, {2}] :> FromCharacterCode[FromDigits[digits, 16]],
@@ -543,6 +554,20 @@ fileValue[s_String] := If[StringFreeQ[s, "\\"], s, StringReplace[s, {
 
 expressions[xs_List] := Map[#["Expr"] &, xs]
 
+(* f @ x, the call; a name's held call marked with the name and x, as the
+   kernel reads x for it where the name is the head of the flat chain it
+   stands in: a <> StringJoin @ b is StringJoin[a, b] *)
+atCall[alg_, l_, r_] := With[{c = alg["Call"][l, {r}]},
+    If[AssociationQ[c] && AssociationQ[l] && MatchQ[l["Expr"], HoldComplete[_Symbol]], Append[c, "At" -> {l["Expr"], r}], c]]
+
+(* the operands of a flat chain, each name @ x whose name is the chain's
+   head read as x *)
+$atSpliceHeads = AssociationThread[{"Composition", "RightComposition", "StringJoin", "NonCommutativeMultiply", "Dot", "Times", "Plus",
+    "And", "Or", "Alternatives", "StringExpression"} -> True]
+spliced[op_String, xs_List] := If[ KeyExistsQ[$atSpliceHeads, op],
+    Map[If[KeyExistsQ[#, "At"] && First[#["At"]] === heldSymbol[op], Last[#["At"]], #] &, xs],
+    xs]
+
 WolframLanguageSemantic = <|
     "Leaf"    -> Function[{kind, s}, heldLeaf[kind, s]],
     "Prefix"  -> Function[{op, x}, held[If[op === "Minus", negated[x], symbolCall[op, {x["Expr"]}]]]],
@@ -551,12 +576,12 @@ WolframLanguageSemantic = <|
     "Binary"  -> Function[{op, l, r}, held[If[op === "Divide",
         symbolCall["Times", {l["Expr"], symbolCall["Power", {r["Expr"], HoldComplete[-1]}]}],
         symbolCall[op, {l["Expr"], r["Expr"]}]]]],
-    "Infix"   -> Function[{op, xs}, Append[held[symbolCall[op, expressions[xs]]], "Chain" -> op === "Times"]],
+    "Infix"   -> Function[{op, xs}, Append[held[symbolCall[op, expressions[spliced[op, xs]]]], "Chain" -> op === "Times"]],
     "Ternary" -> Function[{op, a, b, c}, held[symbolCall[op, expressions[{a, b, c}]]]],
     "Call"    -> Function[{h, args}, held[heldCall[h["Expr"], expressions[args]]]],
     (* parentheses keep a number literal one, and make a product a factor *)
     "Group"   -> Function[{kind, xs}, If[kind === "Paren",
-        Append[First[xs], "Chain" -> False],
+        Append[KeyDrop[First[xs], "At"], "Chain" -> False],
         held[symbolCall[kind, expressions[xs]]]]]
 |>
 
@@ -1114,6 +1139,7 @@ concreteParser[ws_, wsAll_, nested_] := Module[
         {"PlusEqual", {"InfixR", binary["*=", TimesBy]}},
         {"PlusEqual", {"InfixR", binary["/=", DivideBy]}},
         {"Amp", {"Postfix", postfix["&", Function]}},
+        {"SlashSlashEqual", {"InfixR", binary["//=", ApplyTo]}},
         {"SlashSlash", {"InfixL", binary["//", CodeParser`BinarySlashSlash]}},
         {"SlashColon", {"Postfix", tagSet}},
         {"Equal", {"Postfix", unset}},
@@ -1373,7 +1399,7 @@ WolframLanguageAST[s_String] := With[{spans = lineContinuations[s]},
 
 WolframLanguageHeld[s_String] := With[{spans = lineContinuations[s]},
     With[{r = parsed[$heldGrammar, If[spans === {}, s, StringReplacePart[s, "", spans]]]},
-        Which[! FailureQ[r], expressions[r], spans === {}, r, True, continuedFailure[r, keptPositions[s, spans], s]]]]
+        Which[! FailureQ[r], DeleteCases[expressions[r], HoldComplete[Null]], spans === {}, r, True, continuedFailure[r, keptPositions[s, spans], s]]]]
 
 $concreteGrammar := $concreteGrammar = concreteGrammar[]
 
