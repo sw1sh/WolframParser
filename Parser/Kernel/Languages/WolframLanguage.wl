@@ -110,12 +110,12 @@ text[p_] := ParseAction[p, Function[StringJoin[Cases[Flatten[{##}], _String]]]]
 
 nameCharacterQ[c_String] := First[ToCharacterCode[c]] > 127 && ! MemberQ[$operatorCharacters, c] && ! StringMatchQ[c, WhitespaceCharacter]
 
-(* a letter past ASCII: a long name that is not an operator's, or a
-   character *)
+(* a letter past ASCII: a long name that is a letter of the language, or
+   a character past ASCII that is no operator's, bracket's or
+   whitespace's *)
 $letter = ParseChoice[
-    ParseAction[ParseLookahead[ParseLiteral["\\["]] ~~ ParseNotFollowedBy[ParseChoice @@ (ParseLiteral /@ $operatorLongNames)] ~~
-        ParseRegex["\\\\\\[[A-Za-z0-9]+]"], #3 &],
-    ParseCharacter[_?nameCharacterQ]]
+    ParseAction[ParseLookahead[ParseLiteral["\\["]] ~~ ParseCondition[ParseRegex["\\\\\\[[A-Za-z0-9]+]"], letterNameQ], #2 &],
+    ParseCharacter[_?concreteNameCharacterQ]]
 
 (* a name: letters, digits, $ and ` context marks; not beginning with a
    digit. The loop after the first run of ASCII is entered only at a
@@ -186,7 +186,8 @@ grammar[alg_] := Module[{space, wsLine, wsAll, nested, top, statement},
     space = ParseChoice[
         ParseCharacter[" " | "\t" | "\r" | "\f"],
         ParseLiteral["\\\n"], ParseLiteral["\\\r\n"],
-        commentParser[]];
+        commentParser[],
+        ParseChoice @@ (ParseLiteral /@ $longWhitespace)];
     wsLine = ParseMany[space];
     wsAll = ParseMany[ParseChoice[ParseCharacter["\n"], space]];
     nested = RecCell[];
@@ -202,6 +203,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     {after, operator, postfixOperator, leaf, nullLeaf, symbolLeaf, blankLeaf, otherUnits, plainUnit, unit, patternUnit,
      items, comma, call, part, messageName, tag, derivative, span, spanStart, compound, tagSet, put,
      binary, prefix, postfix, flat, plus, relation, relationOp, implicit, specs, table, information, dot, setOperator, unset,
+     longOperator, longPostfixOperator, longSpecs, longGroups, longCalls, integrals, integrandOperand, differentialAhead, divisible,
      patternRight, spanOperand, compoundOperand, tagLeft, tagRight},
 
     after[p_, w_] := ParseAction[p ~~ w, #1 &];
@@ -214,13 +216,38 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     (* --- operands --- *)
     symbolLeaf = SpannedToken[ParseAction[$name ~~ ParseNotFollowedBy[ParseLiteral["_"]], #1 &], ws, alg["Leaf"]["Symbol", #] &];
     blankLeaf = SpannedToken[text[ParseOptional[$name] ~~ $blank], ws, alg["Leaf"]["Blank", #] &];
-    comma = after[ParseLiteral[","], wsAll];
-    (* comma-separated expressions up to the closing bracket; an empty one is Null *)
-    items[close_String] := ParseChoice[
-        ParseAction[ParseLookahead[ParseLiteral[close]], {} &],
+    (* a long name, as it is spelt or as its character *)
+    longOperator[name_String] := after[ParseChoice @@ (ParseLiteral /@ longNameSpellings[name]), wsAll];
+    longPostfixOperator[name_String] := after[ParseChoice @@ (ParseLiteral /@ longNameSpellings[name]), ws];
+    comma = after[ParseChoice @@ (ParseLiteral /@ Prepend[longNameSpellings["InvisibleComma"], ","]), wsAll];
+    (* comma-separated expressions up to the closing bracket, a closer of
+       its spellings; an empty one is Null *)
+    items[close_String] := items[{close}];
+    items[closes_List] := ParseChoice[
+        ParseAction[ParseLookahead[ParseChoice @@ (ParseLiteral /@ closes)], {} &],
         ParseAction[ParseSepBy[ParseOptional[RecRef[nested]], comma], Function[nullLeaf /@ {##}]]];
 
     patternRight = RecCell[]; spanOperand = RecCell[]; compoundOperand = RecCell[]; tagLeft = RecCell[]; tagRight = RecCell[];
+    integrandOperand = RecCell[];
+
+    (* \[LeftFloor] x \[RightFloor] and the other brackets of long names *)
+    longGroups = Map[Function[g,
+        ParseAction[longOperator[g[[1]]] ~~ items[longNameSpellings[g[[2]]]] ~~ longPostfixOperator[g[[2]]],
+            alg["Group"][SymbolName[g[[3]]], #2] &]], Select[$longNameTable["Groups"], #[[1]] =!= "LeftDoubleBracket" &]];
+    (* f \[LeftDoubleBracket] i \[RightDoubleBracket], a part *)
+    longCalls = ParseAction[longOperator["LeftDoubleBracket"] ~~ items[longNameSpellings["RightDoubleBracket"]] ~~ longPostfixOperator["RightDoubleBracket"],
+        Function[{open, indices, close}, Function[e, alg["Infix"]["Part", Prepend[indices, e]]]]];
+    (* \[Integral] f \[DifferentialD] x: its integrand, then the differential
+       after it; Integrate[f, x], and for an integral round a contour its
+       head of the product of both *)
+    differentialAhead = ParseLookahead[ParseChoice @@ (ParseLiteral /@ Catenate[longNameSpellings /@ {"DifferentialD", "CapitalDifferentialD"}])];
+    integrals = Map[Function[row, ParseAction[
+            longOperator[row[[1]]] ~~ ParseScoped["Integrand", RecRef[integrandOperand]] ~~ ParseOptional[ParseAction[differentialAhead ~~ RecRef[integrandOperand], #2 &]],
+            Function[{o, f, d}, Which[
+                MissingQ[d], alg["Prefix"][SymbolName[row[[2]]], f],
+                row[[3]] === Integrate, integralOf[alg, f, d],
+                True, alg["Prefix"][SymbolName[row[[2]]], alg["Infix"]["Times", {f, d}]]]]]],
+        $longNameTable["Integrals"]];
 
     (* a name, or n:patt: the name binds its pattern wherever it stands;
        within the pattern a : is Optional's *)
@@ -247,7 +274,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
         ParseAction[after[ParseLiteral["<|"], wsAll] ~~ items["|>"] ~~ after[ParseLiteral["|>"], ws],
             alg["Group"]["Association", #2] &],
         ParseAction[operator["<<"] ~~ leaf[$file, "File"], alg["Prefix"]["Get", #2] &],
-        spanStart, information];
+        spanStart, information, Sequence @@ longGroups, Sequence @@ integrals];
     plainUnit = ParseChoice[symbolLeaf, otherUnits];
     unit = ParseChoice[patternUnit, otherUnits];
 
@@ -304,16 +331,18 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     plus = Function[{operands, signs}, alg["Infix"]["Plus", Prepend[
         MapThread[If[#2 === "-", alg["Prefix"]["Minus", #1], #1] &, {Rest[operands], signs}], First[operands]]]];
     (* a < b < c is Less[a, b, c]; a < b <= c is Inequality[a, Less, b, LessEqual, c] *)
-    relation = Function[{operands, heads}, If[Length[Union[heads]] === 1,
-        alg["Infix"][First[heads], operands],
-        alg["Infix"]["Inequality", Riffle[operands, alg["Leaf"]["Symbol", #] & /@ heads]]]];
+    relation = Function[{operands, heads}, relationValue[alg, operands, heads]];
+    divisible = Function[{operands, ops}, alg["Infix"]["Divisible", Reverse[operands]]];
     relationOp[op_String, head_String] := ParseAction[operator[op], head &];
     (* a b: a product where an operand follows an operand *)
     implicit = ParseAction[ParseLookahead[ParseChoice[
-        ParseCharacter[LetterCharacter | DigitCharacter | "$" | "`" | "\"" | "_" | "#" | "%" | "(" | "{"],
-        ParseLiteral["<|"],
-        ParseLiteral["."] ~~ ParseCharacter[DigitCharacter],
-        $letter]], "*" &];
+            ParseCharacter[LetterCharacter | DigitCharacter | "$" | "`" | "\"" | "_" | "#" | "%" | "(" | "{"],
+            ParseLiteral["<|"],
+            ParseLiteral["."] ~~ ParseCharacter[DigitCharacter],
+            $letter,
+            ParseLookahead[ParseCharacter[_?prefixOnlyStartQ]] ~~ ParseChoice @@ (ParseLiteral /@ Catenate[longNameSpellings /@ $prefixOnlyNames])]] ~~
+            ParseNotFollowedBy[differentialAhead ~~ ParseCondition[ParseScope[], MatchQ[#, {___, "Integrand"}] &]],
+        "*" &];
     (* a . not before a digit, which begins a number *)
     dot = after[ParseAction[longest["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]], #1 &], wsAll];
 
@@ -359,7 +388,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
         {"Class`Inequality", {"InfixN", relationOp[">", "Greater"], relation}},
         {"EqualEqualEqual", {"InfixN", operator["==="], flat["SameQ"]}},
         {"EqualEqualEqual", {"InfixN", operator["=!="], flat["UnsameQ"]}},
-        {"Class`SetRelations", {"InfixL", binary["Element", "Element"]}},
+        {"Class`SetRelations", {"InfixN", operator["Element"], flat["Element"]}},
         {"Prefix`Bang", {"Prefix", prefix["!", "Not"]}},
         {"Prefix`Bang", {"Prefix", ParseAction[operator["!!"], Function[o, Function[x, alg["Prefix"]["Not", alg["Prefix"]["Not", x]]]]]}},
         {"AmpAmp", {"InfixN", operator["&&"], flat["And"]}},
@@ -393,7 +422,25 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
         {"Semi", {"Postfix", compound}}
     };
 
+    longSpecs = Join[
+        Map[Function[row, With[{name = row[[1]], head = heldLongHead[row]}, {row[[4]], Which[
+            row[[3]] === CodeParser`InfixInequality, {"InfixN", ParseAction[longOperator[name], head &], relation},
+            name === "Minus", {"InfixN", ParseAction[longOperator[name], "-" &], plus},
+            name === "ImplicitPlus", {"InfixL", ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Binary"]["Plus", l, r]]]]},
+            name === "Divides", {"InfixN", longOperator[name], divisible},
+            name === "InvisibleApplication", {"InfixR", ParseAction[longOperator[name], Function[o, Function[{l, r}, atCall[alg, l, r]]]]},
+            (* \[Application] a chain of one node, as the kernel reads it *)
+            row[[2]] === "InfixNode" || name === "Application", {"InfixN", longOperator[name], flat[head]},
+            True, {If[row[[5]] === "Right", "InfixR", "InfixL"], ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Binary"][head, l, r]]]]}]}]],
+            $heldLongInfix],
+        Map[{#[[4]], {"Prefix", With[{head = heldLongHead[#]}, ParseAction[longOperator[#[[1]]], Function[o, Function[x, alg["Prefix"][head, x]]]]]}} &, $heldLongPrefix],
+        Map[{#[[4]], {"Postfix", With[{head = heldLongHead[#]}, ParseAction[longPostfixOperator[#[[1]]], Function[o, Function[x, alg["Postfix"][x, head]]]]]}} &,
+            $longNameTable["Postfix"]],
+        {{"Call", {"Postfix", longCalls}}}];
+    specs = Join[specs, longSpecs];
+
     table[u_, min_Integer] := ParseOperatorTable[u, levelsAbove[specs, min]];
+    SetRec[integrandOperand, table[unit, $integralPrecedence]];
     SetRec[patternRight, table[plainUnit, $codeParserPrecedence["Fake`PatternColon"]]];
     SetRec[spanOperand, table[unit, $codeParserPrecedence["SemiSemi"]]];
     SetRec[compoundOperand, table[unit, $codeParserPrecedence["Semi"]]];
@@ -554,6 +601,58 @@ expressions[xs_List] := Map[#["Expr"] &, xs]
    stands in: a <> StringJoin @ b is StringJoin[a, b] *)
 atCall[alg_, l_, r_] := With[{c = alg["Call"][l, {r}]},
     If[AssociationQ[c] && AssociationQ[l] && MatchQ[l["Expr"], HoldComplete[_Symbol]], Append[c, "At" -> {l["Expr"], r}], c]]
+
+(* --- long names the held grammar reads --- *)
+
+(* the long-name operators of no ASCII operator's spellings: the infix ones
+   but the invisible comma, which is a comma, and the prefix ones but the
+   integrals, which are units of their own *)
+$heldLongInfix := $heldLongInfix = Select[$longNameTable["Infix"], ! KeyExistsQ[$asciiLongNames, #[[1]]] && #[[3]] =!= CodeParser`Comma &]
+$heldLongPrefix := $heldLongPrefix = Select[$longNameTable["Prefix"],
+    ! KeyExistsQ[$asciiLongNames, #[[1]]] && ! MemberQ[$longNameTable["Integrals"][[All, 1]], #[[1]]] &]
+$integralPrecedence := $integralPrecedence = First[Cases[$longNameTable["Prefix"], {"Integral", _, _, p_Integer, _} :> p]]
+
+(* the head the kernel gives a long-name operator: its tag's, a relation's
+   the kernel's symbol for it, and \[HermitianConjugate] ConjugateTranspose *)
+heldLongHead[row_List] := Which[
+    row[[3]] === CodeParser`InfixInequality, Lookup[$relationHeads, row[[1]], row[[1]]],
+    row[[1]] === "HermitianConjugate", "ConjugateTranspose",
+    True, SymbolName[row[[3]]]]
+$relationHeads = <|"NotEqual" -> "Unequal", "LessSlantEqual" -> "LessEqual", "GreaterSlantEqual" -> "GreaterEqual",
+    "Equal" -> "Equal", "LongEqual" -> "Equal"|>
+
+(* Integrate[f, x] of an integrand and its differential \[DifferentialD] x *)
+integralOf[alg_, f_, d_] := If[ AssociationQ[d],
+    Replace[d["Expr"], {HoldComplete[_[x_]] :> held[symbolCall["Integrate", {f["Expr"], HoldComplete[x]}]], _ :> alg["Prefix"]["Integrate", f]}],
+    alg["Call"][alg["Leaf"]["Symbol", "Integrate"], {f, d}]]
+
+(* A chain of relations as the kernel reads it: one of a single relation
+   that relation of the operands, of the vector ones of their list; one of
+   several Inequality, or VectorInequality once a vector relation is among
+   them, a chain of relations of the one kind and then of the other made
+   one operand of what follows. *)
+$vectorRelations = <|"VectorLess" -> True, "VectorGreater" -> True, "VectorLessEqual" -> True, "VectorGreaterEqual" -> True|>
+$neutralRelations = <|"Equal" -> True, "Unequal" -> True, "Less" -> True, "Greater" -> True, "LessEqual" -> True, "GreaterEqual" -> True|>
+vectorAffinity[head_String] := Which[KeyExistsQ[$vectorRelations, head], True, KeyExistsQ[$neutralRelations, head], None, True, False]
+
+relationValue[alg_, operands_List, heads_List] := Module[{processed = {First[operands]}, affinity = None, a},
+    Do[
+        a = vectorAffinity[heads[[i]]];
+        If[ a =!= None && affinity =!= None && a =!= affinity,
+            processed = {simplifiedRelation[alg, processed, affinity], heads[[i]], operands[[i + 1]]},
+            processed = Join[processed, {heads[[i]], operands[[i + 1]]}]];
+        If[a =!= None, affinity = a],
+        {i, Length[heads]}];
+    simplifiedRelation[alg, processed, affinity]]
+
+simplifiedRelation[alg_, processed_List, affinity_] := With[{rators = processed[[2 ;; -2 ;; 2]], rands = processed[[1 ;; -1 ;; 2]]},
+    Which[
+        Length[Union[rators]] === 1 && KeyExistsQ[$vectorRelations, First[rators]],
+            alg["Call"][alg["Leaf"]["Symbol", First[rators]], {alg["Group"]["List", rands]}],
+        Length[Union[rators]] === 1, alg["Infix"][First[rators], rands],
+        affinity === True,
+            alg["Call"][alg["Leaf"]["Symbol", "Developer`VectorInequality"], Riffle[rands, alg["Leaf"]["Symbol", #] & /@ rators]],
+        True, alg["Infix"]["Inequality", Riffle[rands, alg["Leaf"]["Symbol", #] & /@ rators]]]]
 
 (* the operands of a flat chain, each name @ x whose name is the chain's
    head read as x *)

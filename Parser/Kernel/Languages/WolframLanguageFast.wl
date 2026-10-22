@@ -24,16 +24,18 @@ Begin["`Private`"]
 (* --- characters --- *)
 
 (* the class of each character code: 1 a letter, $ or ` that begins a name,
-   2 a digit, 3 a space, tab, return or form feed, 4 a newline, 5 a
-   character past ASCII that a name holds, 0 any other *)
+   2 a digit, 3 a space, tab, return or form feed, or the character of a
+   long name that is whitespace, 4 a newline, 5 a character past ASCII
+   that a name holds, 0 any other *)
 $fastClasses := $fastClasses = Module[{t = ConstantArray[0, 65536], high = Range[128, 65535]},
     t[[ToCharacterCode["ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz$`"] + 1]] = 1;
     t[[Range[48, 57] + 1]] = 2;
     t[[{32, 9, 13, 12} + 1]] = 3;
     t[[11]] = 4;
     t[[high + 1]] = 5;
-    t[[ToCharacterCode[StringJoin[$operatorCharacters]] + 1]] = 0;
+    t[[ToCharacterCode[StringJoin[Keys[$nonLetterCharacters]]] + 1]] = 0;
     t[[Pick[high, StringMatchQ[Characters[FromCharacterCode[high]], WhitespaceCharacter]] + 1]] = 0;
+    t[[ToCharacterCode[StringJoin[Lookup[$longNameTable["Characters"], $longNameTable["Whitespace"], Nothing]]] + 1]] = 3;
     t]
 
 fastClass[c_Integer] := If[c > 65535, 5, $fastClasses[[c + 1]]]
@@ -46,30 +48,52 @@ $fastOperators = Join[$operatorSpellings, {"DirectedEdge", "UndirectedEdge", "El
 $fastOperatorIds = AssociationThread[$fastOperators -> Range[Length[$fastOperators]]]
 fastOp[name_String] := $fastOperatorIds[name]
 
+(* the long names the held grammar reads that are no ASCII operator's, each
+   an operator after those, read at their first use; the whitespace ones
+   one more, and the invisible comma, a comma, one after it *)
+$fastLongNames := $fastLongNames = Complement[Keys[$nonLetterNames], Keys[$asciiLongNames], $longNameTable["Whitespace"], {"InvisibleComma"}]
+$fastLongIds := $fastLongIds = AssociationThread[$fastLongNames -> Length[$fastOperators] + Range[Length[$fastLongNames]]]
+$fastSpaceId := $fastSpaceId = Length[$fastOperators] + Length[$fastLongNames] + 1
+$fastInvisibleCommaId := $fastInvisibleCommaId = $fastSpaceId + 1
+(* \[Not] and its character, which ! is not after an operand *)
+$fastNotId := $fastNotId = $fastSpaceId + 2
+fastLongOp[name_String] := Which[
+    KeyExistsQ[$fastLongIds, name], $fastLongIds[name],
+    MemberQ[$longNameTable["Whitespace"], name], $fastSpaceId,
+    name === "InvisibleComma", $fastInvisibleCommaId,
+    True, 0]
+
 (* the operators of one, two and three ASCII characters, and of a character
    past ASCII, by their codes *)
 $fastOp1 := $fastOp1 = Module[{t = ConstantArray[0, 65536]},
     Scan[(t[[First[ToCharacterCode[#]] + 1]] = fastOp[#]) &, Select[$operatorSpellings, StringLength[#] === 1 &]];
     KeyValueMap[Function[{op, spellings}, Scan[(t[[First[ToCharacterCode[#]] + 1]] = fastOp[op]) &, Select[spellings, StringLength[#] === 1 &]]],
         $longNameOperators];
+    Scan[With[{c = Lookup[$longNameTable["Characters"], #, None]}, If[StringQ[c] && First[ToCharacterCode[c]] <= 65535,
+        t[[First[ToCharacterCode[c]] + 1]] = fastLongOp[#]]] &, Append[$fastLongNames, "InvisibleComma"]];
+    With[{c = $longNameTable["Characters"]["Not"]}, t[[First[ToCharacterCode[c]] + 1]] = $fastNotId];
     t]
 $fastOp2 := $fastOp2 = Module[{t = ConstantArray[0, {128, 128}]},
     Scan[With[{c = ToCharacterCode[#]}, t[[c[[1]] + 1, c[[2]] + 1]] = fastOp[#]] &, Select[$operatorSpellings, StringLength[#] === 2 &]];
     t]
 $fastOp3 = Association[Map[ToCharacterCode[#] -> fastOp[#] &, Select[$operatorSpellings, StringLength[#] === 3 &]]]
-(* a long name that is an operator: its name -> the operator *)
-$fastLongNameOps = Association[Catenate[KeyValueMap[Function[{op, spellings},
-    Map[StringTake[#, {3, -2}] -> fastOp[op] &, Select[spellings, StringStartsQ[#, "\\["] &]]], $longNameOperators]]]
+(* each long name of the language: -1 a letter, else its operator *)
+$fastLongNameOps := $fastLongNameOps = Join[
+    AssociationMap[If[KeyExistsQ[$nonLetterNames, #], fastLongOp[#], -1] &, Keys[$longNames]],
+    Association[Catenate[KeyValueMap[Function[{op, spellings},
+        Map[StringTake[#, {3, -2}] -> fastOp[op] &, Select[spellings, StringStartsQ[#, "\\["] &]]], $longNameOperators]]],
+    <|"Not" -> $fastNotId|>]
 
 (* the tables of the lexer, packed: the 2-character operators by the codes
    of both, {c1, c2, c3, operator} for each of 3, and for each long name
    that is an operator its length, its codes and the operator *)
 $fastOp2Flat := $fastOp2Flat = Flatten[$fastOp2]
 $fastOp3Table = Flatten[KeyValueMap[Append[#1, #2] &, $fastOp3]]
-$fastLongOpTable = Flatten[KeyValueMap[Join[{StringLength[#1]}, ToCharacterCode[#1], {#2}] &, $fastLongNameOps]]
+$fastLongOpTable := $fastLongOpTable = Flatten[KeyValueMap[Join[{StringLength[#1]}, ToCharacterCode[#1], {#2}] &, $fastLongNameOps]]
 $fastOpenAssociation = fastOp["<|"]; $fastCloseAssociation = fastOp["|>"]
 $fastGet = fastOp["<<"]; $fastPut = fastOp[">>"]; $fastPutAppend = fastOp[">>>"]
-$fastSpecial = {$fastOpenAssociation, $fastCloseAssociation, $fastGet, $fastPut, $fastPutAppend, fastOp["=."], fastOp["="]}
+$fastSpecial := $fastSpecial = {$fastOpenAssociation, $fastCloseAssociation, $fastGet, $fastPut, $fastPutAppend, fastOp["=."], fastOp["="],
+    $fastSpaceId, $fastInvisibleCommaId}
 
 (* --- tokens --- *)
 
@@ -95,14 +119,15 @@ fastBaseDigitsEnd[codes_List, j0_Integer, n_Integer] := Module[{j = j0, c},
 fastLetterNameEnd[codes_List, j_Integer, n_Integer] := Module[{k},
     If[ j + 3 <= n && codes[[j]] === 92 && codes[[j + 1]] === 91,
         k = fastBaseDigitsEnd[codes, j + 2, n];
-        If[ k > j + 2 && k <= n && codes[[k]] === 93 && ! KeyExistsQ[$fastLongNameOps, FromCharacterCode[codes[[j + 2 ;; k - 1]]]],
+        If[ k > j + 2 && k <= n && codes[[k]] === 93 && Lookup[$fastLongNameOps, FromCharacterCode[codes[[j + 2 ;; k - 1]]], 0] === -1,
             k + 1, j],
         j]]
 
 (* The lexer, typed code over packed integers: the codes of a source and
    three zeros after them, so that no look ahead reads past them, the
    class of each code, the operators of 1, 2 and 3 characters, the long-name
-   operators and {<|, |>, <<, >>, >>>, =., =} -> {status, k, then for each of the
+   long names (-1 a letter, else its operator) and {<|, |>, <<, >>, >>>,
+   =., =, whitespace, the invisible comma} -> {status, k, then for each of the
    k tokens its kind, operator, start, end (just past it) and newline mark
    (1 where a newline outside a comment comes before it)}, the last token
    the end. Status 1: the source holds what the lexer does not take, a
@@ -144,6 +169,7 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                     Which[
                         cl == 3, i++,
                         cl == 4, nl = 1; i++,
+                        c == 92 && lnEnd[[i]] > 0 && lnOp[[i]] == lexSpecial[[8]], i = lnEnd[[i]],
                         c == 40 && i < n && lexCodes[[i + 1]] == 42,
                             depth = 1; j = i + 2;
                             While[ depth > 0,
@@ -180,13 +206,13 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                             If[j == i, status = 1];
                             kind = 8,
                         (* a name, a blank after it *)
-                        cl == 1 || cl == 5 || (c == 92 && lnEnd[[i]] > 0 && lnOp[[i]] == 0),
+                        cl == 1 || cl == 5 || (c == 92 && lnEnd[[i]] > 0 && lnOp[[i]] == -1),
                             j = i; scanning = 1;
                             While[ scanning == 1 && j <= n,
                                 c2 = lexCodes[[j]]; cl = If[c2 > 65535, 5, lexClasses[[c2 + 1]]];
                                 Which[
                                     cl == 1 || cl == 5 || (cl == 2 && j > start), j++,
-                                    c2 == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == 0, j = lnEnd[[j]],
+                                    c2 == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == -1, j = lnEnd[[j]],
                                     True, scanning = 0]];
                             kind = 1;
                             If[ j <= n && lexCodes[[j]] == 95, kind = 2; c = 95],
@@ -255,7 +281,10 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                         c == 125, kind = 15,
                         c == 44, kind = 18,
                         (* a long name, an operator's *)
-                        c == 92, If[lnEnd[[i]] > 0 && lnOp[[i]] > 0, op = lnOp[[i]]; j = lnEnd[[i]]; kind = 9, status = 1],
+                        c == 92,
+                            If[ lnEnd[[i]] > 0 && lnOp[[i]] > 0,
+                                op = lnOp[[i]]; j = lnEnd[[i]]; kind = If[op == lexSpecial[[9]], 18, 9],
+                                status = 1],
                         (* an operator, the longest there *)
                         True,
                             len = 0;
@@ -269,7 +298,7 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                             (* =. before a digit: =, then a number *)
                             If[op == lexSpecial[[6]] && i + 2 <= n && 48 <= lexCodes[[i + 2]] <= 57, op = lexSpecial[[7]]; len = 1];
                             j = i + len;
-                            Which[op == 0, status = 1, op == lexSpecial[[1]], kind = 16, op == lexSpecial[[2]], kind = 17, True, kind = 9]];
+                            Which[op == 0, status = 1, op == lexSpecial[[1]], kind = 16, op == lexSpecial[[2]], kind = 17, op == lexSpecial[[9]], kind = 18, True, kind = 9]];
                     (* a blank: _, __ or ___, then a . or a name *)
                     If[ kind == 2 && status == 0,
                         count = 0;
@@ -277,13 +306,13 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                         If[ j <= n && lexCodes[[j]] == 46,
                             j++,
                             If[ j <= n && (If[lexCodes[[j]] > 65535, 5, lexClasses[[lexCodes[[j]] + 1]]] == 1 ||
-                                    If[lexCodes[[j]] > 65535, 5, lexClasses[[lexCodes[[j]] + 1]]] == 5 || (lexCodes[[j]] == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == 0)),
+                                    If[lexCodes[[j]] > 65535, 5, lexClasses[[lexCodes[[j]] + 1]]] == 5 || (lexCodes[[j]] == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == -1)),
                                 start = j; scanning = 1;
                                 While[ scanning == 1 && j <= n,
                                     c2 = lexCodes[[j]]; cl = If[c2 > 65535, 5, lexClasses[[c2 + 1]]];
                                     Which[
                                         cl == 1 || cl == 5 || (cl == 2 && j > start), j++,
-                                        c2 == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == 0, j = lnEnd[[j]],
+                                        c2 == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == -1, j = lnEnd[[j]],
                                         True, scanning = 0]]]]];
                     file = If[kind == 9 && (op == lexSpecial[[3]] || op == lexSpecial[[4]] || op == lexSpecial[[5]]), 1, 0];
                     out[[base + 1]] = kind; out[[base + 2]] = If[kind == 9, op, 0]; out[[base + 4]] = j;
@@ -328,7 +357,7 @@ $fastLed = Association[Map[fastOp[#[[1]]] -> Rest[#] &, {
     {"==", 76, "InfixN", "Equal"}, {"!=", 76, "InfixN", "Unequal"}, {"<=", 76, "InfixN", "LessEqual"},
     {">=", 76, "InfixN", "GreaterEqual"}, {"<", 76, "InfixN", "Less"}, {">", 76, "InfixN", "Greater"},
     {"===", 70, "InfixN", "SameQ"}, {"=!=", 70, "InfixN", "UnsameQ"},
-    {"Element", 68, "InfixL", "Element"},
+    {"Element", 68, "InfixN", "Element"},
     {"&&", 62, "InfixN", "And"},
     {"||", 58, "InfixN", "Or"},
     {"..", 44, "Postfix", "Repeated"}, {"...", 44, "Postfix", "RepeatedNull"},
@@ -352,15 +381,40 @@ $fastLed = Association[Map[fastOp[#[[1]]] -> Rest[#] &, {
 (* the operators of one chain: the products, the sums, the relations *)
 $fastChainKey = <|"Times" -> "Times", "Plus" -> "Plus", "Equal" -> "Relation", "Unequal" -> "Relation", "LessEqual" -> "Relation",
     "GreaterEqual" -> "Relation", "Less" -> "Relation", "Greater" -> "Relation"|>
-fastChainKey[head_String] := Lookup[$fastChainKey, head, head]
+fastChainKey[spec_List] := If[Length[spec] >= 4, spec[[4]], Lookup[$fastChainKey, spec[[3]], spec[[3]]]]
 
 (* the prefix operators: the precedence and the head *)
 $fastPrefix = Association[Map[fastOp[#[[1]]] -> Rest[#] &, {
     {"++", 172, "PreIncrement"}, {"--", 172, "PreDecrement"}, {"-", 124, "Minus"}, {"+", 124, "Plus"}, {"!", 64, "Not"}, {"!!", 64, "NotNot"}}]]
 
+(* The long-name operators, read at their first use: the led ones by the
+   held grammar's specs, the fourth of a spec the key of the chain it makes
+   with others, and the prefix ones; the brackets, the integrals, the
+   differentials, and the prefix operators that a product goes on at. *)
+$fastLedTable := $fastLedTable = Join[$fastLed, Association[Join[
+    Map[Function[row, fastLongOp[row[[1]]] -> With[{head = heldLongHead[row], p = row[[4]]}, Which[
+        row[[3]] === CodeParser`InfixInequality, {p, "InfixN", head, "Relation"},
+        row[[1]] === "Minus", {p, "InfixN", "Plus", "Plus"},
+        row[[1]] === "ImplicitPlus", {p, "InfixL", "Plus"},
+        row[[1]] === "Divides", {p, "InfixN", "Divisible", "Divisible"},
+        row[[1]] === "InvisibleApplication", {p, "InfixR", "At"},
+        row[[2]] === "InfixNode" || row[[1]] === "Application", {p, "InfixN", head, head},
+        True, {p, If[row[[5]] === "Right", "InfixR", "InfixL"], head}]]], $heldLongInfix],
+    Map[fastLongOp[#[[1]]] -> {#[[4]], "Postfix", heldLongHead[#]} &, $longNameTable["Postfix"]],
+    {fastLongOp["LeftDoubleBracket"] -> {176, "LongPart", "Part"}}]]]
+$fastPrefixTable := $fastPrefixTable = Join[$fastPrefix,
+    Association[Map[fastLongOp[#[[1]]] -> {#[[4]], heldLongHead[#]} &, $heldLongPrefix]], <|$fastNotId -> {64, "Not"}|>]
+$fastGroupTable := $fastGroupTable = Association[Map[fastLongOp[#[[1]]] -> {fastLongOp[#[[2]]], SymbolName[#[[3]]]} &,
+    Select[$longNameTable["Groups"], #[[1]] =!= "LeftDoubleBracket" &]]]
+$fastIntegralTable := $fastIntegralTable = Association[Map[fastLongOp[#[[1]]] -> {SymbolName[#[[2]]], #[[3]]} &, $longNameTable["Integrals"]]]
+$fastDifferentials := $fastDifferentials = AssociationThread[fastLongOp /@ {"DifferentialD", "CapitalDifferentialD"} -> True]
+$fastPrefixOnly := $fastPrefixOnly = AssociationThread[Append[DeleteCases[fastLongOp /@ $prefixOnlyNames, 0], $fastNotId] -> True]
+$fastLongMinus := $fastLongMinus = fastLongOp["Minus"]
+$fastRightDoubleBracket := $fastRightDoubleBracket = fastLongOp["RightDoubleBracket"]
+
 $fastPatternColon = 40; $fastSpanOperand = 80; $fastCompoundOperand = 4; $fastTagLeft = 9; $fastTagRight = 8; $fastImplicitTimes = 108
 $fastColon = fastOp[":"]; $fastSemiSemi = fastOp[";;"]; $fastSemi = fastOp[";"]; $fastQuestion = fastOp["?"]; $fastColonColon = fastOp["::"]
-$fastColonEqual = fastOp[":="]; $fastEqual = fastOp["="]; $fastEqualDot = fastOp["=."]; $fastTilde = fastOp["~"]; $fastDot = fastOp["."]
+$fastColonEqual = fastOp[":="]; $fastEqual = fastOp["="]; $fastEqualDot = fastOp["=."]; $fastTilde = fastOp["~"]; $fastDot = fastOp["."]; $fastMinus = fastOp["-"]
 
 (* --- reading the tokens --- *)
 
@@ -378,13 +432,15 @@ fastNext[] := $ft++
 fastLineEndQ[] := $fbrackets === 0 && $fn[[$ft]] === 1
 
 (* the token at hand an operand begins with, so a product goes on *)
-fastOperandStartQ[] := MemberQ[{$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation}, $fk[[$ft]]]
+fastOperandStartQ[] := With[{k = $fk[[$ft]]},
+    MemberQ[{$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation}, k] ||
+        (k === $tkOperator && KeyExistsQ[$fastPrefixOnly, $fo[[$ft]]] && ! ($fintegrand && KeyExistsQ[$fastDifferentials, $fo[[$ft]]]))]
 
 (* the source's top-level expressions, held *)
 fastHeld[s_String] := Replace[Catch[Catch[Module[{codes = ToCharacterCode[s], tokens, out = Internal`Bag[]},
     tokens = fastTokens[codes];
     Block[{$fcodes = codes, $fk = tokens[[1]], $fo = tokens[[2]], $fs = tokens[[3]], $fe = tokens[[4]], $fn = tokens[[5]],
-           $ft = 1, $fbrackets = 0, $fdepth = 0, $falg = WolframLanguageSemantic},
+           $ft = 1, $fbrackets = 0, $fdepth = 0, $fintegrand = False, $falg = WolframLanguageSemantic},
         While[$fk[[$ft]] =!= $tkEnd, Internal`StuffBag[out, fastExpression[0, 0, False]]];
         expressions[Internal`BagPart[out, All]]]], $fastFail], $fastGiveUp], $fastFail -> $fastGiveUp]
 
@@ -405,10 +461,10 @@ fastExpression[min_Integer, rbp_Integer, plain_] := Block[{$fdepth = $fdepth + 1
 fastLedSpec[] := Which[
     fastLineEndQ[], None,
     fastSpacedUnsetQ[], {9, "Unset", "Unset"},
-    $fk[[$ft]] === $tkOperator, Lookup[$fastLed, $fo[[$ft]], None],
+    $fk[[$ft]] === $tkOperator && KeyExistsQ[$fastLedTable, $fo[[$ft]]], $fastLedTable[$fo[[$ft]]],
     $fk[[$ft]] === $tkOpenSquare, {176, "Call", "Call"},
     $fk[[$ft]] === $tkPrimes, {154, "Derivative", "Derivative"},
-    fastOperandStartQ[], {$fastImplicitTimes, "InfixN", "Times"},
+    fastOperandStartQ[], {$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"},
     True, None]
 
 fastLeaf[kind_String, text_String] := $falg["Leaf"][kind, text]
@@ -420,8 +476,8 @@ fastSpacedUnsetQ[] := $fk[[$ft]] === $tkOperator && $fo[[$ft]] === $fastEqual &&
 (* --- operands --- *)
 
 fastOperand[min_Integer, plain_] := Module[{kind = $fk[[$ft]], spec, text, name},
-    If[ kind === $tkOperator && KeyExistsQ[$fastPrefix, $fo[[$ft]]] && $fastPrefix[$fo[[$ft]]][[1]] > min,
-        spec = $fastPrefix[$fo[[$ft]]]; fastNext[];
+    If[ kind === $tkOperator && KeyExistsQ[$fastPrefixTable, $fo[[$ft]]] && $fastPrefixTable[$fo[[$ft]]][[1]] > min,
+        spec = $fastPrefixTable[$fo[[$ft]]]; fastNext[];
         Return[With[{x = fastExpression[min, spec[[1]], plain]},
             If[spec[[2]] === "NotNot", $falg["Prefix"]["Not", $falg["Prefix"]["Not", x]], $falg["Prefix"][spec[[2]], x]]], Module]];
     Switch[ kind,
@@ -447,6 +503,8 @@ fastOperand[min_Integer, plain_] := Module[{kind = $fk[[$ft]], spec, text, name}
                 $fo[[$ft]] === $fastGet, fastNext[]; $falg["Prefix"]["Get", fastFile[]],
                 $fo[[$ft]] === $fastSemiSemi, fastSpan[fastLeaf["Integer", "1"], min],
                 $fo[[$ft]] === $fastQuestion, fastInformation[],
+                KeyExistsQ[$fastGroupTable, $fo[[$ft]]], fastLongGroup[],
+                KeyExistsQ[$fastIntegralTable, $fo[[$ft]]], fastIntegral[],
                 True, fastFail[]],
         _, fastFail[]]]
 
@@ -457,19 +515,40 @@ fastPattern[name_] := Module[{at = $ft, pattern},
     pattern = Catch[fastExpression[$fastPatternColon, 0, True], $fastFail];
     If[pattern === $fastFail, $ft = at; name, $falg["Binary"]["Pattern", name, pattern]]]
 
+(* \[LeftFloor] x \[RightFloor] and the other brackets of long names *)
+fastLongGroup[] := With[{g = $fastGroupTable[$fo[[$ft]]]},
+    fastNext[];
+    With[{xs = fastItems[{$tkOperator, g[[1]]}]}, fastClose[{$tkOperator, g[[1]]}]; $falg["Group"][g[[2]], xs]]]
+
+(* \[Integral] f \[DifferentialD] x: the integrand, in which no product
+   goes on at a differential, then the differential *)
+fastIntegral[] := Module[{spec = $fastIntegralTable[$fo[[$ft]]], f, d = Missing[]},
+    fastNext[];
+    f = Block[{$fintegrand = True}, fastExpression[$integralPrecedence, 0, False]];
+    If[ $fk[[$ft]] === $tkOperator && KeyExistsQ[$fastDifferentials, $fo[[$ft]]] && ! fastLineEndQ[],
+        d = fastExpression[$integralPrecedence, 0, False]];
+    Which[
+        MissingQ[d], $falg["Prefix"][spec[[1]], f],
+        spec[[2]] === Integrate, integralOf[$falg, f, d],
+        True, $falg["Prefix"][spec[[1]], $falg["Infix"]["Times", {f, d}]]]]
+
 (* what is read inside a bracket, where a newline is whitespace *)
 SetAttributes[fastBracketed, HoldFirst]
 fastBracketed[e_] := Block[{$fbrackets = $fbrackets + 1}, e]
 
+(* the closer of a bracket at hand: a token kind, or {operator, its id} *)
+fastAtQ[kind_Integer] := $fk[[$ft]] === kind
+fastAtQ[{kind_Integer, op_Integer}] := $fk[[$ft]] === kind && $fo[[$ft]] === op
+
 (* the closer of the bracket *)
-fastClose[kind_Integer] := If[$fk[[$ft]] === kind, fastNext[], fastFail[]]
+fastClose[close_] := If[fastAtQ[close], fastNext[], fastFail[]]
 
 (* expressions between commas up to the closer, an empty one Null *)
-fastItems[close_Integer] := fastBracketed[Module[{items = Internal`Bag[], more = True},
-    If[ $fk[[$ft]] === close,
+fastItems[close_] := fastBracketed[Module[{items = Internal`Bag[], more = True},
+    If[ fastAtQ[close],
         {},
         While[ more,
-            Internal`StuffBag[items, If[MemberQ[{$tkComma, close}, $fk[[$ft]]], fastLeaf["Symbol", "Null"], fastExpression[0, 0, False]]];
+            Internal`StuffBag[items, If[$fk[[$ft]] === $tkComma || fastAtQ[close], fastLeaf["Symbol", "Null"], fastExpression[0, 0, False]]];
             If[$fk[[$ft]] === $tkComma, fastNext[], more = False]];
         Internal`BagPart[items, All]]]]
 
@@ -510,10 +589,13 @@ fastInformationEnd[j0_Integer] := Module[{j = j0, n = Length[$fcodes], wordEnd =
 
 (* --- operators after an operand --- *)
 
-fastLed[left_, {bp_Integer, fixity_String, head_String}, min_Integer, plain_] := Switch[ fixity,
+fastLed[left_, spec : {bp_Integer, fixity_String, head_String, ___}, min_Integer, plain_] := Switch[ fixity,
     "InfixL", fastNext[]; fastBinary[head, left, fastExpression[min, bp, plain]],
     "InfixR", fastNext[]; fastBinary[head, left, fastExpression[min, bp - 1, plain]],
-    "InfixN", fastChain[left, bp, head, min, plain],
+    "InfixN", fastChain[left, spec, min, plain],
+    "LongPart", fastNext[];
+        With[{xs = fastItems[{$tkOperator, $fastRightDoubleBracket}]}, fastClose[{$tkOperator, $fastRightDoubleBracket}];
+            $falg["Infix"]["Part", Prepend[xs, left]]],
     "Postfix", fastNext[]; $falg["Postfix"][left, head],
     "Unset", $ft += 2; $falg["Postfix"][left, "Unset"],
     "Call", fastCall[left],
@@ -537,20 +619,21 @@ fastBinary[head_String, l_, r_] := Switch[ head,
     _, $falg["Binary"][head, l, r]]
 
 (* a chain of the operators of one key at one level, one node *)
-fastChain[left_, bp_Integer, head_String, min_Integer, plain_] := Module[{key = fastChainKey[head], operands = {left}, heads = {}, more = True, spec},
+fastChain[left_, first_List, min_Integer, plain_] := Module[{bp = first[[1]], key = fastChainKey[first], operands = {left}, heads = {}, more = True, spec},
     While[ more,
         spec = fastLedSpec[];
-        If[ spec =!= None && spec[[1]] === bp && spec[[2]] === "InfixN" && fastChainKey[spec[[3]]] === key,
-            heads = Append[heads, If[spec[[3]] === "Plus", If[$fk[[$ft]] === $tkOperator && $fo[[$ft]] === fastOp["-"], "-", "+"], spec[[3]]]];
-            If[$fk[[$ft]] === $tkOperator, fastNext[]];
+        If[ spec =!= None && spec[[1]] === bp && spec[[2]] === "InfixN" && fastChainKey[spec] === key,
+            heads = Append[heads, If[ key === "Plus",
+                If[$fk[[$ft]] === $tkOperator && ($fo[[$ft]] === $fastMinus || $fo[[$ft]] === $fastLongMinus), "-", "+"],
+                spec[[3]]]];
+            If[Length[spec] < 5, fastNext[]];
             operands = Append[operands, fastExpression[min, bp, plain]],
             more = False]];
     Switch[ key,
         "Plus", $falg["Infix"]["Plus", Prepend[MapThread[If[#2 === "-", $falg["Prefix"]["Minus", #1], #1] &, {Rest[operands], heads}], First[operands]]],
-        "Relation", If[Length[Union[heads]] === 1,
-            $falg["Infix"][First[heads], operands],
-            $falg["Infix"]["Inequality", Riffle[operands, fastLeaf["Symbol", #] & /@ heads]]],
-        _, $falg["Infix"][head, operands]]]
+        "Relation", relationValue[$falg, operands, heads],
+        "Divisible", $falg["Infix"]["Divisible", Reverse[operands]],
+        _, $falg["Infix"][first[[3]], operands]]]
 
 (* f[args] and e[[indices]] *)
 fastCall[left_] := Module[{part = $ft + 1 <= Length[$fk] && $fk[[$ft + 1]] === $tkOpenSquare, xs},
