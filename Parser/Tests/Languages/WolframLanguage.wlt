@@ -196,6 +196,8 @@ $wlCases = {
     {"\"\\<x\\>\"", List[HoldComplete["x"]]},
     {"\"\\!\\(x\\)\"", List[HoldComplete["\!\(x\)"]]},
     {"\"\\[NotAName]\"", List[HoldComplete["\\[NotAName]"]]},
+    {"\"\\[LeftAngleBracket]\\[Intersection]\\[RawSpace]\"", List[HoldComplete["\[LeftAngleBracket]\[Intersection] "]]},
+    {"\"\\[CJKUnifiedIdeograph4E00]\"", List[HoldComplete["\\[CJKUnifiedIdeograph4E00]"]]},
     {"\"\\777\"", List[HoldComplete["\:01ff"]]},
     {"\"x\\\\\"", List[HoldComplete["x\\"]]},
     {"f::\"tag\"", List[HoldComplete[MessageName[f, "tag"]]]},
