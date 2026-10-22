@@ -236,6 +236,17 @@ VerificationTest[
     cond[1, 2, cond[3, 4, 5]],
     TestID -> "ParseOperatorTable: TernaryR is right-associative"]
 
+(* a chain whose later operators may follow a newline, its first may not:
+   the parser for the later ones, the spec's fourth element, reads them *)
+ClearAll[nlTable];
+nlTable = ParseOperatorTable[num, {
+    {{"InfixN", sumOp["+"], (sum[#1, #2] &), ParseChoice[sumOp["+"], ParseAction[ParseLiteral["\n+"], "\n+" &]]}}}];
+
+VerificationTest[
+    {Parse[nlTable, "1+2\n+3+4"], ParsePartial[nlTable, "1\n+2"]},
+    {sum[{1, 2, 3, 4}, {"+", "\n+", "+"}], {1, "\n+2"}},
+    TestID -> "ParseOperatorTable: an InfixN chain reads its later operators with a parser of their own"]
+
 
 (* === first-character dispatch === *)
 

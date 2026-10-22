@@ -21,6 +21,7 @@ It is the [Pratt / top-down-operator-precedence](https://tdop.github.io/) ("prec
 
 - *fixity* is one of the strings `"InfixL"` (left-associative), `"InfixR"` (right-associative), `"Prefix"`, or `"Postfix"`.
 - <code>{"InfixN", *opParser*, *combine*}</code> is a *flat* operator: a run of `"InfixN"` operators of one level that share *combine* builds one node, <code>*combine*[{*operand1*, *operand2*, …}, {*opResult1*, …}]</code>, so `a + b - c` can be one sum and `a < b <= c` one chain. Without *combine*, a run continues only across the same operator, and the first operator's result is applied to the operands.
+- <code>{"InfixN", *opParser*, *combine*, *nextParser*}</code> reads the chain's operators after the first with *nextParser*, for a chain whose later operators may follow what its first may not, such as a newline; *combine* gets what *nextParser* returned for them.
 - <code>{"Ternary", *op1Parser*, *op2Parser*}</code> parses *left* *op1* *middle* *op2* *right*, and *op2Parser*'s result is applied to the three operands; it is left-associative, and `"TernaryR"` is right-associative.
 - *Dispatch on the first character.* The table is built with the characters each operator parser can begin with, so at each position it tries only the operators that could begin there, in table order. An operator whose first character cannot be told (one beginning with a [ParseRegex]() or a [ParseRecursive]()) is tried everywhere.
 - *Operator parsers return their combining function* — the same convention as [ParseChainLeft](). *opParser* matches the operator token and yields a function: **binary** <code>*f*[*left*, *right*]</code> for infix, **unary** <code>*f*[*operand*]</code> for prefix / postfix. Use [ParseAction]() to attach the function, e.g. `ParseAction[ParseLiteral["+"], (Plus &)]`.
@@ -179,6 +180,28 @@ Parse[sum, "1+2-3+4"]
 ```
 
 <!-- => terms[{1, 2, 3, 4}, {"+", "-", "+"}] -->
+
+A chain's later operators may have a parser of their own, here one that also takes a newline before the `+`; the first `+` may not follow one:
+
+```wl
+lines = ParseOperatorTable[ParseAction[ParseRegex["[0-9]+"], FromDigits], {
+   {{"InfixN", ParseAction[ParseLiteral["+"], "+" &], (terms[#1, #2] &), ParseChoice[ParseLiteral["+"], ParseLiteral["\n+"]]}}
+}]
+```
+
+```wl
+Parse[lines, "1+2\n+3"]
+```
+
+<!-- => terms[{1, 2, 3}, {"+", "\n+"}] -->
+
+A newline before the first `+` ends the expression, the rest left unread:
+
+```wl
+ParsePartial[lines, "1\n+2"]
+```
+
+<!-- => {1, "\n+2"} -->
 
 **Ternary operators.** `?` and `:` around a middle operand, left-associative:
 

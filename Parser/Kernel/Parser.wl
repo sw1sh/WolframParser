@@ -72,7 +72,7 @@ ParseChainLeft::usage = "ParseChainLeft[p, op] parses a left-associative chain: 
 
 ParseChainRight::usage = "ParseChainRight[p, op] parses a right-associative chain."
 
-ParseOperatorTable::usage = "ParseOperatorTable[unit, levels] parses an operator-precedence expression grammar by Pratt-style binding-power climbing - a single left-to-right pass instead of a hand-written ParseChainLeft / ParseChainRight cascade. unit is the parser for an operand (an atom, a parenthesised sub-expression via ParseRecursive, a prefix-quantifier, ...). levels is a list of precedence levels, TIGHTEST binding first; each level is a list of operator specs {fixity, opParser} (a lone spec may stand in for a one-operator level) where fixity is \"InfixL\" | \"InfixR\" | \"Prefix\" | \"Postfix\" and opParser's RESULT is the combining function - binary for infix, unary for prefix / postfix - the same op-returns-a-function convention as ParseChainLeft. {\"InfixN\", opParser, combine} is a flat n-ary chain: a run of \"InfixN\" operators of one level sharing combine (or, without combine, the same operator) builds one node, combine[{operand1, operand2, ...}, {opResult1, ...}], or opResult1 @@ operands without combine - for a + b - c into one sum, or a < b <= c into one chain. {\"Ternary\", op1Parser, op2Parser} parses left op1 middle op2 right and gives op2's result applied to {left, middle, right}, left-associative; \"TernaryR\" is right-associative. Stays linear on grammars where a PEG choice over or / and / apply re-parses the shared leading operand and backtracks exponentially (e.g. TPTP THF)."
+ParseOperatorTable::usage = "ParseOperatorTable[unit, levels] parses an operator-precedence expression grammar by Pratt-style binding-power climbing - a single left-to-right pass instead of a hand-written ParseChainLeft / ParseChainRight cascade. unit is the parser for an operand (an atom, a parenthesised sub-expression via ParseRecursive, a prefix-quantifier, ...). levels is a list of precedence levels, TIGHTEST binding first; each level is a list of operator specs {fixity, opParser} (a lone spec may stand in for a one-operator level) where fixity is \"InfixL\" | \"InfixR\" | \"Prefix\" | \"Postfix\" and opParser's RESULT is the combining function - binary for infix, unary for prefix / postfix - the same op-returns-a-function convention as ParseChainLeft. {\"InfixN\", opParser, combine} is a flat n-ary chain: a run of \"InfixN\" operators of one level sharing combine (or, without combine, the same operator) builds one node, combine[{operand1, operand2, ...}, {opResult1, ...}], or opResult1 @@ operands without combine - for a + b - c into one sum, or a < b <= c into one chain. {\"InfixN\", opParser, combine, nextParser} reads the chain's operators after the first with nextParser, for a chain whose later operators may follow what its first may not (a newline); its result stands in the operator results combine gets. {\"Ternary\", op1Parser, op2Parser} parses left op1 middle op2 right and gives op2's result applied to {left, middle, right}, left-associative; \"TernaryR\" is right-associative. Stays linear on grammars where a PEG choice over or / and / apply re-parses the shared leading operand and backtracks exponentially (e.g. TPTP THF)."
 
 ParseLookahead::usage = "ParseLookahead[p] succeeds iff p would match at the current position, consuming nothing."
 
@@ -183,7 +183,10 @@ operatorDispatch[levels_List] :=
         ];
         <|
             "Prefix" -> byFirstCharacter[Select[specs, #[[2]] === "Prefix" &]],
-            "Led"    -> byFirstCharacter[Select[specs, MatchQ[#[[2]], "InfixL" | "InfixR" | "InfixN" | "Ternary" | "TernaryR" | "Postfix"] &]]
+            "Led"    -> byFirstCharacter[Select[specs, MatchQ[#[[2]], "InfixL" | "InfixR" | "InfixN" | "Ternary" | "TernaryR" | "Postfix"] &]],
+            (* the chains whose later operators have a parser of their own,
+               tried wherever the chain stands, whatever character is there *)
+            "Next"   -> Select[specs, #[[2]] === "InfixN" && Length[#] >= 5 &]
         |>
     ]
 
@@ -953,7 +956,9 @@ interpretDispatch[ParserCombinator["OperatorTable", {unit_, levels_List}, opts_]
            chain's combining function (or, without one, is the same
            operator) and its operand; combine[operands, operatorResults]
            builds the node, or the first operator's result applied to the
-           operands when the spec has no combine. *)
+           operands when the spec has no combine. A chain whose first spec
+           has a parser for its later operators reads each of them with
+           that parser of its spec. *)
         naryChain[s_, left_, first_, opEnd_] := Module[
             {key = If[ Length[s] >= 4, {"Combine", s[[4]]}, {"Operator", s[[3]]}],
              operands = {left}, results = {first}, cur = opEnd, r, next, more = True},
@@ -965,10 +970,10 @@ interpretDispatch[ParserCombinator["OperatorTable", {unit_, levels_List}, opts_]
                 Do[
                     If[ t[[1]] === s[[1]] && t[[2]] === "InfixN" &&
                         If[ Length[t] >= 4, {"Combine", t[[4]]}, {"Operator", t[[3]]}] === key,
-                        r = interpret[t[[3]], input, cur];
+                        r = interpret[If[ Length[t] >= 5, t[[5]], t[[3]] ], input, cur];
                         If[ MatchQ[r, _parseOk], next = r; Break[] ]
                     ],
-                    {t, specsAt["Led", cur]}
+                    {t, If[ Length[s] >= 5, dispatch["Next"], specsAt["Led", cur] ]}
                 ];
                 If[ next === noOp,
                     more = False,
