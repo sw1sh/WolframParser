@@ -303,10 +303,17 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
             out[[1]] = status; out[[2]] = k;
             Take[out, 2 + 5 k]]]]
 
-(* The lexer run here: compiled once, at its first use, where Compile is,
-   else evaluated. *)
-fastLexFunction := fastLexFunction = With[{f = $fastLexDeclaration[[2, 1]]},
-    Replace[Compile @@ Join[Hold[Evaluate[Map[{#, _Integer, 1} &, f[[1]]]]], Extract[f, {2}, Hold]], Except[_CompiledFunction] -> f]]
+(* The function of a typed declaration: the definition a compiler of typed
+   code gave the declared symbol, where one did; else the declaration's
+   Function compiled by Compile, where Compile is, else evaluated. *)
+SetAttributes[typedFunction, HoldFirst]
+typedFunction[symbol_Symbol, declaration_] := If[ DownValues[symbol] =!= {} || OwnValues[symbol] =!= {},
+    symbol,
+    With[{f = declaration[[2, 1]]},
+        Replace[Compile @@ Join[Hold[Evaluate[Map[{#, _Integer, 1} &, f[[1]]]]], Extract[f, {2}, Hold]], Except[_CompiledFunction] -> f]]]
+
+(* the lexer run here, fixed at its first use *)
+fastLexFunction := fastLexFunction = typedFunction[fastLex, $fastLexDeclaration]
 
 (* --- the operator table --- *)
 
@@ -762,10 +769,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
             out[[1]] = status; out[[2]] = on;
             Take[out, 2 + 3 on]]]]
 
-(* The parser run here: compiled once, at its first use, where Compile is,
-   else evaluated. *)
-fastParseFunction := fastParseFunction = With[{f = $fastParseDeclaration[[2, 1]]},
-    Replace[Compile @@ Join[Hold[Evaluate[Map[{#, _Integer, 1} &, f[[1]]]]], Extract[f, {2}, Hold]], Except[_CompiledFunction] -> f]]
+(* the parser run here, fixed at its first use *)
+fastParseFunction := fastParseFunction = typedFunction[fastParse, $fastParseDeclaration]
 
 (* --- the typed parser's tables --- *)
 
