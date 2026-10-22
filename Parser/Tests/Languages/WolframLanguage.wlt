@@ -205,7 +205,13 @@ $wlCases = {
     {"<<a\\b.m", List[HoldComplete[Get["a\\b.m"]]]},
     {"<<a!b*c?", List[HoldComplete[Get["a!b*c?"]]]},
     {"<<a\\[Alpha]\\:0041", List[HoldComplete[Get["a\[Alpha]A"]]]},
-    {"x >> a\\b", List[HoldComplete[Put[x, "a\\b"]]]}
+    {"x >> a\\b", List[HoldComplete[Put[x, "a\\b"]]]},
+    {"ab\\\ncd", List[HoldComplete[abcd]]},
+    {"12\\\n  34", List[HoldComplete[1234]]},
+    {"x_\\\nInteger", List[HoldComplete[x_Integer]]},
+    {"a:\\\n=b", List[HoldComplete[a := b]]},
+    {"a\\\n+ b", List[HoldComplete[a + b]]},
+    {"1\\\n.5\\\n", List[HoldComplete[1.5]]}
 };
 
 (* === forms: precedence, flat chains, minus and quotients, patterns, spans,
@@ -249,6 +255,12 @@ VerificationTest[
     WolframLanguageAST["a +\n  b"][[2, 1, 3, "Source"]],
     {{1, 1}, {2, 4}},
     TestID -> "wl: AST spans cross lines"]
+VerificationTest[
+    WolframLanguageAST["ab\\\ncd +\\\n e"],
+    ContainerNode["String", {InfixNode["Plus", {
+        LeafNode["Symbol", "abcd", <|"Source" -> {{1, 1}, {2, 3}}|>], LeafNode["Symbol", "e", <|"Source" -> {{2, 5}, {3, 3}}|>]},
+        <|"Source" -> {{1, 1}, {3, 3}}|>]}, <|"Source" -> {{1, 1}, {3, 3}}|>],
+    TestID -> "wl: AST reads line continuations, its spans in the source"]
 VerificationTest[
     ASTStripSource @ WolframLanguageAST["a < b <= c"],
     ContainerNode["String", {InfixNode["Inequality", {

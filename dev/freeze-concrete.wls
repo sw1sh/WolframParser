@@ -89,8 +89,12 @@ containerForms = {
     "f[x_] := x^2 (* c *)\n", "a; \nb", "a b", "f[x, ]", ";;b", "{1, 2}[[1]]", "a\r\nb", "\ta\tb", "x\n(* a\n b *)\n\n",
     "\"a\nb\" (*\t*)", "\"c\\\nd\"", "\\[Alpha]b \\[Rule] c", "a +\n  b",
     "\[LeftAngleBracket]a\[RightAngleBracket] \\[Element] b\[NonBreakingSpace]\n",
+    (* line continuations: in a token, before one, at the end *)
+    "a\\\nb", "a \\\n b", "a\\\n  + b", "ab\\\ncd\\\nef", "a\\\n", "\\\n", "\\\n\\\n a", "a\\\r\nb", "a \\\n\n b", "a \\\n (* c *) b",
+    "\"a\" \\\n \"b\"", "\"a\\\nb\" \\\n c", "f[x, \\\n]", "a+\\\n+b", "x_\\\nInteger", "1\\\n.5", "<< \\\nfile", "(* a\\\nb *)",
     (* what CodeParser reads again: an open group or token, up to its chunk *)
-    "f[x\ny = 1", "f[x\ng[y]", "{1,\n2\n\nf[3]", "f[x \n", "(* abc\n", "\"abc\n", "a = 1\nb = (c", "f[x\nBegin[\"a`\"]"
+    "f[x\ny = 1", "f[x\ng[y]", "{1,\n2\n\nf[3]", "f[x \n", "(* abc\n", "\"abc\n", "a = 1\nb = (c", "f[x\nBegin[\"a`\"]",
+    "f[x\\\n", "\"abc\\\n", "\"a\\\nb\\\n"
 };
 
 dropIssues[c_] := MapAt[KeyDrop[#, CodeParser`SyntaxIssues] &, c, 3]

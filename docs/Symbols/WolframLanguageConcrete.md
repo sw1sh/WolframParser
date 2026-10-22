@@ -32,7 +32,8 @@ RelatedGuides: [ParserZoo]
   - A closer that closes none of the groups around it is a `Token``Error``UnexpectedCloser`, and one that closes an outer group ends the inner one.
   - Text that is no token is an `ErrorNode` of CodeParser's kind for it: `UnterminatedString`, `UnterminatedComment`, `Number`, `UnsupportedToken` (`??`, or a long name CodeParser does not read, such as `\[PartialD]`), `UnhandledCharacter`, `ExpectedLetterlike`. Such a token is the whole of an expression it begins.
   - A `~` without its second `~`, a `/:` without its `=` and a `:` after what is neither a name nor a pattern are a `SyntaxErrorNode`.
-- CodeParser's `SyntaxIssues`, the diagnostics it adds to the container (a remark on each character past ASCII, for one), are not given. A line continuation outside a string is not read.
+- A `\` at the end of a line, outside a string, a comment and the file name of `<<` or `>>`, continues the line as CodeParser reads it: the source reads as though the `\`, the newline and the spaces and tabs after it were not there, so `a\` and `b` on the next line are the name `ab`. The token they fall in holds them, else the token after them; at the end of the source they are in no leaf, and the container lists them where the source ends.
+- CodeParser's `SyntaxIssues`, the diagnostics it adds to the container (a remark on each character past ASCII, for one), are not given.
 
 ## Basic Examples
 
@@ -90,6 +91,12 @@ An integral with its differential:
 
 ```wl
 ASTStripSource[WolframLanguageConcrete["\\[Integral] f \\[DifferentialD] x"]]
+```
+
+A line continuation inside a name, the name keeping it, and the container listing where:
+
+```wl
+ASTStripSource[WolframLanguageConcrete["ab\\\ncd"]]
 ```
 
 A source file of the paclet:

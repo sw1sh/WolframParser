@@ -1146,14 +1146,17 @@ concreteParser[ws_, wsAll_, nested_] := Module[
    a node's runs from its first leaf to its last. The container lists
    where the tokens are that hold a line continuation, outside a string
    and inside one, and the strings and comments holding a newline or a
-   tab. *)
-withSource[CodeParser`ContainerNode[kind_, children_List, meta_]] := Module[
+   tab. A leaf that holds a line continuation is marked continuedBy, the
+   length of the one it begins with its value; a continuation at the end
+   of the source, in no leaf, is listed where the source ends. *)
+withSource[CodeParser`ContainerNode[kind_, children_List, meta_], continuedAtEnd_ : False] := Module[
     {at = {1, 1}, marks = <|"SimpleLineContinuations" -> {}, "ComplexLineContinuations" -> {}, "EmbeddedNewlines" -> {}, "EmbeddedTabs" -> {}|>,
      placed, leaf, placedChildren},
     leaf[head_, k_, s_String, m_] := With[{start = at},
         at = advanced[at, s];
-        Scan[(marks[#] = Append[marks[#], start]) &, tokenMarks[k, s]];
-        head[k, s, Append[m, CodeParser`Source -> {start, at}]]];
+        Scan[(marks[#] = Append[marks[#], start]) &, Union[tokenMarks[k, StringDrop[s, Lookup[m, continuedBy, 0]]],
+            If[KeyExistsQ[m, continuedBy], {"SimpleLineContinuations"}, {}]]];
+        head[k, s, Append[KeyDrop[m, continuedBy], CodeParser`Source -> {start, at}]]];
     placed[CodeParser`LeafNode[k_, s_String, m_]] := leaf[CodeParser`LeafNode, k, s, m];
     placed[CodeParser`ErrorNode[k_, s_String, m_]] := leaf[CodeParser`ErrorNode, k, s, m];
     placed[CodeParser`CallNode[head_List, group_, m_]] := With[{h = placed /@ head, g = placed[group]},
@@ -1161,6 +1164,7 @@ withSource[CodeParser`ContainerNode[kind_, children_List, meta_]] := Module[
     placed[node_[tag_, kids_List, m_]] := With[{c = placed /@ kids},
         node[tag, c, Append[m, CodeParser`Source -> {sourceOf[First[c]][[1]], sourceOf[Last[c]][[2]]}]]];
     placedChildren = placed /@ children;
+    If[continuedAtEnd, marks["SimpleLineContinuations"] = Append[marks["SimpleLineContinuations"], at]];
     CodeParser`ContainerNode[kind, placedChildren, Join[meta, Select[marks, # =!= {} &],
         If[placedChildren === {}, <||>, <|CodeParser`Source -> {{1, 1}, at}|>]]]
 ]
@@ -1173,10 +1177,9 @@ advanced[{line_, column_}, s_String] := With[{breaks = StringCount[s, "\r\n" | "
         {line, column + StringLength[s]},
         {line + breaks, 1 + StringLength[Last[StringSplit[s, "\r\n" | "\n" | "\r", All]]]}]]
 
-(* the container's lists a token is in: a string's escaped newline is a
-   complex line continuation, its newline not escaped and a comment's
-   newline are embedded, and another token's escaped newline is a simple
-   line continuation *)
+(* the container's lists a token's own text puts it in: a string's
+   escaped newline is a complex line continuation, its newline not
+   escaped and a comment's newline are embedded *)
 tokenMarks[String | Token`Error`UnterminatedString, s_String] := With[{plain = StringDelete[s, "\\" ~~ _]},
     Join[
         If[StringContainsQ[s, "\\\n" | "\\\r"] && MemberQ[StringCases[s, "\\" ~~ c_ :> c], "\n" | "\r"], {"ComplexLineContinuations"}, {}],
@@ -1185,8 +1188,87 @@ tokenMarks[String | Token`Error`UnterminatedString, s_String] := With[{plain = S
 tokenMarks[Token`Comment | Token`Error`UnterminatedComment, s_String] := Join[
     If[StringContainsQ[s, "\n" | "\r"], {"EmbeddedNewlines"}, {}],
     If[StringContainsQ[s, "\t"], {"EmbeddedTabs"}, {}]]
-tokenMarks[Token`Newline | Whitespace, _String] := {}
-tokenMarks[_, s_String] := If[StringContainsQ[s, "\\\n" | "\\\r"], {"SimpleLineContinuations"}, {}]
+tokenMarks[_, _String] := {}
+
+(* --- line continuations --- *)
+
+(* A \ before a newline, outside a string, a comment and the file name
+   of << or >>, continues the line: CodeParser reads the source as though
+   the \, the newline and the spaces and tabs after it were not there.
+   Their text is in the token they fall in, else in the token after them,
+   and at the end of the source in none, there a string's too. The spans
+   {first, last} of them in s, those that follow one another one. *)
+continuationSpans[s_String] := Module[{c = ToCharacterCode[s], n, i = 1, depth = 0, inString = False, spans = {}, runEnd, fileEnd},
+    n = Length[c];
+    (* the last character of the continuations from j on, j - 1 if none begins there *)
+    runEnd[j_Integer] := Module[{k = j},
+        While[k < n && c[[k]] === 92 && (c[[k + 1]] === 10 || c[[k + 1]] === 13),
+            k += If[c[[k + 1]] === 13 && k + 2 <= n && c[[k + 2]] === 10, 3, 2];
+            While[k <= n && MemberQ[{32, 9, 11, 12}, c[[k]]], k++]];
+        k - 1];
+    (* the last character of the spaces and the file name from j on *)
+    fileEnd[j0_Integer] := Module[{j = j0},
+        While[j <= n && (c[[j]] === 32 || c[[j]] === 9), j++];
+        While[j <= n && (KeyExistsQ[$fileCharacterCodes, c[[j]]] || c[[j]] === 92),
+            If[ c[[j]] === 92 && j < n && c[[j + 1]] === 91,
+                j += 2; While[j <= n && KeyExistsQ[$alphanumericCodes, c[[j]]], j++]; If[j <= n && c[[j]] === 93, j++, Break[]],
+                j++]];
+        j - 1];
+    While[i <= n,
+        Which[
+            inString, Which[
+                c[[i]] === 92 && runEnd[i] === n, AppendTo[spans, {i, n}]; i = n + 1,
+                c[[i]] === 92, i += 2,
+                c[[i]] === 34, inString = False; i++,
+                True, i++],
+            depth > 0, Which[
+                c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth++; i += 2,
+                c[[i]] === 42 && i < n && c[[i + 1]] === 41, depth--; i += 2,
+                True, i++],
+            c[[i]] === 34, inString = True; i++,
+            c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth = 1; i += 2,
+            c[[i]] === 60 && i < n && c[[i + 1]] === 60, i = fileEnd[i + 2] + 1,
+            c[[i]] === 62 && i < n && c[[i + 1]] === 62, i = fileEnd[If[i + 2 <= n && c[[i + 2]] === 62, i + 3, i + 2]] + 1,
+            c[[i]] === 92 && runEnd[i] >= i, AppendTo[spans, {i, runEnd[i]}]; i = spans[[-1, 2]] + 1,
+            (* a \ and the character it escapes *)
+            c[[i]] === 92, i += 2,
+            True, i++]];
+    spans]
+
+$alphanumericCodes = AssociationThread[Join[Range[48, 57], Range[65, 90], Range[97, 122]] -> True]
+(* the characters of a file name but its \ *)
+$fileCharacterCodes = Join[$alphanumericCodes, AssociationThread[ToCharacterCode["$`_./~:!*?-"] -> True]]
+
+lineContinuations[s_String] := If[StringContainsQ[s, "\\\n" | "\\\r"], continuationSpans[s], {}]
+
+(* the positions in s of the characters read without its line continuations *)
+keptPositions[s_String, spans_List] := Complement[Range[StringLength[s]], Catenate[Range @@@ spans]]
+
+(* offsets into the source read without its line continuations made
+   offsets into the source: a node begins where the continuations before
+   its first character do, and ends past its last character *)
+continuedOffsets[tree_, kept_List] := With[{at = Function[o, If[o === 1, 1, kept[[o - 1]] + 1]]},
+    tree /. (a_Association /; MatchQ[Lookup[a, "Source"], {_Integer, _Integer}]) :> Append[a, "Source" -> Map[at, a["Source"]]]]
+
+(* a failure at a character of the source read without its line
+   continuations, placed at that character of the source *)
+continuedFailure[f_Failure, kept_List, s_String] := With[{at = f["Position"]},
+    If[IntegerQ[at], parseFailure[If[at <= Length[kept], kept[[at]], StringLength[s] + 1], f["Expected"], f["Found"]], f]]
+
+(* the leaves of a tree read from s without its line continuations, each
+   given its text in s: kept is the positions in s of the characters read *)
+continuedLeaves[children_List, s_String, kept_List] := Module[{p = 0, leaf, walked},
+    leaf[head_, k_, t_String, m_] := If[t === "", head[k, t, m],
+        With[{first = kept[[p + 1]], last = kept[[p + StringLength[t]]], from = If[p === 0, 1, kept[[p]] + 1]},
+            p += StringLength[t];
+            If[ from === first && last - first + 1 === StringLength[t],
+                head[k, t, m],
+                head[k, StringTake[s, {from, last}], Append[m, continuedBy -> first - from]]]]];
+    walked[CodeParser`LeafNode[k_, t_String, m_]] := leaf[CodeParser`LeafNode, k, t, m];
+    walked[CodeParser`ErrorNode[k_, t_String, m_]] := leaf[CodeParser`ErrorNode, k, t, m];
+    walked[CodeParser`CallNode[head_List, group_, m_]] := With[{h = walked /@ head}, CodeParser`CallNode[h, walked[group], m]];
+    walked[node_[tag_, kids_List, m_]] := node[tag, walked /@ kids, m];
+    walked /@ children]
 
 (* --- what CodeParser reads again --- *)
 
@@ -1266,16 +1348,29 @@ concreteGrammar[] := Module[{comment, spaces, newline, lineTrivia, allTrivia, ne
 $astGrammar := $astGrammar = grammar[ASTAlgebra]
 $heldGrammar := $heldGrammar = grammar[WolframLanguageSemantic]
 
-WolframLanguageAST[s_String] := With[{r = parsed[$astGrammar, s]},
-    If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]]
+(* Each reads a source with line continuations without them: the held
+   expressions need nothing more, the nodes are given their places in the
+   source, and so is a failure. *)
+WolframLanguageAST[s_String] := With[{spans = lineContinuations[s]},
+    If[ spans === {},
+        With[{r = parsed[$astGrammar, s]}, If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]],
+        With[{r = parsed[$astGrammar, StringReplacePart[s, "", spans]], kept = keptPositions[s, spans]},
+            If[FailureQ[r], continuedFailure[r, kept, s], ASTAddSource[continuedOffsets[ASTContainer[r], kept], s]]]]]
 
-WolframLanguageHeld[s_String] := With[{r = parsed[$heldGrammar, s]},
-    If[FailureQ[r], r, expressions[r]]]
+WolframLanguageHeld[s_String] := With[{spans = lineContinuations[s]},
+    With[{r = parsed[$heldGrammar, If[spans === {}, s, StringReplacePart[s, "", spans]]]},
+        Which[! FailureQ[r], expressions[r], spans === {}, r, True, continuedFailure[r, keptPositions[s, spans], s]]]]
 
 $concreteGrammar := $concreteGrammar = concreteGrammar[]
 
-WolframLanguageConcrete[s_String] := With[{r = parsed[$concreteGrammar, s]},
-    If[FailureQ[r], r, reparsed[withSource[CodeParser`ContainerNode[String, r, <||>]], s]]]
+WolframLanguageConcrete[s_String] := With[{spans = lineContinuations[s]},
+    If[ spans === {},
+        With[{r = parsed[$concreteGrammar, s]},
+            If[FailureQ[r], r, reparsed[withSource[CodeParser`ContainerNode[String, r, <||>]], s]]],
+        With[{r = parsed[$concreteGrammar, StringReplacePart[s, "", spans]], kept = keptPositions[s, spans]},
+            If[ FailureQ[r],
+                continuedFailure[r, kept, s],
+                reparsed[withSource[CodeParser`ContainerNode[String, continuedLeaves[r, s, kept], <||>], spans[[-1, 2]] === StringLength[s]], s]]]]]
 
 (* a file's text read as UTF-8, its container a File one naming it *)
 WolframLanguageConcrete[File[f_String]] := With[{bytes = ReadByteArray[f]},

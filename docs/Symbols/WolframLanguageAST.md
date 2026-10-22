@@ -21,7 +21,7 @@ RelatedGuides: [ParserZoo]
 - A term after a `-` is a [PrefixNode]() `"Minus"` inside the sum's [InfixNode]() `"Plus"`; a chain of different relations is an [InfixNode]() `"Inequality"` whose operands alternate with the relations' names, as [Inequality]() takes them.
 - Parentheses, lists and associations are [GroupNode]() `"Paren"`, `"List"` and `"Association"`.
 - A leaf keeps its source text: a [LeafNode]() of kind `"Integer"`, `"Real"`, `"String"`, `"Symbol"`, `"Blank"` (`x_h`), `"Slot"`, `"Out"`, `"Tag"` (the tag of `f::tag`) or `"File"` (the file of `<<` and `>>`).
-- Every node carries a `"Source"` span `{{line, column}, {line, column}}`, added by [ASTAddSource]().
+- Every node carries a `"Source"` span `{{line, column}, {line, column}}`, added by [ASTAddSource](). A line continuation outside a string reads as the kernel reads it, and the spans are those of the source as written.
 
 ## Basic Examples
 
