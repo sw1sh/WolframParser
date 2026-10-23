@@ -203,7 +203,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     {after, operator, postfixOperator, leaf, nullLeaf, symbolLeaf, blankLeaf, otherUnits, plainUnit, unit, patternUnit,
      items, comma, call, part, messageName, tag, derivative, span, spanStart, compound, tagSet, put,
      binary, prefix, postfix, flat, plus, relation, relationOp, implicit, specs, table, information, dot, setOperator, unset,
-     longOperator, longPostfixOperator, longSpecs, longGroups, longCalls, integrals, integrandOperand, differentialAhead, divisible,
+     longOperator, longPostfixOperator, longSpecs, longGroups, longCalls, integrals, integrandOperand, divisible,
      patternRight, spanOperand, compoundOperand, tagLeft, tagRight},
 
     after[p_, w_] := ParseAction[p ~~ w, #1 &];
@@ -237,16 +237,12 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     (* f \[LeftDoubleBracket] i \[RightDoubleBracket], a part *)
     longCalls = ParseAction[longOperator["LeftDoubleBracket"] ~~ items[longNameSpellings["RightDoubleBracket"]] ~~ longPostfixOperator["RightDoubleBracket"],
         Function[{open, indices, close}, Function[e, alg["Infix"]["Part", Prepend[indices, e]]]]];
-    (* \[Integral] f \[DifferentialD] x: its integrand, then the differential
-       after it; Integrate[f, x], and for an integral round a contour its
-       head of the product of both *)
-    differentialAhead = ParseLookahead[ParseChoice @@ (ParseLiteral /@ Catenate[longNameSpellings /@ {"DifferentialD", "CapitalDifferentialD"}])];
-    integrals = Map[Function[row, ParseAction[
-            longOperator[row[[1]]] ~~ ParseScoped["Integrand", RecRef[integrandOperand]] ~~ ParseOptional[ParseAction[differentialAhead ~~ RecRef[integrandOperand], #2 &]],
-            Function[{o, f, d}, Which[
-                MissingQ[d], alg["Prefix"][SymbolName[row[[2]]], f],
-                row[[3]] === Integrate, integralOf[alg, f, d],
-                True, alg["Prefix"][SymbolName[row[[2]]], alg["Infix"]["Times", {f, d}]]]]]],
+    (* \[Integral] f \[DifferentialD] x: the operand read whole, a differential
+       in it a factor like any other; \[Integral]'s Integrate of a product that
+       ends in one, by integralOf, and an integral round a contour its head of
+       the operand *)
+    integrals = Map[Function[row, ParseAction[longOperator[row[[1]]] ~~ RecRef[integrandOperand],
+            Function[{o, f}, If[row[[3]] === Integrate, integralOf[alg, SymbolName[row[[2]]], f], alg["Prefix"][SymbolName[row[[2]]], f]]]]],
         $longNameTable["Integrals"]];
 
     (* a name, or n:patt: the name binds its pattern wherever it stands;
@@ -340,8 +336,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
             ParseLiteral["<|"],
             ParseLiteral["."] ~~ ParseCharacter[DigitCharacter],
             $letter,
-            ParseLookahead[ParseCharacter[_?prefixOnlyStartQ]] ~~ ParseChoice @@ (ParseLiteral /@ Catenate[longNameSpellings /@ $prefixOnlyNames])]] ~~
-            ParseNotFollowedBy[differentialAhead ~~ ParseCondition[ParseScope[], MatchQ[#, {___, "Integrand"}] &]],
+            ParseLookahead[ParseCharacter[_?prefixOnlyStartQ]] ~~ ParseChoice @@ (ParseLiteral /@ Catenate[longNameSpellings /@ $prefixOnlyNames])]],
         "*" &];
     (* a . not before a digit, which begins a number *)
     dot = after[ParseAction[longest["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]], #1 &], wsAll];
@@ -621,10 +616,24 @@ heldLongHead[row_List] := Which[
 $relationHeads = <|"NotEqual" -> "Unequal", "LessSlantEqual" -> "LessEqual", "GreaterSlantEqual" -> "GreaterEqual",
     "Equal" -> "Equal", "LongEqual" -> "Equal"|>
 
-(* Integrate[f, x] of an integrand and its differential \[DifferentialD] x *)
-integralOf[alg_, f_, d_] := If[ AssociationQ[d],
-    Replace[d["Expr"], {HoldComplete[_[x_]] :> held[symbolCall["Integrate", {f["Expr"], HoldComplete[x]}]], _ :> alg["Prefix"]["Integrate", f]}],
-    alg["Call"][alg["Leaf"]["Symbol", "Integrate"], {f, d}]]
+(* \[Integral] f as the kernel reads it: of a product whose last factor is a
+   differential, \[DifferentialD] x or \[CapitalDifferentialD] x, Integrate of
+   the factors before it over x; of a differential alone, Integrate[1, x]; of
+   anything else, head[f]. Held, from the expression; as nodes, from a Times
+   node whose last operand is a differential's, which the call keeps. *)
+integralOf[alg_, head_String, f_Association] := Replace[f["Expr"], {
+    HoldComplete[d_[x_]] /; differentialHeadQ[d] :> held[symbolCall["Integrate", {HoldComplete[1], HoldComplete[x]}]],
+    HoldComplete[t_[g___, d_[x_]]] /; MatchQ[Unevaluated[t], Times] && differentialHeadQ[d] :>
+        held[symbolCall["Integrate", {If[Length[HoldComplete[g]] === 1, HoldComplete[g], HoldComplete[Times[g]]], HoldComplete[x]}]],
+    _ :> alg["Prefix"][head, f]}]
+integralOf[alg_, head_String, f_] := Replace[f, {
+    PrefixNode["DifferentialD" | "CapitalDifferentialD", _, _] :> alg["Call"][alg["Leaf"]["Symbol", "Integrate"], {alg["Leaf"]["Integer", "1"], f}],
+    InfixNode["Times", {g__, d : PrefixNode["DifferentialD" | "CapitalDifferentialD", _, _]}, _] :>
+        alg["Call"][alg["Leaf"]["Symbol", "Integrate"], {Replace[{g}, {{one_} :> one, factors_ :> alg["Infix"]["Times", factors]}], d}],
+    _ :> alg["Prefix"][head, f]}]
+
+SetAttributes[differentialHeadQ, HoldFirst]
+differentialHeadQ[d_] := MatchQ[Unevaluated[d], DifferentialD | CapitalDifferentialD]
 
 (* A chain of relations as the kernel reads it: one of a single relation
    that relation of the operands, of the vector ones of their list; one of

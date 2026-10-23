@@ -374,8 +374,8 @@ $fastPrefix = Association[Map[fastOp[#[[1]]] -> Rest[#] &, {
 
 (* The long-name operators, read at their first use: the led ones by the
    held grammar's specs, the fourth of a spec the key of the chain it makes
-   with others, and the prefix ones; the brackets, the integrals, the
-   differentials, and the prefix operators that a product goes on at. *)
+   with others, and the prefix ones; the brackets, the integrals and the
+   prefix operators that a product goes on at. *)
 $fastLedTable := $fastLedTable = Join[$fastLed, Association[Join[
     Map[Function[row, fastLongOp[row[[1]]] -> With[{head = heldLongHead[row], p = row[[4]]}, Which[
         row[[3]] === CodeParser`InfixInequality, {p, "InfixN", head, "Relation"},
@@ -392,7 +392,6 @@ $fastPrefixTable := $fastPrefixTable = Join[$fastPrefix,
 $fastGroupTable := $fastGroupTable = Association[Map[fastLongOp[#[[1]]] -> {fastLongOp[#[[2]]], SymbolName[#[[3]]]} &,
     Select[$longNameTable["Groups"], #[[1]] =!= "LeftDoubleBracket" &]]]
 $fastIntegralTable := $fastIntegralTable = Association[Map[fastLongOp[#[[1]]] -> {SymbolName[#[[2]]], #[[3]]} &, $longNameTable["Integrals"]]]
-$fastDifferentials := $fastDifferentials = AssociationThread[fastLongOp /@ {"DifferentialD", "CapitalDifferentialD"} -> True]
 $fastPrefixOnly := $fastPrefixOnly = AssociationThread[Append[DeleteCases[fastLongOp /@ $prefixOnlyNames, 0], $fastNotId] -> True]
 $fastLongMinus := $fastLongMinus = fastLongOp["Minus"]
 $fastRightDoubleBracket := $fastRightDoubleBracket = fastLongOp["RightDoubleBracket"]
@@ -404,10 +403,9 @@ $fastColonEqual = fastOp[":="]; $fastEqual = fastOp["="]; $fastEqualDot = fastOp
 (* --- the operator after each token --- *)
 
 (* The spec of the operator after an operand, by token: all the led specs
-   in a list, and each token's index in it, 0 if it is none; and the
-   tokens that are a differential, at which no product in an integrand
-   goes on. A token's spec is the operator's it is, or that of the call, a
-   derivative or a product for its kind; = before . is an unset. *)
+   in a list, and each token's index in it, 0 if it is none. A token's spec
+   is the operator's it is, or that of the call, a derivative or a product
+   for its kind; = before . is an unset. *)
 $fastSpecList := $fastSpecList = DeleteDuplicates[Join[Values[$fastLedTable],
     {{176, "Call", "Call"}, {154, "Derivative", "Derivative"}, {$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}, {9, "Unset", "Unset"}}]]
 fastSpecIndex[spec_] := First[FirstPosition[$fastSpecList, spec, {0}, {1}, Heads -> False]]
@@ -422,12 +420,11 @@ fastLedIndices[kinds_List, ops_List] := Module[{index, unset},
     index = $fastKindSpecIndex[[kinds + 1]] + $fastOpSpecIndex[[ops + 1]] (1 - Unitize[kinds - $tkOperator]);
     unset = (1 - Unitize[ops - $fastEqual]) (1 - Unitize[RotateLeft[ops] - $fastDot]) (1 - Unitize[RotateLeft[kinds] - $tkOperator]);
     index (1 - unset) + unset fastSpecIndex[{9, "Unset", "Unset"}]]
-fastDifferentialMarks[ops_List] := Total[Map[1 - Unitize[ops - #] &, Keys[$fastDifferentials]]]
 
 (* --- the typed parser --- *)
 
 (* The parser, typed code over packed integers, as the lexer is: the
-   lexer's tokens, each token's led spec index and differential mark, the
+   lexer's tokens, each token's led spec index, the
    tables of the specs {precedence, fixity, head, chain key}, of the
    prefix operators {precedence, head} and the brackets {closer, head} by
    operator, the integral of each operator, the special operators and
@@ -446,9 +443,9 @@ fastDifferentialMarks[ops_List] := Total[Map[1 - Unitize[ops - #] &, Keys[$fastD
    operator, count, head}, of kind 1 a call, 2 a part, 3 a list, 4 an
    association, 5 a long-name group, 6 a long-name part, 7 a type's
    parameters; 7 a pattern and 8 an operand left out, {token, length,
-   brackets, integrand}; 9 a span {state, count}; 10 a compound {count};
+   brackets}; 9 a span {state, count}; 10 a compound {count};
    11 a ternary {state, precedence, min, plain}; 12 a tag set {state}; 13
-   an integral {state, integral}.
+   an integral {integral}.
 
    Instructions: 1 a leaf {kind, token}; 2 prefix {head}; 3 postfix
    {head}; 4 binary {head}; 5 a flat chain {head, n}; 6 a relation's
@@ -457,17 +454,17 @@ fastDifferentialMarks[ops_List] := Total[Map[1 - Unitize[ops - #] &, Keys[$fastD
    14 a message name {n}; 15 a type's parameters {n}; 16 a derivative
    {primes}; 17 a ~f~ b; 18 a span {n}; 19 a compound {n}; 20 a tag set
    {1 :=, 2 =, 3 =.}; 21 a put {head}; 22 a get; 23 a pattern; 24 an
-   integral {integral, with its differential}; 25 the end of a statement;
+   integral {integral}; 25 the end of a statement;
    26 a divisibility chain {n}; 27 !!; 28 the words of a query {start,
    end}; 29 a query {??}. *)
 $fastParseDeclaration = FunctionDeclaration[fastParse,
     Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
         "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
         "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
-        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} ->
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} ->
         "PackedArray"::["MachineInteger", 1]] @
-    Function[{pTok, pLed, pDiff, pSpecs, pPrefix, pGroups, pIntegrals, pSpecial, pHeads, pKeys, pCodes, pClasses},
-        Module[{n = pTok[[2]], out, fr, maxFrames, sp = 0, on = 0, t = 1, brackets = 0, integrand = 0, status = 0, mode = 0,
+    Function[{pTok, pLed, pSpecs, pPrefix, pGroups, pIntegrals, pSpecial, pHeads, pKeys, pCodes, pClasses},
+        Module[{n = pTok[[2]], out, fr, maxFrames, sp = 0, on = 0, t = 1, brackets = 0, status = 0, mode = 0,
                 pMin = 0, pRbp = 0, pPlain = 0, base = 0, k = 0, o = 0, i = 0, bp = 0, fx = 0, hd = 0, ky = 0, mn = 0, rb = 0, pl = 0,
                 ft = 0, cnt = 0, bt = 0, colons = 0, ok = 0, x = 0, lg = 0, e = 0, we = 0, c = 0, cl = 0, tt = 0},
             out = Table[0, {3 (8 n + 16) + 2}];
@@ -495,7 +492,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                             k == 1,
                                 on++; out[[3 on]] = 1; out[[3 on + 1]] = 1; out[[3 on + 2]] = t; t++;
                                 If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
-                                    sp++; base = 8 (sp - 1); fr[[base + 1]] = 7; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets; fr[[base + 5]] = integrand;
+                                    sp++; base = 8 (sp - 1); fr[[base + 1]] = 7; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
                                     t++; pMin = pSpecial[[16]]; pRbp = 0; pPlain = 1; mode = 1,
                                     mode = 3],
                             k >= 2 && k <= 7,
@@ -553,15 +550,15 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                             on++; out[[3 on]] = 28; out[[3 on + 1]] = e; out[[3 on + 2]] = we;
                                             on++; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; mode = 3]]],
                             k == 9 && pIntegrals[[o + 1]] > 0,
-                                x = pIntegrals[[o + 1]]; t++; integrand++;
-                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 13; fr[[base + 2]] = 1; fr[[base + 3]] = x;
+                                x = pIntegrals[[o + 1]]; t++;
+                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 13; fr[[base + 2]] = x;
                                 pMin = pSpecial[[15]]; pRbp = 0; pPlain = 0; mode = 1,
                             True, mode = 5],
                     (* after an operand: the operator that takes it, if one binds tightly enough *)
                     mode == 3,
                         base = 8 (sp - 1); mn = fr[[base + 2]]; rb = fr[[base + 3]]; pl = fr[[base + 4]];
                         i = pLed[[t]];
-                        If[(brackets == 0 && pTok[[5 t + 2]] == 1) || (integrand > 0 && pDiff[[t]] == 1), i = 0];
+                        If[brackets == 0 && pTok[[5 t + 2]] == 1, i = 0];
                         If[ i == 0, mode = 4,
                             bp = pSpecs[[4 i - 3]]; fx = pSpecs[[4 i - 2]]; hd = pSpecs[[4 i - 1]]; ky = pSpecs[[4 i]];
                             If[ bp <= rb || bp <= mn, mode = 4,
@@ -645,7 +642,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                     If[fr[[base + 6]] == 1, on++; out[[3 on]] = 2; out[[3 on + 1]] = pHeads[[1]]; out[[3 on + 2]] = 0];
                                     fr[[base + 5]] = fr[[base + 5]] + 1;
                                     i = pLed[[t]];
-                                    If[(brackets == 0 && pTok[[5 t + 2]] == 1) || (integrand > 0 && pDiff[[t]] == 1), i = 0];
+                                    If[brackets == 0 && pTok[[5 t + 2]] == 1, i = 0];
                                     If[ i > 0 && pSpecs[[4 i - 3]] == fr[[base + 2]] && (pSpecs[[4 i - 2]] == 3 || pSpecs[[4 i - 2]] == 15) && pSpecs[[4 i]] == fr[[base + 3]],
                                         fr[[base + 6]] = If[fr[[base + 3]] == pKeys[[1]] && pTok[[5 t - 2]] == 9 && (pTok[[5 t - 1]] == pSpecial[[11]] || pTok[[5 t - 1]] == pSpecial[[12]]), 1, 0];
                                         If[fr[[base + 3]] == pKeys[[2]], on++; out[[3 on]] = 6; out[[3 on + 1]] = pSpecs[[4 i - 1]]; out[[3 on + 2]] = 0];
@@ -687,12 +684,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                             True, mode = 5],
                                         on++; out[[3 on]] = 20; out[[3 on + 1]] = If[fr[[base + 2]] == 2, 1, 2]; out[[3 on + 2]] = 0; sp--; mode = 3],
                                 ft == 13,
-                                    If[ fr[[base + 2]] == 1,
-                                        integrand--;
-                                        If[ pTok[[5 t - 2]] == 9 && pDiff[[t]] == 1 && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
-                                            fr[[base + 2]] = 2; pMin = pSpecial[[15]]; pRbp = 0; pPlain = 0; mode = 1,
-                                            on++; out[[3 on]] = 24; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; mode = 3],
-                                        on++; out[[3 on]] = 24; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 1; sp--; mode = 3],
+                                    on++; out[[3 on]] = 24; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3,
                                 True, mode = 5]],
                     (* no Wolfram Language: back to a pattern's name or an operand left out, else the end *)
                     mode == 5,
@@ -700,7 +692,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                         If[ sp == 0,
                             status = 1; mode = 99,
                             base = 8 (sp - 1);
-                            t = fr[[base + 2]]; on = fr[[base + 3]]; brackets = fr[[base + 4]]; integrand = fr[[base + 5]];
+                            t = fr[[base + 2]]; on = fr[[base + 3]]; brackets = fr[[base + 4]];
                             If[ fr[[base + 1]] == 7,
                                 sp--; mode = 3,
                                 sp--; base = 8 (sp - 1);
@@ -746,7 +738,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                     mode == 11,
                         If[ (pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]]) || (brackets == 0 && pTok[[5 t + 2]] == 1) || pTok[[5 t - 2]] == 0,
                             on++; out[[3 on]] = 12; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 12,
-                            sp++; base = 8 (sp - 1); fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets; fr[[base + 5]] = integrand;
+                            sp++; base = 8 (sp - 1); fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
                             pMin = pSpecial[[17]]; pRbp = 0; pPlain = 0; mode = 1],
                     (* after a span's operand: a second ;; and its operand, else the span *)
                     mode == 12,
@@ -761,7 +753,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                             If[ (brackets == 0 && pTok[[5 t + 2]] == 1) || pTok[[5 t - 2]] == 0,
                                 on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0;
                                 base = 8 (sp - 1); fr[[base + 2]] = fr[[base + 2]] + 1,
-                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets; fr[[base + 5]] = integrand;
+                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
                                 pMin = pSpecial[[18]]; pRbp = 0; pPlain = 0; mode = 1],
                             base = 8 (sp - 1);
                             on++; out[[3 on]] = 19; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3],
@@ -856,10 +848,7 @@ fastBuild[prog_List] := Module[{n = prog[[2]], vals = <||>, sp = 0, heads, hp = 
             21, y = vals[sp]; sp--; vals[sp] = $falg["Binary"][$fastHeadNames[[a]], vals[sp], y],
             22, vals[sp] = $falg["Prefix"]["Get", vals[sp]],
             24, spec = $fastIntegralList[[a]];
-                If[ b === 0,
-                    vals[sp] = $falg["Prefix"][spec[[1]], vals[sp]],
-                    y = vals[sp]; sp--;
-                    vals[sp] = If[spec[[2]] === Integrate, integralOf[$falg, vals[sp], y], $falg["Prefix"][spec[[1]], $falg["Infix"]["Times", {vals[sp], y}]]]],
+                vals[sp] = If[spec[[2]] === Integrate, integralOf[$falg, spec[[1]], vals[sp]], $falg["Prefix"][spec[[1]], vals[sp]]],
             26, xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = $falg["Infix"]["Divisible", Reverse[xs]],
             27, vals[sp] = $falg["Prefix"]["Not", $falg["Prefix"]["Not", vals[sp]]],
             28, sp++; vals[sp] = fastLeaf["String", "\"" <> StringReplace[fastText[a, b], "\t" -> " "] <> "\""],
@@ -875,7 +864,7 @@ fastHeld[s_String] := Catch[Module[{codes = ToCharacterCode[s], padded, lexed, k
     lexed = fastLexFunction[padded, $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];
     If[lexed[[1]] =!= 0, fastGiveUp[]];
     kinds = lexed[[3 ;; ;; 5]]; ops = lexed[[4 ;; ;; 5]];
-    prog = fastParseFunction[lexed, fastLedIndices[kinds, ops], fastDifferentialMarks[ops], $fastSpecTable, $fastPrefixArray, $fastGroupArray,
+    prog = fastParseFunction[lexed, fastLedIndices[kinds, ops], $fastSpecTable, $fastPrefixArray, $fastGroupArray,
         $fastIntegralArray, $fastSpecialArray, $fastHeadCodeArray, $fastKeyCodeArray, padded, $fastClasses];
     If[prog[[1]] =!= 0, fastGiveUp[]];
     Block[{$fcodes = codes, $fs = lexed[[5 ;; ;; 5]], $fe = lexed[[6 ;; ;; 5]], $falg = WolframLanguageSemantic},
