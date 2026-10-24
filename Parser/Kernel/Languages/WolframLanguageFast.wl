@@ -495,8 +495,8 @@ $fastKindSpecIndex := $fastKindSpecIndex = Developer`ToPackedArray[ReplacePart[C
     {($tkOpenSquare + 1) -> fastSpecIndex[{176, "Call", "Call"}], ($tkPrimes + 1) -> fastSpecIndex[{154, "Derivative", "Derivative"}]},
     Map[(# + 1) -> fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}] &,
         {$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation, $tkBoxes}]]]]
-fastLedIndices[lexed_List] := fastLedFunction[lexed, $fastKindSpecIndex, $fastOpSpecIndex,
-    Developer`ToPackedArray[{$tkOperator, $fastEqual, $fastDot, $fastUnsetSpecIndex}]]
+fastLedIndices[lexed_List] := fastLedFunction[lexed, $fastKindSpecIndex, $fastOpSpecIndex, $fastLedParams]
+$fastLedParams := $fastLedParams = Developer`ToPackedArray[{$tkOperator, $fastEqual, $fastDot, $fastUnsetSpecIndex}]
 $fastUnsetSpecIndex := $fastUnsetSpecIndex = fastSpecIndex[{9, "Unset", "Unset"}]
 
 (* --- the typed parser --- *)
@@ -880,22 +880,29 @@ fastParseFunction := fastParseFunction = typedFunction[fastParse, $fastParseDecl
 
 (* --- the typed lines --- *)
 
-(* The lines of a segment, typed code over packed integers as the lexer and the parser are: codes,
+(* The parts of a segment, typed code over packed integers as the lexer and the parser are: codes,
    the lexer's tokens, the program, the count of tokens that may warn before each token, the
-   character classes, the newline long names {length, codes, ...} and {statements read, where
-   reading stops, 1 if a statement the grammar read is pending, the segment} -> {rows, the slot
-   after the last, then each row {kind, start, next, segment, first instruction, last, first
-   token, last, warnings}}. A gap's line breaks are its newlines and newline long names outside
-   comments; the first after a statement, or after the one pending, ends its line, else the token
-   after it does, and each after that one a Null's. *)
+   character classes, the newline long names {length, codes, ...}, the source's position of each
+   character of the source read without its line continuations ({0} where it has none), and
+   {statements read, where reading stops, 1 if a statement the grammar read is pending, the
+   segment, how reading stops: 0 at the end, 3 at a failure, 4 at a statement the grammar reads,
+   the segment's offset in the source read, the source's length, where the pending statement
+   begins, how many positions the source read keeps} -> {rows, the slot after the lines, then each
+   row {kind, start, next, segment, first instruction, last, first token, last, warnings}}, its
+   start and next the source's positions. A gap's line breaks are its newlines and newline long
+   names outside comments; the first after a statement, or after the one pending, ends its line,
+   else the token after it does, and each after that one a Null's. The last row is where reading
+   stops, or the end; a source with no statement is one Null and the end. *)
 $fastLinesDeclaration = FunctionDeclaration[fastLines,
     Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
         "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
-        "PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
-    Function[{lnCodes, lnLexed, lnProg, lnWarn, lnClasses, lnNames, lnParams},
-        Module[{nUse = lnParams[[1]], end = lnParams[[2]], pending = lnParams[[3]], seg = lnParams[[4]], n = Length[lnCodes],
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
+    Function[{lnCodes, lnLexed, lnProg, lnWarn, lnClasses, lnNames, lnKept, lnParams},
+        Module[{nUse = lnParams[[1]], end = lnParams[[2]], pending = lnParams[[3]], seg = lnParams[[4]], stop = lnParams[[5]], offset = lnParams[[6]],
+                srcLen = lnParams[[7]], pendingStart = lnParams[[8]], keptLen = lnParams[[9]], n = Length[lnCodes],
                 js, nS = 0, j = 0, g = 0, lo = 0, hi = 0, p = 0, c = 0, depth = 0, k = 0, a = 0, len = 0, match = 0, q = 0,
-                pass = 1, total = 0, out, rows = 0, slot = 1, breaks = 0, at = 0, ti = 0, fI = 0, lI = 0, fT = 0, tA = 0, kind = 0, base = 0},
+                pass = 1, total = 0, out, rows = 0, slot = 1, breaks = 0, at = 0, ti = 0, fI = 0, lI = 0, fT = 0, tA = 0, kind = 0, base = 0,
+                post = 1, lone = 0, r = 0, col = 0, v = 0},
             js = Table[0, {nUse + 1}];
             j = 1;
             While[ j <= lnProg[[2]] && nS < nUse,
@@ -903,7 +910,10 @@ $fastLinesDeclaration = FunctionDeclaration[fastLines,
                 j++];
             out = Table[0, {2}];
             While[ pass <= 2,
-                If[pass == 2, out = Table[0, {2 + 9 total}]];
+                If[ pass == 2,
+                    lone = If[stop == 0 && pending == 0 && total == 0, 1, 0];
+                    post = If[lone == 1, 2, 1];
+                    out = Table[0, {2 + 9 (total + post)}]];
                 rows = 0; slot = 1;
                 g = 1;
                 While[ g <= nS + 1,
@@ -961,10 +971,28 @@ $fastLinesDeclaration = FunctionDeclaration[fastLines,
                             slot = hi]];
                     g++];
                 pass++];
-            out[[1]] = rows; out[[2]] = slot;
+            (* where reading stops, or the end; a source with no statement one Null and the end *)
+            If[ lone == 1,
+                out[[2 + 9 rows + 1]] = 2; out[[2 + 9 rows + 2]] = 1; out[[2 + 9 rows + 3]] = n + 2;
+                out[[2 + 9 rows + 10]] = 6; out[[2 + 9 rows + 11]] = n + 2; out[[2 + 9 rows + 12]] = n + 2,
+                out[[2 + 9 rows + 1]] = If[stop == 0, 6, stop]; out[[2 + 9 rows + 2]] = slot; out[[2 + 9 rows + 3]] = slot];
+            (* the positions the source's *)
+            r = 1;
+            While[ r <= rows + post,
+                col = 2;
+                While[ col <= 3,
+                    v = out[[2 + 9 (r - 1) + col]] + offset;
+                    If[keptLen > 0, v = If[v <= keptLen, lnKept[[v]], srcLen + v - keptLen]];
+                    out[[2 + 9 (r - 1) + col]] = v;
+                    col++];
+                r++];
+            If[pending == 1, out[[2 + 2]] = pendingStart];
+            If[lone == 1, out[[2 + 2]] = 1];
+            out[[1]] = rows + post; out[[2]] = slot;
             out]]];
 
 fastLinesFunction := fastLinesFunction = typedFunction[fastLines, $fastLinesDeclaration]
+$fastNoKept = Developer`ToPackedArray[{0}];
 
 (* --- the typed led indices and warning tokens --- *)
 
@@ -1139,7 +1167,7 @@ $fastLeafKinds = <|1 -> "Symbol", 2 -> "Blank", 3 -> "Integer", 4 -> "Real", 5 -
    not Module's, which would rewrite the body at every call, and each instruction is the rule of
    its code, a call or an operator of one or two operands its own rule. *)
 fastBuild[steps_List, kinds_List, texts_List, marks_List] := Block[{vals = <||>, mk = ConstantArray[0, Length[steps] / 3 + 1], ats = <||>, sp = 0,
-        heads = ConstantArray[0, Length[steps] / 3 + 1], hp = 0, statements = <||>, ns = 0, leafValues = fastLeafValues[kinds, texts], leafMarks = marks,
+        heads = <||>, hp = 0, statements = <||>, ns = 0, leafValues = fastLeafValues[kinds, texts], leafMarks = marks,
         leafIndex = 0, xs, spec},
     fastStep @@@ Partition[steps, 3];
     Values[statements]]
@@ -1154,7 +1182,7 @@ fastLeafValues[kinds_List, texts_List] := If[ Length[texts] <= 64,
 fastLeafOnce[kind_Integer, text_String] := With[{key = {kind, text}}, If[KeyExistsQ[seen, key], seen[key], seen[key] = fastLeafValue[kind, text]]]
 
 (* the leaves of a program, its instructions of code 1, in order, by fastLeafCodes: their kinds, their
-   texts, cut from the codes in one pass where their tokens come in order, their marks, 1 for a
+   texts, a few one at a time, more cut from the codes in one pass where their tokens come in order, their marks, 1 for a
    number literal, and how many come before each instruction, so that the leaves of the
    instructions i to j are those from Before[[i]] + 1 to Before[[j + 1]] *)
 fastLeafData[prog_List, codes_List, lexed_List] := With[{d = fastLeafFunction[prog, lexed]},
@@ -1162,6 +1190,7 @@ fastLeafData[prog_List, codes_List, lexed_List] := With[{d = fastLeafFunction[pr
         <|"Kinds" -> d[[4 ;; 3 + m]],
           "Texts" -> Which[
             m === 0, {},
+            m <= 8, Table[FromCharacterCode[codes[[lexed[[5 d[[3 + m + i]]]] ;; lexed[[5 d[[3 + m + i]] + 1]] - 1]]], {i, m}],
             d[[3]] === 1, FromCharacterCode[TakeList[codes[[lexed[[5 d[[4 + m]]]] ;; lexed[[5 d[[3 + 2 m]] + 1]] - 1]], d[[5 + 3 m + n ;;]]][[1 ;; ;; 2]]],
             True, tokenTexts[codes, lexed[[5 d[[4 + m ;; 3 + 2 m]]]], lexed[[5 d[[4 + m ;; 3 + 2 m]] + 1]]]],
           "Marks" -> d[[4 + 2 m ;; 3 + 3 m]], "Before" -> d[[4 + 3 m ;; 4 + 3 m + n]]|>]]
@@ -1204,9 +1233,9 @@ fastStep[3, a_, _] := (vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], {val
 fastStep[23, _, _] := (sp--; vals[sp] = symbolCall["Pattern", {vals[sp], vals[sp + 1]}]; mk[[sp]] = 0)
 fastStep[11, _, _] := (sp++; vals[sp] = heldSymbol["Null"]; mk[[sp]] = 0)
 fastStep[14, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = symbolCall["MessageName", xs]; mk[[sp]] = 0)
-fastStep[6, a_, _] := (hp++; heads[[hp]] = a)
+fastStep[6, a_, _] := (hp++; heads[hp] = a)
 fastStep[7, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1;
-    vals[sp] = relationHeld[xs, $fastHeadNames[[heads[[hp - a + 2 ;; hp]]]]]; mk[[sp]] = 0; hp -= a - 1)
+    vals[sp] = relationHeld[xs, $fastHeadNames[[Lookup[heads, Range[hp - a + 2, hp]]]]]; mk[[sp]] = 0; hp -= a - 1)
 fastStep[10, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = symbolCall["Part", Prepend[xs, vals[sp]]]; mk[[sp]] = 0)
 fastStep[12, _, _] := (sp++; vals[sp] = heldSymbol["All"]; mk[[sp]] = 0)
 fastStep[13, _, _] := (sp++; vals[sp] = HoldComplete[1]; mk[[sp]] = 1)
@@ -1339,7 +1368,7 @@ lexerFailure[lexed_List, n_Integer] := If[lexed[[1]] === 3, fastFailure[n + 1, T
    after it ends. The names are Block's: Module would rewrite the body at every call. *)
 segmentParts[state_Association, from_Integer, pending_] := Block[
     {st = state, offset = from - 1, codes, padded, lexed, prog, first = None, stop = None, k, cut, ranges, seg, data = state["Data"],
-     n0 = Length[state["Parts"]], slot = 1, end, lined, lines = {}, post, lone = False, made},
+     n0 = Length[state["Parts"]], end, made},
     codes = If[from === 1, state["Codes"], Drop[state["Codes"], offset]];
     padded = Join[codes, {0, 0, 0}];
     lexed = fastLexFunction[padded, $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];
@@ -1380,28 +1409,17 @@ segmentParts[state_Association, from_Integer, pending_] := Block[
        line break after a statement, or after the one pending, ends its line, else the token after
        it does; each break after that one ends a Null's. *)
     end = If[first === None, Length[codes] + 1, lexed[[5 first]]];
-    lined = fastLinesFunction[codes, lexed, prog, st["Segments"][[seg, "Warning", 2]], $fastClasses, $fastNewlineNames,
-        Developer`ToPackedArray[{Length[ranges], end, If[pending === None, 0, 1], seg}]];
-    lines = Partition[lined[[3 ;;]], 9];
-    slot = lined[[2]];
+    made = fastLinesFunction[codes, lexed, prog, st["Segments"][[seg, "Warning", 2]], $fastClasses, $fastNewlineNames,
+        If[st["Kept"] === None, $fastNoKept, Developer`ToPackedArray[st["Kept"]]],
+        Developer`ToPackedArray[{Length[ranges], end, If[pending === None, 0, 1], seg, Which[stop === None, 0, stop[[1]] === "Failure", 3, True, 4], offset,
+            StringLength[st["Source"]], If[pending === None, 0, pending["Start"]], If[st["Kept"] === None, 0, Length[st["Kept"]]]}]];
+    made = Partition[made[[3 ;;]], 9];
     If[pending =!= None, data[n0 + 1] = {pending["Expr"], pending["Warnings"]}];
-    post = Which[
+    Which[
         stop =!= None && stop[[1]] === "Failure",
-            data[n0 + Length[lines] + 1] = warned[sourceFailure[st, stop[[2]], from], tokenWarnings[codes, lexed, first, stop[[3]], stop[[4]]]];
-            {{3, slot, slot, 0, 0, 0, 0, 0, 0}},
+            data[n0 + Length[made]] = warned[sourceFailure[st, stop[[2]], from], tokenWarnings[codes, lexed, first, stop[[3]], stop[[4]]]],
         stop =!= None,
-            data[n0 + Length[lines] + 1] = {end + offset, seg, first};
-            {{4, slot, slot, 0, 0, 0, 0, 0, 0}},
-        pending === None && lines === {},
-            lone = True; {{2, 1, Length[codes] + 2, 0, 0, 0, 0, 0, 0}, {6, Length[codes] + 2, Length[codes] + 2, 0, 0, 0, 0, 0, 0}},
-        True, {{6, slot, slot, 0, 0, 0, 0, 0, 0}}];
-    (* the positions made those of the source; the line of the statement pending begins where it
-       did, and the one Null of a source with no statement at its first character *)
-    made = Developer`ToPackedArray[Join[lines, post]];
-    made[[All, 2]] = sourcePositions[st, made[[All, 2]] + offset];
-    made[[All, 3]] = sourcePositions[st, made[[All, 3]] + offset];
-    If[pending =!= None, made[[1, 2]] = pending["Start"]];
-    If[lone, made[[1, 2]] = 1];
+            data[n0 + Length[made]] = {end + offset, seg, first}];
     st["Parts"] = Join[st["Parts"], made];
     st["Data"] = data;
     st["Index"] = AssociationThread[st["Parts"][[All, 2]] -> Range[Length[st["Parts"]]]];
@@ -1443,9 +1461,9 @@ warningsAt[codes_List, lexed_List, from_Integer, to_Integer, stop_Integer, ts_Li
 (* The tokens of a lexed source a statement's warning may come from, each read in one pass: a
    comma after a token that opens a bracket or before one that closes it, a comma or the end, and a
    string with a \ in it. With them, for each token t, how many come before it. *)
-warningTokens[codes_List, lexed_List] := With[{w = fastWarnFunction[codes, lexed, $openKindFlags, $closeKindFlags, $warnOpenOps, $warnCloseOps,
-        Developer`ToPackedArray[{$tkOperator, $tkComma, $tkString}]]},
+warningTokens[codes_List, lexed_List] := With[{w = fastWarnFunction[codes, lexed, $openKindFlags, $closeKindFlags, $warnOpenOps, $warnCloseOps, $fastWarnParams]},
     {w[[2 ;; w[[1]] + 1]], w[[w[[1]] + 2 ;;]]}]
+$fastWarnParams := $fastWarnParams = Developer`ToPackedArray[{$tkOperator, $tkComma, $tkString}]
 
 (* the kinds of token that open a bracket's items, and that close them, by kind + 1, and the
    operators that do, the long-name brackets, by operator + 1 *)
