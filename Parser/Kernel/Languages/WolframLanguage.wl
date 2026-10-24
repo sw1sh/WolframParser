@@ -455,7 +455,12 @@ spellings[op : "DirectedEdge" | "UndirectedEdge" | "Element"] := $longNameOperat
 
 held[e_HoldComplete] := <|"Expr" -> e, "Literal" -> False, "Chain" -> False|>
 
-(* HoldComplete[h], {HoldComplete[a], ...} -> HoldComplete[h[a, ...]] *)
+(* HoldComplete[h], {HoldComplete[a], ...} -> HoldComplete[h[a, ...]]: up to three arguments by
+   one rule, more by joining them *)
+heldCall[HoldComplete[h_], {}] := HoldComplete[h[]]
+heldCall[HoldComplete[h_], {HoldComplete[a_]}] := HoldComplete[h[a]]
+heldCall[HoldComplete[h_], {HoldComplete[a_], HoldComplete[b_]}] := HoldComplete[h[a, b]]
+heldCall[HoldComplete[h_], {HoldComplete[a_], HoldComplete[b_], HoldComplete[c_]}] := HoldComplete[h[a, b, c]]
 heldCall[HoldComplete[h_], args_List] :=
     Replace[Join @@ Prepend[args, HoldComplete[]], HoldComplete[a___] :> HoldComplete[h[a]]]
 
@@ -479,12 +484,10 @@ negated[x_Association] := Which[
 
 (* x_h, __, x___., ...: the name before the underscores, their count, and
    the head or the . after them *)
-blankExpression[s_String] := Module[{name, rest, underscores, head, blank, named},
-    name = StringTake[s, First[First[StringPosition[s, "_", 1]]] - 1];
-    rest = StringDrop[s, StringLength[name]];
-    underscores = StringLength[First[StringCases[rest, StartOfString ~~ ("_" ..), 1]]];
-    head = StringDrop[rest, underscores];
-    blank = symbolCall[{"Blank", "BlankSequence", "BlankNullSequence"}[[underscores]],
+blankExpression[s_String] := Block[{run = First[StringPosition[s, "_" .., 1]], name, head, blank, named},
+    name = StringTake[s, run[[1]] - 1];
+    head = StringDrop[s, run[[2]]];
+    blank = symbolCall[{"Blank", "BlankSequence", "BlankNullSequence"}[[run[[2]] - run[[1]] + 1]],
         If[head === "" || head === ".", {}, {heldName[head]}]];
     named = If[name === "", blank, symbolCall["Pattern", {heldName[name], blank}]];
     If[head === ".", symbolCall["Optional", {named}], named]
@@ -509,7 +512,9 @@ outExpression[s_String] := With[{count = StringCount[s, "%"], digits = StringDel
    *^e for a power of the base. A real without a mark is a machine real,
    unless its digits are more than a machine real holds; it then keeps
    the accuracy its digits give [WL 15.0.0]. *)
-numberValue[s_String] := Module[{base = 10, text = s, exponent = 0, mark = None, markText = "", int, frac, exact},
+numberValue[s_String] := If[DigitQ[s], FromDigits[s], markedNumberValue[s]]
+
+markedNumberValue[s_String] := Module[{base = 10, text = s, exponent = 0, mark = None, markText = "", int, frac, exact},
     If[ StringContainsQ[text, "^^"],
         {base, text} = {FromDigits[First[StringSplit[text, "^^"]]], Last[StringSplit[text, "^^"]]}];
     If[ StringContainsQ[text, "*^"],
@@ -867,7 +872,7 @@ WolframLanguageSemantic = <|
     "Binary"  -> Function[{op, l, r}, held[If[op === "Divide",
         symbolCall["Times", {l["Expr"], symbolCall["Power", {r["Expr"], HoldComplete[-1]}]}],
         symbolCall[op, {l["Expr"], r["Expr"]}]]]],
-    "Infix"   -> Function[{op, xs}, Append[held[symbolCall[op, expressions[spliced[op, xs]]]], "Chain" -> op === "Times"]],
+    "Infix"   -> Function[{op, xs}, <|"Expr" -> symbolCall[op, expressions[spliced[op, xs]]], "Literal" -> False, "Chain" -> op === "Times"|>],
     "Ternary" -> Function[{op, a, b, c}, held[symbolCall[op, expressions[{a, b, c}]]]],
     "Call"    -> Function[{h, args}, held[heldCall[h["Expr"], expressions[args]]]],
     (* parentheses keep a number literal one, and make a product a factor *)
