@@ -696,3 +696,81 @@ VerificationTest[
     {wlStop[WolframLanguageHeld["\\!\\(x"]], WolframLanguageHeldNext["a = 1\n\\!\\(x\\^2\\)", 7]},
     {{6, True}, {HoldComplete[LinearBoxes[SuperscriptBox["x", "2"]]], 17, <|"Warnings" -> {}|>}},
     TestID -> "wl linear: a group not closed is incomplete; a statement of one reads one at a time"]
+
+(* a colon after a pattern gives its default, and only there; a tilde's operands read as the kernel reads them *)
+VerificationTest[
+    WolframLanguageHeld /@ {"x_ | y_ : 1", "x_ : y_ : 1", "f[x:_:1]"},
+    {{HoldComplete[x_ | (y_ : 1)]}, {HoldComplete[x_ : (y_ : 1)]}, {HoldComplete[f[x_ : 1]]}},
+    TestID -> "wl: a colon after a pattern is its default"]
+VerificationTest[
+    WolframLanguageHeld /@ {"a ~ b & ~ c", "a ~ b ~ c ~ d ~ e"},
+    {{HoldComplete[(b &)[a, c]]}, {HoldComplete[d[b[a, c], e]]}},
+    TestID -> "wl: a tilde's function may end in a postfix operator; tildes group to the left"]
+VerificationTest[
+    wlStop /@ (WolframLanguageHeld /@ {"f[x] : 1", "x_. : 1", "a ~ b c", "a ~ b"}),
+    {{7, False}, {6, False}, {8, True}, {6, True}},
+    TestID -> "wl failure: a colon after no pattern; a tilde with no second"]
+
+(* SyntaxQ and SyntaxLength as Wolfram 15 gives them for each source *)
+$wlSyntaxCases = {
+    {"", False, 0},
+    {" ", True, 1},
+    {"a", True, 1},
+    {"a + b c", True, 7},
+    {"a + b)", False, 5},
+    {"f[x", False, 5},
+    {"f[x)", False, 3},
+    {"a +", False, 5},
+    {"a\nb", True, 3},
+    {"a\n)", False, 2},
+    {"x = 1\n1 +", False, 11},
+    {"(* c *)", True, 7},
+    {"(* c", False, 4},
+    {"\"abc", False, 4},
+    {"  (* c", False, 3},
+    {"a + \"abc", False, 5},
+    {"a\n\"abc", False, 2},
+    {"a)b", False, 1},
+    {"f[x]]", False, 4},
+    {"]", False, 0},
+    {"a::", False, 2},
+    {"a::1", False, 2},
+    {"a::b::c::", False, 7},
+    {"f[x] ::=", False, 5},
+    {"       A ::= A", False, 9},
+    {"?a*=b", True, 5},
+    {"f[1,]", True, 5},
+    {"a \\[Foo] b", False, 2},
+    {"\\[Foo]", False, 6},
+    {"x = a\\[Foo]", False, 4},
+    {"a`", False, 2},
+    {"x = a`", False, 4},
+    {"a\\b", False, 1},
+    {"f[x] : y", False, 5},
+    {"x_ : 1", True, 6},
+    {"x_ | y_ : 1", True, 11},
+    {"x_. : 1", False, 4},
+    {"a ~ b c", False, 9},
+    {"a ~ b & ~ c", True, 11},
+    {"i ~ s t, u", False, 7},
+    {"<|a -> 1", False, 10},
+    {"\\!\\(x\\^2\\)", True, 10},
+    {"\\!\\(x", False, 7},
+    {"a\\\nb", True, 4},
+    {"a\\\n)", False, 3},
+    {"f[\nx\n", False, 7},
+    {"<<", False, 2},
+    {"x = <<", False, 4},
+    {"t/:a", False, 4},
+    {"t/:a\n", False, 4},
+    {"t/:", False, 5},
+    {"1 + (2", False, 8},
+    {"(* c *) )", False, 8}
+};
+Scan[
+    Function[c, VerificationTest[{WolframLanguageSyntaxQ[c[[1]]], WolframLanguageSyntaxLength[c[[1]]]}, Rest[c], TestID -> "wl syntax: " <> ToString[c[[1]], InputForm]]],
+    $wlSyntaxCases]
+VerificationTest[
+    WolframLanguageSyntaxQ["aNameOnlyChecked + 1"]; Names["*`aNameOnlyChecked"],
+    {},
+    TestID -> "wl syntax: checking a source makes none of its names"]

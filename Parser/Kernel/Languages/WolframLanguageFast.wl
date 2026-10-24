@@ -412,7 +412,6 @@ $fastLed = Association[Map[fastOp[#[[1]]] -> Rest[#] &, {
     {"||", 58, "InfixN", "Or"},
     {"..", 44, "Postfix", "Repeated"}, {"...", 44, "Postfix", "RepeatedNull"},
     {"|", 42, "InfixN", "Alternatives"},
-    {":", 38, "InfixL", "Optional"},
     {"~~", 36, "InfixN", "StringExpression"},
     {"/;", 34, "InfixL", "Condition"},
     {"<->", 33, "InfixR", "TwoWayRule"},
@@ -461,7 +460,7 @@ $fastPrefixOnly := $fastPrefixOnly = AssociationThread[Append[DeleteCases[fastLo
 $fastLongMinus := $fastLongMinus = fastLongOp["Minus"]
 $fastRightDoubleBracket := $fastRightDoubleBracket = fastLongOp["RightDoubleBracket"]
 
-$fastPatternColon = 40; $fastSpanOperand = 80; $fastCompoundOperand = 4; $fastTagLeft = 9; $fastTagRight = 8; $fastImplicitTimes = 108
+$fastPatternColon = 40; $fastOptionalColon = 38; $fastSpanOperand = 80; $fastCompoundOperand = 4; $fastTagLeft = 9; $fastTagRight = 8; $fastImplicitTimes = 108
 $fastColon = fastOp[":"]; $fastSemiSemi = fastOp[";;"]; $fastSemi = fastOp[";"]; $fastQuestion = fastOp["?"]; $fastColonColon = fastOp["::"]
 $fastColonEqual = fastOp[":="]; $fastEqual = fastOp["="]; $fastEqualDot = fastOp["=."]; $fastTilde = fastOp["~"]; $fastDot = fastOp["."]; $fastMinus = fastOp["-"]
 
@@ -622,12 +621,18 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                 sp++; base = 8 (sp - 1); fr[[base + 1]] = 13; fr[[base + 2]] = x;
                                 pMin = pSpecial[[15]]; pRbp = 0; pPlain = 0; mode = 1,
                             True, mode = 5],
-                    (* after an operand: the operator that takes it, if one binds tightly enough *)
+                    (* after an operand: an Optional's : after a blank or a pattern, else the operator that
+                       takes it, if one binds tightly enough *)
                     mode == 3,
                         base = 8 (sp - 1); mn = fr[[base + 2]]; rb = fr[[base + 3]]; pl = fr[[base + 4]];
                         i = pLed[[t]];
-                        If[brackets == 0 && pTok[[5 t + 2]] == 1, i = 0];
+                        If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1) &&
+                                ((out[[3 on]] == 1 && out[[3 on + 1]] == 2 && pCodes[[pTok[[5 out[[3 on + 2]] + 1]] - 1]] != 46) || out[[3 on]] == 23),
+                            t++; sp++; base = 8 (sp - 1); fr[[base + 1]] = 3; fr[[base + 2]] = pHeads[[7]];
+                            pMin = mn; pRbp = pSpecial[[21]]; pPlain = 0; i = -1; mode = 1];
+                        If[brackets == 0 && pTok[[5 t + 2]] == 1 && i > 0, i = 0];
                         If[ i == 0, mode = 4,
+                            If[ i > 0,
                             bp = pSpecs[[4 i - 3]]; fx = pSpecs[[4 i - 2]]; hd = pSpecs[[4 i - 1]]; ky = pSpecs[[4 i]];
                             If[ bp <= rb || bp <= mn, mode = 4,
                                 Which[
@@ -692,7 +697,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                             on++; out[[3 on]] = 1; out[[3 on + 1]] = 8; out[[3 on + 2]] = t; t++;
                                             on++; out[[3 on]] = 21; out[[3 on + 1]] = hd; out[[3 on + 2]] = 0,
                                             mode = 5],
-                                    True, mode = 5]]],
+                                    True, mode = 5]]]],
                     (* the expression at the top is read: what waited for it *)
                     mode == 4,
                         sp--;
@@ -731,11 +736,36 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                 ft == 8,
                                     sp--; base = 8 (sp - 1);
                                     If[fr[[base + 1]] == 9, mode = 12, fr[[base + 2]] = fr[[base + 2]] + 1; mode = 13],
+                                (* after a ~ and its middle operand: the second ~; a postfix operator on the middle
+                                   operand, then what binds more tightly than ~; a ; before the second ~, the middle
+                                   a compound with Null; anything else, reading on as the kernel's reader does, to a
+                                   closer or a comma, where it stops, else to the end of the source *)
                                 ft == 11,
                                     If[ fr[[base + 2]] == 1,
-                                        If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[8]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
-                                            t++; fr[[base + 2]] = 2; pMin = fr[[base + 4]]; pRbp = fr[[base + 3]]; pPlain = fr[[base + 5]]; mode = 1,
-                                            mode = 5],
+                                        i = pLed[[t]];
+                                        Which[
+                                            pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[8]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                                                t++; fr[[base + 2]] = 2; pMin = fr[[base + 4]]; pRbp = fr[[base + 3]]; pPlain = fr[[base + 5]]; mode = 1,
+                                            i > 0 && (pSpecs[[4 i - 2]] == 4 || pSpecs[[4 i - 2]] == 6) && pSpecs[[4 i - 1]] != pHeads[[2]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                                                on++;
+                                                If[ pSpecs[[4 i - 2]] == 4,
+                                                    out[[3 on]] = 3; out[[3 on + 1]] = pSpecs[[4 i - 1]]; out[[3 on + 2]] = 0,
+                                                    out[[3 on]] = 16; out[[3 on + 1]] = pTok[[5 t + 1]] - pTok[[5 t]]; out[[3 on + 2]] = 0];
+                                                t++; x = base;
+                                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 1; fr[[base + 2]] = fr[[x + 4]]; fr[[base + 3]] = fr[[x + 3]]; fr[[base + 4]] = fr[[x + 5]];
+                                                mode = 3,
+                                            pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[3]] && t < n && pTok[[5 t + 3]] == 9 && pTok[[5 t + 4]] == pSpecial[[8]],
+                                                t++; on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0;
+                                                on++; out[[3 on]] = 19; out[[3 on + 1]] = 2; out[[3 on + 2]] = 0,
+                                            True,
+                                                (* reading goes on to a closer or a comma outside brackets, no Wolfram Language,
+                                                   else the end *)
+                                                x = 0; tt = t;
+                                                While[ pTok[[5 tt - 2]] != 0 && ! (x == 0 && (pTok[[5 tt - 2]] == 11 || pTok[[5 tt - 2]] == 13 || pTok[[5 tt - 2]] == 15 || pTok[[5 tt - 2]] == 17 || pTok[[5 tt - 2]] == 18)),
+                                                    If[pTok[[5 tt - 2]] == 10 || pTok[[5 tt - 2]] == 12 || pTok[[5 tt - 2]] == 14 || pTok[[5 tt - 2]] == 16, x++];
+                                                    If[pTok[[5 tt - 2]] == 11 || pTok[[5 tt - 2]] == 13 || pTok[[5 tt - 2]] == 15 || pTok[[5 tt - 2]] == 17, x--];
+                                                    tt++];
+                                                If[tt > far, far = tt]; mode = 5],
                                         on++; out[[3 on]] = 17; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; sp--; mode = 3],
                                 ft == 12,
                                     If[ fr[[base + 2]] == 1,
@@ -837,7 +867,7 @@ fastParseFunction := fastParseFunction = typedFunction[fastParse, $fastParseDecl
 (* --- the typed parser's tables --- *)
 
 (* the heads, each by the position of its name; the chain keys likewise *)
-$fastHeadNames := $fastHeadNames = DeleteDuplicates[Join[{"Minus", "Unset", "Paren", "List", "Association", "NotNot"},
+$fastHeadNames := $fastHeadNames = DeleteDuplicates[Join[{"Minus", "Unset", "Paren", "List", "Association", "NotNot", "Optional"},
     $fastSpecList[[All, 3]], Values[$fastPrefixTable][[All, 2]], Values[$fastGroupTable][[All, 2]]]]
 fastHeadCode[name_String] := First[FirstPosition[$fastHeadNames, name, {0}, {1}]]
 $fastKeyNames := $fastKeyNames = DeleteDuplicates[Join[{"Plus", "Relation", "Divisible"},
@@ -864,8 +894,8 @@ $fastIntegralArray := $fastIntegralArray = Table[
 $fastSpecialArray := $fastSpecialArray = Join[
     {$fastColon, $fastSemiSemi, $fastSemi, $fastColonColon, $fastEqual, $fastEqualDot, $fastDot, $fastTilde, $fastGet, $fastColonEqual,
      $fastMinus, $fastLongMinus, $fastRightDoubleBracket, $fastQuestion},
-    {$integralPrecedence, $fastPatternColon, $fastSpanOperand, $fastCompoundOperand, $fastTagLeft, $fastTagRight}]
-$fastHeadCodeArray := $fastHeadCodeArray = fastHeadCode /@ {"Minus", "Unset", "Paren", "List", "Association", "NotNot"}
+    {$integralPrecedence, $fastPatternColon, $fastSpanOperand, $fastCompoundOperand, $fastTagLeft, $fastTagRight, $fastOptionalColon}]
+$fastHeadCodeArray := $fastHeadCodeArray = fastHeadCode /@ {"Minus", "Unset", "Paren", "List", "Association", "NotNot", "Optional"}
 $fastKeyCodeArray := $fastKeyCodeArray = fastKeyCode /@ {"Plus", "Relation", "Divisible"}
 
 (* --- the build pass --- *)
@@ -1278,6 +1308,95 @@ heldStatements[s_String] := Module[{pos = 1, r, out = Internal`Bag[]},
         If[First[r] =!= HoldComplete[Null], Internal`StuffBag[out, First[r]]];
         pos = r[[2]]];
     Internal`BagPart[out, All]]
+
+(* --- syntax alone --- *)
+
+(* Where reading a source stops, as the kernel's SyntaxLength counts the characters before it, or
+   None where the source reads: by the lexer and the parser alone, no expression built, but for a
+   statement only the grammar reads. A source that ends before its expression does stops past its
+   end, by 2. Reading stops
+   - before the token no Wolfram Language reaches, a line continuation before it its own, but
+     after a name or a number the name's or the number's;
+   - at a :: with no tag after it that touches the symbol of its message name, else before it;
+   - at the end of the last operand of a /: with no assignment after it;
+   - at a comment or a string the source does not close, for a string that begins a statement
+     after the first line at the newline before it;
+   - before a long name no character has, or a malformed name, from the name it is in;
+   and at the end of the source where a comment, a string or a name of these is its first token. *)
+syntaxStop[s_String] := Module[{spans = lineContinuations[s], clean, kept, codes, padded, lexed, prog, k, cut, source, length = StringLength[s]},
+    clean = If[spans === {}, s, StringReplacePart[s, "", spans]];
+    kept = If[spans === {}, None, keptPositions[s, spans]];
+    codes = ToCharacterCode[clean]; padded = Join[codes, {0, 0, 0}];
+    (* a token's place in the source, the line continuations before it its own *)
+    source = Function[c, Which[
+        kept === None, c, c === 1, 1, c > Length[kept], length + c - Length[kept],
+        LetterQ[FromCharacterCode[codes[[c - 1]]]] || DigitQ[FromCharacterCode[codes[[c - 1]]]] || MemberQ[{36, 96}, codes[[c - 1]]], kept[[c]],
+        True, kept[[c - 1]] + 1]];
+    lexed = fastLexFunction[padded, $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];
+    If[ lexed[[1]] === 0,
+        prog = fastParseTokens[lexed, padded];
+        Switch[prog[[1]], 0, None, 1, parserStop[lexed, prog[[2]], prog[[3]], source, length], _, grammarStop[s]],
+        k = lexed[[2]]; cut = tokensBefore[lexed, k];
+        prog = fastParseTokens[cut, padded];
+        Which[
+            prog[[1]] === 2, grammarStop[s],
+            prog[[1]] === 1 && prog[[2]] < k, parserStop[cut, prog[[2]], prog[[3]], source, length],
+            lexed[[1]] === 3 && lexed[[5 k - 2]] === $tkBoxes, length + 2,
+            lexed[[1]] === 3 && lexed[[5 k - 2]] === $tkString && lexed[[5 k + 2]] === 1 && prog[[1]] === 0, source[lastNewline[codes, lexed[[5 k]]]],
+            lexed[[1]] === 3 && lexed[[5 k - 2]] === $tkString, With[{p = source[lexed[[5 k]]]}, If[p === 1, length, p]],
+            lexed[[1]] === 3, With[{p = source[unclosedComment[codes, If[k > 1, lexed[[5 (k - 1) + 1]], 1]]]}, If[p === 1, length, p]],
+            lexed[[5 k + 2]] === 1 && prog[[1]] === 0 && lexed[[5 k]] <= Length[codes] && (codes[[lexed[[5 k]]]] === 96 || LetterQ[FromCharacterCode[codes[[lexed[[5 k]]]]]]),
+                source[lastNewline[codes, lexed[[5 k]]]],
+            True, With[{t = If[k > 1 && lexed[[5 (k - 1) - 2]] === $tkName && lexed[[5 (k - 1) + 1]] === lexed[[5 k]] && codes[[lexed[[5 k]]]] === 92 &&
+                    lexed[[5 k]] < Length[codes] && codes[[lexed[[5 k]] + 1]] === 91, k - 1, k]},
+                With[{p = source[lexed[[5 t]]]}, If[p === 1 && (codes[[lexed[[5 t]]]] === 92 || lexed[[5 t - 2]] === $tkName || LetterQ[FromCharacterCode[codes[[lexed[[5 t]]]]]]), length, p - 1]]]]]]
+
+(* the last newline before the character at *)
+lastNewline[codes_List, at_Integer] := Block[{i = at - 1}, While[i > 1 && codes[[i]] =!= 10 && codes[[i]] =!= 13, i--]; i]
+
+(* where the comment that the gap from a on holds and the source does not close begins *)
+unclosedComment[codes_List, a_Integer] := Block[{i = a, depth = 0, open = a, n = Length[codes]},
+    While[ i <= n,
+        Which[
+            codes[[i]] === 40 && i < n && codes[[i + 1]] === 42, If[depth === 0, open = i]; depth++; i += 2,
+            codes[[i]] === 42 && i < n && codes[[i + 1]] === 41 && depth > 0, depth--; i += 2,
+            True, i++]];
+    open]
+
+(* reading stops at token t of the statement from token stmt *)
+parserStop[lexed_List, t_Integer, stmt_Integer, source_, length_Integer] := With[{before = If[t > 1, lexed[[5 (t - 1) - 1]], 0], kindBefore = If[t > 1, lexed[[5 (t - 1) - 2]], 0]},
+    Which[
+        kindBefore === $tkOperator && before === $fastColonColon,
+            If[ t > 2 && lexed[[5 (t - 2) - 2]] === $tkName && lexed[[5 (t - 2) + 1]] === lexed[[5 (t - 1)]] &&
+                    ! (t > 3 && lexed[[5 (t - 3) - 2]] === $tkOperator && lexed[[5 (t - 3) - 1]] === $fastColonColon),
+                source[lexed[[5 (t - 1)]]], source[lexed[[5 (t - 1)]]] - 1],
+        lexed[[5 t - 2]] =!= $tkEnd, source[lexed[[5 t]]] - 1,
+        kindBefore === $tkOperator && before === $fastGet, If[source[lexed[[5 (t - 1)]]] === 1, length, source[lexed[[5 (t - 1)]]] - 1],
+        kindBefore === $tkOperator && MemberQ[{$fastPut, $fastPutAppend}, before], source[lexed[[5 (t - 1)]]] - 1,
+        tagSetOpen[lexed, stmt, t - 1], source[lexed[[5 (t - 1) + 1]]] - 1,
+        True, length + 2]]
+
+(* the tokens from stmt to last hold a /: with no =, := or =. after it, outside brackets, all closed, and the last ends an operand *)
+tagSetOpen[lexed_List, stmt_Integer, last_Integer] := Block[{depth = 0, open = False, k},
+    Do[
+        k = lexed[[5 u - 2]];
+        Which[
+            MemberQ[{10, 12, 14, 16}, k], depth++,
+            MemberQ[{11, 13, 15, 17}, k], depth--,
+            depth === 0 && k === $tkOperator && lexed[[5 u - 1]] === $fastSlashColon, open = True,
+            depth === 0 && k === $tkOperator && MemberQ[$fastAssignments, lexed[[5 u - 1]]], open = False],
+        {u, stmt, last}];
+    open && depth === 0 && MemberQ[{1, 2, 3, 4, 5, 6, 7, 11, 13, 15, 17, 19}, lexed[[5 last - 2]]]]
+
+$fastSlashColon := $fastSlashColon = fastOp["/:"]
+$fastAssignments := $fastAssignments = fastOp /@ {"=", ":=", "=."}
+
+(* a statement only the grammar reads: before the token WolframLanguageHeld's failure is just past *)
+grammarStop[s_String] := With[{r = WolframLanguageHeld[s]}, If[FailureQ[r], If[TrueQ[r["Incomplete"]], StringLength[s] + 2, Max[r["Position"] - 2, 0]], None]]
+
+WolframLanguageSyntaxQ[s_String] := s =!= "" && syntaxStop[s] === None
+
+WolframLanguageSyntaxLength[s_String] := Replace[syntaxStop[s], None -> StringLength[s]]
 
 End[]
 
