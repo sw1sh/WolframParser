@@ -904,38 +904,48 @@ fastText[a_Integer, b_Integer] := FromCharacterCode[$fcodes[[a ;; b - 1]]]
 
 $fastLeafKinds = <|1 -> "Symbol", 2 -> "Blank", 3 -> "Integer", 4 -> "Real", 5 -> "String", 6 -> "Slot", 7 -> "Out", 8 -> "File", 20 -> "Boxes", 100 -> "Tag"|>
 
-(* the held values of a postfix program, its instructions {code, a, b} one after another: the
-   statements'. A value on the stack is its expression, held, and its mark what the kernel reads
-   differently for it: 1 a number literal, into which a minus folds, 2 a product, whose factors a
-   minus joins, 3 a name's call by @, the name and the argument in ats, a flat chain of the name
-   reading the argument, 0 anything else. The values wait in an association by their place on the
-   stack, which a write does not copy, as it does a list of them, and the marks in a packed array.
-   The leaves are made before, by fastLeaves. The names are Block's, not Module's, which would
-   rewrite the body at every call, and each instruction is the rule of its code, a call or an
-   operator of one or two operands its own rule. *)
-fastBuild[steps_List] := Block[{vals = <||>, mk = ConstantArray[0, Length[steps] / 3 + 1], ats = <||>, sp = 0, heads = ConstantArray[0, Length[steps] / 3 + 1],
-        hp = 0, statements = Internal`Bag[], leafValues, leafMarks, leafIndex = 0, xs, spec},
-    {leafValues, leafMarks} = fastLeaves[steps];
+(* the held values of a postfix program, its instructions {code, a, b} one after another, and the
+   kinds, texts and marks of its leaves, those fastLeafData gives: the statements'. A value on the
+   stack is its expression, held, and its mark what the kernel reads differently for it: 1 a number
+   literal, into which a minus folds, 2 a product, whose factors a minus joins, 3 a name's call by
+   @, the name and the argument in ats, a flat chain of the name reading the argument, 0 anything
+   else. The values wait in an association by their place on the stack, which a write does not
+   copy, as it does a list of them, and the marks in a packed array. A leaf's value is made once for
+   each kind and text, before the instructions run, as nothing is evaluated while the program is
+   built. The names are Block's,
+   not Module's, which would rewrite the body at every call, and each instruction is the rule of
+   its code, a call or an operator of one or two operands its own rule. *)
+fastBuild[steps_List, kinds_List, texts_List, marks_List] := Block[{vals = <||>, mk = ConstantArray[0, Length[steps] / 3 + 1], ats = <||>, sp = 0,
+        heads = ConstantArray[0, Length[steps] / 3 + 1], hp = 0, statements = <||>, ns = 0, leafValues = fastLeafValues[kinds, texts], leafMarks = marks,
+        leafIndex = 0, xs, spec},
     fastStep @@@ Partition[steps, 3];
-    Internal`BagPart[statements, All]]
+    Values[statements]]
 
-(* the values of a program's leaves, its instructions of code 1, in order, and their marks, 1 for a
-   number literal: their texts cut from the codes in one pass, and the value of each kind and text
-   made once, in the order they are read, as nothing is evaluated while the program is built *)
-fastLeaves[{}] := {{}, {}}
-fastLeaves[steps_List] := Block[{ops = steps[[1 ;; ;; 3]], kinds, toks, texts, keys, u},
+(* the values of the leaves of the kinds and texts, each kind and text made once: a statement's few
+   one at a time, more by their distinct pairs *)
+fastLeafValues[kinds_List, texts_List] := If[ Length[texts] <= 64,
+    Block[{seen = <||>}, Table[fastLeafOnce[kinds[[i]], texts[[i]]], {i, Length[texts]}]],
+    With[{keys = Transpose[{kinds, texts}]}, With[{u = DeleteDuplicates[keys]}, Lookup[AssociationThread[u, fastLeafValue @@@ u], keys]]]]
+
+(* a leaf's value, made at its first kind and text among those seen *)
+fastLeafOnce[kind_Integer, text_String] := With[{key = {kind, text}}, If[KeyExistsQ[seen, key], seen[key], seen[key] = fastLeafValue[kind, text]]]
+
+(* the leaves of a postfix program, its instructions of code 1, in order: their kinds, their texts,
+   cut from the codes in one pass, their marks, 1 for a number literal, and how many come before
+   each instruction, so that the leaves of the instructions i to j are those from Before[[i]] + 1
+   to Before[[j + 1]] *)
+fastLeafData[{}, _List, _List, _List] := <|"Kinds" -> {}, "Texts" -> {}, "Marks" -> {}, "Before" -> {0}|>
+fastLeafData[steps_List, codes_List, starts_List, ends_List] := Block[{ops = steps[[1 ;; ;; 3]], kinds, toks},
     toks = Pick[steps[[3 ;; ;; 3]], ops, 1];
     kinds = Pick[steps[[2 ;; ;; 3]], ops, 1];
-    texts = tokenTexts[$fcodes, $fs[[toks]], $fe[[toks]]];
-    keys = Transpose[{kinds, texts}];
-    u = DeleteDuplicates[keys];
-    {Lookup[AssociationThread[u, fastLeafValue @@@ u], keys], 1 - Unitize[(kinds - 3) (kinds - 4)]}]
+    <|"Kinds" -> kinds, "Texts" -> tokenTexts[codes, starts[[toks]], ends[[toks]]], "Marks" -> 1 - Unitize[(kinds - 3) (kinds - 4)],
+      "Before" -> Prepend[Accumulate[1 - Unitize[ops - 1]], 0]|>]
 
 (* the texts of the tokens from st to en in codes, in order, in one pass where they are *)
 tokenTexts[codes_List, st_List, en_List] := Which[
     st === {}, {},
     Length[st] === 1 || Min[Rest[st] - Most[en]] >= 0, FromCharacterCode[TakeList[codes[[st[[1]] ;; en[[-1]] - 1]], Riffle[en - st, Rest[st] - Most[en]]][[1 ;; ;; 2]]],
-    True, MapThread[FromCharacterCode[codes[[#1 ;; #2 - 1]]] &, {st, en}]]
+    True, Table[FromCharacterCode[codes[[st[[i]] ;; en[[i]] - 1]]], {i, Length[st]}]]
 
 (* a leaf's value by the lexer's kind of it *)
 fastLeafValue[1, s_String] := heldName[s]
@@ -950,7 +960,7 @@ fastStep[8, 1, _] := (sp--; vals[sp] = heldCall[vals[sp], {vals[sp + 1]}]; mk[[s
 fastStep[8, 2, _] := (sp -= 2; vals[sp] = heldCall[vals[sp], {vals[sp + 1], vals[sp + 2]}]; mk[[sp]] = 0)
 fastStep[8, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = heldCall[vals[sp], xs]; mk[[sp]] = 0)
 fastStep[4, a_, _] := (sp--; fastBinary[a, vals[sp + 1]])
-fastStep[25, _, _] := (Internal`StuffBag[statements, vals[sp]]; sp--)
+fastStep[25, _, _] := (ns++; statements[ns] = vals[sp]; sp--)
 fastStep[5, a_, 2] := (sp--;
     vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]],
         If[$fastSpliceHeads[[a]] === 1 && (mk[[sp]] === 3 || mk[[sp + 1]] === 3), splicedAt[a, {sp, sp + 1}], {vals[sp], vals[sp + 1]}]];
@@ -1032,7 +1042,8 @@ fastHeld[s_String] := Catch[Block[{codes = ToCharacterCode[s], padded, lexed, cu
         1, Throw[stoppedFailure[lexed, prog[[2]]], $fastGiveUp],
         _, fastGiveUp[]];
     Block[{$fcodes = codes, $fs = lexed[[5 ;; ;; 5]], $fe = lexed[[6 ;; ;; 5]]},
-        fastBuild[prog[[3 ;; 3 prog[[2]] + 2]]]]], $fastGiveUp]
+        With[{steps = prog[[3 ;; 3 prog[[2]] + 2]]}, With[{leaves = fastLeafData[steps, codes, $fs, $fe]},
+            fastBuild[steps, leaves["Kinds"], leaves["Texts"], leaves["Marks"]]]]]], $fastGiveUp]
 
 (* the typed parser over the lexer's tokens of a source, its codes padded *)
 fastParseTokens[lexed_List, padded_List] := fastParseFunction[lexed, fastLedIndices[lexed[[3 ;; ;; 5]], lexed[[4 ;; ;; 5]]], $fastSpecTable,
@@ -1165,7 +1176,7 @@ segmentParts[state_Association, from_Integer, pending_] := Module[
     While[first =!= None && ranges =!= {} && lexed[[5 first + 2]] === 0, first = ranges[[-1, 3]]; ranges = Most[ranges]];
     seg = Length[st["Segments"]] + 1;
     st["Segments"] = Append[st["Segments"], <|"Codes" -> codes, "Lexed" -> lexed, "Starts" -> lexed[[5 ;; ;; 5]], "Ends" -> lexed[[6 ;; ;; 5]], "Program" -> prog,
-        "Warning" -> warningTokens[codes, lexed]|>];
+        "Warning" -> warningTokens[codes, lexed], "Leaves" -> fastLeafData[prog[[3 ;; 3 prog[[2]] + 2]], codes, lexed[[5 ;; ;; 5]], lexed[[6 ;; ;; 5]]]|>];
     (* The lines, positions of the segment: the Nulls of the gap before the first statement, each
        statement and the Nulls of the gap after it, then where reading stops or the end. The first
        line break after a statement, or after the one pending, ends its line, else the token after
@@ -1313,10 +1324,12 @@ statementWarnings[state_Association, row_List] := With[{segment = state["Segment
     With[{before = segment["Warning"][[2]]},
         warningsAt[segment["Codes"], segment["Lexed"], row[[7]], row[[8]], 0, segment["Warning"][[1, before[[row[[7]]]] + 1 ;; before[[row[[8]] + 1]]]]]]]
 
-(* the statement of a row, held, its names made now *)
+(* the statement of a row, held, its names made now: its instructions, and its leaves among the
+   segment's *)
 heldNextStatement[state_Association, row_List] := With[{segment = state["Segments"][[row[[4]]]]},
-    Block[{$fcodes = segment["Codes"], $fs = segment["Starts"], $fe = segment["Ends"]},
-        First[fastBuild[segment["Program"][[3 row[[5]] ;; 3 row[[6]] + 2]]]]]]
+    With[{leaves = segment["Leaves"], span = segment["Leaves"]["Before"][[row[[5]]]] + 1 ;; segment["Leaves"]["Before"][[row[[6]] + 1]]},
+        Block[{$fcodes = segment["Codes"], $fs = segment["Starts"], $fe = segment["Ends"]},
+            First[fastBuild[segment["Program"][[3 row[[5]] ;; 3 row[[6]] + 2]], leaves["Kinds"][[span]], leaves["Texts"][[span]], leaves["Marks"][[span]]]]]]]
 
 (* the state, its part i, the last, a statement the grammar reads, read: a failure, or the statement,
    and the parts of the source after it read *)
