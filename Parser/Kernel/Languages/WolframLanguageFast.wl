@@ -104,7 +104,7 @@ $fastSpecial := $fastSpecial = {$fastOpenAssociation, $fastCloseAssociation, $fa
 (* token kinds *)
 $tkEnd = 0; $tkName = 1; $tkBlank = 2; $tkInteger = 3; $tkReal = 4; $tkString = 5; $tkSlot = 6; $tkOut = 7; $tkFile = 8;
 $tkOperator = 9; $tkOpenParen = 10; $tkCloseParen = 11; $tkOpenSquare = 12; $tkCloseSquare = 13; $tkOpenCurly = 14;
-$tkCloseCurly = 15; $tkOpenAssociation = 16; $tkCloseAssociation = 17; $tkComma = 18; $tkPrimes = 19
+$tkCloseCurly = 15; $tkOpenAssociation = 16; $tkCloseAssociation = 17; $tkComma = 18; $tkPrimes = 19; $tkBoxes = 20
 
 (* the source is not one this reader takes: the grammar reads it *)
 fastGiveUp[] := Throw[$fastGiveUp, $fastGiveUp]
@@ -137,8 +137,9 @@ fastFailure[position_Integer, incomplete_] := Failure["ParseError", <|
    (1 where a newline outside a comment comes before it)}, the last token
    the end. Status 1: the source holds a character no token has, where the
    last token, the one that stops there, ends; 3: the source ends in a
-   string or a comment not closed. Whitespace and comments are in no
-   token; after << and >> the file is one token. *)
+   string, a comment or a linear syntax's \( not closed. Whitespace and
+   comments are in no token; after << and >> the file is one token, and
+   so is a \( to its \), the boxes of linear syntax, a \! before it too. *)
 $fastLexDeclaration = FunctionDeclaration[fastLex,
     Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
         "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
@@ -308,6 +309,17 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                         c == 123, kind = 14,
                         c == 125, kind = 15,
                         c == 44, kind = 18,
+                        (* linear syntax: \( to its \), or \!\( to it *)
+                        c == 92 && (lexCodes[[i + 1]] == 40 || (lexCodes[[i + 1]] == 33 && lexCodes[[i + 2]] == 92 && lexCodes[[i + 3]] == 40)),
+                            j = If[lexCodes[[i + 1]] == 40, i + 2, i + 4]; depth = 1;
+                            While[ depth > 0,
+                                Which[
+                                    j >= n, status = 3; depth = 0; j = n + 1,
+                                    lexCodes[[j]] == 92 && lexCodes[[j + 1]] == 40, depth++; j += 2,
+                                    lexCodes[[j]] == 92 && lexCodes[[j + 1]] == 41, depth--; j += 2,
+                                    lexCodes[[j]] == 92, j += 2,
+                                    True, j++]];
+                            kind = 20,
                         (* a long name, an operator's *)
                         c == 92,
                             If[ lnEnd[[i]] > 0 && lnOp[[i]] > 0,
@@ -465,10 +477,10 @@ fastSpecIndex[spec_] := First[FirstPosition[$fastSpecList, spec, {0}, {1}, Heads
 $fastOpSpecIndex := $fastOpSpecIndex = With[{n = $fastNotId + 1},
     Table[Which[KeyExistsQ[$fastLedTable, k], fastSpecIndex[$fastLedTable[k]],
         KeyExistsQ[$fastPrefixOnly, k], fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}], True, 0], {k, 0, n}]]
-$fastKindSpecIndex := $fastKindSpecIndex = ReplacePart[ConstantArray[0, 20], Join[
+$fastKindSpecIndex := $fastKindSpecIndex = ReplacePart[ConstantArray[0, 21], Join[
     {($tkOpenSquare + 1) -> fastSpecIndex[{176, "Call", "Call"}], ($tkPrimes + 1) -> fastSpecIndex[{154, "Derivative", "Derivative"}]},
     Map[(# + 1) -> fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}] &,
-        {$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation}]]]
+        {$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation, $tkBoxes}]]]
 fastLedIndices[kinds_List, ops_List] := Module[{index, unset},
     index = $fastKindSpecIndex[[kinds + 1]] + $fastOpSpecIndex[[ops + 1]] (1 - Unitize[kinds - $tkOperator]);
     unset = (1 - Unitize[ops - $fastEqual]) (1 - Unitize[RotateLeft[ops] - $fastDot]) (1 - Unitize[RotateLeft[kinds] - $tkOperator]);
@@ -551,7 +563,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                     sp++; base = 8 (sp - 1); fr[[base + 1]] = 7; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
                                     t++; pMin = pSpecial[[16]]; pRbp = 0; pPlain = 1; mode = 1,
                                     mode = 3],
-                            k >= 2 && k <= 7,
+                            (k >= 2 && k <= 7) || k == 20,
                                 on++; out[[3 on]] = 1; out[[3 on + 1]] = k; out[[3 on + 2]] = t; t++; mode = 3,
                             k == 10,
                                 t++; brackets++;
@@ -867,7 +879,7 @@ fastBinary[head_String, l_, r_] := Switch[ head,
     "SlashSlash", $falg["Call"][r, {l}],
     _, $falg["Binary"][head, l, r]]
 
-$fastLeafKinds = <|1 -> "Symbol", 2 -> "Blank", 3 -> "Integer", 4 -> "Real", 5 -> "String", 6 -> "Slot", 7 -> "Out", 8 -> "File", 100 -> "Tag"|>
+$fastLeafKinds = <|1 -> "Symbol", 2 -> "Blank", 3 -> "Integer", 4 -> "Real", 5 -> "String", 6 -> "Slot", 7 -> "Out", 8 -> "File", 20 -> "Boxes", 100 -> "Tag"|>
 
 (* the held values of a postfix program, by the held algebra's builders:
    the statements'. The values wait in an association by their place on
@@ -1127,8 +1139,8 @@ warningTokens[codes_List, lexed_List] := Module[{kinds = lexed[[3 ;; ;; 5]], n, 
     {Union[commas, strings], Accumulate[Prepend[marks, 0]]}]
 
 (* the kinds of token that may open a bracket's items, and close them, by kind + 1 *)
-$openKindFlags = ReplacePart[ConstantArray[0, 20], Thread[{9, 12, 14, 16} + 1 -> 1]];
-$closeKindFlags = ReplacePart[ConstantArray[0, 20], Thread[{0, 9, 13, 15, 17, 18} + 1 -> 1]];
+$openKindFlags = ReplacePart[ConstantArray[0, 21], Thread[{9, 12, 14, 16} + 1 -> 1]];
+$closeKindFlags = ReplacePart[ConstantArray[0, 21], Thread[{0, 9, 13, 15, 17, 18} + 1 -> 1]];
 
 (* the letters and digits of a long name's name, from its character i on *)
 longNameText[codes_List, i_Integer] := FromCharacterCode[TakeWhile[codes[[i ;;]], 48 <= # <= 57 || 65 <= # <= 90 || 97 <= # <= 122 &]]
@@ -1147,7 +1159,8 @@ $warnClosers := $warnClosers = Join[<|"Kinds" -> {$tkCloseSquare, $tkCloseCurly,
     AssociationThread[Append[Values[$fastGroupTable][[All, 1]], $fastRightDoubleBracket] -> True]]
 
 (* The warnings of the escapes a string keeps as written [WL 15.0.0]: too few digits of a code,
-   a letter no escape has, a long name no character has, or not closed before the string is, and
+   a letter no escape has, a long name no character has, or not closed before the string is, the
+   string closed, and
    {"sntmsng"} for a long name with no name at its end, which the statement's text completes;
    unclosed, the string goes on to its token's end. *)
 stringWarnings[s_String, unclosed_] := StringCases[If[TrueQ[unclosed], StringDrop[s, 1], StringTake[s, {2, -2}]], Join[
@@ -1156,7 +1169,7 @@ stringWarnings[s_String, unclosed_] := StringCases[If[TrueQ[unclosed], StringDro
     "\\." -> {"sntoct2"},
     "\\:" -> {"snthex"},
     "\\|" -> {"snthex32"},
-    "\\[" ~~ name : $nameCharacter .. ~~ EndOfString :> {"sntunc", name},
+    "\\[" ~~ name : $nameCharacter .. ~~ EndOfString :> {If[TrueQ[unclosed], "sntufn", "sntunc"], name},
     "\\[" ~~ name : $nameCharacter .. :> {"sntufn", name},
     "\\[" ~~ EndOfString -> {"sntmsng"},
     "\\" ~~ c : (CharacterRange["a", "z"] | CharacterRange["A", "Z"]) :> {"stresc", c},

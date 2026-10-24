@@ -612,6 +612,7 @@ $wlWarningCases = {
     {"\"a\\[Foo]b\"", {{"sntufn", "Foo"}}},
     {"\"\\[Al-pha]\"", {{"sntufn", "Al"}}},
     {"\"\\[Foo\"", {{"sntunc", "Foo"}}},
+    {"x = \"a\\[Foo", {{"sntufn", "Foo"}}},
     {"x = 1; \"\\[\"", {{"sntmsng", "x = 1; \"\\[\""}}},
     {"{\"\\q\",}", {{"stresc", "q"}, {"com"}}},
     {"f[\"\\q\", 1 +", {{"stresc", "q"}}}
@@ -623,3 +624,75 @@ VerificationTest[
     {WolframLanguageHeldNext["f[1,]", 1], WolframLanguageHeldNext["f[1,", 1][[1]]["Warnings"]},
     {{HoldComplete[f[1, Null]], 6, <|"Warnings" -> {{"com"}}|>}, {{"com"}}},
     TestID -> "wl next: a statement carries its warnings, a failure under its Warnings key"]
+
+(* --- linear syntax --- *)
+
+(* {the text of a group, the boxes Wolfram 15's ToExpression["\\(" <> text <> "\\)", InputForm, HoldComplete] gives} *)
+$wlLinearCases = {
+    {"x\\^2", HoldComplete[SuperscriptBox["x", "2"]]},
+    {"a + b c", HoldComplete[RowBox[{"a", "+", RowBox[{"b", "c"}]}]]},
+    {"\\(a + b\\) c", HoldComplete[RowBox[{RowBox[{"a", "+", "b"}], "c"}]]},
+    {"a\\ b", HoldComplete[RowBox[{"a", " ", "b"}]]},
+    {"f[x]", HoldComplete[RowBox[{"f", "[", "x", "]"}]]},
+    {"\"s\"", HoldComplete["\"s\""]},
+    {"\\[Alpha]", HoldComplete["\[Alpha]"]},
+    {"", HoldComplete[""]},
+    {"\\*RowBox[{\"a\"}]", HoldComplete[RowBox[{"a"}]]},
+    {"x\\_y\\%z", HoldComplete[SubsuperscriptBox["x", "y", "z"]]},
+    {"\\@x\\%3", HoldComplete[RadicalBox["x", "3"]]},
+    {"TraditionalForm\\`x", HoldComplete[FormBox["x", TraditionalForm]]},
+    {"a; b", HoldComplete[RowBox[{"a", ";", "b"}]]},
+    {"x\\&y", HoldComplete[OverscriptBox["x", "y"]]},
+    {"1.5", HoldComplete["1.5"]},
+    {"x\\^2\\^3", HoldComplete[SuperscriptBox["x", SuperscriptBox["2", "3"]]]},
+    {"x\\^\\(2 + y\\)", HoldComplete[SuperscriptBox["x", RowBox[{"2", "+", "y"}]]]},
+    {"f[x, y]", HoldComplete[RowBox[{"f", "[", RowBox[{"x", ",", "y"}], "]"}]]},
+    {"x_", HoldComplete["x_"]},
+    {"#1", HoldComplete["#1"]},
+    {"x\\/y\\/z", HoldComplete[FractionBox[FractionBox["x", "y"], "z"]]},
+    {"-x", HoldComplete[RowBox[{"-", "x"}]]},
+    {"a\\tb", HoldComplete[RowBox[{"a", "\t", "b"}]]},
+    {"12ab", HoldComplete[RowBox[{"12", "ab"}]]},
+    {"\\@", HoldComplete[SqrtBox[""]]},
+    {"x\\^", HoldComplete[SuperscriptBox["x", ""]]},
+    {"\\^x", HoldComplete[SuperscriptBox["", "x"]]},
+    {"<|a->1|>", HoldComplete[RowBox[{"\[LeftAssociation]", RowBox[{"a", "->", "1"}], "\[RightAssociation]"}]]},
+    {"a\\[InvisibleSpace]b", HoldComplete[RowBox[{"a", "\[InvisibleSpace]", "b"}]]},
+    {"a[[1]]", HoldComplete[RowBox[{"a", "[", RowBox[{"[", "1", "]"}], "]"}]]},
+    {"a // f // g", HoldComplete[RowBox[{RowBox[{"a", "//", "f"}], "//", "g"}]]},
+    {"a + b - c", HoldComplete[RowBox[{"a", "+", "b", "-", "c"}]]},
+    {"a = b = c", HoldComplete[RowBox[{"a", "=", RowBox[{"b", "=", "c"}]}]]},
+    {"f[x_] := x", HoldComplete[RowBox[{RowBox[{"f", "[", "x_", "]"}], ":=", "x"}]]},
+    {"-a - b", HoldComplete[RowBox[{RowBox[{"-", "a"}], "-", "b"}]]},
+    {"\\@x\\^2", HoldComplete[SqrtBox[SuperscriptBox["x", "2"]]]},
+    {"x\\&y\\^z", HoldComplete[SuperscriptBox[OverscriptBox["x", "y"], "z"]]},
+    {"x\\_y\\+z", HoldComplete[SubscriptBox["x", UnderscriptBox["y", "z"]]]},
+    {"x\\^-1", HoldComplete[SuperscriptBox["x", RowBox[{"-", "1"}]]]},
+    {"f[x\\^2]\\^3", HoldComplete[SuperscriptBox[RowBox[{"f", "[", SuperscriptBox["x", "2"], "]"}], "3"]]},
+    {"\\[Sum]\\+\\(i = 1\\)\\%n i", HoldComplete[RowBox[{UnderoverscriptBox["\[Sum]", RowBox[{"i", "=", "1"}], "n"], "i"}]]},
+    {"a\\ \\ b", HoldComplete[RowBox[{"a", " ", " ", "b"}]]},
+    {"x\\+y\\%z", HoldComplete[UnderoverscriptBox["x", "y", "z"]]},
+    {"x\\&y\\%z", HoldComplete[UnderoverscriptBox["x", "z", "y"]]},
+    {"a \\(b\\) c", HoldComplete[RowBox[{"a", "b", "c"}]]}
+};
+Scan[
+    Function[c, VerificationTest[WolframLanguageHeld["\\(" <> c[[1]] <> "\\)"], {c[[2]]}, TestID -> "wl linear: " <> ToString[c[[1]], InputForm]]],
+    $wlLinearCases]
+
+(* a group read as input, LinearBoxes of its boxes, and MakeExpression of them what Wolfram 15 reads from it *)
+VerificationTest[
+    Map[Function[s, With[{r = WolframLanguageHeld[s]}, {r, Cases[r, LinearBoxes[b_] :> MakeExpression[b, StandardForm], Infinity]}]],
+        {"\\!\\(\\*RowBox[{\"a\", \"+\", \"b\"}]\\)", "\\!\\(a \\[CirclePlus] b\\)", "\\!\\(x\\^2\\)", "\\!\\(\\*FractionBox[\"1\", \"2\"]\\)"}],
+    {{{HoldComplete[LinearBoxes[RowBox[{"a", "+", "b"}]]]}, {HoldComplete[a + b]}},
+     {{HoldComplete[LinearBoxes[RowBox[{"a", "\[CirclePlus]", "b"}]]]}, {HoldComplete[CirclePlus[a, b]]}},
+     {{HoldComplete[LinearBoxes[SuperscriptBox["x", "2"]]]}, {HoldComplete[x^2]}},
+     {{HoldComplete[LinearBoxes[FractionBox["1", "2"]]]}, {HoldComplete[1/2]}}},
+    TestID -> "wl linear: a group read as input is LinearBoxes of its boxes"]
+VerificationTest[
+    {WolframLanguageHeld["f[\\!\\(x\\^2\\)] + 1"], WolframLanguageHeld["\\!\\(x\\)\\!\\(y\\)"], WolframLanguageHeld["{\\(a\\), 1}"]},
+    {{HoldComplete[f[LinearBoxes[SuperscriptBox["x", "2"]]] + 1]}, {HoldComplete[LinearBoxes["x"] LinearBoxes["y"]]}, {HoldComplete[{"a", 1}]}},
+    TestID -> "wl linear: a group is an operand"]
+VerificationTest[
+    {wlStop[WolframLanguageHeld["\\!\\(x"]], WolframLanguageHeldNext["a = 1\n\\!\\(x\\^2\\)", 7]},
+    {{6, True}, {HoldComplete[LinearBoxes[SuperscriptBox["x", "2"]]], 17, <|"Warnings" -> {}|>}},
+    TestID -> "wl linear: a group not closed is incomplete; a statement of one reads one at a time"]

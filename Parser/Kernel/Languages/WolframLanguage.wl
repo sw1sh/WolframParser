@@ -38,6 +38,7 @@ WolframLanguageHeld::usage     = "WolframLanguageHeld[\"code\"] parses Wolfram L
 WolframLanguageHeldNext::usage = "WolframLanguageHeldNext[\"code\", pos] reads the statement of code whose line begins at pos, 1 or the position the call before gave, as the kernel's ToExpression reads its statements one at a time: {HoldComplete[statement], next, <|\"Warnings\" -> warnings|>}, next where the line of the next one begins, warnings the syntax warnings the kernel gives as it reads the statement, the names of the statement made only now; HoldComplete[Null] for a line end with no statement before it; {Failure[...], pos} where the statement cannot be read, its warnings under its \"Warnings\" key; EndOfFile past the last."
 WolframLanguageGrammar::usage  = "WolframLanguageGrammar[alg] builds the Wolfram Language parser over the algebra alg, an Association with the keys of ASTAlgebra; the parser gives the list of the top-level expressions."
 WolframLanguageConcrete::usage = "WolframLanguageConcrete[\"code\"] parses Wolfram Language source to its concrete syntax tree, as CodeParser`CodeConcreteParse gives it: a ContainerNode of the top-level expressions and the whitespace, newlines and comments around them, in CodeParser's own nodes, every character of the source in a leaf. Source that is not Wolfram Language reads as CodeParser reads it, into its error nodes: nothing fails."
+LinearBoxes::usage             = "LinearBoxes[boxes] stands for the linear syntax \\!\\(...\\) in what WolframLanguageHeld and WolframLanguageHeldNext read, boxes the boxes of its \\(...\\), where the kernel's reader gives MakeExpression[boxes, StandardForm]."
 WolframLanguageSemantic::usage = "WolframLanguageSemantic is the algebra that builds each expression held: its builders give <|\"Expr\" -> HoldComplete[expr], \"Literal\" -> .., \"Chain\" -> ..|>, the flags telling a number literal and a product, into which a minus folds."
 
 Begin["`Private`"]
@@ -583,6 +584,191 @@ heldLeaf["Slot", s_String] := held[slotExpression[s]]
 heldLeaf["Out", s_String] := held[outExpression[s]]
 heldLeaf["Tag", s_String] := held[HoldComplete[s]]
 heldLeaf["File", s_String] := held[HoldComplete @@ {If[StringStartsQ[s, "\""], stringValue[s], fileValue[s]]}]
+heldLeaf["Boxes", s_String] := held[linearHeld[s]]
+
+(* --- linear syntax --- *)
+
+(* The boxes of linear syntax as Wolfram 15's reader reads them: a \( to its \) its boxes, a \!
+   before it LinearBoxes of them, all held. Inside, \^ \_ \% \& \+ \/ \@ \` build the boxes they
+   name from the box on either side, \( \) group, \* reads the input after it, and the rest is
+   rows of tokens, nested as their concrete syntax tree nests them. *)
+linearHeld[s_String] := With[{interpret = StringStartsQ[s, "\\!"]},
+    With[{inner = StringTake[s, {If[interpret, 5, 3], If[StringEndsQ[s, "\\)"], -3, -1]}]},
+        ReplaceAll[HoldComplete @@ {If[interpret, LinearBoxes[linearGroup[inner]], linearGroup[inner]]}, linearInput[HoldComplete[e_]] :> e]]]
+
+(* the boxes of a group's text: a form's, after its \`, else its row's *)
+linearGroup[s_String] := With[{pieces = linearPieces[s]},
+    With[{f = FirstPosition[pieces, {"Form"}, {0}, {1}][[1]]},
+        If[f === 0, linearRow[pieces], FormBox[linearRow[Drop[pieces, f]], linearForm[Take[pieces, f - 1]]]]]]
+
+(* the pieces of a group's text: {"Text", t}, {"Box", boxes}, {"Op", o} for a box operator, and
+   {"Form"}; a newline or a tab in the text is whitespace, and \  \t \n are their boxes *)
+linearPieces[s_String] := Module[{cs = Characters[s], n, i = 1, out = Internal`Bag[], text = Internal`Bag[], depth, j, e, flush},
+    n = Length[cs];
+    flush := If[Internal`BagLength[text] > 0, Internal`StuffBag[out, {"Text", StringJoin[Internal`BagPart[text, All]]}]; text = Internal`Bag[]];
+    While[ i <= n,
+        If[ cs[[i]] === "\\" && i < n,
+            Switch[ cs[[i + 1]],
+                "(",
+                    flush; depth = 1; j = i + 2;
+                    While[j <= n && depth > 0, If[cs[[j]] === "\\" && j < n, Switch[cs[[j + 1]], "(", depth++, ")", depth--]; j += 2, j++]];
+                    Internal`StuffBag[out, {"Box", linearGroup[StringJoin[cs[[i + 2 ;; If[depth === 0, j - 3, n]]]]]}]; i = j,
+                ")" | "!", i += 2,
+                "^" | "_" | "%" | "&" | "+" | "/" | "@", flush; Internal`StuffBag[out, {"Op", cs[[i + 1]]}]; i += 2,
+                "`", flush; Internal`StuffBag[out, {"Form"}]; i += 2,
+                "*", flush; {e, i} = linearStar[cs, i + 2]; Internal`StuffBag[out, {"Box", e}],
+                " ", flush; Internal`StuffBag[out, {"Box", " "}]; i += 2,
+                "t", flush; Internal`StuffBag[out, {"Box", "\t"}]; i += 2,
+                "n", flush; Internal`StuffBag[out, {"Box", "\n"}]; i += 2,
+                _, Internal`StuffBag[text, cs[[i]] <> cs[[i + 1]]]; i += 2],
+            Internal`StuffBag[text, If[MemberQ[{"\n", "\r", "\t"}, cs[[i]]], " ", cs[[i]]]]; i++]];
+    flush;
+    Internal`BagPart[out, All]]
+
+(* \* and the input after it, a string or a name and its brackets: the boxes it gives, held where
+   they are no string, and where the text goes on *)
+linearStar[cs_List, i0_Integer] := Module[{i = i0, n = Length[cs], depth, quoted = False, from, read},
+    While[i <= n && cs[[i]] === " ", i++];
+    from = i;
+    If[ i <= n && cs[[i]] === "\"",
+        i++; While[i <= n && cs[[i]] =!= "\"", If[cs[[i]] === "\\", i += 2, i++]]; i++,
+        While[i <= n && (LetterQ[cs[[i]]] || DigitQ[cs[[i]]] || MemberQ[{"$", "`"}, cs[[i]]]), i++];
+        While[ i <= n && cs[[i]] === "[",
+            depth = 0;
+            While[ i <= n,
+                Which[
+                    quoted, If[cs[[i]] === "\\", i++, If[cs[[i]] === "\"", quoted = False]],
+                    cs[[i]] === "\"", quoted = True,
+                    cs[[i]] === "[", depth++,
+                    cs[[i]] === "]", depth--];
+                i++;
+                If[! quoted && depth === 0, Break[]]]]];
+    read = WolframLanguageHeld[StringJoin[cs[[from ;; i - 1]]]];
+    {Replace[read, {{HoldComplete[x_String]} :> x, {h_HoldComplete} :> linearInput[h], _ :> StringJoin[cs[[from ;; i - 1]]]}], i}]
+
+(* the form before a \`: the symbol a name names, else its boxes *)
+linearForm[pieces_List] := With[{b = linearRow[pieces]},
+    If[ StringQ[b] && StringMatchQ[b, (LetterCharacter | "$") ~~ (WordCharacter | "$" | "`") ...],
+        Replace[WolframLanguageHeld[b], {{HoldComplete[x_Symbol]} :> linearInput[HoldComplete[x]], _ :> b}], b]]
+
+(* the boxes of a row's pieces: its box operators folded, inside each bracket first, then the rest *)
+linearRow[pieces_List] := linearPlain[linearFoldBrackets[Catenate[Map[If[#[[1]] === "Text", linearTextTokens[#[[2]]], {#}] &, pieces]]]]
+
+(* the tokens of a row's text, {"Tok", text, kind, the whitespace before it}, by the lexer *)
+linearTextTokens[t_String] := Module[{codes = ToCharacterCode[t], lexed},
+    lexed = fastLexFunction[Join[codes, {0, 0, 0}], $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];
+    If[ lexed[[1]] =!= 0,
+        If[StringTrim[t] === "", {}, {{"Tok", StringTrim[t], 1, If[StringStartsQ[t, " "], " ", ""]}}],
+        Table[With[{a = lexed[[5 j]], before = If[j === 1, 1, lexed[[5 (j - 1) + 1]]]},
+            {"Tok", FromCharacterCode[codes[[a ;; lexed[[5 j + 1]] - 1]]], lexed[[5 j - 2]], FromCharacterCode[codes[[before ;; a - 1]]]}],
+            {j, lexed[[2]] - 1}]]]
+
+(* the kinds of token that open and close a bracket, and those of an atom *)
+$linearOpenKinds = {10, 12, 14, 16};
+$linearCloseKinds = {11, 13, 15, 17};
+$linearAtomKinds = {1, 2, 3, 4, 5, 6, 7, 8, 19};
+
+(* a token that may be a prefix operator *)
+linearPrefixQ[t_List] := t[[1]] === "Tok" && t[[3]] === 9 && MemberQ[{"-", "+", "!", "++", "--"}, t[[2]]]
+
+(* where the bracket that token i of ts opens closes *)
+linearClose[ts_List, i_Integer] := Module[{depth = 0, j = i},
+    While[ j <= Length[ts],
+        If[ts[[j, 1]] === "Tok" && MemberQ[$linearOpenKinds, ts[[j, 3]]], depth++];
+        If[ts[[j, 1]] === "Tok" && MemberQ[$linearCloseKinds, ts[[j, 3]]], depth--; If[depth === 0, Return[j, Module]]];
+        j++];
+    Length[ts]]
+
+(* the last token of the operand a box operator takes from token i on, prefixes before it where
+   they may be: an atom, a bracketed group or a box, then the brackets of its call; i - 1 where
+   none begins there *)
+linearPrimaryEnd[ts_List, i0_Integer, prefixes_ : False] := Module[{i = i0, n = Length[ts]},
+    If[TrueQ[prefixes], While[i <= n && linearPrefixQ[ts[[i]]], i++]];
+    Which[
+        i > n, Return[i0 - 1, Module],
+        ts[[i, 1]] === "Box", Null,
+        ts[[i, 1]] === "Tok" && MemberQ[$linearAtomKinds, ts[[i, 3]]],
+            While[i < n && ts[[i + 1, 1]] === "Tok" && MemberQ[{1, 2}, ts[[i + 1, 3]]] && ts[[i + 1, 4]] === "" && ! MemberQ[{3, 4}, ts[[i, 3]]], i++],
+        ts[[i, 1]] === "Tok" && MemberQ[{10, 14, 16}, ts[[i, 3]]], i = linearClose[ts, i],
+        True, Return[i0 - 1, Module]];
+    While[i < n && ts[[i + 1, 1]] === "Tok" && ts[[i + 1, 3]] === 12, i = linearClose[ts, i + 1]];
+    i]
+
+(* the box operators inside each bracket folded, then those around them *)
+linearFoldBrackets[ts_List] := Module[{out = Internal`Bag[], i = 1, j, n = Length[ts]},
+    While[ i <= n,
+        If[ ts[[i, 1]] === "Tok" && MemberQ[$linearOpenKinds, ts[[i, 3]]],
+            j = linearClose[ts, i];
+            Scan[Internal`StuffBag[out, #] &, Join[{ts[[i]]},
+                If[ ts[[j, 1]] === "Tok" && MemberQ[$linearCloseKinds, ts[[j, 3]]] && j > i,
+                    Append[linearFoldBrackets[ts[[i + 1 ;; j - 1]]], ts[[j]]],
+                    linearFoldBrackets[ts[[i + 1 ;; j]]]]]];
+            i = j + 1,
+            Internal`StuffBag[out, ts[[i]]]; i++]];
+    linearFold[Internal`BagPart[out, All]]]
+
+(* The box operators of a row folded into the boxes they build, by precedence: \& and \+ the
+   tightest, then \_, \^, the prefix \@ and, the loosest, \/. The scripts and \@ read to the
+   right, \/ to the left; \% gives the third box of the script or root before it. *)
+linearFold[ts_List] := Module[{out = Internal`Bag[], i = 1, n = Length[ts], pos, op, operand, script, sub, sup, root, fraction},
+    op[o_] := pos <= n && ts[[pos]] === {"Op", o};
+    operand := Module[{e = linearPrimaryEnd[ts, pos, True]},
+        Which[
+            e >= pos, With[{b = linearPlain[ts[[pos ;; e]]]}, pos = e + 1; b],
+            pos <= n && ts[[pos, 1]] === "Tok" && ts[[pos, 3]] === 9, pos++; linearLeaf[ts[[pos - 1, 2]]],
+            True, ""]];
+    script := Module[{b = operand, k, x, y},
+        If[ op["&"] || op["+"],
+            k = ts[[pos, 2]]; pos++; x = script;
+            If[ op["%"],
+                pos++; y = script; If[k === "&", UnderoverscriptBox[b, y, x], UnderoverscriptBox[b, x, y]],
+                If[k === "&", OverscriptBox[b, x], UnderscriptBox[b, x]]],
+            b]];
+    sub := Module[{b = script, x, y},
+        If[op["_"], pos++; x = sub; If[op["%"], pos++; y = sub; SubsuperscriptBox[b, x, y], SubscriptBox[b, x]], b]];
+    sup := Module[{b = sub}, If[op["^"], pos++; SuperscriptBox[b, root], b]];
+    root := If[op["@"], pos++; With[{x = root}, If[op["%"], pos++; RadicalBox[x, root], SqrtBox[x]]], sup];
+    fraction := Module[{b = root}, While[op["/"], pos++; b = FractionBox[b, root]]; b];
+    While[ i <= n,
+        If[ ts[[i, 1]] === "Op" || (i < n && ts[[i, 1]] === "Tok" && ts[[i, 3]] === 9 && ts[[i + 1, 1]] === "Op") ||
+                (! linearPrefixQ[ts[[i]]] && linearPrimaryEnd[ts, i] >= i && linearPrimaryEnd[ts, i] < n && ts[[linearPrimaryEnd[ts, i] + 1, 1]] === "Op"),
+            pos = i; Internal`StuffBag[out, {"Box", fraction}]; i = Max[pos, i + 1],
+            Internal`StuffBag[out, ts[[i]]]; i++]];
+    Internal`BagPart[out, All]]
+
+(* the boxes of a row with no box operator left: its concrete syntax tree, the box of each name
+   that stands for one in its place *)
+linearPlain[ts_List] := Module[{boxes = <||>, k = 0, text, tree},
+    Which[
+        ts === {}, "",
+        Length[ts] === 1 && ts[[1, 1]] === "Box", ts[[1, 2]],
+        True,
+            text = StringJoin[Map[Function[t, If[ t[[1]] === "Box",
+                k++; boxes["zzLinearBox" <> ToString[k] <> "zz"] = t[[2]]; " zzLinearBox" <> ToString[k] <> "zz ",
+                t[[4]] <> t[[2]]]], ts]];
+            tree = WolframLanguageConcrete[text];
+            With[{items = DeleteCases[linearCST[#, boxes] & /@ tree[[2]], Nothing]},
+                Which[items === {}, "", Length[items] === 1, items[[1]], True, RowBox[items]]]]]
+
+(* a node of a concrete syntax tree as boxes: a call's brackets in its row, a pattern's or a slot's
+   leaves one string, whitespace other than spaces, tabs and newlines kept *)
+linearCST[CodeParser`LeafNode[kind_, t_String, _], boxes_] := Which[
+    (MatchQ[kind, Whitespace | Token`Newline | Token`Comment] && StringMatchQ[t, (" " | "\t" | "\n" | "\r") ...]) ||
+        StringStartsQ[ToString[kind], "Token`Fake`"] || t === "", Nothing,
+    KeyExistsQ[boxes, t], boxes[t],
+    True, linearLeaf[t]]
+linearCST[CodeParser`CompoundNode[_, children_List, _], boxes_] := With[{parts = linearCST[#, boxes] & /@ children},
+    If[AllTrue[parts, StringQ], StringJoin[parts], RowBox[parts]]]
+linearCST[CodeParser`CallNode[{head_}, CodeParser`GroupNode[_, children_List, _], _], boxes_] :=
+    RowBox[DeleteCases[Prepend[linearCST[#, boxes] & /@ children, linearCST[head, boxes]], Nothing]]
+linearCST[_[_, children_List, _], boxes_] := With[{items = DeleteCases[linearCST[#, boxes] & /@ children, Nothing]},
+    Which[items === {}, Nothing, Length[items] === 1, items[[1]], True, RowBox[items]]]
+
+(* a token's text as a box: its long names their characters, <| and |> theirs *)
+linearLeaf["<|"] = "\[LeftAssociation]";
+linearLeaf["|>"] = "\[RightAssociation]";
+linearLeaf[t_String] := If[StringFreeQ[t, "\\["], t,
+    StringReplace[t, "\\[" ~~ name : (LetterCharacter | DigitCharacter) .. ~~ "]" /; KeyExistsQ[longNameCharacters[], name] :> longNameCharacters[][name]]]
 
 (* the file a name of << or >> gives: its long names and its \: and \.
    escapes decoded, another \ kept *)

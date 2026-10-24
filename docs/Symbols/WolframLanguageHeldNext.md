@@ -6,7 +6,7 @@ ContextPath: [Wolfram`Parser`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/ref/WolframLanguageHeldNext
 Keywords: [Wolfram Language, statement, one at a time, package, Get, HoldComplete, ToExpression, parser zoo]
-SeeAlso: [WolframLanguageHeld, WolframLanguageGrammar, WolframLanguageSemantic, ToExpression, Get, EndOfFile]
+SeeAlso: [WolframLanguageHeld, WolframLanguageGrammar, WolframLanguageSemantic, LinearBoxes, ToExpression, Get, EndOfFile]
 RelatedGuides: [ParserZoo]
 ---
 
@@ -21,10 +21,11 @@ RelatedGuides: [ParserZoo]
 - The names in a statement are made when that statement is read, in the [$Context]() and [$ContextPath]() of that moment. A statement evaluated before the next is read, such as [BeginPackage]() or [Begin](), so decides where the names after it are made, as [Get]() reads a package.
 - The first call on *code* reads all of it, in one compiled pass over its characters and one over its tokens, and keeps what it finds for the calls after it, each of which builds only its own statement, until a call gives [EndOfFile]() or a [Failure](). What the last few sources read hold is kept.
 - A statement that cannot be read gives <code>{[Failure]()["ParseError", ...], *pos*}</code>, with the `"Position"` and `"Incomplete"` that [WolframLanguageHeld]() gives for *code*; the statements before it read as they are. Reading stops at the line that holds the failure: `a )` fails as a whole, as the kernel reads it, rather than giving `a` first.
-- *warnings* lists the warnings in the order the kernel's reader gives them, each `{tag}` or `{tag, argument}` of the message `Syntax::tag`: `{"com"}` for each [Null]() a comma leaves, after the opener of a bracket or before another comma, the closer or a token that begins no operand; `{"stresc", "q"}` for an escape such as `\q` that a string keeps as written; `{"sntoct1"}`, `{"sntoct2"}`, `{"snthex"}` and `{"snthex32"}` for an octal, `\.`, `\:` or `\|` code with too few digits; `{"sntufn", name}` for a long name no character has, or one not closed in code; `{"sntunc", name}` for one not closed at the end of a string; and `{"sntmsng", text}` for a long name with no name, *text* the source from the statement on.
+- *warnings* lists the warnings in the order the kernel's reader gives them, each `{tag}` or `{tag, argument}` of the message `Syntax::tag`: `{"com"}` for each [Null]() a comma leaves, after the opener of a bracket or before another comma, the closer or a token that begins no operand; `{"stresc", "q"}` for an escape such as `\q` that a string keeps as written; `{"sntoct1"}`, `{"sntoct2"}`, `{"snthex"}` and `{"snthex32"}` for an octal, `\.`, `\:` or `\|` code with too few digits; `{"sntufn", name}` for a long name no character has, or one not closed in code; `{"sntunc", name}` for one not closed at the end of a string, or `{"sntufn", name}` where the source ends in the string; and `{"sntmsng", text}` for a long name with no name, *text* the source from the statement on.
 - A [Failure]() carries under its `"Warnings"` key the warnings the statement that cannot be read gives before reading stops.
 - *pos* is 1 or a position an earlier call gave; from any other position the call reads the first statement whose line begins at or after it.
 - A statement the compiled reader does not take is read by [WolframLanguageGrammar]() over [WolframLanguageSemantic](), and the statements after it by the compiled reader again.
+- Linear syntax reads as [WolframLanguageHeld]() reads it: a group of boxes as its boxes, a group read as input as [LinearBoxes]() of them.
 
 ## Basic Examples
 

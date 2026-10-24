@@ -6,7 +6,7 @@ ContextPath: [Wolfram`Parser`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/ref/WolframLanguageHeld
 Keywords: [Wolfram Language, InputForm, package, held expressions, HoldComplete, ImportString, parser zoo]
-SeeAlso: [WolframLanguageAST, WolframLanguageConcrete, WolframLanguageGrammar, WolframLanguageSemantic, ParseOperatorTable, ImportString]
+SeeAlso: [WolframLanguageHeldNext, WolframLanguageAST, WolframLanguageConcrete, WolframLanguageGrammar, WolframLanguageSemantic, LinearBoxes, ParseOperatorTable, ImportString]
 RelatedGuides: [ParserZoo]
 ---
 
@@ -17,6 +17,7 @@ RelatedGuides: [ParserZoo]
 ## Details & Options
 
 - The result is what <code>[ImportString]()[*code*, {"WL", "HeldExpressions"}]</code> gives: the expressions as the kernel reads them, before any of them evaluates. A statement that is `Null` alone is left out, as the kernel leaves it out.
+- Linear syntax, a group of boxes written as text, reads as its boxes, as the kernel reads it; a group that *code* asks to be read as input reads as [LinearBoxes]() of them, where the kernel gives the expression [MakeExpression]() makes of them.
 - Outside brackets a newline ends an expression wherever the expression could end, so `a` on one line and `+ b` on the next are two expressions, while `a +` followed by `b` is one. Inside brackets a newline is whitespace. Comments, nested ones included, are whitespace. A `\` at the end of a line, outside a string, continues it: `a\` and `b` on the next line are the name `ab`. A `?` or `??` where an operand begins asks about the words after it, as `?Plot*` is `Information["Plot*", LongForm -> False]`, and a `.` before a digit begins a number, so `a.5` is `a*0.5`.
 - The forms come out as the kernel builds them: `a - b` is `Plus[a, Times[-1, b]]`, `a/b` is `Times[a, Power[b, -1]]`, a minus folds into a number (`-2` is the integer `-2`), and a chain of one flat operator is one call (`a + b + c` is `Plus[a, b, c]`).
 - The binding powers are the precedences [CodeParser]() publishes; [WolframLanguageGrammar]() generates the levels of its [ParseOperatorTable]() from them.

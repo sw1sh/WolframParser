@@ -164,6 +164,7 @@ The Wolfram Language itself, as a package file is written: its operators at the 
 - [WolframLanguageConcrete]() parse to the concrete syntax tree [CodeParser]() gives, every character in a leaf
 - [WolframLanguageGrammar]() the grammar, parameterised over an algebra
 - [WolframLanguageSemantic]() the algebra that builds each expression held
+- [LinearBoxes]() a group of boxes written as linear syntax and read as input, held for [MakeExpression]()
 
 ```wl
 WolframLanguageHeld["f[x_] := a - b x /; x > 0"]
