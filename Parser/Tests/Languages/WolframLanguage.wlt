@@ -721,6 +721,24 @@ VerificationTest[
     {HoldComplete[a Get["b"]], 6, <|"Warnings" -> {}|>},
     TestID -> "wl next: << after an operand is a factor"]
 
+(* a unary plus is its own call, but a flat chain of Plus reads its operand, as the kernel reads it *)
+VerificationTest[
+    WolframLanguageHeld /@ {"+b", "+b - 1", "a + +b", "(+a) + b", "a - +b", "x + +y z"},
+    {{HoldComplete[Plus[b]]}, {HoldComplete[Plus[b, -1]]}, {HoldComplete[Plus[a, b]]}, {HoldComplete[Plus[Plus[a], b]]},
+     {HoldComplete[Plus[a, Times[-1, Plus[b]]]]}, {HoldComplete[Plus[x, Times[Plus[y], z]]]}},
+    TestID -> "wl: a unary plus in a chain of Plus is its operand"]
+
+(* a slot's name is read as a name is, $, contexts and long names in it; ## takes digits only *)
+VerificationTest[
+    WolframLanguageHeld /@ {"#$name", "#a$b", "#a`b", "#`a", "##abc", "#\\[Alpha]"},
+    {{HoldComplete[Slot["$name"]]}, {HoldComplete[Slot["a$b"]]}, {HoldComplete[Slot["a`b"]]}, {HoldComplete[Slot["`a"]]},
+     {HoldComplete[Times[SlotSequence[1], abc]]}, {HoldComplete[Slot["\[Alpha]"]]}},
+    TestID -> "wl: a slot's name is a name"]
+VerificationTest[
+    WolframLanguageSyntaxLength /@ {"#a`", "x = #a`", "f[#a`]"},
+    {3, 4, 2},
+    TestID -> "wl syntax: a slot's malformed name makes no slot"]
+
 (* SyntaxQ and SyntaxLength as Wolfram 15 gives them for each source *)
 $wlSyntaxCases = {
     {"", False, 0},

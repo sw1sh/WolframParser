@@ -289,12 +289,27 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                                     c2 = lexCodes[[j]];
                                     Which[c2 == 34, j++; scanning = 0, c2 == 92, j += 2, True, j++]]];
                             kind = If[c == 35, 6, 5],
+                        (* a slot: ## and its digits, or # and its digits or a name, read as a name's
+                           token reads one, a name malformed making no slot *)
                         c == 35,
-                            If[j <= n && lexCodes[[j]] == 35, j++];
                             Which[
+                                j <= n && lexCodes[[j]] == 35, j++; While[j <= n && 48 <= lexCodes[[j]] <= 57, j++],
                                 j <= n && 48 <= lexCodes[[j]] <= 57, While[j <= n && 48 <= lexCodes[[j]] <= 57, j++],
-                                j <= n && ((65 <= lexCodes[[j]] <= 90) || (97 <= lexCodes[[j]] <= 122)),
-                                    j++; While[j <= n && ((48 <= lexCodes[[j]] <= 57) || (65 <= lexCodes[[j]] <= 90) || (97 <= lexCodes[[j]] <= 122)), j++],
+                                j <= n && (lexCodes[[j]] > 65535 || lexClasses[[Min[lexCodes[[j]], 65535] + 1]] == 1 || lexClasses[[Min[lexCodes[[j]], 65535] + 1]] == 5 ||
+                                        (lexCodes[[j]] == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == -1)),
+                                    m = j; scanning = 1;
+                                    While[ scanning == 1 && j <= n,
+                                        c2 = lexCodes[[j]]; cl = If[c2 > 65535, 5, lexClasses[[c2 + 1]]];
+                                        Which[
+                                            cl == 1 || cl == 5 || (cl == 2 && j > m), j++,
+                                            c2 == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == -1, j = lnEnd[[j]],
+                                            True, scanning = 0]];
+                                    tick = 0;
+                                    While[ m < j && status == 0,
+                                        If[lexCodes[[m]] == 96, If[tick == 1, status = 1, tick = 1], If[tick == 1 && 48 <= lexCodes[[m]] <= 57, status = 1]; tick = 0];
+                                        m++];
+                                    If[tick == 1, status = 1];
+                                    If[status == 1, j = i],
                                 True, j = j];
                             kind = 6,
                         c == 37,
@@ -1059,8 +1074,8 @@ $fastLeafKinds = <|1 -> "Symbol", 2 -> "Blank", 3 -> "Integer", 4 -> "Real", 5 -
    kinds, texts and marks of its leaves, those fastLeafData gives: the statements'. A value on the
    stack is its expression, held, and its mark what the kernel reads differently for it: 1 a number
    literal, into which a minus folds, 2 a product, whose factors a minus joins, 3 a name's call by
-   @, the name and the argument in ats, a flat chain of the name reading the argument, 0 anything
-   else. The values wait in an association by their place on the stack, which a write does not
+   @ or a unary plus, the name and the argument in ats, a flat chain of the name reading the
+   argument, 0 anything else. The values wait in an association by their place on the stack, which a write does not
    copy, as it does a list of them, and the marks in a packed array. A leaf's value is made once for
    each kind and text, before the instructions run, as nothing is evaluated while the program is
    built. The names are Block's,
@@ -1122,7 +1137,10 @@ fastStep[5, a_, b_] := (xs = Range[sp - b + 1, sp]; sp -= b - 1;
 fastStep[9, a_, b_] := If[ a === $fastParenHead, mk[[sp]] = If[mk[[sp]] === 1, 1, 0],
     xs = Lookup[vals, Range[sp - b + 1, sp]]; sp -= b - 1; vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], xs]; mk[[sp]] = 0]
 fastStep[19, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = symbolCall["CompoundExpression", xs]; mk[[sp]] = 0)
-fastStep[2, a_, _] := (vals[sp] = If[a === $fastMinusHead, negatedHeld[vals[sp], mk[[sp]]], heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp]}]]; mk[[sp]] = 0)
+fastStep[2, a_, _] := Which[
+    a === $fastMinusHead, vals[sp] = negatedHeld[vals[sp], mk[[sp]]]; mk[[sp]] = 0,
+    a === $fastPlusHead, ats[sp] = {heldSymbol["Plus"], vals[sp]}; vals[sp] = heldCall[ats[sp][[1]], {vals[sp]}]; mk[[sp]] = 3,
+    True, vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp]}]; mk[[sp]] = 0]
 fastStep[3, a_, _] := (vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp]}]; mk[[sp]] = 0)
 fastStep[23, _, _] := (sp--; vals[sp] = symbolCall["Pattern", {vals[sp], vals[sp + 1]}]; mk[[sp]] = 0)
 fastStep[11, _, _] := (sp++; vals[sp] = heldSymbol["Null"]; mk[[sp]] = 0)
@@ -1152,6 +1170,7 @@ fastStep[29, a_, _] := (vals[sp] = symbolCall["Information", {vals[sp], symbolCa
 (* the head codes the build pass reads apart, and the heads whose flat chain reads a call of the
    head by @ as its argument *)
 $fastMinusHead := $fastMinusHead = fastHeadCode["Minus"]
+$fastPlusHead := $fastPlusHead = fastHeadCode["Plus"]
 $fastParenHead := $fastParenHead = fastHeadCode["Paren"]
 $fastTimesHead := $fastTimesHead = fastHeadCode["Times"]
 $fastAtHead := $fastAtHead = fastHeadCode["At"]
@@ -1509,7 +1528,8 @@ syntaxStop[s_String] := Module[{spans = lineContinuations[s], clean, kept, codes
                 source[lastNewline[codes, lexed[[5 k]]]],
             True, With[{t = If[k > 1 && lexed[[5 (k - 1) - 2]] === $tkName && lexed[[5 (k - 1) + 1]] === lexed[[5 k]] && codes[[lexed[[5 k]]]] === 92 &&
                     lexed[[5 k]] < Length[codes] && codes[[lexed[[5 k]] + 1]] === 91, k - 1, k]},
-                With[{p = source[lexed[[5 t]]]}, If[p === 1 && (codes[[lexed[[5 t]]]] === 92 || lexed[[5 t - 2]] === $tkName || LetterQ[FromCharacterCode[codes[[lexed[[5 t]]]]]]), length, p - 1]]]]]]
+                With[{p = source[lexed[[5 t]]]}, If[p === 1 && (codes[[lexed[[5 t]]]] === 92 || lexed[[5 t - 2]] === $tkName || lexed[[5 t - 2]] === $tkSlot ||
+                    LetterQ[FromCharacterCode[codes[[lexed[[5 t]]]]]]), length, p - 1]]]]]]
 
 (* the last newline before the character at *)
 lastNewline[codes_List, at_Integer] := Block[{i = at - 1}, While[i > 1 && codes[[i]] =!= 10 && codes[[i]] =!= 13, i--]; i]

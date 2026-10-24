@@ -151,7 +151,7 @@ $string = text[ParseLiteral["\""] ~~ ParseMany[ParseChoice[
 (* _, __, ___, then an optional . or a head *)
 $blank = text[ParseChoice[ParseLiteral["___"], ParseLiteral["__"], ParseLiteral["_"]] ~~ ParseOptional[ParseChoice[ParseLiteral["."], $name]]]
 
-$slot = ParseAction[ParseLookahead[ParseLiteral["#"]] ~~ ParseChoice[text[ParseLiteral["#"] ~~ $string], ParseRegex["##?([0-9]+|[A-Za-z][A-Za-z0-9]*)?"]], #2 &]
+$slot = ParseAction[ParseLookahead[ParseLiteral["#"]] ~~ ParseChoice[text[ParseLiteral["#"] ~~ $string], ParseRegex["##[0-9]*|#([0-9]+|[A-Za-z$`][A-Za-z0-9$`]*)?"]], #2 &]
 
 (* what a ? or ?? asks about: words of letters, digits and the * and @
    of a name pattern, the spaces and tabs between them too *)
@@ -501,7 +501,11 @@ $heldBlanks := $heldBlanks = symbolCall[#, {}] & /@ $blankNames
 slotExpression[s_String] /; StringStartsQ[s, "#\""] := symbolCall["Slot", {HoldComplete @@ {stringValue[StringDrop[s, 1]]}}]
 slotExpression[s_String] := With[{rest = StringDelete[s, "#"]},
     symbolCall[If[StringStartsQ[s, "##"], "SlotSequence", "Slot"],
-        {Which[rest === "", HoldComplete[1], StringMatchQ[rest, DigitCharacter ..], HoldComplete @@ {FromDigits[rest]}, True, HoldComplete @@ {rest}]}]]
+        {Which[rest === "", HoldComplete[1], StringMatchQ[rest, DigitCharacter ..], HoldComplete @@ {FromDigits[rest]}, True, HoldComplete @@ {longNamesRead[rest]}]}]]
+
+(* a name's text, each long name in it that is a letter its character *)
+longNamesRead[s_String] := If[ StringFreeQ[s, "\\["], s,
+    StringReplace[s, "\\[" ~~ name : (LetterCharacter | DigitCharacter) .. ~~ "]" /; KeyExistsQ[longNameCharacters[], name] :> longNameCharacters[][name]]]
 
 (* %: Out[]; %%: Out[-2]; %3: Out[3] *)
 outExpression[s_String] := With[{count = StringCount[s, "%"], digits = StringDelete[s, "%"]},
@@ -879,7 +883,11 @@ binaryHeld[op_String, l_, r_] := symbolCall[op, {l, r}]
 
 WolframLanguageSemantic = <|
     "Leaf"    -> Function[{kind, s}, heldLeaf[kind, s]],
-    "Prefix"  -> Function[{op, x}, held[If[op === "Minus", negated[x], symbolCall[op, {x["Expr"]}]]]],
+    (* a unary plus is marked as a call of Plus by @, which a flat chain of Plus reads as its operand *)
+    "Prefix"  -> Function[{op, x}, Which[
+        op === "Minus", held[negated[x]],
+        op === "Plus", Append[held[symbolCall[op, {x["Expr"]}]], "At" -> {heldSymbol["Plus"], x}],
+        True, held[symbolCall[op, {x["Expr"]}]]]],
     "Postfix" -> Function[{x, op}, held[symbolCall[op, {x["Expr"]}]]],
     "Binary"  -> Function[{op, l, r}, held[binaryHeld[op, l["Expr"], r["Expr"]]]],
     "Infix"   -> Function[{op, xs}, <|"Expr" -> symbolCall[op, expressions[spliced[op, xs]]], "Literal" -> False, "Chain" -> op === "Times"|>],
