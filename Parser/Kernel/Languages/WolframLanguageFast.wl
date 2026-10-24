@@ -456,7 +456,7 @@ $fastPrefixTable := $fastPrefixTable = Join[$fastPrefix,
 $fastGroupTable := $fastGroupTable = Association[Map[fastLongOp[#[[1]]] -> {fastLongOp[#[[2]]], SymbolName[#[[3]]]} &,
     Select[$longNameTable["Groups"], #[[1]] =!= "LeftDoubleBracket" &]]]
 $fastIntegralTable := $fastIntegralTable = Association[Map[fastLongOp[#[[1]]] -> {SymbolName[#[[2]]], #[[3]]} &, $longNameTable["Integrals"]]]
-$fastPrefixOnly := $fastPrefixOnly = AssociationThread[Append[DeleteCases[fastLongOp /@ $prefixOnlyNames, 0], $fastNotId] -> True]
+$fastPrefixOnly := $fastPrefixOnly = AssociationThread[Join[DeleteCases[fastLongOp /@ $prefixOnlyNames, 0], {$fastNotId, $fastGet}] -> True]
 $fastLongMinus := $fastLongMinus = fastLongOp["Minus"]
 $fastRightDoubleBracket := $fastRightDoubleBracket = fastLongOp["RightDoubleBracket"]
 

@@ -711,6 +711,16 @@ VerificationTest[
     {{7, False}, {6, False}, {8, True}, {6, True}},
     TestID -> "wl failure: a colon after no pattern; a tilde with no second"]
 
+(* << after an operand on its line is a factor, as the kernel reads it *)
+VerificationTest[
+    WolframLanguageHeld /@ {"a<<b", "f[a<<b]", "a<<b + 1", "2<<b.m", "a\n<<b"},
+    {{HoldComplete[a Get["b"]]}, {HoldComplete[f[a Get["b"]]]}, {HoldComplete[a Get["b"] + 1]}, {HoldComplete[2 Get["b.m"]]}, {HoldComplete[a], HoldComplete[Get["b"]]}},
+    TestID -> "wl: << after an operand is a factor"]
+VerificationTest[
+    WolframLanguageHeldNext["a<<b\nc", 1],
+    {HoldComplete[a Get["b"]], 6, <|"Warnings" -> {}|>},
+    TestID -> "wl next: << after an operand is a factor"]
+
 (* SyntaxQ and SyntaxLength as Wolfram 15 gives them for each source *)
 $wlSyntaxCases = {
     {"", False, 0},
