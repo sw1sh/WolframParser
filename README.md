@@ -50,7 +50,7 @@ does, each statement's names made only when it is read and the kernel's syntax w
 The kernel is dependency-free — no C library — with performance from `FunctionCompile`'s
 LLVM backend. It ships as a full paclet (`Guides` / `Symbols` / `Tutorials` documentation,
 built from `docs/` with [PacletPage](https://github.com/WolframInstitute/PacletPage)) and is
-covered by 446 core and 1193 language tests (`wl -f run-tests.wls`).
+covered by 448 core and 1194 language tests (`wl -f run-tests.wls`).
 
 [`build.wls`](build.wls) builds the documentation, [`release.wls`](release.wls) builds it,
 deploys the paclet resource and publishes the documentation site, and

@@ -121,6 +121,7 @@ PacletObject[<|
             "Root" -> "Assets",
             "Assets" -> {
                 {"CompiledLaTeXParser", "LaTeXMathParserCompiled.wxf"},
+                {"WolframLanguageClasses", "WolframLanguageClasses.wxf"},
                 {"Hero", "hero.png"}
             }
         },

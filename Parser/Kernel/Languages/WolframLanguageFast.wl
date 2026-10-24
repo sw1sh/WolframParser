@@ -28,8 +28,16 @@ Begin["`Private`"]
    2 a digit, 3 a space, tab or form feed, or the character of a long name
    that is whitespace, 4 a newline, a return or the character of a long
    name that is a newline, 5 a character past ASCII that a name holds, 0
-   any other *)
-$fastClasses := $fastClasses = Module[{t = ConstantArray[0, 65536], high = Range[128, 65535]},
+   any other. The table is the paclet's asset WolframLanguageClasses.wxf,
+   recorded on Wolfram 15, so that every kernel lexes by Wolfram 15's own
+   WhitespaceCharacter; it is computed where the asset is missing. *)
+$fastClasses := $fastClasses = With[{file = FileNameJoin[{ParentDirectory[$languagesDirectory, 2], "Assets", "WolframLanguageClasses.wxf"}]},
+    Replace[If[FileExistsQ[file], BinaryDeserialize[ReadByteArray[file]], None], {
+        b_ByteArray /; Length[b] === 65536 :> Developer`ToPackedArray[Normal[b]],
+        _ :> fastClassesComputed[]}]]
+
+(* the table computed: what dev/freeze-classes.wls records into the paclet's asset on Wolfram 15 *)
+fastClassesComputed[] := Module[{t = ConstantArray[0, 65536], high = Range[128, 65535]},
     t[[ToCharacterCode["ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz$`"] + 1]] = 1;
     t[[Range[48, 57] + 1]] = 2;
     t[[{32, 9, 12} + 1]] = 3;
