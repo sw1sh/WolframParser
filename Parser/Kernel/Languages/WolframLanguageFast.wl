@@ -486,7 +486,8 @@ fastLedIndices[kinds_List, ops_List] := Module[{index, unset},
    three integers}: a postfix program the build pass makes the held values
    of. Status 1: the tokens are no Wolfram Language, and the second number
    is the farthest token reading reached, where the kernel's reader stops;
-   2: they hold what this parser does not take. It climbs as the grammar's table does, with no
+   2: they hold what this parser does not take; either way the third is
+   the first token of the statement that stops it. It climbs as the grammar's table does, with no
    recursion: a stack of frames of eight integers, the expression being
    read and what waits for it, backtracking to a pattern's name or to an
    operand left out by the token and the program's length a frame saved.
@@ -508,7 +509,8 @@ fastLedIndices[kinds_List, ops_List] := Module[{index, unset},
    14 a message name {n}; 15 a type's parameters {n}; 16 a derivative
    {primes}; 17 a ~f~ b; 18 a span {n}; 19 a compound {n}; 20 a tag set
    {1 :=, 2 =, 3 =.}; 21 a put {head}; 22 a get; 23 a pattern; 24 an
-   integral {integral}; 25 the end of a statement;
+   integral {integral}; 25 the end of a statement {its first token, the
+   token after it};
    26 a divisibility chain {n}; 27 !!; 28 the words of a query {start,
    end}; 29 a query {??}. *)
 $fastParseDeclaration = FunctionDeclaration[fastParse,
@@ -520,7 +522,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
     Function[{pTok, pLed, pSpecs, pPrefix, pGroups, pIntegrals, pSpecial, pHeads, pKeys, pCodes, pClasses},
         Module[{n = pTok[[2]], out, fr, maxFrames, sp = 0, on = 0, t = 1, brackets = 0, status = 0, mode = 0,
                 pMin = 0, pRbp = 0, pPlain = 0, base = 0, k = 0, o = 0, i = 0, bp = 0, fx = 0, hd = 0, ky = 0, mn = 0, rb = 0, pl = 0,
-                ft = 0, cnt = 0, bt = 0, colons = 0, ok = 0, x = 0, lg = 0, e = 0, we = 0, c = 0, cl = 0, tt = 0, far = 0},
+                ft = 0, cnt = 0, bt = 0, colons = 0, ok = 0, x = 0, lg = 0, e = 0, we = 0, c = 0, cl = 0, tt = 0, far = 0, stmt = 1},
             out = Table[0, {3 (8 n + 16) + 2}];
             maxFrames = 4 n + 64;
             fr = Table[0, {8 maxFrames}];
@@ -528,7 +530,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                 Which[
                     (* a statement *)
                     mode == 0,
-                        If[pTok[[5 t - 2]] == 0, mode = 99, pMin = 0; pRbp = 0; pPlain = 0; mode = 1],
+                        If[pTok[[5 t - 2]] == 0, mode = 99, stmt = t; pMin = 0; pRbp = 0; pPlain = 0; mode = 1],
                     (* an expression's frame *)
                     mode == 1,
                         If[ sp >= maxFrames, status = 2; mode = 99,
@@ -683,7 +685,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                     mode == 4,
                         sp--;
                         If[ sp == 0,
-                            on++; out[[3 on]] = 25; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 0,
+                            on++; out[[3 on]] = 25; out[[3 on + 1]] = stmt; out[[3 on + 2]] = t; mode = 0,
                             base = 8 (sp - 1); ft = fr[[base + 1]];
                             Which[
                                 ft == 2,
@@ -814,7 +816,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                             on++; out[[3 on]] = 19; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3],
                     True, status = 2; mode = 99]];
             out[[1]] = status; out[[2]] = If[status == 1, far, on];
-            Take[out, If[status == 0, 2 + 3 on, 2]]]]]
+            If[status != 0, out[[3]] = stmt];
+            Take[out, If[status == 0, 2 + 3 on, 3]]]]]
 
 (* the parser run here, fixed at its first use *)
 fastParseFunction := fastParseFunction = typedFunction[fastParse, $fastParseDeclaration]
@@ -915,22 +918,304 @@ fastBuild[prog_List] := Module[{n = prog[[2]], vals = <||>, sp = 0, heads, hp = 
 (* the source's top-level expressions, held, by the lexer, the parser and
    the build pass; source that is no Wolfram Language a failure where the
    kernel's reader stops, and the grammar reads what they do not take *)
-fastHeld[s_String] := Catch[Module[{codes = ToCharacterCode[s], padded, lexed, kinds, ops, prog},
+fastHeld[s_String] := Catch[Module[{codes = ToCharacterCode[s], padded, lexed, cut, prog},
     padded = Join[codes, {0, 0, 0}];
     lexed = fastLexFunction[padded, $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];
-    Switch[ lexed[[1]],
-        0, Null,
-        3, Throw[fastFailure[Length[codes] + 1, True], $fastGiveUp],
-        _, Throw[fastFailure[lexed[[2 + 5 (lexed[[2]] - 1) + 4]], False], $fastGiveUp]];
-    kinds = lexed[[3 ;; ;; 5]]; ops = lexed[[4 ;; ;; 5]];
-    prog = fastParseFunction[lexed, fastLedIndices[kinds, ops], $fastSpecTable, $fastPrefixArray, $fastGroupArray,
-        $fastIntegralArray, $fastSpecialArray, $fastHeadCodeArray, $fastKeyCodeArray, padded, $fastClasses];
+    (* the lexer stops at its last token: reading stops there, or at a statement before it that
+       cannot be read *)
+    If[ lexed[[1]] =!= 0,
+        cut = tokensBefore[lexed, lexed[[2]]];
+        prog = fastParseTokens[cut, padded];
+        Which[
+            prog[[1]] === 2, fastGiveUp[],
+            prog[[1]] === 1 && prog[[2]] < lexed[[2]], Throw[stoppedFailure[cut, prog[[2]]], $fastGiveUp],
+            True, Throw[lexerFailure[lexed, Length[codes]], $fastGiveUp]]];
+    prog = fastParseTokens[lexed, padded];
     Switch[ prog[[1]],
         0, Null,
         1, Throw[stoppedFailure[lexed, prog[[2]]], $fastGiveUp],
         _, fastGiveUp[]];
     Block[{$fcodes = codes, $fs = lexed[[5 ;; ;; 5]], $fe = lexed[[6 ;; ;; 5]], $falg = WolframLanguageSemantic},
         fastBuild[prog]]], $fastGiveUp]
+
+(* the typed parser over the lexer's tokens of a source, its codes padded *)
+fastParseTokens[lexed_List, padded_List] := fastParseFunction[lexed, fastLedIndices[lexed[[3 ;; ;; 5]], lexed[[4 ;; ;; 5]]], $fastSpecTable,
+    $fastPrefixArray, $fastGroupArray, $fastIntegralArray, $fastSpecialArray, $fastHeadCodeArray, $fastKeyCodeArray, padded, $fastClasses]
+
+(* --- statements one at a time --- *)
+
+(* The parts of a source that reading it one statement at a time gives, as the kernel's
+   ToExpression gives them: each statement, and the Null of each line that holds none. A line ends
+   at each return, each newline and each long name that is a newline, outside comments; a
+   statement's line is the one it ends on, each line after it with only whitespace and comments on
+   it is a Null, and the last line of the source is one only where the source holds nothing else.
+   Reading stops at the first statement that cannot be read. Each part is <|"Start" -> where its
+   line begins, "Next" -> where the line after it does, "Kind" -> ...|>, positions of the source: a
+   "Statement", the instructions "From" to "To" of the program of its "Segment" and its "Tokens";
+   a statement the grammar reads, "Grammar" until it is read, at the character "At" of the source
+   read and the "Token" of its "Segment", then "Held", its "Data" and "Warnings"; a "Null"; a
+   "Failure", its "Data"; and the "End". A source's parts are made at its first call and kept for
+   the calls on it after, until one reads its end or its failure, those of the last few sources. *)
+$heldNextStates = {};
+
+(* the place in $heldNextStates of the parts of s, made now if they are not there *)
+heldNextState[s_String] := Module[{i = 1},
+    While[i <= Length[$heldNextStates] && $heldNextStates[[i]]["Source"] =!= s, i++];
+    If[ i <= Length[$heldNextStates], i,
+        $heldNextStates = Take[Prepend[$heldNextStates, makeHeldNextState[s]], UpTo[4]]; 1]]
+
+makeHeldNextState[s_String] := With[{spans = lineContinuations[s]},
+    With[{clean = If[spans === {}, s, StringReplacePart[s, "", spans]]},
+        segmentParts[<|"Source" -> s, "Clean" -> clean, "Kept" -> If[spans === {}, None, keptPositions[s, spans]],
+            "Codes" -> ToCharacterCode[clean], "Segments" -> {}, "Parts" -> {}, "Index" -> <||>|>, 1, None]]]
+
+(* a position in the source read without its line continuations, in the source *)
+sourcePosition[state_Association, c_Integer] := With[{kept = state["Kept"]},
+    Which[kept === None, c, c <= Length[kept], kept[[c]], True, StringLength[state["Source"]] + c - Length[kept]]]
+
+(* a failure of the source read from its character from on, without its line continuations, at the
+   character of the source it is at *)
+sourceFailure[state_Association, f_Failure, from_Integer] := With[{p = sourcePosition[state, f["Position"] + from - 1]},
+    Failure[f[[1]], Join[f[[2]], <|"Position" -> p, "MessageParameters" -> Append[Lookup[f[[2]], "MessageParameters", <||>], "Position" -> p]|>]]]
+
+(* the lexer's tokens 1 to k - 1, then the end, where token k begins *)
+tokensBefore[lexed_List, k_Integer] := Developer`ToPackedArray[Join[{0, k}, lexed[[3 ;; 2 + 5 (k - 1)]], {0, 0, lexed[[5 k]], lexed[[5 k]], lexed[[5 k + 2]]}]]
+
+(* each statement of a program read whole: {its first instruction, its last, its first token, the token after it} *)
+statementRanges[prog_List] := With[{js = Flatten[Position[prog[[3 ;; 2 + 3 prog[[2]] ;; 3]], 25]]},
+    If[js === {}, {}, Transpose[{Prepend[Most[js] + 1, 1], js, prog[[3 js + 1]], prog[[3 js + 2]]}]]]
+
+(* where the lexer stops, the failure: the source ends in a string or a comment not closed, or
+   holds a character no token has *)
+lexerFailure[lexed_List, n_Integer] := If[lexed[[1]] === 3, fastFailure[n + 1, True], fastFailure[lexed[[5 lexed[[2]] + 1]], False]]
+
+(* the line breaks in the whitespace and comments of codes from a to b - 1, each the position just past it *)
+lineBreaks[codes_List, a_Integer, b_Integer] := Module[{i = a, out = Internal`Bag[], depth, k},
+    While[ i < b,
+        Which[
+            codes[[i]] === 40 && i + 1 < b && codes[[i + 1]] === 42,
+                depth = 1; i += 2;
+                While[ i < b && depth > 0,
+                    Which[
+                        codes[[i]] === 40 && i + 1 < b && codes[[i + 1]] === 42, depth++; i += 2,
+                        codes[[i]] === 42 && i + 1 < b && codes[[i + 1]] === 41, depth--; i += 2,
+                        True, i++]],
+            codes[[i]] <= 65535 && $fastClasses[[codes[[i]] + 1]] === 4, i++; Internal`StuffBag[out, i],
+            codes[[i]] === 92 && i + 1 < b && codes[[i + 1]] === 91,
+                k = i + 2; While[k < b && codes[[k]] =!= 93, k++];
+                If[MemberQ[$heldNewlineNames, FromCharacterCode[codes[[i + 2 ;; k - 1]]]], Internal`StuffBag[out, k + 1]];
+                i = k + 1,
+            True, i++]];
+    Internal`BagPart[out, All]]
+
+(* The state, the parts of the source read from its character from on appended to its parts and
+   the segment they are read from to its segments. The statement pending before them, if one, is the
+   one the grammar has just read, whose line the first line break after it ends. *)
+segmentParts[state_Association, from_Integer, pending_] := Module[
+    {st = state, offset = from - 1, codes, padded, lexed, prog, first = None, stop = None, k, cut, ranges, seg, bag = Internal`Bag[],
+     open = pending, slot = from, after = 1, end, src, emit, close, gap},
+    codes = If[from === 1, state["Codes"], Drop[state["Codes"], offset]];
+    padded = Join[codes, {0, 0, 0}];
+    lexed = fastLexFunction[padded, $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];
+    (* a token, or a character no token has, on the line of the statement the grammar read: that
+       statement cannot be read *)
+    If[ pending =!= None && lexed[[7]] === 0 && (lexed[[3]] =!= $tkEnd || lexed[[1]] =!= 0),
+        st["Parts"] = Append[st["Parts"], <|"Start" -> pending["Start"], "Next" -> pending["Start"], "Kind" -> "Failure",
+            "Data" -> warned[sourceFailure[st, If[lexed[[1]] === 0, stoppedFailure[lexed, 1], lexerFailure[lexed, Length[codes]]], from],
+                Join[pending["Warnings"], tokenWarnings[codes, lexed, 1, 1]]]|>];
+        Return[st, Module]];
+    Which[
+        lexed[[1]] === 0,
+            prog = fastParseTokens[lexed, padded];
+            Switch[ prog[[1]],
+                0, Null,
+                1, first = prog[[3]]; stop = {"Failure", stoppedFailure[lexed, prog[[2]]], prog[[2]], prog[[2]]},
+                _, first = prog[[3]]; stop = {"Grammar"}],
+        (* the lexer stops at its last token: the statements before it are read, and the one where
+           reading stops is the first that cannot be, the one that holds the token or one before it *)
+        True,
+            k = lexed[[2]]; cut = tokensBefore[lexed, k];
+            prog = fastParseTokens[cut, padded];
+            Which[
+                prog[[1]] === 2, first = prog[[3]]; stop = {"Grammar"},
+                prog[[1]] === 1 && prog[[2]] < k, first = prog[[3]]; stop = {"Failure", stoppedFailure[cut, prog[[2]]], prog[[2]], prog[[2]]},
+                True, first = If[prog[[1]] === 1, prog[[3]], k]; stop = {"Failure", lexerFailure[lexed, Length[codes]], k, 0}]];
+    (* the statements before the one where reading stops, but those on its line, which the
+       kernel reads with it *)
+    ranges = If[ first === None, statementRanges[prog],
+        prog = fastParseTokens[tokensBefore[lexed, first], padded];
+        statementRanges[prog]];
+    While[first =!= None && ranges =!= {} && lexed[[5 first + 2]] === 0, first = ranges[[-1, 3]]; ranges = Most[ranges]];
+    seg = Length[st["Segments"]] + 1;
+    st["Segments"] = Append[st["Segments"], <|"Codes" -> codes, "Lexed" -> lexed, "Starts" -> lexed[[5 ;; ;; 5]], "Ends" -> lexed[[6 ;; ;; 5]], "Program" -> prog,
+        "Warning" -> warningTokens[codes, lexed]|>];
+    (* the parts, positions of the source read made those of the source *)
+    src = sourcePosition[st, # + offset] &;
+    emit = Internal`StuffBag[bag, #] &;
+    close = Function[x, emit[Append[open, "Next" -> src[x]]]; open = None; slot = x];
+    (* the line breaks before the token at x: the first ends the line of the statement before, if
+       one is open, each after it a Null's *)
+    gap = Function[x, Module[{breaks = lineBreaks[codes, after, x]},
+        If[open =!= None, If[breaks === {}, close[x], close[First[breaks]]; breaks = Rest[breaks]]];
+        Scan[(emit[<|"Start" -> src[slot], "Next" -> src[#], "Kind" -> "Null"|>]; slot = #) &, breaks]]];
+    Scan[Function[r,
+        gap[lexed[[5 r[[3]]]]];
+        open = <|"Start" -> src[slot], "Kind" -> "Statement", "Segment" -> seg, "From" -> r[[1]], "To" -> r[[2]], "Tokens" -> {r[[3]], r[[4]] - 1}|>;
+        after = lexed[[5 r[[4]] - 4]]], ranges];
+    end = If[first === None, Length[codes] + 1, lexed[[5 first]]];
+    gap[end];
+    Which[
+        stop =!= None,
+            emit[Join[<|"Start" -> src[slot], "Next" -> src[slot], "Kind" -> stop[[1]]|>,
+                If[ stop[[1]] === "Failure",
+                    <|"Data" -> warned[sourceFailure[st, stop[[2]], from], tokenWarnings[codes, lexed, first, stop[[3]], stop[[4]]]]|>,
+                    <|"At" -> end + offset, "Segment" -> seg, "Token" -> first|>]]],
+        pending === None && Internal`BagLength[bag] === 0,
+            emit[<|"Start" -> 1, "Next" -> src[Length[codes] + 2], "Kind" -> "Null"|>]; emit[<|"Start" -> src[Length[codes] + 2], "Kind" -> "End"|>],
+        True, emit[<|"Start" -> src[slot], "Kind" -> "End"|>]];
+    st["Parts"] = Join[st["Parts"], Internal`BagPart[bag, All]];
+    st["Index"] = AssociationThread[Lookup[st["Parts"], "Start"] -> Range[Length[st["Parts"]]]];
+    st]
+
+(* --- warnings --- *)
+
+(* The warnings the kernel's reader gives as it reads tokens from to to of a lexed source, codes
+   its characters [WL 15.0.0]: {"com"} for each Null a comma leaves, after the opener of a bracket
+   or before another comma, its closer, the end or the token stop that reading stops at, which
+   begins no operand; those of each string's escapes; and where the lexer stops at a long name,
+   {"sntufn", name} for one no character has or not closed, {"sntmsng", text} for one with no name
+   before a quote, text the source from the statement on. *)
+tokenWarnings[codes_List, lexed_List, from_Integer, to_Integer, stop_Integer : 0] := With[{kinds = lexed[[5 from - 2 ;; 5 to - 2 ;; 5]]},
+    warningsAt[codes, lexed, from, to, stop, from - 1 + Flatten[Position[Unitize[(kinds - $tkString) (kinds - $tkComma) kinds], 0]]]]
+
+(* the warnings of tokens from to to that come from the tokens ts among them *)
+warningsAt[codes_List, lexed_List, from_Integer, to_Integer, stop_Integer, ts_List] := Module[{out = Internal`Bag[], k, text},
+    text := FromCharacterCode[codes[[lexed[[5 from]] ;;]]];
+    Do[ k = lexed[[5 t - 2]];
+            Which[
+                k === $tkString,
+                    With[{string = codes[[lexed[[5 t]] ;; lexed[[5 t + 1]] - 1]]},
+                        If[ MemberQ[string, 92],
+                            Scan[Internal`StuffBag[out, Replace[#, {"sntmsng"} :> {"sntmsng", text}]] &, stringWarnings[FromCharacterCode[string], lexed[[1]] === 3 && t === lexed[[2]]]]]],
+                k === $tkComma,
+                    If[t > from && bracketQ[lexed, t - 1, $warnOpeners], Internal`StuffBag[out, {"com"}]];
+                    If[t < to && (lexed[[5 t + 3]] === $tkComma || bracketQ[lexed, t + 1, $warnClosers] || t + 1 === stop), Internal`StuffBag[out, {"com"}]],
+                k === $tkEnd && t === lexed[[2]] && lexed[[1]] === 1 && codes[[lexed[[5 t]]]] === 92 && lexed[[5 t]] < Length[codes] && codes[[lexed[[5 t]] + 1]] === 91,
+                    With[{name = longNameText[codes, lexed[[5 t]] + 2]},
+                        Which[
+                            name === "", If[lexed[[5 t]] + 2 <= Length[codes] && codes[[lexed[[5 t]] + 2]] === 34, Internal`StuffBag[out, {"sntmsng", text}]],
+                            ! (lexed[[5 t]] + 2 + StringLength[name] <= Length[codes] && codes[[lexed[[5 t]] + 2 + StringLength[name]]] === 93 &&
+                                KeyExistsQ[longNameCharacters[], name]),
+                                Internal`StuffBag[out, {"sntufn", name}]]]],
+        {t, ts}];
+    Internal`BagPart[out, All]]
+
+(* The tokens of a lexed source a statement's warning may come from, each read in one pass: a
+   comma after a token that may open a bracket or before one that may close it or a comma, and a
+   string with a \ in it. With them, for each token t, how many come before it. *)
+warningTokens[codes_List, lexed_List] := Module[{kinds = lexed[[3 ;; ;; 5]], n, commas, strings, slashes, marks},
+    n = Length[kinds];
+    commas = Flatten[Position[kinds, $tkComma]];
+    If[ commas =!= {},
+        commas = Pick[commas, Unitize[$openKindFlags[[kinds[[Clip[commas - 1, {1, n}]]] + 1]] + $closeKindFlags[[kinds[[Clip[commas + 1, {1, n}]]] + 1]]], 1]];
+    strings = Flatten[Position[kinds, $tkString]];
+    If[ strings =!= {},
+        slashes = Accumulate[Prepend[1 - Unitize[codes - 92], 0]];
+        strings = Pick[strings, Unitize[slashes[[lexed[[5 strings + 1]]]] - slashes[[lexed[[5 strings]]]]], 1]];
+    marks = ConstantArray[0, n];
+    marks[[Union[commas, strings]]] = 1;
+    {Union[commas, strings], Accumulate[Prepend[marks, 0]]}]
+
+(* the kinds of token that may open a bracket's items, and close them, by kind + 1 *)
+$openKindFlags = ReplacePart[ConstantArray[0, 20], Thread[{9, 12, 14, 16} + 1 -> 1]];
+$closeKindFlags = ReplacePart[ConstantArray[0, 20], Thread[{0, 9, 13, 15, 17, 18} + 1 -> 1]];
+
+(* the letters and digits of a long name's name, from its character i on *)
+longNameText[codes_List, i_Integer] := FromCharacterCode[TakeWhile[codes[[i ;;]], 48 <= # <= 57 || 65 <= # <= 90 || 97 <= # <= 122 &]]
+
+(* token t of a lexed source opens, or closes, a bracket's items: its kind, or the long name it
+   is; the end of the source closes them too, where the lexer reads it *)
+bracketQ[lexed_List, t_Integer, ops_Association] := With[{k = lexed[[5 t - 2]]},
+    Which[
+        k === $tkOperator, KeyExistsQ[ops, lexed[[5 t - 1]]],
+        k === $tkEnd, ops === $warnClosers && (lexed[[1]] =!= 1 || t < lexed[[2]]),
+        True, MemberQ[ops["Kinds"], k]]]
+
+$warnOpeners := $warnOpeners = Join[<|"Kinds" -> {$tkOpenSquare, $tkOpenCurly, $tkOpenAssociation}|>,
+    AssociationThread[Append[Keys[$fastGroupTable], fastLongOp["LeftDoubleBracket"]] -> True]]
+$warnClosers := $warnClosers = Join[<|"Kinds" -> {$tkCloseSquare, $tkCloseCurly, $tkCloseAssociation}|>,
+    AssociationThread[Append[Values[$fastGroupTable][[All, 1]], $fastRightDoubleBracket] -> True]]
+
+(* The warnings of the escapes a string keeps as written [WL 15.0.0]: too few digits of a code,
+   a letter no escape has, a long name no character has, or not closed before the string is, and
+   {"sntmsng"} for a long name with no name at its end, which the statement's text completes;
+   unclosed, the string goes on to its token's end. *)
+stringWarnings[s_String, unclosed_] := StringCases[If[TrueQ[unclosed], StringDrop[s, 1], StringTake[s, {2, -2}]], Join[
+    Map[First[#] -> Nothing &, $escapes], {
+    "\\" ~~ CharacterRange["0", "7"] -> {"sntoct1"},
+    "\\." -> {"sntoct2"},
+    "\\:" -> {"snthex"},
+    "\\|" -> {"snthex32"},
+    "\\[" ~~ name : $nameCharacter .. ~~ EndOfString :> {"sntunc", name},
+    "\\[" ~~ name : $nameCharacter .. :> {"sntufn", name},
+    "\\[" ~~ EndOfString -> {"sntmsng"},
+    "\\" ~~ c : (CharacterRange["a", "z"] | CharacterRange["A", "Z"]) :> {"stresc", c},
+    "\\" ~~ _ -> Nothing}]]
+
+$nameCharacter = CharacterRange["a", "z"] | CharacterRange["A", "Z"] | CharacterRange["0", "9"];
+
+(* a failure with the warnings of the statement that cannot be read *)
+warned[f_Failure, warnings_List] := Failure[f[[1]], Append[f[[2]], "Warnings" -> warnings]]
+
+(* the warnings of the statement of a part, from the tokens of its segment that may give one *)
+statementWarnings[state_Association, part_Association] := With[{segment = state["Segments"][[part["Segment"]]], a = part["Tokens"][[1]], b = part["Tokens"][[2]]},
+    With[{before = segment["Warning"][[2]]},
+        If[ before[[b + 1]] === before[[a]], {},
+            warningsAt[segment["Codes"], segment["Lexed"], a, b, 0, segment["Warning"][[1, before[[a]] + 1 ;; before[[b + 1]]]]]]]]
+
+(* the statement of a part, held, its names made now *)
+heldNextStatement[state_Association, part_Association] := With[{segment = state["Segments"][[part["Segment"]]]},
+    Block[{$fcodes = segment["Codes"], $fs = segment["Starts"], $fe = segment["Ends"], $falg = WolframLanguageSemantic},
+        First[fastBuild[Join[{0, part["To"] - part["From"] + 1}, segment["Program"][[3 part["From"] ;; 3 part["To"] + 2]]]]]]]
+
+(* the state, its part i, the last, a statement the grammar reads, read: a failure, or the statement,
+   and the parts of the source after it read *)
+grammarStatement[state_Association, i_Integer] := Module[{st = state, part = state["Parts"][[i]], clean = state["Clean"], r, segment, upTo},
+    r = ParsePartial[$heldGrammar["Expression"], StringDrop[clean, part["At"] - 1]];
+    segment = st["Segments"][[part["Segment"]]];
+    (* the warnings of the tokens of the statement, those that begin before the character at *)
+    upTo = Function[at, tokenWarnings[segment["Codes"], segment["Lexed"], part["Token"],
+        part["Token"] - 1 + LengthWhile[segment["Starts"][[part["Token"] ;; segment["Lexed"][[2]]]], # + part["At"] - segment["Starts"][[part["Token"]]] < at &]]];
+    If[ FailureQ[r],
+        st["Parts"] = Append[Most[st["Parts"]], <|"Start" -> part["Start"], "Next" -> part["Start"], "Kind" -> "Failure",
+            "Data" -> warned[grammarFailure[sourceFailure[st, r, part["At"]], StringLength[st["Source"]]], upTo[r["Position"] + part["At"] - 1]]|>];
+        st,
+        st["Parts"] = Most[st["Parts"]];
+        segmentParts[st, StringLength[clean] + 1 - StringLength[r[[2]]],
+            <|"Start" -> part["Start"], "Kind" -> "Held", "Data" -> r[[1]]["Expr"], "Warnings" -> upTo[StringLength[clean] + 1 - StringLength[r[[2]]]]|>]]]
+
+(* the statement of the source s whose line begins at pos, 1 or the position the call before gave *)
+WolframLanguageHeldNext[s_String, pos_Integer] := Module[{j = heldNextState[s], state, i, part},
+    state = $heldNextStates[[j]];
+    i = Lookup[state["Index"], pos, None];
+    If[i === None, i = Min[LengthWhile[Lookup[state["Parts"], "Start"], # < pos &] + 1, Length[state["Parts"]]]];
+    If[ state["Parts"][[i, "Kind"]] === "Grammar",
+        state = grammarStatement[state, i]; $heldNextStates[[j]] = state];
+    part = state["Parts"][[i]];
+    Switch[ part["Kind"],
+        "Statement", {heldNextStatement[state, part], part["Next"], <|"Warnings" -> statementWarnings[state, part]|>},
+        "Held", {part["Data"], part["Next"], <|"Warnings" -> part["Warnings"]|>},
+        "Null", {HoldComplete[Null], part["Next"], <|"Warnings" -> {}|>},
+        "Failure", $heldNextStates = Delete[$heldNextStates, j]; {part["Data"], part["Start"]},
+        _, $heldNextStates = Delete[$heldNextStates, j]; EndOfFile]]
+
+(* each statement of s read one at a time, but the Nulls, or the failure of the first that cannot be read *)
+heldStatements[s_String] := Module[{pos = 1, r, out = Internal`Bag[]},
+    While[ ListQ[r = WolframLanguageHeldNext[s, pos]],
+        If[FailureQ[First[r]], Return[First[r], Module]];
+        If[First[r] =!= HoldComplete[Null], Internal`StuffBag[out, First[r]]];
+        pos = r[[2]]];
+    Internal`BagPart[out, All]]
 
 End[]
 

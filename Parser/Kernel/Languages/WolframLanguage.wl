@@ -35,6 +35,7 @@ BeginPackage["Wolfram`Parser`Languages`WolframLanguage`", {"Wolfram`Parser`"}]
 
 WolframLanguageAST::usage      = "WolframLanguageAST[\"code\"] parses Wolfram Language source to a standard AST: a ContainerNode of its top-level expressions, of CallNode / InfixNode / BinaryNode / PrefixNode / PostfixNode / TernaryNode / GroupNode / LeafNode, each operator named by the head it stands for (\"Plus\", \"SetDelayed\", ...)."
 WolframLanguageHeld::usage     = "WolframLanguageHeld[\"code\"] parses Wolfram Language source to the list of its top-level expressions, each in HoldComplete, as ImportString[code, {\"WL\", \"HeldExpressions\"}] gives them."
+WolframLanguageHeldNext::usage = "WolframLanguageHeldNext[\"code\", pos] reads the statement of code whose line begins at pos, 1 or the position the call before gave, as the kernel's ToExpression reads its statements one at a time: {HoldComplete[statement], next, <|\"Warnings\" -> warnings|>}, next where the line of the next one begins, warnings the syntax warnings the kernel gives as it reads the statement, the names of the statement made only now; HoldComplete[Null] for a line end with no statement before it; {Failure[...], pos} where the statement cannot be read, its warnings under its \"Warnings\" key; EndOfFile past the last."
 WolframLanguageGrammar::usage  = "WolframLanguageGrammar[alg] builds the Wolfram Language parser over the algebra alg, an Association with the keys of ASTAlgebra; the parser gives the list of the top-level expressions."
 WolframLanguageConcrete::usage = "WolframLanguageConcrete[\"code\"] parses Wolfram Language source to its concrete syntax tree, as CodeParser`CodeConcreteParse gives it: a ContainerNode of the top-level expressions and the whitespace, newlines and comments around them, in CodeParser's own nodes, every character of the source in a leaf. Source that is not Wolfram Language reads as CodeParser reads it, into its error nodes: nothing fails."
 WolframLanguageSemantic::usage = "WolframLanguageSemantic is the algebra that builds each expression held: its builders give <|\"Expr\" -> HoldComplete[expr], \"Literal\" -> .., \"Chain\" -> ..|>, the flags telling a number literal and a product, into which a minus folds."
@@ -181,7 +182,8 @@ commentParser[] := With[{comment = RecCell[]},
 WolframLanguageGrammar[alg_] := grammar[alg]["Program"]
 
 (* <|"Program" -> the parser of a whole source, "Statement" -> that of one
-   top-level expression and the whitespace after it|> *)
+   top-level expression and the whitespace after it, "Expression" -> that of
+   the expression alone|> *)
 grammar[alg_] := Module[{space, wsLine, wsAll, nested, top, statement},
     space = ParseChoice[
         ParseCharacter[" " | "\t" | "\f"],
@@ -194,7 +196,7 @@ grammar[alg_] := Module[{space, wsLine, wsAll, nested, top, statement},
     SetRec[nested, expressionParser[alg, wsAll, wsAll, nested]];
     top = expressionParser[alg, wsLine, wsAll, nested];
     statement = ParseAction[top ~~ wsAll, #1 &];
-    <|"Program" -> ParseAction[wsAll ~~ ParseMany[statement], #2 &], "Statement" -> statement|>
+    <|"Program" -> ParseAction[wsAll ~~ ParseMany[statement], #2 &], "Statement" -> statement, "Expression" -> top|>
 ]
 
 (* The expression parser whose operands and postfix operators are followed
@@ -1510,8 +1512,9 @@ WolframLanguageAST[s_String] := With[{spans = lineContinuations[s]},
 
 (* The held expressions read first by the reader of WolframLanguageFast.wl,
    which reads the grammar's source in one pass over its tokens and fails
-   where the kernel's reader stops; source it does not take the grammar
-   reads. *)
+   where the kernel's reader stops; where it does not take a statement, the
+   source is read one statement at a time, that statement by the grammar.
+   With $fastHeldReader False the grammar reads all of it. *)
 $fastHeldReader = True
 
 WolframLanguageHeld[s_String] := With[{spans = lineContinuations[s]},
@@ -1520,6 +1523,7 @@ WolframLanguageHeld[s_String] := With[{spans = lineContinuations[s]},
             Which[
                 ListQ[fast], DeleteCases[fast, HoldComplete[Null]],
                 FailureQ[fast], If[spans === {}, fast, continuedFailure[fast, keptPositions[s, spans], s]],
+                fast === $fastGiveUp, heldStatements[s],
                 True, With[{r = grammarFailure[parsed[$heldGrammar, clean], StringLength[clean]]},
                     Which[! FailureQ[r], DeleteCases[expressions[r], HoldComplete[Null]], spans === {}, r, True, continuedFailure[r, keptPositions[s, spans], s]]]]]]]
 

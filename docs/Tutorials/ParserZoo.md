@@ -159,6 +159,7 @@ ABCRun["fact = fact(t - 1) * t + (1 - t)\nprint fact", {5}]
 The Wolfram Language itself, as a package file is written: its operators at the precedences [CodeParser]() publishes, flat chains such as `a + b - c` and `a < b <= c`, `a ~f~ b`, patterns, spans, comments, and the rule that a newline ends an expression outside brackets wherever the expression could end. Held, it reads every source as the kernel does, the zoo's own included.
 
 - [WolframLanguageHeld]() parse to the list of top-level expressions, each in [HoldComplete](), as [ImportString]() reads them
+- [WolframLanguageHeldNext]() read one statement at a time, each in [HoldComplete]() and its names made only then, as [ToExpression]() reads them
 - [WolframLanguageAST]() parse to a standard AST, each operator named by its head
 - [WolframLanguageConcrete]() parse to the concrete syntax tree [CodeParser]() gives, every character in a leaf
 - [WolframLanguageGrammar]() the grammar, parameterised over an algebra

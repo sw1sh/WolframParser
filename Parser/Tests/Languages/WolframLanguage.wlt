@@ -4,7 +4,9 @@
    Wolfram 15's ImportString[s, {"WL", "HeldExpressions"}] gives for it
    (recorded once from the kernel, then frozen here); how a source splits
    into its top-level expressions; the grammar reading the zoo's own
-   sources as the kernel does; the standard AST; and failures. Run via
+   sources as the kernel does; the standard AST; failures; and the
+   statements WolframLanguageHeldNext reads one at a time, against the parts
+   of Wolfram 15's ToExpression[s, InputForm, HoldComplete]. Run via
    run-tests.wls. *)
 
 ClearAll[$wlCases, $wlZoo]
@@ -495,3 +497,129 @@ VerificationTest[
     wlStop[WolframLanguageHeld["?Plo_t*"]],
     {8, True},
     TestID -> "wl: a failure of the grammar tells an incomplete source too"]
+VerificationTest[
+    {wlStop[WolframLanguageHeld["f[x)\n\"abc"]], wlStop[WolframLanguageHeld["a )\nb \\!"]]},
+    {{5, False}, {4, False}},
+    TestID -> "wl: reading stops at a statement that cannot be read, before a token that cannot be one"]
+
+(* --- statements one at a time --- *)
+
+(* the parts WolframLanguageHeldNext gives a source, read from 1 to EndOfFile, a failure as
+   {"Failure", its position, whether the source ends too early, where its line begins} *)
+wlParts[s_String] := Module[{pos = 1, r, out = {}},
+    While[ ListQ[r = WolframLanguageHeldNext[s, pos]],
+        If[FailureQ[First[r]], AppendTo[out, {"Failure", r[[1]]["Position"], r[[1]]["Incomplete"], r[[2]]}]; Break[]];
+        AppendTo[out, First[r]]; pos = r[[2]]];
+    out]
+
+(* {source, its parts as Wolfram 15's ToExpression[source, InputForm, HoldComplete] gives them} *)
+$wlStatementCases = {
+    {"\n\na", {HoldComplete[Null], HoldComplete[Null], HoldComplete[a]}},
+    {"a\n\nb", {HoldComplete[a], HoldComplete[Null], HoldComplete[b]}},
+    {"a\n", {HoldComplete[a]}},
+    {"a\n\n", {HoldComplete[a], HoldComplete[Null]}},
+    {"", {HoldComplete[Null]}},
+    {" ", {HoldComplete[Null]}},
+    {"\n\n", {HoldComplete[Null], HoldComplete[Null]}},
+    {"(* c *)\n(* d *)", {HoldComplete[Null]}},
+    {"a\n(* c *)\n", {HoldComplete[a], HoldComplete[Null]}},
+    {"a\n(* x\ny *)\nb", {HoldComplete[a], HoldComplete[Null], HoldComplete[b]}},
+    {"a\r\n\r\nb", {HoldComplete[a], HoldComplete[Null], HoldComplete[Null], HoldComplete[Null], HoldComplete[b]}},
+    {"a\r\rb", {HoldComplete[a], HoldComplete[Null], HoldComplete[b]}},
+    {"a;\n\nb", {HoldComplete[CompoundExpression[a, Null]], HoldComplete[Null], HoldComplete[b]}},
+    {"a\nb\n\nc\n", {HoldComplete[a], HoldComplete[b], HoldComplete[Null], HoldComplete[c]}},
+    {"f[\n\n1]", {HoldComplete[f[1]]}},
+    {"a\\\n\nb", {HoldComplete[a], HoldComplete[b]}},
+    {"a\\\nb\nc", {HoldComplete[ab], HoldComplete[c]}},
+    {"a\\[NewLine]\\[NewLine]b", {HoldComplete[a], HoldComplete[Null], HoldComplete[b]}},
+    {"Null", {HoldComplete[Null]}},
+    {"x\n\n?a*=b\n\ny\n", {HoldComplete[x], HoldComplete[Null], HoldComplete[Set[Information["a*", LongForm -> False], b]], HoldComplete[Null], HoldComplete[y]}}
+};
+Scan[
+    Function[c, VerificationTest[wlParts[c[[1]]], c[[2]], TestID -> "wl next: " <> ToString[c[[1]], InputForm]]],
+    $wlStatementCases]
+
+(* {source, its parts up to the failure, which is the one WolframLanguageHeld gives} *)
+$wlStatementFailures = {
+    {"x = 1\n\n1 +", {HoldComplete[x = 1], HoldComplete[Null], {"Failure", 11, True, 8}}},
+    {"a\n)", {HoldComplete[a], {"Failure", 4, False, 3}}},
+    {"a )\nb", {{"Failure", 4, False, 1}}},
+    {"a; b )\nc", {{"Failure", 7, False, 1}}},
+    {"a\n\"abc", {HoldComplete[a], {"Failure", 7, True, 3}}},
+    {"a\nb \\!", {HoldComplete[a], {"Failure", 5, False, 3}}},
+    {"a )\nb \\!", {{"Failure", 4, False, 1}}},
+    {"a = \\\n(b", {{"Failure", 9, True, 1}}},
+    {"?a*=b )", {{"Failure", 8, False, 1}}},
+    {"?a*=b\n)", {HoldComplete[Set[Information["a*", LongForm -> False], b]], {"Failure", 8, False, 7}}}
+};
+Scan[
+    Function[c, VerificationTest[
+        {wlParts[c[[1]]], wlStop[WolframLanguageHeld[c[[1]]]]},
+        {c[[2]], c[[2, -1, 2 ;; 3]]},
+        TestID -> "wl next failure: " <> ToString[c[[1]], InputForm]]],
+    $wlStatementFailures]
+VerificationTest[
+    {WolframLanguageHeldNext["a\nbb\nc", 4], WolframLanguageHeldNext["a", 2]},
+    {{HoldComplete[c], 7, <|"Warnings" -> {}|>}, EndOfFile},
+    TestID -> "wl next: from a position no call gave, the statement whose line begins after it"]
+VerificationTest[
+    WolframLanguageHeldNext["wlNextFirst\nwlNextSecond", 1]; Names["*`wlNextSecond"],
+    {},
+    TestID -> "wl next: the names of a statement are made only when it is read"]
+VerificationTest[
+    Module[{pos = 1, r, out = {}},
+        Block[{$Context = "WLNextTest`", $ContextPath = {"System`"}},
+            While[ ListQ[r = WolframLanguageHeldNext["Begin[\"WLNextTest`Inner`\"]\nnamed\nEnd[]\nother", pos]],
+                If[MatchQ[First[r], HoldComplete[_Symbol]], AppendTo[out, Context @@ First[r]], ReleaseHold[First[r]]];
+                pos = r[[2]]]];
+        out],
+    {"WLNextTest`Inner`", "WLNextTest`"},
+    TestID -> "wl next: a statement's names are made in the contexts of the moment it is read"]
+
+(* the warnings WolframLanguageHeldNext gives a source, read from 1 up to a failure, those of the
+   failure last *)
+wlWarnings[s_String] := Module[{pos = 1, r, out = {}},
+    While[ ListQ[r = WolframLanguageHeldNext[s, pos]],
+        If[FailureQ[First[r]], out = Join[out, r[[1]]["Warnings"]]; Break[]];
+        out = Join[out, r[[3, "Warnings"]]]; pos = r[[2]]];
+    out]
+
+(* {source, the Syntax warnings Wolfram 15's ToExpression gives as it reads it, each {tag} or {tag, argument}} *)
+$wlWarningCases = {
+    {"f[1,]", {{"com"}}},
+    {"{,}", {{"com"}, {"com"}}},
+    {"f[1,,2]", {{"com"}}},
+    {"f[\\[InvisibleComma]]", {{"com"}, {"com"}}},
+    {"<|a -> 1,|>", {{"com"}}},
+    {"a\\[LeftDoubleBracket]1,\\[RightDoubleBracket]", {{"com"}}},
+    {"\\[LeftAngleBracket]a,\\[RightAngleBracket]", {{"com"}}},
+    {"f[1,", {{"com"}}},
+    {"f[1, /b]", {{"com"}}},
+    {"f[1, +2]", {}},
+    {"f[1,]\nf[2,]", {{"com"}, {"com"}}},
+    {"x = 1\nf[1,]\n1 +", {{"com"}}},
+    {"a \\[Foo] b", {{"sntufn", "Foo"}}},
+    {"f[x,\\[Foo]]", {{"sntufn", "Foo"}}},
+    {"\\[Alpha", {{"sntufn", "Alpha"}}},
+    {"(* \\[Foo] *) a", {}},
+    {"\"a\\qb\"", {{"stresc", "q"}}},
+    {"\"\\[Alpha]\\q\\w\"", {{"stresc", "q"}, {"stresc", "w"}}},
+    {"\"\\8\"", {}},
+    {"\"\\12\"", {{"sntoct1"}}},
+    {"\"\\.1\"", {{"sntoct2"}}},
+    {"\"\\:12\"", {{"snthex"}}},
+    {"\"\\|12\"", {{"snthex32"}}},
+    {"\"a\\[Foo]b\"", {{"sntufn", "Foo"}}},
+    {"\"\\[Al-pha]\"", {{"sntufn", "Al"}}},
+    {"\"\\[Foo\"", {{"sntunc", "Foo"}}},
+    {"x = 1; \"\\[\"", {{"sntmsng", "x = 1; \"\\[\""}}},
+    {"{\"\\q\",}", {{"stresc", "q"}, {"com"}}},
+    {"f[\"\\q\", 1 +", {{"stresc", "q"}}}
+};
+Scan[
+    Function[c, VerificationTest[wlWarnings[c[[1]]], c[[2]], TestID -> "wl next warnings: " <> ToString[c[[1]], InputForm]]],
+    $wlWarningCases]
+VerificationTest[
+    {WolframLanguageHeldNext["f[1,]", 1], WolframLanguageHeldNext["f[1,", 1][[1]]["Warnings"]},
+    {{HoldComplete[f[1, Null]], 6, <|"Warnings" -> {{"com"}}|>}, {{"com"}}},
+    TestID -> "wl next: a statement carries its warnings, a failure under its Warnings key"]
