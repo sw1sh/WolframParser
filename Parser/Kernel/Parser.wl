@@ -666,6 +666,14 @@ interpretDispatch[ParserCombinator["InterpreterSlot", type_String, _], input_, p
    LetterCharacter | "*" works correctly. Named classes
    (LetterCharacter, DigitCharacter, CharacterRange, ...) fall through
    to StringMatchQ, which is correct for them. *)
+(* The characters of the classes string patterns name, as Wolfram 15 matches them: the paclet's
+   asset CharacterClasses.wxf, class -> {{first, last}, ...} runs of code points, recorded by
+   dev/freeze-character-classes.wls; Missing where the asset or the class is not there. *)
+$parserDirectory = DirectoryName[$InputFileName];
+characterClassRuns[] := characterClassRuns[] = With[{file = FileNameJoin[{ParentDirectory[$parserDirectory], "Assets", "CharacterClasses.wxf"}]},
+    If[FileExistsQ[file], Replace[BinaryDeserialize[ReadByteArray[file]], Except[_Association] -> <||>], <||>]]
+characterClassRuns[class_String] := Lookup[characterClassRuns[], class, Missing["NotRecorded", class]]
+
 charMatchesQ[ch_String, s_String] := ch === s
 charMatchesQ[ch_String, Verbatim[Alternatives][pats__]] :=
     AnyTrue[{pats}, charMatchesQ[ch, #] &]
@@ -1488,24 +1496,36 @@ cgEmit[ParserCombinator["Character", pat_, _]] := With[{v = cgFreshV[]},
    own charMatchesQ, so the compiled test matches Parse exactly. Each test
    is built held: evaluated against the value-free cgInput and cgPP, a
    character-code test would fold to a comparison of the character's string
-   with a number. DigitCharacter is every decimal digit: DigitQ inlines 0 to
-   9, and a character past ASCII asks charMatchesQ. *)
+   with a number. A class string patterns name tests its characters below 128
+   inline from the class data recorded on Wolfram 15, and asks charMatchesQ of
+   any other: DigitCharacter is every decimal digit, not 0 to 9 alone. *)
 cgCharCond[pat_] := Replace[cgCharTest[pat], Hold[t_] :> Hold[cgPP <= StringLength[cgInput] && t]]
 cgCharTest[pat_] := With[{nt = cgNativeCharTest[pat]},
     If[nt === $cgNoNative,
         With[{k = cgKF[(charMatchesQ[#, pat] &), {"String"}, "Boolean"]}, Hold[k[StringTake[cgInput, {cgPP, cgPP}]]]],
         nt]]
-cgNativeCharTest[DigitCharacter] := With[{k = cgKF[(charMatchesQ[#, DigitCharacter] &), {"String"}, "Boolean"]},
-    Hold[DigitQ[StringTake[cgInput, {cgPP, cgPP}]] ||
-        (First[ToCharacterCode[StringTake[cgInput, {cgPP, cgPP}]]] > 127 && k[StringTake[cgInput, {cgPP, cgPP}]])]]
+cgNativeCharTest[c_Symbol] /; KeyExistsQ[$cgRecordedClasses, c] && AllTrue[$cgRecordedClasses[c], ListQ[characterClassRuns[#]] &] :=
+    (* the code goes to a fresh integer local, not a With: substituted into, a With renames what it
+       binds, apart from the tests that name it *)
+    With[{v = cgFreshI[]},
+        Hold[v = First[ToCharacterCode[StringTake[cgInput, {cgPP, cgPP}]]]; If[v < 128, cgAsciiSlot, cgClassSlot[StringTake[cgInput, {cgPP, cgPP}]]]] /.
+            {cgAsciiSlot -> cgAsciiTest[Catenate[characterClassRuns /@ $cgRecordedClasses[c]], v], cgClassSlot -> cgKF[(charMatchesQ[#, c] &), {"String"}, "Boolean"]}]
 cgNativeCharTest[s_String] /; StringLength[s] === 1 :=
     With[{cc = First @ ToCharacterCode[s]}, Hold[First[ToCharacterCode[StringTake[cgInput, {cgPP, cgPP}]]] == cc]]
 cgNativeCharTest[HoldPattern[CharacterRange[a_String, b_String]]] :=
     With[{lo = First @ ToCharacterCode[a], hi = First @ ToCharacterCode[b]},
-        Hold[lo <= First[ToCharacterCode[StringTake[cgInput, {cgPP, cgPP}]]] <= hi]]
+        Hold[lo <= First[ToCharacterCode[StringTake[cgInput, {cgPP, cgPP}]]] && First[ToCharacterCode[StringTake[cgInput, {cgPP, cgPP}]]] <= hi]]
 cgNativeCharTest[Verbatim[Alternatives][ps__]] :=
     With[{sub = cgNativeCharTest /@ {ps}}, If[FreeQ[sub, $cgNoNative], Replace[Join @@ sub, Hold[t___] :> Hold[Or[t]]], $cgNoNative]]
 cgNativeCharTest[_] := $cgNoNative
+
+(* a class the paclet records, by the names of its classes: its characters below 128 are tested
+   inline, as ranges of codes, and any other is asked of charMatchesQ *)
+$cgRecordedClasses = <|LetterCharacter -> {"letter"}, DigitCharacter -> {"digit"}, WhitespaceCharacter -> {"whitespace"},
+    PunctuationCharacter -> {"punctuation"}, HexadecimalCharacter -> {"hexadecimal"}, WordCharacter -> {"letter", "digit", "number"}|>
+(* the test of the code v, below 128, for the runs: each run's part below 128 a range *)
+cgAsciiTest[runs_List, v_Symbol] := With[{ranges = Cases[runs, {lo_Integer, hi_Integer} /; lo <= 127 :> {lo, Min[hi, 127]}]},
+    If[ranges === {}, False, Or @@ Map[Function[r, r[[1]] <= v && v <= r[[2]]], ranges]]]
 
 cgEmit[ParserCombinator["Succeed", val_, _]] := With[{v = cgFreshV[]},
     {cgSet[v, cgKF[(val &), {}, cgInertT][]], v}]

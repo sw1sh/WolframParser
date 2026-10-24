@@ -1,0 +1,7414 @@
+# The characters of each class as runs of code points: class<TAB>first<TAB>last, hexadecimal.
+# Recorded by Wolfram/Parser's dev/freeze-character-classes.wls on 15.1.0 for Mac OS X ARM (64-bit) (August 7, 2026).
+letter	0041	005a
+letter	0061	007a
+letter	00aa	00aa
+letter	00b5	00b5
+letter	00ba	00ba
+letter	00c0	00d6
+letter	00d8	00f6
+letter	00f8	02c1
+letter	02c6	02d1
+letter	02e0	02e4
+letter	02ec	02ec
+letter	02ee	02ee
+letter	0370	0374
+letter	0376	0377
+letter	037a	037d
+letter	037f	037f
+letter	0386	0386
+letter	0388	038a
+letter	038c	038c
+letter	038e	03a1
+letter	03a3	03f5
+letter	03f7	0481
+letter	048a	052f
+letter	0531	0556
+letter	0559	0559
+letter	0561	0587
+letter	05d0	05ea
+letter	05f0	05f2
+letter	0620	064a
+letter	066e	066f
+letter	0671	06d3
+letter	06d5	06d5
+letter	06e5	06e6
+letter	06ee	06ef
+letter	06fa	06fc
+letter	06ff	06ff
+letter	0710	0710
+letter	0712	072f
+letter	074d	07a5
+letter	07b1	07b1
+letter	07ca	07ea
+letter	07f4	07f5
+letter	07fa	07fa
+letter	0800	0815
+letter	081a	081a
+letter	0824	0824
+letter	0828	0828
+letter	0840	0858
+letter	08a0	08b2
+letter	0904	0939
+letter	093d	093d
+letter	0950	0950
+letter	0958	0961
+letter	0971	0980
+letter	0985	098c
+letter	098f	0990
+letter	0993	09a8
+letter	09aa	09b0
+letter	09b2	09b2
+letter	09b6	09b9
+letter	09bd	09bd
+letter	09ce	09ce
+letter	09dc	09dd
+letter	09df	09e1
+letter	09f0	09f1
+letter	0a05	0a0a
+letter	0a0f	0a10
+letter	0a13	0a28
+letter	0a2a	0a30
+letter	0a32	0a33
+letter	0a35	0a36
+letter	0a38	0a39
+letter	0a59	0a5c
+letter	0a5e	0a5e
+letter	0a72	0a74
+letter	0a85	0a8d
+letter	0a8f	0a91
+letter	0a93	0aa8
+letter	0aaa	0ab0
+letter	0ab2	0ab3
+letter	0ab5	0ab9
+letter	0abd	0abd
+letter	0ad0	0ad0
+letter	0ae0	0ae1
+letter	0b05	0b0c
+letter	0b0f	0b10
+letter	0b13	0b28
+letter	0b2a	0b30
+letter	0b32	0b33
+letter	0b35	0b39
+letter	0b3d	0b3d
+letter	0b5c	0b5d
+letter	0b5f	0b61
+letter	0b71	0b71
+letter	0b83	0b83
+letter	0b85	0b8a
+letter	0b8e	0b90
+letter	0b92	0b95
+letter	0b99	0b9a
+letter	0b9c	0b9c
+letter	0b9e	0b9f
+letter	0ba3	0ba4
+letter	0ba8	0baa
+letter	0bae	0bb9
+letter	0bd0	0bd0
+letter	0c05	0c0c
+letter	0c0e	0c10
+letter	0c12	0c28
+letter	0c2a	0c39
+letter	0c3d	0c3d
+letter	0c58	0c59
+letter	0c60	0c61
+letter	0c85	0c8c
+letter	0c8e	0c90
+letter	0c92	0ca8
+letter	0caa	0cb3
+letter	0cb5	0cb9
+letter	0cbd	0cbd
+letter	0cde	0cde
+letter	0ce0	0ce1
+letter	0cf1	0cf2
+letter	0d05	0d0c
+letter	0d0e	0d10
+letter	0d12	0d3a
+letter	0d3d	0d3d
+letter	0d4e	0d4e
+letter	0d60	0d61
+letter	0d7a	0d7f
+letter	0d85	0d96
+letter	0d9a	0db1
+letter	0db3	0dbb
+letter	0dbd	0dbd
+letter	0dc0	0dc6
+letter	0e01	0e30
+letter	0e32	0e33
+letter	0e40	0e46
+letter	0e81	0e82
+letter	0e84	0e84
+letter	0e87	0e88
+letter	0e8a	0e8a
+letter	0e8d	0e8d
+letter	0e94	0e97
+letter	0e99	0e9f
+letter	0ea1	0ea3
+letter	0ea5	0ea5
+letter	0ea7	0ea7
+letter	0eaa	0eab
+letter	0ead	0eb0
+letter	0eb2	0eb3
+letter	0ebd	0ebd
+letter	0ec0	0ec4
+letter	0ec6	0ec6
+letter	0edc	0edf
+letter	0f00	0f00
+letter	0f40	0f47
+letter	0f49	0f6c
+letter	0f88	0f8c
+letter	1000	102a
+letter	103f	103f
+letter	1050	1055
+letter	105a	105d
+letter	1061	1061
+letter	1065	1066
+letter	106e	1070
+letter	1075	1081
+letter	108e	108e
+letter	10a0	10c5
+letter	10c7	10c7
+letter	10cd	10cd
+letter	10d0	10fa
+letter	10fc	1248
+letter	124a	124d
+letter	1250	1256
+letter	1258	1258
+letter	125a	125d
+letter	1260	1288
+letter	128a	128d
+letter	1290	12b0
+letter	12b2	12b5
+letter	12b8	12be
+letter	12c0	12c0
+letter	12c2	12c5
+letter	12c8	12d6
+letter	12d8	1310
+letter	1312	1315
+letter	1318	135a
+letter	1380	138f
+letter	13a0	13f4
+letter	1401	166c
+letter	166f	167f
+letter	1681	169a
+letter	16a0	16ea
+letter	16f1	16f8
+letter	1700	170c
+letter	170e	1711
+letter	1720	1731
+letter	1740	1751
+letter	1760	176c
+letter	176e	1770
+letter	1780	17b3
+letter	17d7	17d7
+letter	17dc	17dc
+letter	1820	1877
+letter	1880	18a8
+letter	18aa	18aa
+letter	18b0	18f5
+letter	1900	191e
+letter	1950	196d
+letter	1970	1974
+letter	1980	19ab
+letter	19c1	19c7
+letter	1a00	1a16
+letter	1a20	1a54
+letter	1aa7	1aa7
+letter	1b05	1b33
+letter	1b45	1b4b
+letter	1b83	1ba0
+letter	1bae	1baf
+letter	1bba	1be5
+letter	1c00	1c23
+letter	1c4d	1c4f
+letter	1c5a	1c7d
+letter	1ce9	1cec
+letter	1cee	1cf1
+letter	1cf5	1cf6
+letter	1d00	1dbf
+letter	1e00	1f15
+letter	1f18	1f1d
+letter	1f20	1f45
+letter	1f48	1f4d
+letter	1f50	1f57
+letter	1f59	1f59
+letter	1f5b	1f5b
+letter	1f5d	1f5d
+letter	1f5f	1f7d
+letter	1f80	1fb4
+letter	1fb6	1fbc
+letter	1fbe	1fbe
+letter	1fc2	1fc4
+letter	1fc6	1fcc
+letter	1fd0	1fd3
+letter	1fd6	1fdb
+letter	1fe0	1fec
+letter	1ff2	1ff4
+letter	1ff6	1ffc
+letter	2071	2071
+letter	207f	207f
+letter	2090	209c
+letter	2102	2102
+letter	2107	2107
+letter	210a	210e
+letter	2110	2113
+letter	2115	2115
+letter	2119	211d
+letter	2124	2124
+letter	2126	2126
+letter	2128	2128
+letter	212a	212a
+letter	212c	212d
+letter	212f	2139
+letter	213c	213f
+letter	2145	2149
+letter	214e	214e
+letter	2183	2184
+letter	2c00	2c2e
+letter	2c30	2c5e
+letter	2c60	2ce4
+letter	2ceb	2cee
+letter	2cf2	2cf3
+letter	2d00	2d25
+letter	2d27	2d27
+letter	2d2d	2d2d
+letter	2d30	2d67
+letter	2d6f	2d6f
+letter	2d80	2d96
+letter	2da0	2da6
+letter	2da8	2dae
+letter	2db0	2db6
+letter	2db8	2dbe
+letter	2dc0	2dc6
+letter	2dc8	2dce
+letter	2dd0	2dd6
+letter	2dd8	2dde
+letter	2e2f	2e2f
+letter	3005	3006
+letter	3031	3035
+letter	303b	303c
+letter	3041	3096
+letter	309d	309f
+letter	30a1	30fa
+letter	30fc	30ff
+letter	3105	312d
+letter	3131	318e
+letter	31a0	31ba
+letter	31f0	31ff
+letter	3400	4db5
+letter	4e00	9fcc
+letter	a000	a48c
+letter	a4d0	a4fd
+letter	a500	a60c
+letter	a610	a61f
+letter	a62a	a62b
+letter	a640	a66e
+letter	a67f	a69d
+letter	a6a0	a6e5
+letter	a717	a71f
+letter	a722	a788
+letter	a78b	a78e
+letter	a790	a7ad
+letter	a7b0	a7b1
+letter	a7f7	a801
+letter	a803	a805
+letter	a807	a80a
+letter	a80c	a822
+letter	a840	a873
+letter	a882	a8b3
+letter	a8f2	a8f7
+letter	a8fb	a8fb
+letter	a90a	a925
+letter	a930	a946
+letter	a960	a97c
+letter	a984	a9b2
+letter	a9cf	a9cf
+letter	a9e0	a9e4
+letter	a9e6	a9ef
+letter	a9fa	a9fe
+letter	aa00	aa28
+letter	aa40	aa42
+letter	aa44	aa4b
+letter	aa60	aa76
+letter	aa7a	aa7a
+letter	aa7e	aaaf
+letter	aab1	aab1
+letter	aab5	aab6
+letter	aab9	aabd
+letter	aac0	aac0
+letter	aac2	aac2
+letter	aadb	aadd
+letter	aae0	aaea
+letter	aaf2	aaf4
+letter	ab01	ab06
+letter	ab09	ab0e
+letter	ab11	ab16
+letter	ab20	ab26
+letter	ab28	ab2e
+letter	ab30	ab5a
+letter	ab5c	ab5f
+letter	ab64	ab65
+letter	abc0	abe2
+letter	ac00	d7a3
+letter	d7b0	d7c6
+letter	d7cb	d7fb
+letter	f6b2	f6b5
+letter	f6b7	f6b7
+letter	f6b9	f6bc
+letter	f6be	f6bf
+letter	f6c1	f700
+letter	f730	f731
+letter	f770	f770
+letter	f772	f773
+letter	f776	f776
+letter	f779	f77a
+letter	f77d	f780
+letter	f782	f78b
+letter	f78d	f790
+letter	f793	f79a
+letter	f79c	f7a2
+letter	f7a4	f7bd
+letter	f800	f844
+letter	f846	f84c
+letter	f854	f86c
+letter	f874	f875
+letter	f878	f879
+letter	f87d	f886
+letter	f88a	f88a
+letter	f900	fa6d
+letter	fa70	fad9
+letter	fb00	fb06
+letter	fb13	fb17
+letter	fb1d	fb1d
+letter	fb1f	fb28
+letter	fb2a	fb36
+letter	fb38	fb3c
+letter	fb3e	fb3e
+letter	fb40	fb41
+letter	fb43	fb44
+letter	fb46	fbb1
+letter	fbd3	fd3d
+letter	fd50	fd8f
+letter	fd92	fdc7
+letter	fdf0	fdfb
+letter	fe70	fe74
+letter	fe76	fefc
+letter	ff21	ff3a
+letter	ff41	ff5a
+letter	ff66	ffbe
+letter	ffc2	ffc7
+letter	ffca	ffcf
+letter	ffd2	ffd7
+letter	ffda	ffdc
+letter	10000	1000b
+letter	1000d	10026
+letter	10028	1003a
+letter	1003c	1003d
+letter	1003f	1004d
+letter	10050	1005d
+letter	10080	100fa
+letter	10280	1029c
+letter	102a0	102d0
+letter	10300	1031f
+letter	10330	10340
+letter	10342	10349
+letter	10350	10375
+letter	10380	1039d
+letter	103a0	103c3
+letter	103c8	103cf
+letter	10400	1049d
+letter	10500	10527
+letter	10530	10563
+letter	10600	10736
+letter	10740	10755
+letter	10760	10767
+letter	10800	10805
+letter	10808	10808
+letter	1080a	10835
+letter	10837	10838
+letter	1083c	1083c
+letter	1083f	10855
+letter	10860	10876
+letter	10880	1089e
+letter	10900	10915
+letter	10920	10939
+letter	10980	109b7
+letter	109be	109bf
+letter	10a00	10a00
+letter	10a10	10a13
+letter	10a15	10a17
+letter	10a19	10a33
+letter	10a60	10a7c
+letter	10a80	10a9c
+letter	10ac0	10ac7
+letter	10ac9	10ae4
+letter	10b00	10b35
+letter	10b40	10b55
+letter	10b60	10b72
+letter	10b80	10b91
+letter	10c00	10c48
+letter	11003	11037
+letter	11083	110af
+letter	110d0	110e8
+letter	11103	11126
+letter	11150	11172
+letter	11176	11176
+letter	11183	111b2
+letter	111c1	111c4
+letter	111da	111da
+letter	11200	11211
+letter	11213	1122b
+letter	112b0	112de
+letter	11305	1130c
+letter	1130f	11310
+letter	11313	11328
+letter	1132a	11330
+letter	11332	11333
+letter	11335	11339
+letter	1133d	1133d
+letter	1135d	11361
+letter	11480	114af
+letter	114c4	114c5
+letter	114c7	114c7
+letter	11580	115ae
+letter	11600	1162f
+letter	11644	11644
+letter	11680	116aa
+letter	118a0	118df
+letter	118ff	118ff
+letter	11ac0	11af8
+letter	12000	12398
+letter	13000	1342e
+letter	16800	16a38
+letter	16a40	16a5e
+letter	16ad0	16aed
+letter	16b00	16b2f
+letter	16b40	16b43
+letter	16b63	16b77
+letter	16b7d	16b8f
+letter	16f00	16f44
+letter	16f50	16f50
+letter	16f93	16f9f
+letter	1b000	1b001
+letter	1bc00	1bc6a
+letter	1bc70	1bc7c
+letter	1bc80	1bc88
+letter	1bc90	1bc99
+letter	1d400	1d454
+letter	1d456	1d49c
+letter	1d49e	1d49f
+letter	1d4a2	1d4a2
+letter	1d4a5	1d4a6
+letter	1d4a9	1d4ac
+letter	1d4ae	1d4b9
+letter	1d4bb	1d4bb
+letter	1d4bd	1d4c3
+letter	1d4c5	1d505
+letter	1d507	1d50a
+letter	1d50d	1d514
+letter	1d516	1d51c
+letter	1d51e	1d539
+letter	1d53b	1d53e
+letter	1d540	1d544
+letter	1d546	1d546
+letter	1d54a	1d550
+letter	1d552	1d6a5
+letter	1d6a8	1d6c0
+letter	1d6c2	1d6da
+letter	1d6dc	1d6fa
+letter	1d6fc	1d714
+letter	1d716	1d734
+letter	1d736	1d74e
+letter	1d750	1d76e
+letter	1d770	1d788
+letter	1d78a	1d7a8
+letter	1d7aa	1d7c2
+letter	1d7c4	1d7cb
+letter	1e800	1e8c4
+letter	1ee00	1ee03
+letter	1ee05	1ee1f
+letter	1ee21	1ee22
+letter	1ee24	1ee24
+letter	1ee27	1ee27
+letter	1ee29	1ee32
+letter	1ee34	1ee37
+letter	1ee39	1ee39
+letter	1ee3b	1ee3b
+letter	1ee42	1ee42
+letter	1ee47	1ee47
+letter	1ee49	1ee49
+letter	1ee4b	1ee4b
+letter	1ee4d	1ee4f
+letter	1ee51	1ee52
+letter	1ee54	1ee54
+letter	1ee57	1ee57
+letter	1ee59	1ee59
+letter	1ee5b	1ee5b
+letter	1ee5d	1ee5d
+letter	1ee5f	1ee5f
+letter	1ee61	1ee62
+letter	1ee64	1ee64
+letter	1ee67	1ee6a
+letter	1ee6c	1ee72
+letter	1ee74	1ee77
+letter	1ee79	1ee7c
+letter	1ee7e	1ee7e
+letter	1ee80	1ee89
+letter	1ee8b	1ee9b
+letter	1eea1	1eea3
+letter	1eea5	1eea9
+letter	1eeab	1eebb
+letter	20000	2a6d6
+letter	2a700	2b734
+letter	2b740	2b81d
+letter	2f800	2fa1d
+digit	0030	0039
+digit	0660	0669
+digit	06f0	06f9
+digit	07c0	07c9
+digit	0966	096f
+digit	09e6	09ef
+digit	0a66	0a6f
+digit	0ae6	0aef
+digit	0b66	0b6f
+digit	0be6	0bef
+digit	0c66	0c6f
+digit	0ce6	0cef
+digit	0d66	0d6f
+digit	0de6	0def
+digit	0e50	0e59
+digit	0ed0	0ed9
+digit	0f20	0f29
+digit	1040	1049
+digit	1090	1099
+digit	17e0	17e9
+digit	1810	1819
+digit	1946	194f
+digit	19d0	19d9
+digit	1a80	1a89
+digit	1a90	1a99
+digit	1b50	1b59
+digit	1bb0	1bb9
+digit	1c40	1c49
+digit	1c50	1c59
+digit	a620	a629
+digit	a8d0	a8d9
+digit	a900	a909
+digit	a9d0	a9d9
+digit	a9f0	a9f9
+digit	aa50	aa59
+digit	abf0	abf9
+digit	ff10	ff19
+digit	104a0	104a9
+digit	11066	1106f
+digit	110f0	110f9
+digit	11136	1113f
+digit	111d0	111d9
+digit	112f0	112f9
+digit	114d0	114d9
+digit	11650	11659
+digit	116c0	116c9
+digit	118e0	118e9
+digit	16a60	16a69
+digit	16b50	16b59
+digit	1d7ce	1d7ff
+number	00b2	00b3
+number	00b9	00b9
+number	00bc	00be
+number	09f4	09f9
+number	0b72	0b77
+number	0bf0	0bf2
+number	0c78	0c7e
+number	0d70	0d75
+number	0f2a	0f33
+number	1369	137c
+number	16ee	16f0
+number	17f0	17f9
+number	19da	19da
+number	2070	2070
+number	2074	2079
+number	2080	2089
+number	2150	2182
+number	2185	2189
+number	2460	249b
+number	24ea	24ff
+number	2776	2793
+number	2cfd	2cfd
+number	3007	3007
+number	3021	3029
+number	3038	303a
+number	3192	3195
+number	3220	3229
+number	3248	324f
+number	3251	325f
+number	3280	3289
+number	32b1	32bf
+number	a6e6	a6ef
+number	a830	a835
+number	10107	10133
+number	10140	10178
+number	1018a	1018b
+number	102e1	102fb
+number	10320	10323
+number	10341	10341
+number	1034a	1034a
+number	103d1	103d5
+number	10858	1085f
+number	10879	1087f
+number	108a7	108af
+number	10916	1091b
+number	10a40	10a47
+number	10a7d	10a7e
+number	10a9d	10a9f
+number	10aeb	10aef
+number	10b58	10b5f
+number	10b78	10b7f
+number	10ba9	10baf
+number	10e60	10e7e
+number	11052	11065
+number	111e1	111f4
+number	118ea	118f2
+number	12400	1246e
+number	16b5b	16b61
+number	1d360	1d371
+number	1e8c7	1e8cf
+number	1f100	1f10c
+whitespace	0009	000d
+whitespace	0020	0020
+whitespace	0085	0085
+whitespace	00a0	00a0
+whitespace	1680	1680
+whitespace	180e	180e
+whitespace	2000	200a
+whitespace	2028	2029
+whitespace	202f	202f
+whitespace	205f	2060
+whitespace	2423	2423
+whitespace	3000	3000
+whitespace	f360	f360
+whitespace	f380	f380
+whitespace	f382	f384
+whitespace	f3a2	f3a3
+whitespace	f3b1	f3b2
+whitespace	f3bd	f3bf
+whitespace	f3c6	f3c6
+whitespace	f760	f760
+whitespace	f76e	f76f
+punctuation	0021	002f
+punctuation	003a	0040
+punctuation	005b	0060
+punctuation	007b	007e
+punctuation	00a1	00a1
+punctuation	00a7	00a7
+punctuation	00ab	00ab
+punctuation	00b6	00b7
+punctuation	00bb	00bb
+punctuation	00bf	00bf
+punctuation	037e	037e
+punctuation	0387	0387
+punctuation	055a	055f
+punctuation	0589	058a
+punctuation	05be	05be
+punctuation	05c0	05c0
+punctuation	05c3	05c3
+punctuation	05c6	05c6
+punctuation	05f3	05f4
+punctuation	0609	060a
+punctuation	060c	060d
+punctuation	061b	061b
+punctuation	061e	061f
+punctuation	066a	066d
+punctuation	06d4	06d4
+punctuation	0700	070d
+punctuation	07f7	07f9
+punctuation	0830	083e
+punctuation	085e	085e
+punctuation	0964	0965
+punctuation	0970	0970
+punctuation	0af0	0af0
+punctuation	0df4	0df4
+punctuation	0e4f	0e4f
+punctuation	0e5a	0e5b
+punctuation	0f04	0f12
+punctuation	0f14	0f14
+punctuation	0f3a	0f3d
+punctuation	0f85	0f85
+punctuation	0fd0	0fd4
+punctuation	0fd9	0fda
+punctuation	104a	104f
+punctuation	10fb	10fb
+punctuation	1360	1368
+punctuation	1400	1400
+punctuation	166d	166e
+punctuation	169b	169c
+punctuation	16eb	16ed
+punctuation	1735	1736
+punctuation	17d4	17d6
+punctuation	17d8	17da
+punctuation	1800	180a
+punctuation	1944	1945
+punctuation	1a1e	1a1f
+punctuation	1aa0	1aa6
+punctuation	1aa8	1aad
+punctuation	1b5a	1b60
+punctuation	1bfc	1bff
+punctuation	1c3b	1c3f
+punctuation	1c7e	1c7f
+punctuation	1cc0	1cc7
+punctuation	1cd3	1cd3
+punctuation	2010	2027
+punctuation	2030	2043
+punctuation	2045	2051
+punctuation	2053	205e
+punctuation	207d	207e
+punctuation	208d	208e
+punctuation	2308	230b
+punctuation	2329	232a
+punctuation	2768	2775
+punctuation	27c5	27c6
+punctuation	27e6	27ef
+punctuation	2983	2998
+punctuation	29d8	29db
+punctuation	29fc	29fd
+punctuation	2cf9	2cfc
+punctuation	2cfe	2cff
+punctuation	2d70	2d70
+punctuation	2e00	2e2e
+punctuation	2e30	2e42
+punctuation	3001	3003
+punctuation	3008	3011
+punctuation	3014	301f
+punctuation	3030	3030
+punctuation	303d	303d
+punctuation	30a0	30a0
+punctuation	30fb	30fb
+punctuation	a4fe	a4ff
+punctuation	a60d	a60f
+punctuation	a673	a673
+punctuation	a67e	a67e
+punctuation	a6f2	a6f7
+punctuation	a874	a877
+punctuation	a8ce	a8cf
+punctuation	a8f8	a8fa
+punctuation	a92e	a92f
+punctuation	a95f	a95f
+punctuation	a9c1	a9cd
+punctuation	a9de	a9df
+punctuation	aa5c	aa5f
+punctuation	aade	aadf
+punctuation	aaf0	aaf1
+punctuation	abeb	abeb
+punctuation	fd3e	fd3f
+punctuation	fe10	fe19
+punctuation	fe30	fe52
+punctuation	fe54	fe61
+punctuation	fe63	fe63
+punctuation	fe68	fe68
+punctuation	fe6a	fe6b
+punctuation	ff01	ff03
+punctuation	ff05	ff0a
+punctuation	ff0c	ff0f
+punctuation	ff1a	ff1b
+punctuation	ff1f	ff20
+punctuation	ff3b	ff3d
+punctuation	ff3f	ff3f
+punctuation	ff5b	ff5b
+punctuation	ff5d	ff5d
+punctuation	ff5f	ff65
+punctuation	10100	10102
+punctuation	1039f	1039f
+punctuation	103d0	103d0
+punctuation	1056f	1056f
+punctuation	10857	10857
+punctuation	1091f	1091f
+punctuation	1093f	1093f
+punctuation	10a50	10a58
+punctuation	10a7f	10a7f
+punctuation	10af0	10af6
+punctuation	10b39	10b3f
+punctuation	10b99	10b9c
+punctuation	11047	1104d
+punctuation	110bb	110bc
+punctuation	110be	110c1
+punctuation	11140	11143
+punctuation	11174	11175
+punctuation	111c5	111c8
+punctuation	111cd	111cd
+punctuation	11238	1123d
+punctuation	114c6	114c6
+punctuation	115c1	115c9
+punctuation	11641	11643
+punctuation	12470	12474
+punctuation	16a6e	16a6f
+punctuation	16af5	16af5
+punctuation	16b37	16b3b
+punctuation	16b44	16b44
+punctuation	1bc9f	1bc9f
+hexadecimal	0030	0039
+hexadecimal	0041	0046
+hexadecimal	0061	0066
+upper	0041	005a
+upper	00c0	00d6
+upper	00d8	00de
+upper	0100	0100
+upper	0102	0102
+upper	0104	0104
+upper	0106	0106
+upper	0108	0108
+upper	010a	010a
+upper	010c	010c
+upper	010e	010e
+upper	0110	0110
+upper	0112	0112
+upper	0114	0114
+upper	0116	0116
+upper	0118	0118
+upper	011a	011a
+upper	011c	011c
+upper	011e	011e
+upper	0120	0120
+upper	0122	0122
+upper	0124	0124
+upper	0126	0126
+upper	0128	0128
+upper	012a	012a
+upper	012c	012c
+upper	012e	012e
+upper	0130	0130
+upper	0132	0132
+upper	0134	0134
+upper	0136	0136
+upper	0139	0139
+upper	013b	013b
+upper	013d	013d
+upper	013f	013f
+upper	0141	0141
+upper	0143	0143
+upper	0145	0145
+upper	0147	0147
+upper	014a	014a
+upper	014c	014c
+upper	014e	014e
+upper	0150	0150
+upper	0152	0152
+upper	0154	0154
+upper	0156	0156
+upper	0158	0158
+upper	015a	015a
+upper	015c	015c
+upper	015e	015e
+upper	0160	0160
+upper	0162	0162
+upper	0164	0164
+upper	0166	0166
+upper	0168	0168
+upper	016a	016a
+upper	016c	016c
+upper	016e	016e
+upper	0170	0170
+upper	0172	0172
+upper	0174	0174
+upper	0176	0176
+upper	0178	0179
+upper	017b	017b
+upper	017d	017d
+upper	0181	0182
+upper	0184	0184
+upper	0186	0187
+upper	0189	018b
+upper	018e	0191
+upper	0193	0194
+upper	0196	0198
+upper	019c	019d
+upper	019f	01a0
+upper	01a2	01a2
+upper	01a4	01a4
+upper	01a6	01a7
+upper	01a9	01a9
+upper	01ac	01ac
+upper	01ae	01af
+upper	01b1	01b3
+upper	01b5	01b5
+upper	01b7	01b8
+upper	01bc	01bc
+upper	01c4	01c4
+upper	01c7	01c7
+upper	01ca	01ca
+upper	01cd	01cd
+upper	01cf	01cf
+upper	01d1	01d1
+upper	01d3	01d3
+upper	01d5	01d5
+upper	01d7	01d7
+upper	01d9	01d9
+upper	01db	01db
+upper	01de	01de
+upper	01e0	01e0
+upper	01e2	01e2
+upper	01e4	01e4
+upper	01e6	01e6
+upper	01e8	01e8
+upper	01ea	01ea
+upper	01ec	01ec
+upper	01ee	01ee
+upper	01f1	01f1
+upper	01f4	01f4
+upper	01f6	01f8
+upper	01fa	01fa
+upper	01fc	01fc
+upper	01fe	01fe
+upper	0200	0200
+upper	0202	0202
+upper	0204	0204
+upper	0206	0206
+upper	0208	0208
+upper	020a	020a
+upper	020c	020c
+upper	020e	020e
+upper	0210	0210
+upper	0212	0212
+upper	0214	0214
+upper	0216	0216
+upper	0218	0218
+upper	021a	021a
+upper	021c	021c
+upper	021e	021e
+upper	0220	0220
+upper	0222	0222
+upper	0224	0224
+upper	0226	0226
+upper	0228	0228
+upper	022a	022a
+upper	022c	022c
+upper	022e	022e
+upper	0230	0230
+upper	0232	0232
+upper	023a	023b
+upper	023d	023e
+upper	0241	0241
+upper	0243	0246
+upper	0248	0248
+upper	024a	024a
+upper	024c	024c
+upper	024e	024e
+upper	0370	0370
+upper	0372	0372
+upper	0376	0376
+upper	037f	037f
+upper	0386	0386
+upper	0388	038a
+upper	038c	038c
+upper	038e	038f
+upper	0391	03a1
+upper	03a3	03ab
+upper	03cf	03cf
+upper	03d2	03d4
+upper	03d8	03d8
+upper	03da	03da
+upper	03dc	03dc
+upper	03de	03de
+upper	03e0	03e0
+upper	03e2	03e2
+upper	03e4	03e4
+upper	03e6	03e6
+upper	03e8	03e8
+upper	03ea	03ea
+upper	03ec	03ec
+upper	03ee	03ee
+upper	03f4	03f4
+upper	03f7	03f7
+upper	03f9	03fa
+upper	03fd	042f
+upper	0460	0460
+upper	0462	0462
+upper	0464	0464
+upper	0466	0466
+upper	0468	0468
+upper	046a	046a
+upper	046c	046c
+upper	046e	046e
+upper	0470	0470
+upper	0472	0472
+upper	0474	0474
+upper	0476	0476
+upper	0478	0478
+upper	047a	047a
+upper	047c	047c
+upper	047e	047e
+upper	0480	0480
+upper	048a	048a
+upper	048c	048c
+upper	048e	048e
+upper	0490	0490
+upper	0492	0492
+upper	0494	0494
+upper	0496	0496
+upper	0498	0498
+upper	049a	049a
+upper	049c	049c
+upper	049e	049e
+upper	04a0	04a0
+upper	04a2	04a2
+upper	04a4	04a4
+upper	04a6	04a6
+upper	04a8	04a8
+upper	04aa	04aa
+upper	04ac	04ac
+upper	04ae	04ae
+upper	04b0	04b0
+upper	04b2	04b2
+upper	04b4	04b4
+upper	04b6	04b6
+upper	04b8	04b8
+upper	04ba	04ba
+upper	04bc	04bc
+upper	04be	04be
+upper	04c0	04c1
+upper	04c3	04c3
+upper	04c5	04c5
+upper	04c7	04c7
+upper	04c9	04c9
+upper	04cb	04cb
+upper	04cd	04cd
+upper	04d0	04d0
+upper	04d2	04d2
+upper	04d4	04d4
+upper	04d6	04d6
+upper	04d8	04d8
+upper	04da	04da
+upper	04dc	04dc
+upper	04de	04de
+upper	04e0	04e0
+upper	04e2	04e2
+upper	04e4	04e4
+upper	04e6	04e6
+upper	04e8	04e8
+upper	04ea	04ea
+upper	04ec	04ec
+upper	04ee	04ee
+upper	04f0	04f0
+upper	04f2	04f2
+upper	04f4	04f4
+upper	04f6	04f6
+upper	04f8	04f8
+upper	04fa	04fa
+upper	04fc	04fc
+upper	04fe	04fe
+upper	0500	0500
+upper	0502	0502
+upper	0504	0504
+upper	0506	0506
+upper	0508	0508
+upper	050a	050a
+upper	050c	050c
+upper	050e	050e
+upper	0510	0510
+upper	0512	0512
+upper	0514	0514
+upper	0516	0516
+upper	0518	0518
+upper	051a	051a
+upper	051c	051c
+upper	051e	051e
+upper	0520	0520
+upper	0522	0522
+upper	0524	0524
+upper	0526	0526
+upper	0528	0528
+upper	052a	052a
+upper	052c	052c
+upper	052e	052e
+upper	0531	0556
+upper	10a0	10c5
+upper	10c7	10c7
+upper	10cd	10cd
+upper	1e00	1e00
+upper	1e02	1e02
+upper	1e04	1e04
+upper	1e06	1e06
+upper	1e08	1e08
+upper	1e0a	1e0a
+upper	1e0c	1e0c
+upper	1e0e	1e0e
+upper	1e10	1e10
+upper	1e12	1e12
+upper	1e14	1e14
+upper	1e16	1e16
+upper	1e18	1e18
+upper	1e1a	1e1a
+upper	1e1c	1e1c
+upper	1e1e	1e1e
+upper	1e20	1e20
+upper	1e22	1e22
+upper	1e24	1e24
+upper	1e26	1e26
+upper	1e28	1e28
+upper	1e2a	1e2a
+upper	1e2c	1e2c
+upper	1e2e	1e2e
+upper	1e30	1e30
+upper	1e32	1e32
+upper	1e34	1e34
+upper	1e36	1e36
+upper	1e38	1e38
+upper	1e3a	1e3a
+upper	1e3c	1e3c
+upper	1e3e	1e3e
+upper	1e40	1e40
+upper	1e42	1e42
+upper	1e44	1e44
+upper	1e46	1e46
+upper	1e48	1e48
+upper	1e4a	1e4a
+upper	1e4c	1e4c
+upper	1e4e	1e4e
+upper	1e50	1e50
+upper	1e52	1e52
+upper	1e54	1e54
+upper	1e56	1e56
+upper	1e58	1e58
+upper	1e5a	1e5a
+upper	1e5c	1e5c
+upper	1e5e	1e5e
+upper	1e60	1e60
+upper	1e62	1e62
+upper	1e64	1e64
+upper	1e66	1e66
+upper	1e68	1e68
+upper	1e6a	1e6a
+upper	1e6c	1e6c
+upper	1e6e	1e6e
+upper	1e70	1e70
+upper	1e72	1e72
+upper	1e74	1e74
+upper	1e76	1e76
+upper	1e78	1e78
+upper	1e7a	1e7a
+upper	1e7c	1e7c
+upper	1e7e	1e7e
+upper	1e80	1e80
+upper	1e82	1e82
+upper	1e84	1e84
+upper	1e86	1e86
+upper	1e88	1e88
+upper	1e8a	1e8a
+upper	1e8c	1e8c
+upper	1e8e	1e8e
+upper	1e90	1e90
+upper	1e92	1e92
+upper	1e94	1e94
+upper	1e9e	1e9e
+upper	1ea0	1ea0
+upper	1ea2	1ea2
+upper	1ea4	1ea4
+upper	1ea6	1ea6
+upper	1ea8	1ea8
+upper	1eaa	1eaa
+upper	1eac	1eac
+upper	1eae	1eae
+upper	1eb0	1eb0
+upper	1eb2	1eb2
+upper	1eb4	1eb4
+upper	1eb6	1eb6
+upper	1eb8	1eb8
+upper	1eba	1eba
+upper	1ebc	1ebc
+upper	1ebe	1ebe
+upper	1ec0	1ec0
+upper	1ec2	1ec2
+upper	1ec4	1ec4
+upper	1ec6	1ec6
+upper	1ec8	1ec8
+upper	1eca	1eca
+upper	1ecc	1ecc
+upper	1ece	1ece
+upper	1ed0	1ed0
+upper	1ed2	1ed2
+upper	1ed4	1ed4
+upper	1ed6	1ed6
+upper	1ed8	1ed8
+upper	1eda	1eda
+upper	1edc	1edc
+upper	1ede	1ede
+upper	1ee0	1ee0
+upper	1ee2	1ee2
+upper	1ee4	1ee4
+upper	1ee6	1ee6
+upper	1ee8	1ee8
+upper	1eea	1eea
+upper	1eec	1eec
+upper	1eee	1eee
+upper	1ef0	1ef0
+upper	1ef2	1ef2
+upper	1ef4	1ef4
+upper	1ef6	1ef6
+upper	1ef8	1ef8
+upper	1efa	1efa
+upper	1efc	1efc
+upper	1efe	1efe
+upper	1f08	1f0f
+upper	1f18	1f1d
+upper	1f28	1f2f
+upper	1f38	1f3f
+upper	1f48	1f4d
+upper	1f59	1f59
+upper	1f5b	1f5b
+upper	1f5d	1f5d
+upper	1f5f	1f5f
+upper	1f68	1f6f
+upper	1fb8	1fbb
+upper	1fc8	1fcb
+upper	1fd8	1fdb
+upper	1fe8	1fec
+upper	1ff8	1ffb
+upper	2102	2102
+upper	2107	2107
+upper	210b	210d
+upper	2110	2112
+upper	2115	2115
+upper	2119	211d
+upper	2124	2124
+upper	2126	2126
+upper	2128	2128
+upper	212a	212a
+upper	212c	212d
+upper	2130	2133
+upper	213e	213f
+upper	2145	2145
+upper	2183	2183
+upper	2c00	2c2e
+upper	2c60	2c60
+upper	2c62	2c64
+upper	2c67	2c67
+upper	2c69	2c69
+upper	2c6b	2c6b
+upper	2c6d	2c70
+upper	2c72	2c72
+upper	2c75	2c75
+upper	2c7e	2c80
+upper	2c82	2c82
+upper	2c84	2c84
+upper	2c86	2c86
+upper	2c88	2c88
+upper	2c8a	2c8a
+upper	2c8c	2c8c
+upper	2c8e	2c8e
+upper	2c90	2c90
+upper	2c92	2c92
+upper	2c94	2c94
+upper	2c96	2c96
+upper	2c98	2c98
+upper	2c9a	2c9a
+upper	2c9c	2c9c
+upper	2c9e	2c9e
+upper	2ca0	2ca0
+upper	2ca2	2ca2
+upper	2ca4	2ca4
+upper	2ca6	2ca6
+upper	2ca8	2ca8
+upper	2caa	2caa
+upper	2cac	2cac
+upper	2cae	2cae
+upper	2cb0	2cb0
+upper	2cb2	2cb2
+upper	2cb4	2cb4
+upper	2cb6	2cb6
+upper	2cb8	2cb8
+upper	2cba	2cba
+upper	2cbc	2cbc
+upper	2cbe	2cbe
+upper	2cc0	2cc0
+upper	2cc2	2cc2
+upper	2cc4	2cc4
+upper	2cc6	2cc6
+upper	2cc8	2cc8
+upper	2cca	2cca
+upper	2ccc	2ccc
+upper	2cce	2cce
+upper	2cd0	2cd0
+upper	2cd2	2cd2
+upper	2cd4	2cd4
+upper	2cd6	2cd6
+upper	2cd8	2cd8
+upper	2cda	2cda
+upper	2cdc	2cdc
+upper	2cde	2cde
+upper	2ce0	2ce0
+upper	2ce2	2ce2
+upper	2ceb	2ceb
+upper	2ced	2ced
+upper	2cf2	2cf2
+upper	a640	a640
+upper	a642	a642
+upper	a644	a644
+upper	a646	a646
+upper	a648	a648
+upper	a64a	a64a
+upper	a64c	a64c
+upper	a64e	a64e
+upper	a650	a650
+upper	a652	a652
+upper	a654	a654
+upper	a656	a656
+upper	a658	a658
+upper	a65a	a65a
+upper	a65c	a65c
+upper	a65e	a65e
+upper	a660	a660
+upper	a662	a662
+upper	a664	a664
+upper	a666	a666
+upper	a668	a668
+upper	a66a	a66a
+upper	a66c	a66c
+upper	a680	a680
+upper	a682	a682
+upper	a684	a684
+upper	a686	a686
+upper	a688	a688
+upper	a68a	a68a
+upper	a68c	a68c
+upper	a68e	a68e
+upper	a690	a690
+upper	a692	a692
+upper	a694	a694
+upper	a696	a696
+upper	a698	a698
+upper	a69a	a69a
+upper	a722	a722
+upper	a724	a724
+upper	a726	a726
+upper	a728	a728
+upper	a72a	a72a
+upper	a72c	a72c
+upper	a72e	a72e
+upper	a732	a732
+upper	a734	a734
+upper	a736	a736
+upper	a738	a738
+upper	a73a	a73a
+upper	a73c	a73c
+upper	a73e	a73e
+upper	a740	a740
+upper	a742	a742
+upper	a744	a744
+upper	a746	a746
+upper	a748	a748
+upper	a74a	a74a
+upper	a74c	a74c
+upper	a74e	a74e
+upper	a750	a750
+upper	a752	a752
+upper	a754	a754
+upper	a756	a756
+upper	a758	a758
+upper	a75a	a75a
+upper	a75c	a75c
+upper	a75e	a75e
+upper	a760	a760
+upper	a762	a762
+upper	a764	a764
+upper	a766	a766
+upper	a768	a768
+upper	a76a	a76a
+upper	a76c	a76c
+upper	a76e	a76e
+upper	a779	a779
+upper	a77b	a77b
+upper	a77d	a77e
+upper	a780	a780
+upper	a782	a782
+upper	a784	a784
+upper	a786	a786
+upper	a78b	a78b
+upper	a78d	a78d
+upper	a790	a790
+upper	a792	a792
+upper	a796	a796
+upper	a798	a798
+upper	a79a	a79a
+upper	a79c	a79c
+upper	a79e	a79e
+upper	a7a0	a7a0
+upper	a7a2	a7a2
+upper	a7a4	a7a4
+upper	a7a6	a7a6
+upper	a7a8	a7a8
+upper	a7aa	a7ad
+upper	a7b0	a7b1
+upper	f770	f770
+upper	f772	f773
+upper	f776	f776
+upper	f779	f77a
+upper	f77d	f780
+upper	f782	f78b
+upper	f78d	f790
+upper	f793	f79a
+upper	f79c	f7a2
+upper	f7a4	f7bd
+upper	f81a	f844
+upper	f846	f84c
+upper	f875	f875
+upper	f87d	f87d
+upper	f87f	f87f
+upper	f881	f881
+upper	f883	f883
+upper	ff21	ff3a
+upper	10400	10427
+upper	118a0	118bf
+upper	1d400	1d419
+upper	1d434	1d44d
+upper	1d468	1d481
+upper	1d49c	1d49c
+upper	1d49e	1d49f
+upper	1d4a2	1d4a2
+upper	1d4a5	1d4a6
+upper	1d4a9	1d4ac
+upper	1d4ae	1d4b5
+upper	1d4d0	1d4e9
+upper	1d504	1d505
+upper	1d507	1d50a
+upper	1d50d	1d514
+upper	1d516	1d51c
+upper	1d538	1d539
+upper	1d53b	1d53e
+upper	1d540	1d544
+upper	1d546	1d546
+upper	1d54a	1d550
+upper	1d56c	1d585
+upper	1d5a0	1d5b9
+upper	1d5d4	1d5ed
+upper	1d608	1d621
+upper	1d63c	1d655
+upper	1d670	1d689
+upper	1d6a8	1d6c0
+upper	1d6e2	1d6fa
+upper	1d71c	1d734
+upper	1d756	1d76e
+upper	1d790	1d7a8
+upper	1d7ca	1d7ca
+lower	0061	007a
+lower	00b5	00b5
+lower	00df	00f6
+lower	00f8	00ff
+lower	0101	0101
+lower	0103	0103
+lower	0105	0105
+lower	0107	0107
+lower	0109	0109
+lower	010b	010b
+lower	010d	010d
+lower	010f	010f
+lower	0111	0111
+lower	0113	0113
+lower	0115	0115
+lower	0117	0117
+lower	0119	0119
+lower	011b	011b
+lower	011d	011d
+lower	011f	011f
+lower	0121	0121
+lower	0123	0123
+lower	0125	0125
+lower	0127	0127
+lower	0129	0129
+lower	012b	012b
+lower	012d	012d
+lower	012f	012f
+lower	0131	0131
+lower	0133	0133
+lower	0135	0135
+lower	0137	0138
+lower	013a	013a
+lower	013c	013c
+lower	013e	013e
+lower	0140	0140
+lower	0142	0142
+lower	0144	0144
+lower	0146	0146
+lower	0148	0149
+lower	014b	014b
+lower	014d	014d
+lower	014f	014f
+lower	0151	0151
+lower	0153	0153
+lower	0155	0155
+lower	0157	0157
+lower	0159	0159
+lower	015b	015b
+lower	015d	015d
+lower	015f	015f
+lower	0161	0161
+lower	0163	0163
+lower	0165	0165
+lower	0167	0167
+lower	0169	0169
+lower	016b	016b
+lower	016d	016d
+lower	016f	016f
+lower	0171	0171
+lower	0173	0173
+lower	0175	0175
+lower	0177	0177
+lower	017a	017a
+lower	017c	017c
+lower	017e	0180
+lower	0183	0183
+lower	0185	0185
+lower	0188	0188
+lower	018c	018d
+lower	0192	0192
+lower	0195	0195
+lower	0199	019b
+lower	019e	019e
+lower	01a1	01a1
+lower	01a3	01a3
+lower	01a5	01a5
+lower	01a8	01a8
+lower	01aa	01ab
+lower	01ad	01ad
+lower	01b0	01b0
+lower	01b4	01b4
+lower	01b6	01b6
+lower	01b9	01ba
+lower	01bd	01bf
+lower	01c6	01c6
+lower	01c9	01c9
+lower	01cc	01cc
+lower	01ce	01ce
+lower	01d0	01d0
+lower	01d2	01d2
+lower	01d4	01d4
+lower	01d6	01d6
+lower	01d8	01d8
+lower	01da	01da
+lower	01dc	01dd
+lower	01df	01df
+lower	01e1	01e1
+lower	01e3	01e3
+lower	01e5	01e5
+lower	01e7	01e7
+lower	01e9	01e9
+lower	01eb	01eb
+lower	01ed	01ed
+lower	01ef	01f0
+lower	01f3	01f3
+lower	01f5	01f5
+lower	01f9	01f9
+lower	01fb	01fb
+lower	01fd	01fd
+lower	01ff	01ff
+lower	0201	0201
+lower	0203	0203
+lower	0205	0205
+lower	0207	0207
+lower	0209	0209
+lower	020b	020b
+lower	020d	020d
+lower	020f	020f
+lower	0211	0211
+lower	0213	0213
+lower	0215	0215
+lower	0217	0217
+lower	0219	0219
+lower	021b	021b
+lower	021d	021d
+lower	021f	021f
+lower	0221	0221
+lower	0223	0223
+lower	0225	0225
+lower	0227	0227
+lower	0229	0229
+lower	022b	022b
+lower	022d	022d
+lower	022f	022f
+lower	0231	0231
+lower	0233	0239
+lower	023c	023c
+lower	023f	0240
+lower	0242	0242
+lower	0247	0247
+lower	0249	0249
+lower	024b	024b
+lower	024d	024d
+lower	024f	0293
+lower	0295	02af
+lower	0371	0371
+lower	0373	0373
+lower	0377	0377
+lower	037b	037d
+lower	0390	0390
+lower	03ac	03ce
+lower	03d0	03d1
+lower	03d5	03d7
+lower	03d9	03d9
+lower	03db	03db
+lower	03dd	03dd
+lower	03df	03df
+lower	03e1	03e1
+lower	03e3	03e3
+lower	03e5	03e5
+lower	03e7	03e7
+lower	03e9	03e9
+lower	03eb	03eb
+lower	03ed	03ed
+lower	03ef	03f3
+lower	03f5	03f5
+lower	03f8	03f8
+lower	03fb	03fc
+lower	0430	045f
+lower	0461	0461
+lower	0463	0463
+lower	0465	0465
+lower	0467	0467
+lower	0469	0469
+lower	046b	046b
+lower	046d	046d
+lower	046f	046f
+lower	0471	0471
+lower	0473	0473
+lower	0475	0475
+lower	0477	0477
+lower	0479	0479
+lower	047b	047b
+lower	047d	047d
+lower	047f	047f
+lower	0481	0481
+lower	048b	048b
+lower	048d	048d
+lower	048f	048f
+lower	0491	0491
+lower	0493	0493
+lower	0495	0495
+lower	0497	0497
+lower	0499	0499
+lower	049b	049b
+lower	049d	049d
+lower	049f	049f
+lower	04a1	04a1
+lower	04a3	04a3
+lower	04a5	04a5
+lower	04a7	04a7
+lower	04a9	04a9
+lower	04ab	04ab
+lower	04ad	04ad
+lower	04af	04af
+lower	04b1	04b1
+lower	04b3	04b3
+lower	04b5	04b5
+lower	04b7	04b7
+lower	04b9	04b9
+lower	04bb	04bb
+lower	04bd	04bd
+lower	04bf	04bf
+lower	04c2	04c2
+lower	04c4	04c4
+lower	04c6	04c6
+lower	04c8	04c8
+lower	04ca	04ca
+lower	04cc	04cc
+lower	04ce	04cf
+lower	04d1	04d1
+lower	04d3	04d3
+lower	04d5	04d5
+lower	04d7	04d7
+lower	04d9	04d9
+lower	04db	04db
+lower	04dd	04dd
+lower	04df	04df
+lower	04e1	04e1
+lower	04e3	04e3
+lower	04e5	04e5
+lower	04e7	04e7
+lower	04e9	04e9
+lower	04eb	04eb
+lower	04ed	04ed
+lower	04ef	04ef
+lower	04f1	04f1
+lower	04f3	04f3
+lower	04f5	04f5
+lower	04f7	04f7
+lower	04f9	04f9
+lower	04fb	04fb
+lower	04fd	04fd
+lower	04ff	04ff
+lower	0501	0501
+lower	0503	0503
+lower	0505	0505
+lower	0507	0507
+lower	0509	0509
+lower	050b	050b
+lower	050d	050d
+lower	050f	050f
+lower	0511	0511
+lower	0513	0513
+lower	0515	0515
+lower	0517	0517
+lower	0519	0519
+lower	051b	051b
+lower	051d	051d
+lower	051f	051f
+lower	0521	0521
+lower	0523	0523
+lower	0525	0525
+lower	0527	0527
+lower	0529	0529
+lower	052b	052b
+lower	052d	052d
+lower	052f	052f
+lower	0561	0587
+lower	1d00	1d2b
+lower	1d6b	1d77
+lower	1d79	1d9a
+lower	1e01	1e01
+lower	1e03	1e03
+lower	1e05	1e05
+lower	1e07	1e07
+lower	1e09	1e09
+lower	1e0b	1e0b
+lower	1e0d	1e0d
+lower	1e0f	1e0f
+lower	1e11	1e11
+lower	1e13	1e13
+lower	1e15	1e15
+lower	1e17	1e17
+lower	1e19	1e19
+lower	1e1b	1e1b
+lower	1e1d	1e1d
+lower	1e1f	1e1f
+lower	1e21	1e21
+lower	1e23	1e23
+lower	1e25	1e25
+lower	1e27	1e27
+lower	1e29	1e29
+lower	1e2b	1e2b
+lower	1e2d	1e2d
+lower	1e2f	1e2f
+lower	1e31	1e31
+lower	1e33	1e33
+lower	1e35	1e35
+lower	1e37	1e37
+lower	1e39	1e39
+lower	1e3b	1e3b
+lower	1e3d	1e3d
+lower	1e3f	1e3f
+lower	1e41	1e41
+lower	1e43	1e43
+lower	1e45	1e45
+lower	1e47	1e47
+lower	1e49	1e49
+lower	1e4b	1e4b
+lower	1e4d	1e4d
+lower	1e4f	1e4f
+lower	1e51	1e51
+lower	1e53	1e53
+lower	1e55	1e55
+lower	1e57	1e57
+lower	1e59	1e59
+lower	1e5b	1e5b
+lower	1e5d	1e5d
+lower	1e5f	1e5f
+lower	1e61	1e61
+lower	1e63	1e63
+lower	1e65	1e65
+lower	1e67	1e67
+lower	1e69	1e69
+lower	1e6b	1e6b
+lower	1e6d	1e6d
+lower	1e6f	1e6f
+lower	1e71	1e71
+lower	1e73	1e73
+lower	1e75	1e75
+lower	1e77	1e77
+lower	1e79	1e79
+lower	1e7b	1e7b
+lower	1e7d	1e7d
+lower	1e7f	1e7f
+lower	1e81	1e81
+lower	1e83	1e83
+lower	1e85	1e85
+lower	1e87	1e87
+lower	1e89	1e89
+lower	1e8b	1e8b
+lower	1e8d	1e8d
+lower	1e8f	1e8f
+lower	1e91	1e91
+lower	1e93	1e93
+lower	1e95	1e9d
+lower	1e9f	1e9f
+lower	1ea1	1ea1
+lower	1ea3	1ea3
+lower	1ea5	1ea5
+lower	1ea7	1ea7
+lower	1ea9	1ea9
+lower	1eab	1eab
+lower	1ead	1ead
+lower	1eaf	1eaf
+lower	1eb1	1eb1
+lower	1eb3	1eb3
+lower	1eb5	1eb5
+lower	1eb7	1eb7
+lower	1eb9	1eb9
+lower	1ebb	1ebb
+lower	1ebd	1ebd
+lower	1ebf	1ebf
+lower	1ec1	1ec1
+lower	1ec3	1ec3
+lower	1ec5	1ec5
+lower	1ec7	1ec7
+lower	1ec9	1ec9
+lower	1ecb	1ecb
+lower	1ecd	1ecd
+lower	1ecf	1ecf
+lower	1ed1	1ed1
+lower	1ed3	1ed3
+lower	1ed5	1ed5
+lower	1ed7	1ed7
+lower	1ed9	1ed9
+lower	1edb	1edb
+lower	1edd	1edd
+lower	1edf	1edf
+lower	1ee1	1ee1
+lower	1ee3	1ee3
+lower	1ee5	1ee5
+lower	1ee7	1ee7
+lower	1ee9	1ee9
+lower	1eeb	1eeb
+lower	1eed	1eed
+lower	1eef	1eef
+lower	1ef1	1ef1
+lower	1ef3	1ef3
+lower	1ef5	1ef5
+lower	1ef7	1ef7
+lower	1ef9	1ef9
+lower	1efb	1efb
+lower	1efd	1efd
+lower	1eff	1f07
+lower	1f10	1f15
+lower	1f20	1f27
+lower	1f30	1f37
+lower	1f40	1f45
+lower	1f50	1f57
+lower	1f60	1f67
+lower	1f70	1f7d
+lower	1f80	1f87
+lower	1f90	1f97
+lower	1fa0	1fa7
+lower	1fb0	1fb4
+lower	1fb6	1fb7
+lower	1fbe	1fbe
+lower	1fc2	1fc4
+lower	1fc6	1fc7
+lower	1fd0	1fd3
+lower	1fd6	1fd7
+lower	1fe0	1fe7
+lower	1ff2	1ff4
+lower	1ff6	1ff7
+lower	210a	210a
+lower	210e	210e
+lower	2113	2113
+lower	212f	212f
+lower	2134	2134
+lower	2139	2139
+lower	213c	213d
+lower	2146	2149
+lower	214e	214e
+lower	2184	2184
+lower	2c30	2c5e
+lower	2c61	2c61
+lower	2c65	2c66
+lower	2c68	2c68
+lower	2c6a	2c6a
+lower	2c6c	2c6c
+lower	2c71	2c71
+lower	2c73	2c74
+lower	2c76	2c7b
+lower	2c81	2c81
+lower	2c83	2c83
+lower	2c85	2c85
+lower	2c87	2c87
+lower	2c89	2c89
+lower	2c8b	2c8b
+lower	2c8d	2c8d
+lower	2c8f	2c8f
+lower	2c91	2c91
+lower	2c93	2c93
+lower	2c95	2c95
+lower	2c97	2c97
+lower	2c99	2c99
+lower	2c9b	2c9b
+lower	2c9d	2c9d
+lower	2c9f	2c9f
+lower	2ca1	2ca1
+lower	2ca3	2ca3
+lower	2ca5	2ca5
+lower	2ca7	2ca7
+lower	2ca9	2ca9
+lower	2cab	2cab
+lower	2cad	2cad
+lower	2caf	2caf
+lower	2cb1	2cb1
+lower	2cb3	2cb3
+lower	2cb5	2cb5
+lower	2cb7	2cb7
+lower	2cb9	2cb9
+lower	2cbb	2cbb
+lower	2cbd	2cbd
+lower	2cbf	2cbf
+lower	2cc1	2cc1
+lower	2cc3	2cc3
+lower	2cc5	2cc5
+lower	2cc7	2cc7
+lower	2cc9	2cc9
+lower	2ccb	2ccb
+lower	2ccd	2ccd
+lower	2ccf	2ccf
+lower	2cd1	2cd1
+lower	2cd3	2cd3
+lower	2cd5	2cd5
+lower	2cd7	2cd7
+lower	2cd9	2cd9
+lower	2cdb	2cdb
+lower	2cdd	2cdd
+lower	2cdf	2cdf
+lower	2ce1	2ce1
+lower	2ce3	2ce4
+lower	2cec	2cec
+lower	2cee	2cee
+lower	2cf3	2cf3
+lower	2d00	2d25
+lower	2d27	2d27
+lower	2d2d	2d2d
+lower	a641	a641
+lower	a643	a643
+lower	a645	a645
+lower	a647	a647
+lower	a649	a649
+lower	a64b	a64b
+lower	a64d	a64d
+lower	a64f	a64f
+lower	a651	a651
+lower	a653	a653
+lower	a655	a655
+lower	a657	a657
+lower	a659	a659
+lower	a65b	a65b
+lower	a65d	a65d
+lower	a65f	a65f
+lower	a661	a661
+lower	a663	a663
+lower	a665	a665
+lower	a667	a667
+lower	a669	a669
+lower	a66b	a66b
+lower	a66d	a66d
+lower	a681	a681
+lower	a683	a683
+lower	a685	a685
+lower	a687	a687
+lower	a689	a689
+lower	a68b	a68b
+lower	a68d	a68d
+lower	a68f	a68f
+lower	a691	a691
+lower	a693	a693
+lower	a695	a695
+lower	a697	a697
+lower	a699	a699
+lower	a69b	a69b
+lower	a723	a723
+lower	a725	a725
+lower	a727	a727
+lower	a729	a729
+lower	a72b	a72b
+lower	a72d	a72d
+lower	a72f	a731
+lower	a733	a733
+lower	a735	a735
+lower	a737	a737
+lower	a739	a739
+lower	a73b	a73b
+lower	a73d	a73d
+lower	a73f	a73f
+lower	a741	a741
+lower	a743	a743
+lower	a745	a745
+lower	a747	a747
+lower	a749	a749
+lower	a74b	a74b
+lower	a74d	a74d
+lower	a74f	a74f
+lower	a751	a751
+lower	a753	a753
+lower	a755	a755
+lower	a757	a757
+lower	a759	a759
+lower	a75b	a75b
+lower	a75d	a75d
+lower	a75f	a75f
+lower	a761	a761
+lower	a763	a763
+lower	a765	a765
+lower	a767	a767
+lower	a769	a769
+lower	a76b	a76b
+lower	a76d	a76d
+lower	a76f	a76f
+lower	a771	a778
+lower	a77a	a77a
+lower	a77c	a77c
+lower	a77f	a77f
+lower	a781	a781
+lower	a783	a783
+lower	a785	a785
+lower	a787	a787
+lower	a78c	a78c
+lower	a78e	a78e
+lower	a791	a791
+lower	a793	a795
+lower	a797	a797
+lower	a799	a799
+lower	a79b	a79b
+lower	a79d	a79d
+lower	a79f	a79f
+lower	a7a1	a7a1
+lower	a7a3	a7a3
+lower	a7a5	a7a5
+lower	a7a7	a7a7
+lower	a7a9	a7a9
+lower	a7fa	a7fa
+lower	ab30	ab5a
+lower	ab64	ab65
+lower	f6b2	f6b5
+lower	f6b7	f6b7
+lower	f6b9	f6bc
+lower	f6be	f6bf
+lower	f6c1	f700
+lower	f730	f731
+lower	f800	f819
+lower	f854	f86c
+lower	f874	f874
+lower	f878	f879
+lower	f87e	f87e
+lower	f880	f880
+lower	f882	f882
+lower	f884	f886
+lower	f88a	f88a
+lower	fb00	fb00
+lower	fb03	fb06
+lower	fb13	fb17
+lower	ff41	ff5a
+lower	10428	1044f
+lower	118c0	118df
+lower	1d41a	1d433
+lower	1d44e	1d454
+lower	1d456	1d467
+lower	1d482	1d49b
+lower	1d4b6	1d4b9
+lower	1d4bb	1d4bb
+lower	1d4bd	1d4c3
+lower	1d4c5	1d4cf
+lower	1d4ea	1d503
+lower	1d51e	1d537
+lower	1d552	1d56b
+lower	1d586	1d59f
+lower	1d5ba	1d5d3
+lower	1d5ee	1d607
+lower	1d622	1d63b
+lower	1d656	1d66f
+lower	1d68a	1d6a5
+lower	1d6c2	1d6da
+lower	1d6dc	1d6e1
+lower	1d6fc	1d714
+lower	1d716	1d71b
+lower	1d736	1d74e
+lower	1d750	1d755
+lower	1d770	1d788
+lower	1d78a	1d78f
+lower	1d7aa	1d7c2
+lower	1d7c4	1d7c9
+lower	1d7cb	1d7cb
+regex \d	0030	0039
+regex \d	0660	0669
+regex \d	06f0	06f9
+regex \d	07c0	07c9
+regex \d	0966	096f
+regex \d	09e6	09ef
+regex \d	0a66	0a6f
+regex \d	0ae6	0aef
+regex \d	0b66	0b6f
+regex \d	0be6	0bef
+regex \d	0c66	0c6f
+regex \d	0ce6	0cef
+regex \d	0d66	0d6f
+regex \d	0de6	0def
+regex \d	0e50	0e59
+regex \d	0ed0	0ed9
+regex \d	0f20	0f29
+regex \d	1040	1049
+regex \d	1090	1099
+regex \d	17e0	17e9
+regex \d	1810	1819
+regex \d	1946	194f
+regex \d	19d0	19d9
+regex \d	1a80	1a89
+regex \d	1a90	1a99
+regex \d	1b50	1b59
+regex \d	1bb0	1bb9
+regex \d	1c40	1c49
+regex \d	1c50	1c59
+regex \d	a620	a629
+regex \d	a8d0	a8d9
+regex \d	a900	a909
+regex \d	a9d0	a9d9
+regex \d	a9f0	a9f9
+regex \d	aa50	aa59
+regex \d	abf0	abf9
+regex \d	ff10	ff19
+regex \d	104a0	104a9
+regex \d	11066	1106f
+regex \d	110f0	110f9
+regex \d	11136	1113f
+regex \d	111d0	111d9
+regex \d	112f0	112f9
+regex \d	114d0	114d9
+regex \d	11650	11659
+regex \d	116c0	116c9
+regex \d	118e0	118e9
+regex \d	16a60	16a69
+regex \d	16b50	16b59
+regex \d	1d7ce	1d7ff
+regex \w	0030	0039
+regex \w	0041	005a
+regex \w	005f	005f
+regex \w	0061	007a
+regex \w	00aa	00aa
+regex \w	00b2	00b3
+regex \w	00b5	00b5
+regex \w	00b9	00ba
+regex \w	00bc	00be
+regex \w	00c0	00d6
+regex \w	00d8	00f6
+regex \w	00f8	02c1
+regex \w	02c6	02d1
+regex \w	02e0	02e4
+regex \w	02ec	02ec
+regex \w	02ee	02ee
+regex \w	0370	0374
+regex \w	0376	0377
+regex \w	037a	037d
+regex \w	037f	037f
+regex \w	0386	0386
+regex \w	0388	038a
+regex \w	038c	038c
+regex \w	038e	03a1
+regex \w	03a3	03f5
+regex \w	03f7	0481
+regex \w	048a	052f
+regex \w	0531	0556
+regex \w	0559	0559
+regex \w	0561	0587
+regex \w	05d0	05ea
+regex \w	05f0	05f2
+regex \w	0620	064a
+regex \w	0660	0669
+regex \w	066e	066f
+regex \w	0671	06d3
+regex \w	06d5	06d5
+regex \w	06e5	06e6
+regex \w	06ee	06fc
+regex \w	06ff	06ff
+regex \w	0710	0710
+regex \w	0712	072f
+regex \w	074d	07a5
+regex \w	07b1	07b1
+regex \w	07c0	07ea
+regex \w	07f4	07f5
+regex \w	07fa	07fa
+regex \w	0800	0815
+regex \w	081a	081a
+regex \w	0824	0824
+regex \w	0828	0828
+regex \w	0840	0858
+regex \w	08a0	08b2
+regex \w	0904	0939
+regex \w	093d	093d
+regex \w	0950	0950
+regex \w	0958	0961
+regex \w	0966	096f
+regex \w	0971	0980
+regex \w	0985	098c
+regex \w	098f	0990
+regex \w	0993	09a8
+regex \w	09aa	09b0
+regex \w	09b2	09b2
+regex \w	09b6	09b9
+regex \w	09bd	09bd
+regex \w	09ce	09ce
+regex \w	09dc	09dd
+regex \w	09df	09e1
+regex \w	09e6	09f1
+regex \w	09f4	09f9
+regex \w	0a05	0a0a
+regex \w	0a0f	0a10
+regex \w	0a13	0a28
+regex \w	0a2a	0a30
+regex \w	0a32	0a33
+regex \w	0a35	0a36
+regex \w	0a38	0a39
+regex \w	0a59	0a5c
+regex \w	0a5e	0a5e
+regex \w	0a66	0a6f
+regex \w	0a72	0a74
+regex \w	0a85	0a8d
+regex \w	0a8f	0a91
+regex \w	0a93	0aa8
+regex \w	0aaa	0ab0
+regex \w	0ab2	0ab3
+regex \w	0ab5	0ab9
+regex \w	0abd	0abd
+regex \w	0ad0	0ad0
+regex \w	0ae0	0ae1
+regex \w	0ae6	0aef
+regex \w	0b05	0b0c
+regex \w	0b0f	0b10
+regex \w	0b13	0b28
+regex \w	0b2a	0b30
+regex \w	0b32	0b33
+regex \w	0b35	0b39
+regex \w	0b3d	0b3d
+regex \w	0b5c	0b5d
+regex \w	0b5f	0b61
+regex \w	0b66	0b6f
+regex \w	0b71	0b77
+regex \w	0b83	0b83
+regex \w	0b85	0b8a
+regex \w	0b8e	0b90
+regex \w	0b92	0b95
+regex \w	0b99	0b9a
+regex \w	0b9c	0b9c
+regex \w	0b9e	0b9f
+regex \w	0ba3	0ba4
+regex \w	0ba8	0baa
+regex \w	0bae	0bb9
+regex \w	0bd0	0bd0
+regex \w	0be6	0bf2
+regex \w	0c05	0c0c
+regex \w	0c0e	0c10
+regex \w	0c12	0c28
+regex \w	0c2a	0c39
+regex \w	0c3d	0c3d
+regex \w	0c58	0c59
+regex \w	0c60	0c61
+regex \w	0c66	0c6f
+regex \w	0c78	0c7e
+regex \w	0c85	0c8c
+regex \w	0c8e	0c90
+regex \w	0c92	0ca8
+regex \w	0caa	0cb3
+regex \w	0cb5	0cb9
+regex \w	0cbd	0cbd
+regex \w	0cde	0cde
+regex \w	0ce0	0ce1
+regex \w	0ce6	0cef
+regex \w	0cf1	0cf2
+regex \w	0d05	0d0c
+regex \w	0d0e	0d10
+regex \w	0d12	0d3a
+regex \w	0d3d	0d3d
+regex \w	0d4e	0d4e
+regex \w	0d60	0d61
+regex \w	0d66	0d75
+regex \w	0d7a	0d7f
+regex \w	0d85	0d96
+regex \w	0d9a	0db1
+regex \w	0db3	0dbb
+regex \w	0dbd	0dbd
+regex \w	0dc0	0dc6
+regex \w	0de6	0def
+regex \w	0e01	0e30
+regex \w	0e32	0e33
+regex \w	0e40	0e46
+regex \w	0e50	0e59
+regex \w	0e81	0e82
+regex \w	0e84	0e84
+regex \w	0e87	0e88
+regex \w	0e8a	0e8a
+regex \w	0e8d	0e8d
+regex \w	0e94	0e97
+regex \w	0e99	0e9f
+regex \w	0ea1	0ea3
+regex \w	0ea5	0ea5
+regex \w	0ea7	0ea7
+regex \w	0eaa	0eab
+regex \w	0ead	0eb0
+regex \w	0eb2	0eb3
+regex \w	0ebd	0ebd
+regex \w	0ec0	0ec4
+regex \w	0ec6	0ec6
+regex \w	0ed0	0ed9
+regex \w	0edc	0edf
+regex \w	0f00	0f00
+regex \w	0f20	0f33
+regex \w	0f40	0f47
+regex \w	0f49	0f6c
+regex \w	0f88	0f8c
+regex \w	1000	102a
+regex \w	103f	1049
+regex \w	1050	1055
+regex \w	105a	105d
+regex \w	1061	1061
+regex \w	1065	1066
+regex \w	106e	1070
+regex \w	1075	1081
+regex \w	108e	108e
+regex \w	1090	1099
+regex \w	10a0	10c5
+regex \w	10c7	10c7
+regex \w	10cd	10cd
+regex \w	10d0	10fa
+regex \w	10fc	1248
+regex \w	124a	124d
+regex \w	1250	1256
+regex \w	1258	1258
+regex \w	125a	125d
+regex \w	1260	1288
+regex \w	128a	128d
+regex \w	1290	12b0
+regex \w	12b2	12b5
+regex \w	12b8	12be
+regex \w	12c0	12c0
+regex \w	12c2	12c5
+regex \w	12c8	12d6
+regex \w	12d8	1310
+regex \w	1312	1315
+regex \w	1318	135a
+regex \w	1369	137c
+regex \w	1380	138f
+regex \w	13a0	13f4
+regex \w	1401	166c
+regex \w	166f	167f
+regex \w	1681	169a
+regex \w	16a0	16ea
+regex \w	16ee	16f8
+regex \w	1700	170c
+regex \w	170e	1711
+regex \w	1720	1731
+regex \w	1740	1751
+regex \w	1760	176c
+regex \w	176e	1770
+regex \w	1780	17b3
+regex \w	17d7	17d7
+regex \w	17dc	17dc
+regex \w	17e0	17e9
+regex \w	17f0	17f9
+regex \w	1810	1819
+regex \w	1820	1877
+regex \w	1880	18a8
+regex \w	18aa	18aa
+regex \w	18b0	18f5
+regex \w	1900	191e
+regex \w	1946	196d
+regex \w	1970	1974
+regex \w	1980	19ab
+regex \w	19c1	19c7
+regex \w	19d0	19da
+regex \w	1a00	1a16
+regex \w	1a20	1a54
+regex \w	1a80	1a89
+regex \w	1a90	1a99
+regex \w	1aa7	1aa7
+regex \w	1b05	1b33
+regex \w	1b45	1b4b
+regex \w	1b50	1b59
+regex \w	1b83	1ba0
+regex \w	1bae	1be5
+regex \w	1c00	1c23
+regex \w	1c40	1c49
+regex \w	1c4d	1c7d
+regex \w	1ce9	1cec
+regex \w	1cee	1cf1
+regex \w	1cf5	1cf6
+regex \w	1d00	1dbf
+regex \w	1e00	1f15
+regex \w	1f18	1f1d
+regex \w	1f20	1f45
+regex \w	1f48	1f4d
+regex \w	1f50	1f57
+regex \w	1f59	1f59
+regex \w	1f5b	1f5b
+regex \w	1f5d	1f5d
+regex \w	1f5f	1f7d
+regex \w	1f80	1fb4
+regex \w	1fb6	1fbc
+regex \w	1fbe	1fbe
+regex \w	1fc2	1fc4
+regex \w	1fc6	1fcc
+regex \w	1fd0	1fd3
+regex \w	1fd6	1fdb
+regex \w	1fe0	1fec
+regex \w	1ff2	1ff4
+regex \w	1ff6	1ffc
+regex \w	2070	2071
+regex \w	2074	2079
+regex \w	207f	2089
+regex \w	2090	209c
+regex \w	2102	2102
+regex \w	2107	2107
+regex \w	210a	210e
+regex \w	2110	2113
+regex \w	2115	2115
+regex \w	2119	211d
+regex \w	2124	2124
+regex \w	2126	2126
+regex \w	2128	2128
+regex \w	212a	212a
+regex \w	212c	212d
+regex \w	212f	2139
+regex \w	213c	213f
+regex \w	2145	2149
+regex \w	214e	214e
+regex \w	2150	2189
+regex \w	2460	249b
+regex \w	24ea	24ff
+regex \w	2776	2793
+regex \w	2c00	2c2e
+regex \w	2c30	2c5e
+regex \w	2c60	2ce4
+regex \w	2ceb	2cee
+regex \w	2cf2	2cf3
+regex \w	2cfd	2cfd
+regex \w	2d00	2d25
+regex \w	2d27	2d27
+regex \w	2d2d	2d2d
+regex \w	2d30	2d67
+regex \w	2d6f	2d6f
+regex \w	2d80	2d96
+regex \w	2da0	2da6
+regex \w	2da8	2dae
+regex \w	2db0	2db6
+regex \w	2db8	2dbe
+regex \w	2dc0	2dc6
+regex \w	2dc8	2dce
+regex \w	2dd0	2dd6
+regex \w	2dd8	2dde
+regex \w	2e2f	2e2f
+regex \w	3005	3007
+regex \w	3021	3029
+regex \w	3031	3035
+regex \w	3038	303c
+regex \w	3041	3096
+regex \w	309d	309f
+regex \w	30a1	30fa
+regex \w	30fc	30ff
+regex \w	3105	312d
+regex \w	3131	318e
+regex \w	3192	3195
+regex \w	31a0	31ba
+regex \w	31f0	31ff
+regex \w	3220	3229
+regex \w	3248	324f
+regex \w	3251	325f
+regex \w	3280	3289
+regex \w	32b1	32bf
+regex \w	3400	4db5
+regex \w	4e00	9fcc
+regex \w	a000	a48c
+regex \w	a4d0	a4fd
+regex \w	a500	a60c
+regex \w	a610	a62b
+regex \w	a640	a66e
+regex \w	a67f	a69d
+regex \w	a6a0	a6ef
+regex \w	a717	a71f
+regex \w	a722	a788
+regex \w	a78b	a78e
+regex \w	a790	a7ad
+regex \w	a7b0	a7b1
+regex \w	a7f7	a801
+regex \w	a803	a805
+regex \w	a807	a80a
+regex \w	a80c	a822
+regex \w	a830	a835
+regex \w	a840	a873
+regex \w	a882	a8b3
+regex \w	a8d0	a8d9
+regex \w	a8f2	a8f7
+regex \w	a8fb	a8fb
+regex \w	a900	a925
+regex \w	a930	a946
+regex \w	a960	a97c
+regex \w	a984	a9b2
+regex \w	a9cf	a9d9
+regex \w	a9e0	a9e4
+regex \w	a9e6	a9fe
+regex \w	aa00	aa28
+regex \w	aa40	aa42
+regex \w	aa44	aa4b
+regex \w	aa50	aa59
+regex \w	aa60	aa76
+regex \w	aa7a	aa7a
+regex \w	aa7e	aaaf
+regex \w	aab1	aab1
+regex \w	aab5	aab6
+regex \w	aab9	aabd
+regex \w	aac0	aac0
+regex \w	aac2	aac2
+regex \w	aadb	aadd
+regex \w	aae0	aaea
+regex \w	aaf2	aaf4
+regex \w	ab01	ab06
+regex \w	ab09	ab0e
+regex \w	ab11	ab16
+regex \w	ab20	ab26
+regex \w	ab28	ab2e
+regex \w	ab30	ab5a
+regex \w	ab5c	ab5f
+regex \w	ab64	ab65
+regex \w	abc0	abe2
+regex \w	abf0	abf9
+regex \w	ac00	d7a3
+regex \w	d7b0	d7c6
+regex \w	d7cb	d7fb
+regex \w	f6b2	f6b5
+regex \w	f6b7	f6b7
+regex \w	f6b9	f6bc
+regex \w	f6be	f6bf
+regex \w	f6c1	f700
+regex \w	f730	f731
+regex \w	f770	f770
+regex \w	f772	f773
+regex \w	f776	f776
+regex \w	f779	f77a
+regex \w	f77d	f780
+regex \w	f782	f78b
+regex \w	f78d	f790
+regex \w	f793	f79a
+regex \w	f79c	f7a2
+regex \w	f7a4	f7bd
+regex \w	f800	f844
+regex \w	f846	f84c
+regex \w	f854	f86c
+regex \w	f874	f875
+regex \w	f878	f879
+regex \w	f87d	f886
+regex \w	f88a	f88a
+regex \w	f900	fa6d
+regex \w	fa70	fad9
+regex \w	fb00	fb06
+regex \w	fb13	fb17
+regex \w	fb1d	fb1d
+regex \w	fb1f	fb28
+regex \w	fb2a	fb36
+regex \w	fb38	fb3c
+regex \w	fb3e	fb3e
+regex \w	fb40	fb41
+regex \w	fb43	fb44
+regex \w	fb46	fbb1
+regex \w	fbd3	fd3d
+regex \w	fd50	fd8f
+regex \w	fd92	fdc7
+regex \w	fdf0	fdfb
+regex \w	fe70	fe74
+regex \w	fe76	fefc
+regex \w	ff10	ff19
+regex \w	ff21	ff3a
+regex \w	ff41	ff5a
+regex \w	ff66	ffbe
+regex \w	ffc2	ffc7
+regex \w	ffca	ffcf
+regex \w	ffd2	ffd7
+regex \w	ffda	ffdc
+regex \w	10000	1000b
+regex \w	1000d	10026
+regex \w	10028	1003a
+regex \w	1003c	1003d
+regex \w	1003f	1004d
+regex \w	10050	1005d
+regex \w	10080	100fa
+regex \w	10107	10133
+regex \w	10140	10178
+regex \w	1018a	1018b
+regex \w	10280	1029c
+regex \w	102a0	102d0
+regex \w	102e1	102fb
+regex \w	10300	10323
+regex \w	10330	1034a
+regex \w	10350	10375
+regex \w	10380	1039d
+regex \w	103a0	103c3
+regex \w	103c8	103cf
+regex \w	103d1	103d5
+regex \w	10400	1049d
+regex \w	104a0	104a9
+regex \w	10500	10527
+regex \w	10530	10563
+regex \w	10600	10736
+regex \w	10740	10755
+regex \w	10760	10767
+regex \w	10800	10805
+regex \w	10808	10808
+regex \w	1080a	10835
+regex \w	10837	10838
+regex \w	1083c	1083c
+regex \w	1083f	10855
+regex \w	10858	10876
+regex \w	10879	1089e
+regex \w	108a7	108af
+regex \w	10900	1091b
+regex \w	10920	10939
+regex \w	10980	109b7
+regex \w	109be	109bf
+regex \w	10a00	10a00
+regex \w	10a10	10a13
+regex \w	10a15	10a17
+regex \w	10a19	10a33
+regex \w	10a40	10a47
+regex \w	10a60	10a7e
+regex \w	10a80	10a9f
+regex \w	10ac0	10ac7
+regex \w	10ac9	10ae4
+regex \w	10aeb	10aef
+regex \w	10b00	10b35
+regex \w	10b40	10b55
+regex \w	10b58	10b72
+regex \w	10b78	10b91
+regex \w	10ba9	10baf
+regex \w	10c00	10c48
+regex \w	10e60	10e7e
+regex \w	11003	11037
+regex \w	11052	1106f
+regex \w	11083	110af
+regex \w	110d0	110e8
+regex \w	110f0	110f9
+regex \w	11103	11126
+regex \w	11136	1113f
+regex \w	11150	11172
+regex \w	11176	11176
+regex \w	11183	111b2
+regex \w	111c1	111c4
+regex \w	111d0	111da
+regex \w	111e1	111f4
+regex \w	11200	11211
+regex \w	11213	1122b
+regex \w	112b0	112de
+regex \w	112f0	112f9
+regex \w	11305	1130c
+regex \w	1130f	11310
+regex \w	11313	11328
+regex \w	1132a	11330
+regex \w	11332	11333
+regex \w	11335	11339
+regex \w	1133d	1133d
+regex \w	1135d	11361
+regex \w	11480	114af
+regex \w	114c4	114c5
+regex \w	114c7	114c7
+regex \w	114d0	114d9
+regex \w	11580	115ae
+regex \w	11600	1162f
+regex \w	11644	11644
+regex \w	11650	11659
+regex \w	11680	116aa
+regex \w	116c0	116c9
+regex \w	118a0	118f2
+regex \w	118ff	118ff
+regex \w	11ac0	11af8
+regex \w	12000	12398
+regex \w	12400	1246e
+regex \w	13000	1342e
+regex \w	16800	16a38
+regex \w	16a40	16a5e
+regex \w	16a60	16a69
+regex \w	16ad0	16aed
+regex \w	16b00	16b2f
+regex \w	16b40	16b43
+regex \w	16b50	16b59
+regex \w	16b5b	16b61
+regex \w	16b63	16b77
+regex \w	16b7d	16b8f
+regex \w	16f00	16f44
+regex \w	16f50	16f50
+regex \w	16f93	16f9f
+regex \w	1b000	1b001
+regex \w	1bc00	1bc6a
+regex \w	1bc70	1bc7c
+regex \w	1bc80	1bc88
+regex \w	1bc90	1bc99
+regex \w	1d360	1d371
+regex \w	1d400	1d454
+regex \w	1d456	1d49c
+regex \w	1d49e	1d49f
+regex \w	1d4a2	1d4a2
+regex \w	1d4a5	1d4a6
+regex \w	1d4a9	1d4ac
+regex \w	1d4ae	1d4b9
+regex \w	1d4bb	1d4bb
+regex \w	1d4bd	1d4c3
+regex \w	1d4c5	1d505
+regex \w	1d507	1d50a
+regex \w	1d50d	1d514
+regex \w	1d516	1d51c
+regex \w	1d51e	1d539
+regex \w	1d53b	1d53e
+regex \w	1d540	1d544
+regex \w	1d546	1d546
+regex \w	1d54a	1d550
+regex \w	1d552	1d6a5
+regex \w	1d6a8	1d6c0
+regex \w	1d6c2	1d6da
+regex \w	1d6dc	1d6fa
+regex \w	1d6fc	1d714
+regex \w	1d716	1d734
+regex \w	1d736	1d74e
+regex \w	1d750	1d76e
+regex \w	1d770	1d788
+regex \w	1d78a	1d7a8
+regex \w	1d7aa	1d7c2
+regex \w	1d7c4	1d7cb
+regex \w	1d7ce	1d7ff
+regex \w	1e800	1e8c4
+regex \w	1e8c7	1e8cf
+regex \w	1ee00	1ee03
+regex \w	1ee05	1ee1f
+regex \w	1ee21	1ee22
+regex \w	1ee24	1ee24
+regex \w	1ee27	1ee27
+regex \w	1ee29	1ee32
+regex \w	1ee34	1ee37
+regex \w	1ee39	1ee39
+regex \w	1ee3b	1ee3b
+regex \w	1ee42	1ee42
+regex \w	1ee47	1ee47
+regex \w	1ee49	1ee49
+regex \w	1ee4b	1ee4b
+regex \w	1ee4d	1ee4f
+regex \w	1ee51	1ee52
+regex \w	1ee54	1ee54
+regex \w	1ee57	1ee57
+regex \w	1ee59	1ee59
+regex \w	1ee5b	1ee5b
+regex \w	1ee5d	1ee5d
+regex \w	1ee5f	1ee5f
+regex \w	1ee61	1ee62
+regex \w	1ee64	1ee64
+regex \w	1ee67	1ee6a
+regex \w	1ee6c	1ee72
+regex \w	1ee74	1ee77
+regex \w	1ee79	1ee7c
+regex \w	1ee7e	1ee7e
+regex \w	1ee80	1ee89
+regex \w	1ee8b	1ee9b
+regex \w	1eea1	1eea3
+regex \w	1eea5	1eea9
+regex \w	1eeab	1eebb
+regex \w	1f100	1f10c
+regex \w	20000	2a6d6
+regex \w	2a700	2b734
+regex \w	2b740	2b81d
+regex \w	2f800	2fa1d
+regex \s	0009	000d
+regex \s	0020	0020
+regex \s	0085	0085
+regex \s	00a0	00a0
+regex \s	1680	1680
+regex \s	180e	180e
+regex \s	2000	200a
+regex \s	2028	2029
+regex \s	202f	202f
+regex \s	205f	2060
+regex \s	2423	2423
+regex \s	3000	3000
+regex \s	f360	f360
+regex \s	f380	f380
+regex \s	f382	f384
+regex \s	f3a2	f3a3
+regex \s	f3b1	f3b2
+regex \s	f3bd	f3bf
+regex \s	f3c6	f3c6
+regex \s	f760	f760
+regex \s	f76e	f76f
+regex [:alpha:]	0041	005a
+regex [:alpha:]	0061	007a
+regex [:alpha:]	00aa	00aa
+regex [:alpha:]	00b5	00b5
+regex [:alpha:]	00ba	00ba
+regex [:alpha:]	00c0	00d6
+regex [:alpha:]	00d8	00f6
+regex [:alpha:]	00f8	02c1
+regex [:alpha:]	02c6	02d1
+regex [:alpha:]	02e0	02e4
+regex [:alpha:]	02ec	02ec
+regex [:alpha:]	02ee	02ee
+regex [:alpha:]	0370	0374
+regex [:alpha:]	0376	0377
+regex [:alpha:]	037a	037d
+regex [:alpha:]	037f	037f
+regex [:alpha:]	0386	0386
+regex [:alpha:]	0388	038a
+regex [:alpha:]	038c	038c
+regex [:alpha:]	038e	03a1
+regex [:alpha:]	03a3	03f5
+regex [:alpha:]	03f7	0481
+regex [:alpha:]	048a	052f
+regex [:alpha:]	0531	0556
+regex [:alpha:]	0559	0559
+regex [:alpha:]	0561	0587
+regex [:alpha:]	05d0	05ea
+regex [:alpha:]	05f0	05f2
+regex [:alpha:]	0620	064a
+regex [:alpha:]	066e	066f
+regex [:alpha:]	0671	06d3
+regex [:alpha:]	06d5	06d5
+regex [:alpha:]	06e5	06e6
+regex [:alpha:]	06ee	06ef
+regex [:alpha:]	06fa	06fc
+regex [:alpha:]	06ff	06ff
+regex [:alpha:]	0710	0710
+regex [:alpha:]	0712	072f
+regex [:alpha:]	074d	07a5
+regex [:alpha:]	07b1	07b1
+regex [:alpha:]	07ca	07ea
+regex [:alpha:]	07f4	07f5
+regex [:alpha:]	07fa	07fa
+regex [:alpha:]	0800	0815
+regex [:alpha:]	081a	081a
+regex [:alpha:]	0824	0824
+regex [:alpha:]	0828	0828
+regex [:alpha:]	0840	0858
+regex [:alpha:]	08a0	08b2
+regex [:alpha:]	0904	0939
+regex [:alpha:]	093d	093d
+regex [:alpha:]	0950	0950
+regex [:alpha:]	0958	0961
+regex [:alpha:]	0971	0980
+regex [:alpha:]	0985	098c
+regex [:alpha:]	098f	0990
+regex [:alpha:]	0993	09a8
+regex [:alpha:]	09aa	09b0
+regex [:alpha:]	09b2	09b2
+regex [:alpha:]	09b6	09b9
+regex [:alpha:]	09bd	09bd
+regex [:alpha:]	09ce	09ce
+regex [:alpha:]	09dc	09dd
+regex [:alpha:]	09df	09e1
+regex [:alpha:]	09f0	09f1
+regex [:alpha:]	0a05	0a0a
+regex [:alpha:]	0a0f	0a10
+regex [:alpha:]	0a13	0a28
+regex [:alpha:]	0a2a	0a30
+regex [:alpha:]	0a32	0a33
+regex [:alpha:]	0a35	0a36
+regex [:alpha:]	0a38	0a39
+regex [:alpha:]	0a59	0a5c
+regex [:alpha:]	0a5e	0a5e
+regex [:alpha:]	0a72	0a74
+regex [:alpha:]	0a85	0a8d
+regex [:alpha:]	0a8f	0a91
+regex [:alpha:]	0a93	0aa8
+regex [:alpha:]	0aaa	0ab0
+regex [:alpha:]	0ab2	0ab3
+regex [:alpha:]	0ab5	0ab9
+regex [:alpha:]	0abd	0abd
+regex [:alpha:]	0ad0	0ad0
+regex [:alpha:]	0ae0	0ae1
+regex [:alpha:]	0b05	0b0c
+regex [:alpha:]	0b0f	0b10
+regex [:alpha:]	0b13	0b28
+regex [:alpha:]	0b2a	0b30
+regex [:alpha:]	0b32	0b33
+regex [:alpha:]	0b35	0b39
+regex [:alpha:]	0b3d	0b3d
+regex [:alpha:]	0b5c	0b5d
+regex [:alpha:]	0b5f	0b61
+regex [:alpha:]	0b71	0b71
+regex [:alpha:]	0b83	0b83
+regex [:alpha:]	0b85	0b8a
+regex [:alpha:]	0b8e	0b90
+regex [:alpha:]	0b92	0b95
+regex [:alpha:]	0b99	0b9a
+regex [:alpha:]	0b9c	0b9c
+regex [:alpha:]	0b9e	0b9f
+regex [:alpha:]	0ba3	0ba4
+regex [:alpha:]	0ba8	0baa
+regex [:alpha:]	0bae	0bb9
+regex [:alpha:]	0bd0	0bd0
+regex [:alpha:]	0c05	0c0c
+regex [:alpha:]	0c0e	0c10
+regex [:alpha:]	0c12	0c28
+regex [:alpha:]	0c2a	0c39
+regex [:alpha:]	0c3d	0c3d
+regex [:alpha:]	0c58	0c59
+regex [:alpha:]	0c60	0c61
+regex [:alpha:]	0c85	0c8c
+regex [:alpha:]	0c8e	0c90
+regex [:alpha:]	0c92	0ca8
+regex [:alpha:]	0caa	0cb3
+regex [:alpha:]	0cb5	0cb9
+regex [:alpha:]	0cbd	0cbd
+regex [:alpha:]	0cde	0cde
+regex [:alpha:]	0ce0	0ce1
+regex [:alpha:]	0cf1	0cf2
+regex [:alpha:]	0d05	0d0c
+regex [:alpha:]	0d0e	0d10
+regex [:alpha:]	0d12	0d3a
+regex [:alpha:]	0d3d	0d3d
+regex [:alpha:]	0d4e	0d4e
+regex [:alpha:]	0d60	0d61
+regex [:alpha:]	0d7a	0d7f
+regex [:alpha:]	0d85	0d96
+regex [:alpha:]	0d9a	0db1
+regex [:alpha:]	0db3	0dbb
+regex [:alpha:]	0dbd	0dbd
+regex [:alpha:]	0dc0	0dc6
+regex [:alpha:]	0e01	0e30
+regex [:alpha:]	0e32	0e33
+regex [:alpha:]	0e40	0e46
+regex [:alpha:]	0e81	0e82
+regex [:alpha:]	0e84	0e84
+regex [:alpha:]	0e87	0e88
+regex [:alpha:]	0e8a	0e8a
+regex [:alpha:]	0e8d	0e8d
+regex [:alpha:]	0e94	0e97
+regex [:alpha:]	0e99	0e9f
+regex [:alpha:]	0ea1	0ea3
+regex [:alpha:]	0ea5	0ea5
+regex [:alpha:]	0ea7	0ea7
+regex [:alpha:]	0eaa	0eab
+regex [:alpha:]	0ead	0eb0
+regex [:alpha:]	0eb2	0eb3
+regex [:alpha:]	0ebd	0ebd
+regex [:alpha:]	0ec0	0ec4
+regex [:alpha:]	0ec6	0ec6
+regex [:alpha:]	0edc	0edf
+regex [:alpha:]	0f00	0f00
+regex [:alpha:]	0f40	0f47
+regex [:alpha:]	0f49	0f6c
+regex [:alpha:]	0f88	0f8c
+regex [:alpha:]	1000	102a
+regex [:alpha:]	103f	103f
+regex [:alpha:]	1050	1055
+regex [:alpha:]	105a	105d
+regex [:alpha:]	1061	1061
+regex [:alpha:]	1065	1066
+regex [:alpha:]	106e	1070
+regex [:alpha:]	1075	1081
+regex [:alpha:]	108e	108e
+regex [:alpha:]	10a0	10c5
+regex [:alpha:]	10c7	10c7
+regex [:alpha:]	10cd	10cd
+regex [:alpha:]	10d0	10fa
+regex [:alpha:]	10fc	1248
+regex [:alpha:]	124a	124d
+regex [:alpha:]	1250	1256
+regex [:alpha:]	1258	1258
+regex [:alpha:]	125a	125d
+regex [:alpha:]	1260	1288
+regex [:alpha:]	128a	128d
+regex [:alpha:]	1290	12b0
+regex [:alpha:]	12b2	12b5
+regex [:alpha:]	12b8	12be
+regex [:alpha:]	12c0	12c0
+regex [:alpha:]	12c2	12c5
+regex [:alpha:]	12c8	12d6
+regex [:alpha:]	12d8	1310
+regex [:alpha:]	1312	1315
+regex [:alpha:]	1318	135a
+regex [:alpha:]	1380	138f
+regex [:alpha:]	13a0	13f4
+regex [:alpha:]	1401	166c
+regex [:alpha:]	166f	167f
+regex [:alpha:]	1681	169a
+regex [:alpha:]	16a0	16ea
+regex [:alpha:]	16f1	16f8
+regex [:alpha:]	1700	170c
+regex [:alpha:]	170e	1711
+regex [:alpha:]	1720	1731
+regex [:alpha:]	1740	1751
+regex [:alpha:]	1760	176c
+regex [:alpha:]	176e	1770
+regex [:alpha:]	1780	17b3
+regex [:alpha:]	17d7	17d7
+regex [:alpha:]	17dc	17dc
+regex [:alpha:]	1820	1877
+regex [:alpha:]	1880	18a8
+regex [:alpha:]	18aa	18aa
+regex [:alpha:]	18b0	18f5
+regex [:alpha:]	1900	191e
+regex [:alpha:]	1950	196d
+regex [:alpha:]	1970	1974
+regex [:alpha:]	1980	19ab
+regex [:alpha:]	19c1	19c7
+regex [:alpha:]	1a00	1a16
+regex [:alpha:]	1a20	1a54
+regex [:alpha:]	1aa7	1aa7
+regex [:alpha:]	1b05	1b33
+regex [:alpha:]	1b45	1b4b
+regex [:alpha:]	1b83	1ba0
+regex [:alpha:]	1bae	1baf
+regex [:alpha:]	1bba	1be5
+regex [:alpha:]	1c00	1c23
+regex [:alpha:]	1c4d	1c4f
+regex [:alpha:]	1c5a	1c7d
+regex [:alpha:]	1ce9	1cec
+regex [:alpha:]	1cee	1cf1
+regex [:alpha:]	1cf5	1cf6
+regex [:alpha:]	1d00	1dbf
+regex [:alpha:]	1e00	1f15
+regex [:alpha:]	1f18	1f1d
+regex [:alpha:]	1f20	1f45
+regex [:alpha:]	1f48	1f4d
+regex [:alpha:]	1f50	1f57
+regex [:alpha:]	1f59	1f59
+regex [:alpha:]	1f5b	1f5b
+regex [:alpha:]	1f5d	1f5d
+regex [:alpha:]	1f5f	1f7d
+regex [:alpha:]	1f80	1fb4
+regex [:alpha:]	1fb6	1fbc
+regex [:alpha:]	1fbe	1fbe
+regex [:alpha:]	1fc2	1fc4
+regex [:alpha:]	1fc6	1fcc
+regex [:alpha:]	1fd0	1fd3
+regex [:alpha:]	1fd6	1fdb
+regex [:alpha:]	1fe0	1fec
+regex [:alpha:]	1ff2	1ff4
+regex [:alpha:]	1ff6	1ffc
+regex [:alpha:]	2071	2071
+regex [:alpha:]	207f	207f
+regex [:alpha:]	2090	209c
+regex [:alpha:]	2102	2102
+regex [:alpha:]	2107	2107
+regex [:alpha:]	210a	210e
+regex [:alpha:]	2110	2113
+regex [:alpha:]	2115	2115
+regex [:alpha:]	2119	211d
+regex [:alpha:]	2124	2124
+regex [:alpha:]	2126	2126
+regex [:alpha:]	2128	2128
+regex [:alpha:]	212a	212a
+regex [:alpha:]	212c	212d
+regex [:alpha:]	212f	2139
+regex [:alpha:]	213c	213f
+regex [:alpha:]	2145	2149
+regex [:alpha:]	214e	214e
+regex [:alpha:]	2183	2184
+regex [:alpha:]	2c00	2c2e
+regex [:alpha:]	2c30	2c5e
+regex [:alpha:]	2c60	2ce4
+regex [:alpha:]	2ceb	2cee
+regex [:alpha:]	2cf2	2cf3
+regex [:alpha:]	2d00	2d25
+regex [:alpha:]	2d27	2d27
+regex [:alpha:]	2d2d	2d2d
+regex [:alpha:]	2d30	2d67
+regex [:alpha:]	2d6f	2d6f
+regex [:alpha:]	2d80	2d96
+regex [:alpha:]	2da0	2da6
+regex [:alpha:]	2da8	2dae
+regex [:alpha:]	2db0	2db6
+regex [:alpha:]	2db8	2dbe
+regex [:alpha:]	2dc0	2dc6
+regex [:alpha:]	2dc8	2dce
+regex [:alpha:]	2dd0	2dd6
+regex [:alpha:]	2dd8	2dde
+regex [:alpha:]	2e2f	2e2f
+regex [:alpha:]	3005	3006
+regex [:alpha:]	3031	3035
+regex [:alpha:]	303b	303c
+regex [:alpha:]	3041	3096
+regex [:alpha:]	309d	309f
+regex [:alpha:]	30a1	30fa
+regex [:alpha:]	30fc	30ff
+regex [:alpha:]	3105	312d
+regex [:alpha:]	3131	318e
+regex [:alpha:]	31a0	31ba
+regex [:alpha:]	31f0	31ff
+regex [:alpha:]	3400	4db5
+regex [:alpha:]	4e00	9fcc
+regex [:alpha:]	a000	a48c
+regex [:alpha:]	a4d0	a4fd
+regex [:alpha:]	a500	a60c
+regex [:alpha:]	a610	a61f
+regex [:alpha:]	a62a	a62b
+regex [:alpha:]	a640	a66e
+regex [:alpha:]	a67f	a69d
+regex [:alpha:]	a6a0	a6e5
+regex [:alpha:]	a717	a71f
+regex [:alpha:]	a722	a788
+regex [:alpha:]	a78b	a78e
+regex [:alpha:]	a790	a7ad
+regex [:alpha:]	a7b0	a7b1
+regex [:alpha:]	a7f7	a801
+regex [:alpha:]	a803	a805
+regex [:alpha:]	a807	a80a
+regex [:alpha:]	a80c	a822
+regex [:alpha:]	a840	a873
+regex [:alpha:]	a882	a8b3
+regex [:alpha:]	a8f2	a8f7
+regex [:alpha:]	a8fb	a8fb
+regex [:alpha:]	a90a	a925
+regex [:alpha:]	a930	a946
+regex [:alpha:]	a960	a97c
+regex [:alpha:]	a984	a9b2
+regex [:alpha:]	a9cf	a9cf
+regex [:alpha:]	a9e0	a9e4
+regex [:alpha:]	a9e6	a9ef
+regex [:alpha:]	a9fa	a9fe
+regex [:alpha:]	aa00	aa28
+regex [:alpha:]	aa40	aa42
+regex [:alpha:]	aa44	aa4b
+regex [:alpha:]	aa60	aa76
+regex [:alpha:]	aa7a	aa7a
+regex [:alpha:]	aa7e	aaaf
+regex [:alpha:]	aab1	aab1
+regex [:alpha:]	aab5	aab6
+regex [:alpha:]	aab9	aabd
+regex [:alpha:]	aac0	aac0
+regex [:alpha:]	aac2	aac2
+regex [:alpha:]	aadb	aadd
+regex [:alpha:]	aae0	aaea
+regex [:alpha:]	aaf2	aaf4
+regex [:alpha:]	ab01	ab06
+regex [:alpha:]	ab09	ab0e
+regex [:alpha:]	ab11	ab16
+regex [:alpha:]	ab20	ab26
+regex [:alpha:]	ab28	ab2e
+regex [:alpha:]	ab30	ab5a
+regex [:alpha:]	ab5c	ab5f
+regex [:alpha:]	ab64	ab65
+regex [:alpha:]	abc0	abe2
+regex [:alpha:]	ac00	d7a3
+regex [:alpha:]	d7b0	d7c6
+regex [:alpha:]	d7cb	d7fb
+regex [:alpha:]	f6b2	f6b5
+regex [:alpha:]	f6b7	f6b7
+regex [:alpha:]	f6b9	f6bc
+regex [:alpha:]	f6be	f6bf
+regex [:alpha:]	f6c1	f700
+regex [:alpha:]	f730	f731
+regex [:alpha:]	f770	f770
+regex [:alpha:]	f772	f773
+regex [:alpha:]	f776	f776
+regex [:alpha:]	f779	f77a
+regex [:alpha:]	f77d	f780
+regex [:alpha:]	f782	f78b
+regex [:alpha:]	f78d	f790
+regex [:alpha:]	f793	f79a
+regex [:alpha:]	f79c	f7a2
+regex [:alpha:]	f7a4	f7bd
+regex [:alpha:]	f800	f844
+regex [:alpha:]	f846	f84c
+regex [:alpha:]	f854	f86c
+regex [:alpha:]	f874	f875
+regex [:alpha:]	f878	f879
+regex [:alpha:]	f87d	f886
+regex [:alpha:]	f88a	f88a
+regex [:alpha:]	f900	fa6d
+regex [:alpha:]	fa70	fad9
+regex [:alpha:]	fb00	fb06
+regex [:alpha:]	fb13	fb17
+regex [:alpha:]	fb1d	fb1d
+regex [:alpha:]	fb1f	fb28
+regex [:alpha:]	fb2a	fb36
+regex [:alpha:]	fb38	fb3c
+regex [:alpha:]	fb3e	fb3e
+regex [:alpha:]	fb40	fb41
+regex [:alpha:]	fb43	fb44
+regex [:alpha:]	fb46	fbb1
+regex [:alpha:]	fbd3	fd3d
+regex [:alpha:]	fd50	fd8f
+regex [:alpha:]	fd92	fdc7
+regex [:alpha:]	fdf0	fdfb
+regex [:alpha:]	fe70	fe74
+regex [:alpha:]	fe76	fefc
+regex [:alpha:]	ff21	ff3a
+regex [:alpha:]	ff41	ff5a
+regex [:alpha:]	ff66	ffbe
+regex [:alpha:]	ffc2	ffc7
+regex [:alpha:]	ffca	ffcf
+regex [:alpha:]	ffd2	ffd7
+regex [:alpha:]	ffda	ffdc
+regex [:alpha:]	10000	1000b
+regex [:alpha:]	1000d	10026
+regex [:alpha:]	10028	1003a
+regex [:alpha:]	1003c	1003d
+regex [:alpha:]	1003f	1004d
+regex [:alpha:]	10050	1005d
+regex [:alpha:]	10080	100fa
+regex [:alpha:]	10280	1029c
+regex [:alpha:]	102a0	102d0
+regex [:alpha:]	10300	1031f
+regex [:alpha:]	10330	10340
+regex [:alpha:]	10342	10349
+regex [:alpha:]	10350	10375
+regex [:alpha:]	10380	1039d
+regex [:alpha:]	103a0	103c3
+regex [:alpha:]	103c8	103cf
+regex [:alpha:]	10400	1049d
+regex [:alpha:]	10500	10527
+regex [:alpha:]	10530	10563
+regex [:alpha:]	10600	10736
+regex [:alpha:]	10740	10755
+regex [:alpha:]	10760	10767
+regex [:alpha:]	10800	10805
+regex [:alpha:]	10808	10808
+regex [:alpha:]	1080a	10835
+regex [:alpha:]	10837	10838
+regex [:alpha:]	1083c	1083c
+regex [:alpha:]	1083f	10855
+regex [:alpha:]	10860	10876
+regex [:alpha:]	10880	1089e
+regex [:alpha:]	10900	10915
+regex [:alpha:]	10920	10939
+regex [:alpha:]	10980	109b7
+regex [:alpha:]	109be	109bf
+regex [:alpha:]	10a00	10a00
+regex [:alpha:]	10a10	10a13
+regex [:alpha:]	10a15	10a17
+regex [:alpha:]	10a19	10a33
+regex [:alpha:]	10a60	10a7c
+regex [:alpha:]	10a80	10a9c
+regex [:alpha:]	10ac0	10ac7
+regex [:alpha:]	10ac9	10ae4
+regex [:alpha:]	10b00	10b35
+regex [:alpha:]	10b40	10b55
+regex [:alpha:]	10b60	10b72
+regex [:alpha:]	10b80	10b91
+regex [:alpha:]	10c00	10c48
+regex [:alpha:]	11003	11037
+regex [:alpha:]	11083	110af
+regex [:alpha:]	110d0	110e8
+regex [:alpha:]	11103	11126
+regex [:alpha:]	11150	11172
+regex [:alpha:]	11176	11176
+regex [:alpha:]	11183	111b2
+regex [:alpha:]	111c1	111c4
+regex [:alpha:]	111da	111da
+regex [:alpha:]	11200	11211
+regex [:alpha:]	11213	1122b
+regex [:alpha:]	112b0	112de
+regex [:alpha:]	11305	1130c
+regex [:alpha:]	1130f	11310
+regex [:alpha:]	11313	11328
+regex [:alpha:]	1132a	11330
+regex [:alpha:]	11332	11333
+regex [:alpha:]	11335	11339
+regex [:alpha:]	1133d	1133d
+regex [:alpha:]	1135d	11361
+regex [:alpha:]	11480	114af
+regex [:alpha:]	114c4	114c5
+regex [:alpha:]	114c7	114c7
+regex [:alpha:]	11580	115ae
+regex [:alpha:]	11600	1162f
+regex [:alpha:]	11644	11644
+regex [:alpha:]	11680	116aa
+regex [:alpha:]	118a0	118df
+regex [:alpha:]	118ff	118ff
+regex [:alpha:]	11ac0	11af8
+regex [:alpha:]	12000	12398
+regex [:alpha:]	13000	1342e
+regex [:alpha:]	16800	16a38
+regex [:alpha:]	16a40	16a5e
+regex [:alpha:]	16ad0	16aed
+regex [:alpha:]	16b00	16b2f
+regex [:alpha:]	16b40	16b43
+regex [:alpha:]	16b63	16b77
+regex [:alpha:]	16b7d	16b8f
+regex [:alpha:]	16f00	16f44
+regex [:alpha:]	16f50	16f50
+regex [:alpha:]	16f93	16f9f
+regex [:alpha:]	1b000	1b001
+regex [:alpha:]	1bc00	1bc6a
+regex [:alpha:]	1bc70	1bc7c
+regex [:alpha:]	1bc80	1bc88
+regex [:alpha:]	1bc90	1bc99
+regex [:alpha:]	1d400	1d454
+regex [:alpha:]	1d456	1d49c
+regex [:alpha:]	1d49e	1d49f
+regex [:alpha:]	1d4a2	1d4a2
+regex [:alpha:]	1d4a5	1d4a6
+regex [:alpha:]	1d4a9	1d4ac
+regex [:alpha:]	1d4ae	1d4b9
+regex [:alpha:]	1d4bb	1d4bb
+regex [:alpha:]	1d4bd	1d4c3
+regex [:alpha:]	1d4c5	1d505
+regex [:alpha:]	1d507	1d50a
+regex [:alpha:]	1d50d	1d514
+regex [:alpha:]	1d516	1d51c
+regex [:alpha:]	1d51e	1d539
+regex [:alpha:]	1d53b	1d53e
+regex [:alpha:]	1d540	1d544
+regex [:alpha:]	1d546	1d546
+regex [:alpha:]	1d54a	1d550
+regex [:alpha:]	1d552	1d6a5
+regex [:alpha:]	1d6a8	1d6c0
+regex [:alpha:]	1d6c2	1d6da
+regex [:alpha:]	1d6dc	1d6fa
+regex [:alpha:]	1d6fc	1d714
+regex [:alpha:]	1d716	1d734
+regex [:alpha:]	1d736	1d74e
+regex [:alpha:]	1d750	1d76e
+regex [:alpha:]	1d770	1d788
+regex [:alpha:]	1d78a	1d7a8
+regex [:alpha:]	1d7aa	1d7c2
+regex [:alpha:]	1d7c4	1d7cb
+regex [:alpha:]	1e800	1e8c4
+regex [:alpha:]	1ee00	1ee03
+regex [:alpha:]	1ee05	1ee1f
+regex [:alpha:]	1ee21	1ee22
+regex [:alpha:]	1ee24	1ee24
+regex [:alpha:]	1ee27	1ee27
+regex [:alpha:]	1ee29	1ee32
+regex [:alpha:]	1ee34	1ee37
+regex [:alpha:]	1ee39	1ee39
+regex [:alpha:]	1ee3b	1ee3b
+regex [:alpha:]	1ee42	1ee42
+regex [:alpha:]	1ee47	1ee47
+regex [:alpha:]	1ee49	1ee49
+regex [:alpha:]	1ee4b	1ee4b
+regex [:alpha:]	1ee4d	1ee4f
+regex [:alpha:]	1ee51	1ee52
+regex [:alpha:]	1ee54	1ee54
+regex [:alpha:]	1ee57	1ee57
+regex [:alpha:]	1ee59	1ee59
+regex [:alpha:]	1ee5b	1ee5b
+regex [:alpha:]	1ee5d	1ee5d
+regex [:alpha:]	1ee5f	1ee5f
+regex [:alpha:]	1ee61	1ee62
+regex [:alpha:]	1ee64	1ee64
+regex [:alpha:]	1ee67	1ee6a
+regex [:alpha:]	1ee6c	1ee72
+regex [:alpha:]	1ee74	1ee77
+regex [:alpha:]	1ee79	1ee7c
+regex [:alpha:]	1ee7e	1ee7e
+regex [:alpha:]	1ee80	1ee89
+regex [:alpha:]	1ee8b	1ee9b
+regex [:alpha:]	1eea1	1eea3
+regex [:alpha:]	1eea5	1eea9
+regex [:alpha:]	1eeab	1eebb
+regex [:alpha:]	20000	2a6d6
+regex [:alpha:]	2a700	2b734
+regex [:alpha:]	2b740	2b81d
+regex [:alpha:]	2f800	2fa1d
+regex [:digit:]	0030	0039
+regex [:digit:]	0660	0669
+regex [:digit:]	06f0	06f9
+regex [:digit:]	07c0	07c9
+regex [:digit:]	0966	096f
+regex [:digit:]	09e6	09ef
+regex [:digit:]	0a66	0a6f
+regex [:digit:]	0ae6	0aef
+regex [:digit:]	0b66	0b6f
+regex [:digit:]	0be6	0bef
+regex [:digit:]	0c66	0c6f
+regex [:digit:]	0ce6	0cef
+regex [:digit:]	0d66	0d6f
+regex [:digit:]	0de6	0def
+regex [:digit:]	0e50	0e59
+regex [:digit:]	0ed0	0ed9
+regex [:digit:]	0f20	0f29
+regex [:digit:]	1040	1049
+regex [:digit:]	1090	1099
+regex [:digit:]	17e0	17e9
+regex [:digit:]	1810	1819
+regex [:digit:]	1946	194f
+regex [:digit:]	19d0	19d9
+regex [:digit:]	1a80	1a89
+regex [:digit:]	1a90	1a99
+regex [:digit:]	1b50	1b59
+regex [:digit:]	1bb0	1bb9
+regex [:digit:]	1c40	1c49
+regex [:digit:]	1c50	1c59
+regex [:digit:]	a620	a629
+regex [:digit:]	a8d0	a8d9
+regex [:digit:]	a900	a909
+regex [:digit:]	a9d0	a9d9
+regex [:digit:]	a9f0	a9f9
+regex [:digit:]	aa50	aa59
+regex [:digit:]	abf0	abf9
+regex [:digit:]	ff10	ff19
+regex [:digit:]	104a0	104a9
+regex [:digit:]	11066	1106f
+regex [:digit:]	110f0	110f9
+regex [:digit:]	11136	1113f
+regex [:digit:]	111d0	111d9
+regex [:digit:]	112f0	112f9
+regex [:digit:]	114d0	114d9
+regex [:digit:]	11650	11659
+regex [:digit:]	116c0	116c9
+regex [:digit:]	118e0	118e9
+regex [:digit:]	16a60	16a69
+regex [:digit:]	16b50	16b59
+regex [:digit:]	1d7ce	1d7ff
+regex [:alnum:]	0030	0039
+regex [:alnum:]	0041	005a
+regex [:alnum:]	0061	007a
+regex [:alnum:]	00aa	00aa
+regex [:alnum:]	00b2	00b3
+regex [:alnum:]	00b5	00b5
+regex [:alnum:]	00b9	00ba
+regex [:alnum:]	00bc	00be
+regex [:alnum:]	00c0	00d6
+regex [:alnum:]	00d8	00f6
+regex [:alnum:]	00f8	02c1
+regex [:alnum:]	02c6	02d1
+regex [:alnum:]	02e0	02e4
+regex [:alnum:]	02ec	02ec
+regex [:alnum:]	02ee	02ee
+regex [:alnum:]	0370	0374
+regex [:alnum:]	0376	0377
+regex [:alnum:]	037a	037d
+regex [:alnum:]	037f	037f
+regex [:alnum:]	0386	0386
+regex [:alnum:]	0388	038a
+regex [:alnum:]	038c	038c
+regex [:alnum:]	038e	03a1
+regex [:alnum:]	03a3	03f5
+regex [:alnum:]	03f7	0481
+regex [:alnum:]	048a	052f
+regex [:alnum:]	0531	0556
+regex [:alnum:]	0559	0559
+regex [:alnum:]	0561	0587
+regex [:alnum:]	05d0	05ea
+regex [:alnum:]	05f0	05f2
+regex [:alnum:]	0620	064a
+regex [:alnum:]	0660	0669
+regex [:alnum:]	066e	066f
+regex [:alnum:]	0671	06d3
+regex [:alnum:]	06d5	06d5
+regex [:alnum:]	06e5	06e6
+regex [:alnum:]	06ee	06fc
+regex [:alnum:]	06ff	06ff
+regex [:alnum:]	0710	0710
+regex [:alnum:]	0712	072f
+regex [:alnum:]	074d	07a5
+regex [:alnum:]	07b1	07b1
+regex [:alnum:]	07c0	07ea
+regex [:alnum:]	07f4	07f5
+regex [:alnum:]	07fa	07fa
+regex [:alnum:]	0800	0815
+regex [:alnum:]	081a	081a
+regex [:alnum:]	0824	0824
+regex [:alnum:]	0828	0828
+regex [:alnum:]	0840	0858
+regex [:alnum:]	08a0	08b2
+regex [:alnum:]	0904	0939
+regex [:alnum:]	093d	093d
+regex [:alnum:]	0950	0950
+regex [:alnum:]	0958	0961
+regex [:alnum:]	0966	096f
+regex [:alnum:]	0971	0980
+regex [:alnum:]	0985	098c
+regex [:alnum:]	098f	0990
+regex [:alnum:]	0993	09a8
+regex [:alnum:]	09aa	09b0
+regex [:alnum:]	09b2	09b2
+regex [:alnum:]	09b6	09b9
+regex [:alnum:]	09bd	09bd
+regex [:alnum:]	09ce	09ce
+regex [:alnum:]	09dc	09dd
+regex [:alnum:]	09df	09e1
+regex [:alnum:]	09e6	09f1
+regex [:alnum:]	09f4	09f9
+regex [:alnum:]	0a05	0a0a
+regex [:alnum:]	0a0f	0a10
+regex [:alnum:]	0a13	0a28
+regex [:alnum:]	0a2a	0a30
+regex [:alnum:]	0a32	0a33
+regex [:alnum:]	0a35	0a36
+regex [:alnum:]	0a38	0a39
+regex [:alnum:]	0a59	0a5c
+regex [:alnum:]	0a5e	0a5e
+regex [:alnum:]	0a66	0a6f
+regex [:alnum:]	0a72	0a74
+regex [:alnum:]	0a85	0a8d
+regex [:alnum:]	0a8f	0a91
+regex [:alnum:]	0a93	0aa8
+regex [:alnum:]	0aaa	0ab0
+regex [:alnum:]	0ab2	0ab3
+regex [:alnum:]	0ab5	0ab9
+regex [:alnum:]	0abd	0abd
+regex [:alnum:]	0ad0	0ad0
+regex [:alnum:]	0ae0	0ae1
+regex [:alnum:]	0ae6	0aef
+regex [:alnum:]	0b05	0b0c
+regex [:alnum:]	0b0f	0b10
+regex [:alnum:]	0b13	0b28
+regex [:alnum:]	0b2a	0b30
+regex [:alnum:]	0b32	0b33
+regex [:alnum:]	0b35	0b39
+regex [:alnum:]	0b3d	0b3d
+regex [:alnum:]	0b5c	0b5d
+regex [:alnum:]	0b5f	0b61
+regex [:alnum:]	0b66	0b6f
+regex [:alnum:]	0b71	0b77
+regex [:alnum:]	0b83	0b83
+regex [:alnum:]	0b85	0b8a
+regex [:alnum:]	0b8e	0b90
+regex [:alnum:]	0b92	0b95
+regex [:alnum:]	0b99	0b9a
+regex [:alnum:]	0b9c	0b9c
+regex [:alnum:]	0b9e	0b9f
+regex [:alnum:]	0ba3	0ba4
+regex [:alnum:]	0ba8	0baa
+regex [:alnum:]	0bae	0bb9
+regex [:alnum:]	0bd0	0bd0
+regex [:alnum:]	0be6	0bf2
+regex [:alnum:]	0c05	0c0c
+regex [:alnum:]	0c0e	0c10
+regex [:alnum:]	0c12	0c28
+regex [:alnum:]	0c2a	0c39
+regex [:alnum:]	0c3d	0c3d
+regex [:alnum:]	0c58	0c59
+regex [:alnum:]	0c60	0c61
+regex [:alnum:]	0c66	0c6f
+regex [:alnum:]	0c78	0c7e
+regex [:alnum:]	0c85	0c8c
+regex [:alnum:]	0c8e	0c90
+regex [:alnum:]	0c92	0ca8
+regex [:alnum:]	0caa	0cb3
+regex [:alnum:]	0cb5	0cb9
+regex [:alnum:]	0cbd	0cbd
+regex [:alnum:]	0cde	0cde
+regex [:alnum:]	0ce0	0ce1
+regex [:alnum:]	0ce6	0cef
+regex [:alnum:]	0cf1	0cf2
+regex [:alnum:]	0d05	0d0c
+regex [:alnum:]	0d0e	0d10
+regex [:alnum:]	0d12	0d3a
+regex [:alnum:]	0d3d	0d3d
+regex [:alnum:]	0d4e	0d4e
+regex [:alnum:]	0d60	0d61
+regex [:alnum:]	0d66	0d75
+regex [:alnum:]	0d7a	0d7f
+regex [:alnum:]	0d85	0d96
+regex [:alnum:]	0d9a	0db1
+regex [:alnum:]	0db3	0dbb
+regex [:alnum:]	0dbd	0dbd
+regex [:alnum:]	0dc0	0dc6
+regex [:alnum:]	0de6	0def
+regex [:alnum:]	0e01	0e30
+regex [:alnum:]	0e32	0e33
+regex [:alnum:]	0e40	0e46
+regex [:alnum:]	0e50	0e59
+regex [:alnum:]	0e81	0e82
+regex [:alnum:]	0e84	0e84
+regex [:alnum:]	0e87	0e88
+regex [:alnum:]	0e8a	0e8a
+regex [:alnum:]	0e8d	0e8d
+regex [:alnum:]	0e94	0e97
+regex [:alnum:]	0e99	0e9f
+regex [:alnum:]	0ea1	0ea3
+regex [:alnum:]	0ea5	0ea5
+regex [:alnum:]	0ea7	0ea7
+regex [:alnum:]	0eaa	0eab
+regex [:alnum:]	0ead	0eb0
+regex [:alnum:]	0eb2	0eb3
+regex [:alnum:]	0ebd	0ebd
+regex [:alnum:]	0ec0	0ec4
+regex [:alnum:]	0ec6	0ec6
+regex [:alnum:]	0ed0	0ed9
+regex [:alnum:]	0edc	0edf
+regex [:alnum:]	0f00	0f00
+regex [:alnum:]	0f20	0f33
+regex [:alnum:]	0f40	0f47
+regex [:alnum:]	0f49	0f6c
+regex [:alnum:]	0f88	0f8c
+regex [:alnum:]	1000	102a
+regex [:alnum:]	103f	1049
+regex [:alnum:]	1050	1055
+regex [:alnum:]	105a	105d
+regex [:alnum:]	1061	1061
+regex [:alnum:]	1065	1066
+regex [:alnum:]	106e	1070
+regex [:alnum:]	1075	1081
+regex [:alnum:]	108e	108e
+regex [:alnum:]	1090	1099
+regex [:alnum:]	10a0	10c5
+regex [:alnum:]	10c7	10c7
+regex [:alnum:]	10cd	10cd
+regex [:alnum:]	10d0	10fa
+regex [:alnum:]	10fc	1248
+regex [:alnum:]	124a	124d
+regex [:alnum:]	1250	1256
+regex [:alnum:]	1258	1258
+regex [:alnum:]	125a	125d
+regex [:alnum:]	1260	1288
+regex [:alnum:]	128a	128d
+regex [:alnum:]	1290	12b0
+regex [:alnum:]	12b2	12b5
+regex [:alnum:]	12b8	12be
+regex [:alnum:]	12c0	12c0
+regex [:alnum:]	12c2	12c5
+regex [:alnum:]	12c8	12d6
+regex [:alnum:]	12d8	1310
+regex [:alnum:]	1312	1315
+regex [:alnum:]	1318	135a
+regex [:alnum:]	1369	137c
+regex [:alnum:]	1380	138f
+regex [:alnum:]	13a0	13f4
+regex [:alnum:]	1401	166c
+regex [:alnum:]	166f	167f
+regex [:alnum:]	1681	169a
+regex [:alnum:]	16a0	16ea
+regex [:alnum:]	16ee	16f8
+regex [:alnum:]	1700	170c
+regex [:alnum:]	170e	1711
+regex [:alnum:]	1720	1731
+regex [:alnum:]	1740	1751
+regex [:alnum:]	1760	176c
+regex [:alnum:]	176e	1770
+regex [:alnum:]	1780	17b3
+regex [:alnum:]	17d7	17d7
+regex [:alnum:]	17dc	17dc
+regex [:alnum:]	17e0	17e9
+regex [:alnum:]	17f0	17f9
+regex [:alnum:]	1810	1819
+regex [:alnum:]	1820	1877
+regex [:alnum:]	1880	18a8
+regex [:alnum:]	18aa	18aa
+regex [:alnum:]	18b0	18f5
+regex [:alnum:]	1900	191e
+regex [:alnum:]	1946	196d
+regex [:alnum:]	1970	1974
+regex [:alnum:]	1980	19ab
+regex [:alnum:]	19c1	19c7
+regex [:alnum:]	19d0	19da
+regex [:alnum:]	1a00	1a16
+regex [:alnum:]	1a20	1a54
+regex [:alnum:]	1a80	1a89
+regex [:alnum:]	1a90	1a99
+regex [:alnum:]	1aa7	1aa7
+regex [:alnum:]	1b05	1b33
+regex [:alnum:]	1b45	1b4b
+regex [:alnum:]	1b50	1b59
+regex [:alnum:]	1b83	1ba0
+regex [:alnum:]	1bae	1be5
+regex [:alnum:]	1c00	1c23
+regex [:alnum:]	1c40	1c49
+regex [:alnum:]	1c4d	1c7d
+regex [:alnum:]	1ce9	1cec
+regex [:alnum:]	1cee	1cf1
+regex [:alnum:]	1cf5	1cf6
+regex [:alnum:]	1d00	1dbf
+regex [:alnum:]	1e00	1f15
+regex [:alnum:]	1f18	1f1d
+regex [:alnum:]	1f20	1f45
+regex [:alnum:]	1f48	1f4d
+regex [:alnum:]	1f50	1f57
+regex [:alnum:]	1f59	1f59
+regex [:alnum:]	1f5b	1f5b
+regex [:alnum:]	1f5d	1f5d
+regex [:alnum:]	1f5f	1f7d
+regex [:alnum:]	1f80	1fb4
+regex [:alnum:]	1fb6	1fbc
+regex [:alnum:]	1fbe	1fbe
+regex [:alnum:]	1fc2	1fc4
+regex [:alnum:]	1fc6	1fcc
+regex [:alnum:]	1fd0	1fd3
+regex [:alnum:]	1fd6	1fdb
+regex [:alnum:]	1fe0	1fec
+regex [:alnum:]	1ff2	1ff4
+regex [:alnum:]	1ff6	1ffc
+regex [:alnum:]	2070	2071
+regex [:alnum:]	2074	2079
+regex [:alnum:]	207f	2089
+regex [:alnum:]	2090	209c
+regex [:alnum:]	2102	2102
+regex [:alnum:]	2107	2107
+regex [:alnum:]	210a	210e
+regex [:alnum:]	2110	2113
+regex [:alnum:]	2115	2115
+regex [:alnum:]	2119	211d
+regex [:alnum:]	2124	2124
+regex [:alnum:]	2126	2126
+regex [:alnum:]	2128	2128
+regex [:alnum:]	212a	212a
+regex [:alnum:]	212c	212d
+regex [:alnum:]	212f	2139
+regex [:alnum:]	213c	213f
+regex [:alnum:]	2145	2149
+regex [:alnum:]	214e	214e
+regex [:alnum:]	2150	2189
+regex [:alnum:]	2460	249b
+regex [:alnum:]	24ea	24ff
+regex [:alnum:]	2776	2793
+regex [:alnum:]	2c00	2c2e
+regex [:alnum:]	2c30	2c5e
+regex [:alnum:]	2c60	2ce4
+regex [:alnum:]	2ceb	2cee
+regex [:alnum:]	2cf2	2cf3
+regex [:alnum:]	2cfd	2cfd
+regex [:alnum:]	2d00	2d25
+regex [:alnum:]	2d27	2d27
+regex [:alnum:]	2d2d	2d2d
+regex [:alnum:]	2d30	2d67
+regex [:alnum:]	2d6f	2d6f
+regex [:alnum:]	2d80	2d96
+regex [:alnum:]	2da0	2da6
+regex [:alnum:]	2da8	2dae
+regex [:alnum:]	2db0	2db6
+regex [:alnum:]	2db8	2dbe
+regex [:alnum:]	2dc0	2dc6
+regex [:alnum:]	2dc8	2dce
+regex [:alnum:]	2dd0	2dd6
+regex [:alnum:]	2dd8	2dde
+regex [:alnum:]	2e2f	2e2f
+regex [:alnum:]	3005	3007
+regex [:alnum:]	3021	3029
+regex [:alnum:]	3031	3035
+regex [:alnum:]	3038	303c
+regex [:alnum:]	3041	3096
+regex [:alnum:]	309d	309f
+regex [:alnum:]	30a1	30fa
+regex [:alnum:]	30fc	30ff
+regex [:alnum:]	3105	312d
+regex [:alnum:]	3131	318e
+regex [:alnum:]	3192	3195
+regex [:alnum:]	31a0	31ba
+regex [:alnum:]	31f0	31ff
+regex [:alnum:]	3220	3229
+regex [:alnum:]	3248	324f
+regex [:alnum:]	3251	325f
+regex [:alnum:]	3280	3289
+regex [:alnum:]	32b1	32bf
+regex [:alnum:]	3400	4db5
+regex [:alnum:]	4e00	9fcc
+regex [:alnum:]	a000	a48c
+regex [:alnum:]	a4d0	a4fd
+regex [:alnum:]	a500	a60c
+regex [:alnum:]	a610	a62b
+regex [:alnum:]	a640	a66e
+regex [:alnum:]	a67f	a69d
+regex [:alnum:]	a6a0	a6ef
+regex [:alnum:]	a717	a71f
+regex [:alnum:]	a722	a788
+regex [:alnum:]	a78b	a78e
+regex [:alnum:]	a790	a7ad
+regex [:alnum:]	a7b0	a7b1
+regex [:alnum:]	a7f7	a801
+regex [:alnum:]	a803	a805
+regex [:alnum:]	a807	a80a
+regex [:alnum:]	a80c	a822
+regex [:alnum:]	a830	a835
+regex [:alnum:]	a840	a873
+regex [:alnum:]	a882	a8b3
+regex [:alnum:]	a8d0	a8d9
+regex [:alnum:]	a8f2	a8f7
+regex [:alnum:]	a8fb	a8fb
+regex [:alnum:]	a900	a925
+regex [:alnum:]	a930	a946
+regex [:alnum:]	a960	a97c
+regex [:alnum:]	a984	a9b2
+regex [:alnum:]	a9cf	a9d9
+regex [:alnum:]	a9e0	a9e4
+regex [:alnum:]	a9e6	a9fe
+regex [:alnum:]	aa00	aa28
+regex [:alnum:]	aa40	aa42
+regex [:alnum:]	aa44	aa4b
+regex [:alnum:]	aa50	aa59
+regex [:alnum:]	aa60	aa76
+regex [:alnum:]	aa7a	aa7a
+regex [:alnum:]	aa7e	aaaf
+regex [:alnum:]	aab1	aab1
+regex [:alnum:]	aab5	aab6
+regex [:alnum:]	aab9	aabd
+regex [:alnum:]	aac0	aac0
+regex [:alnum:]	aac2	aac2
+regex [:alnum:]	aadb	aadd
+regex [:alnum:]	aae0	aaea
+regex [:alnum:]	aaf2	aaf4
+regex [:alnum:]	ab01	ab06
+regex [:alnum:]	ab09	ab0e
+regex [:alnum:]	ab11	ab16
+regex [:alnum:]	ab20	ab26
+regex [:alnum:]	ab28	ab2e
+regex [:alnum:]	ab30	ab5a
+regex [:alnum:]	ab5c	ab5f
+regex [:alnum:]	ab64	ab65
+regex [:alnum:]	abc0	abe2
+regex [:alnum:]	abf0	abf9
+regex [:alnum:]	ac00	d7a3
+regex [:alnum:]	d7b0	d7c6
+regex [:alnum:]	d7cb	d7fb
+regex [:alnum:]	f6b2	f6b5
+regex [:alnum:]	f6b7	f6b7
+regex [:alnum:]	f6b9	f6bc
+regex [:alnum:]	f6be	f6bf
+regex [:alnum:]	f6c1	f700
+regex [:alnum:]	f730	f731
+regex [:alnum:]	f770	f770
+regex [:alnum:]	f772	f773
+regex [:alnum:]	f776	f776
+regex [:alnum:]	f779	f77a
+regex [:alnum:]	f77d	f780
+regex [:alnum:]	f782	f78b
+regex [:alnum:]	f78d	f790
+regex [:alnum:]	f793	f79a
+regex [:alnum:]	f79c	f7a2
+regex [:alnum:]	f7a4	f7bd
+regex [:alnum:]	f800	f844
+regex [:alnum:]	f846	f84c
+regex [:alnum:]	f854	f86c
+regex [:alnum:]	f874	f875
+regex [:alnum:]	f878	f879
+regex [:alnum:]	f87d	f886
+regex [:alnum:]	f88a	f88a
+regex [:alnum:]	f900	fa6d
+regex [:alnum:]	fa70	fad9
+regex [:alnum:]	fb00	fb06
+regex [:alnum:]	fb13	fb17
+regex [:alnum:]	fb1d	fb1d
+regex [:alnum:]	fb1f	fb28
+regex [:alnum:]	fb2a	fb36
+regex [:alnum:]	fb38	fb3c
+regex [:alnum:]	fb3e	fb3e
+regex [:alnum:]	fb40	fb41
+regex [:alnum:]	fb43	fb44
+regex [:alnum:]	fb46	fbb1
+regex [:alnum:]	fbd3	fd3d
+regex [:alnum:]	fd50	fd8f
+regex [:alnum:]	fd92	fdc7
+regex [:alnum:]	fdf0	fdfb
+regex [:alnum:]	fe70	fe74
+regex [:alnum:]	fe76	fefc
+regex [:alnum:]	ff10	ff19
+regex [:alnum:]	ff21	ff3a
+regex [:alnum:]	ff41	ff5a
+regex [:alnum:]	ff66	ffbe
+regex [:alnum:]	ffc2	ffc7
+regex [:alnum:]	ffca	ffcf
+regex [:alnum:]	ffd2	ffd7
+regex [:alnum:]	ffda	ffdc
+regex [:alnum:]	10000	1000b
+regex [:alnum:]	1000d	10026
+regex [:alnum:]	10028	1003a
+regex [:alnum:]	1003c	1003d
+regex [:alnum:]	1003f	1004d
+regex [:alnum:]	10050	1005d
+regex [:alnum:]	10080	100fa
+regex [:alnum:]	10107	10133
+regex [:alnum:]	10140	10178
+regex [:alnum:]	1018a	1018b
+regex [:alnum:]	10280	1029c
+regex [:alnum:]	102a0	102d0
+regex [:alnum:]	102e1	102fb
+regex [:alnum:]	10300	10323
+regex [:alnum:]	10330	1034a
+regex [:alnum:]	10350	10375
+regex [:alnum:]	10380	1039d
+regex [:alnum:]	103a0	103c3
+regex [:alnum:]	103c8	103cf
+regex [:alnum:]	103d1	103d5
+regex [:alnum:]	10400	1049d
+regex [:alnum:]	104a0	104a9
+regex [:alnum:]	10500	10527
+regex [:alnum:]	10530	10563
+regex [:alnum:]	10600	10736
+regex [:alnum:]	10740	10755
+regex [:alnum:]	10760	10767
+regex [:alnum:]	10800	10805
+regex [:alnum:]	10808	10808
+regex [:alnum:]	1080a	10835
+regex [:alnum:]	10837	10838
+regex [:alnum:]	1083c	1083c
+regex [:alnum:]	1083f	10855
+regex [:alnum:]	10858	10876
+regex [:alnum:]	10879	1089e
+regex [:alnum:]	108a7	108af
+regex [:alnum:]	10900	1091b
+regex [:alnum:]	10920	10939
+regex [:alnum:]	10980	109b7
+regex [:alnum:]	109be	109bf
+regex [:alnum:]	10a00	10a00
+regex [:alnum:]	10a10	10a13
+regex [:alnum:]	10a15	10a17
+regex [:alnum:]	10a19	10a33
+regex [:alnum:]	10a40	10a47
+regex [:alnum:]	10a60	10a7e
+regex [:alnum:]	10a80	10a9f
+regex [:alnum:]	10ac0	10ac7
+regex [:alnum:]	10ac9	10ae4
+regex [:alnum:]	10aeb	10aef
+regex [:alnum:]	10b00	10b35
+regex [:alnum:]	10b40	10b55
+regex [:alnum:]	10b58	10b72
+regex [:alnum:]	10b78	10b91
+regex [:alnum:]	10ba9	10baf
+regex [:alnum:]	10c00	10c48
+regex [:alnum:]	10e60	10e7e
+regex [:alnum:]	11003	11037
+regex [:alnum:]	11052	1106f
+regex [:alnum:]	11083	110af
+regex [:alnum:]	110d0	110e8
+regex [:alnum:]	110f0	110f9
+regex [:alnum:]	11103	11126
+regex [:alnum:]	11136	1113f
+regex [:alnum:]	11150	11172
+regex [:alnum:]	11176	11176
+regex [:alnum:]	11183	111b2
+regex [:alnum:]	111c1	111c4
+regex [:alnum:]	111d0	111da
+regex [:alnum:]	111e1	111f4
+regex [:alnum:]	11200	11211
+regex [:alnum:]	11213	1122b
+regex [:alnum:]	112b0	112de
+regex [:alnum:]	112f0	112f9
+regex [:alnum:]	11305	1130c
+regex [:alnum:]	1130f	11310
+regex [:alnum:]	11313	11328
+regex [:alnum:]	1132a	11330
+regex [:alnum:]	11332	11333
+regex [:alnum:]	11335	11339
+regex [:alnum:]	1133d	1133d
+regex [:alnum:]	1135d	11361
+regex [:alnum:]	11480	114af
+regex [:alnum:]	114c4	114c5
+regex [:alnum:]	114c7	114c7
+regex [:alnum:]	114d0	114d9
+regex [:alnum:]	11580	115ae
+regex [:alnum:]	11600	1162f
+regex [:alnum:]	11644	11644
+regex [:alnum:]	11650	11659
+regex [:alnum:]	11680	116aa
+regex [:alnum:]	116c0	116c9
+regex [:alnum:]	118a0	118f2
+regex [:alnum:]	118ff	118ff
+regex [:alnum:]	11ac0	11af8
+regex [:alnum:]	12000	12398
+regex [:alnum:]	12400	1246e
+regex [:alnum:]	13000	1342e
+regex [:alnum:]	16800	16a38
+regex [:alnum:]	16a40	16a5e
+regex [:alnum:]	16a60	16a69
+regex [:alnum:]	16ad0	16aed
+regex [:alnum:]	16b00	16b2f
+regex [:alnum:]	16b40	16b43
+regex [:alnum:]	16b50	16b59
+regex [:alnum:]	16b5b	16b61
+regex [:alnum:]	16b63	16b77
+regex [:alnum:]	16b7d	16b8f
+regex [:alnum:]	16f00	16f44
+regex [:alnum:]	16f50	16f50
+regex [:alnum:]	16f93	16f9f
+regex [:alnum:]	1b000	1b001
+regex [:alnum:]	1bc00	1bc6a
+regex [:alnum:]	1bc70	1bc7c
+regex [:alnum:]	1bc80	1bc88
+regex [:alnum:]	1bc90	1bc99
+regex [:alnum:]	1d360	1d371
+regex [:alnum:]	1d400	1d454
+regex [:alnum:]	1d456	1d49c
+regex [:alnum:]	1d49e	1d49f
+regex [:alnum:]	1d4a2	1d4a2
+regex [:alnum:]	1d4a5	1d4a6
+regex [:alnum:]	1d4a9	1d4ac
+regex [:alnum:]	1d4ae	1d4b9
+regex [:alnum:]	1d4bb	1d4bb
+regex [:alnum:]	1d4bd	1d4c3
+regex [:alnum:]	1d4c5	1d505
+regex [:alnum:]	1d507	1d50a
+regex [:alnum:]	1d50d	1d514
+regex [:alnum:]	1d516	1d51c
+regex [:alnum:]	1d51e	1d539
+regex [:alnum:]	1d53b	1d53e
+regex [:alnum:]	1d540	1d544
+regex [:alnum:]	1d546	1d546
+regex [:alnum:]	1d54a	1d550
+regex [:alnum:]	1d552	1d6a5
+regex [:alnum:]	1d6a8	1d6c0
+regex [:alnum:]	1d6c2	1d6da
+regex [:alnum:]	1d6dc	1d6fa
+regex [:alnum:]	1d6fc	1d714
+regex [:alnum:]	1d716	1d734
+regex [:alnum:]	1d736	1d74e
+regex [:alnum:]	1d750	1d76e
+regex [:alnum:]	1d770	1d788
+regex [:alnum:]	1d78a	1d7a8
+regex [:alnum:]	1d7aa	1d7c2
+regex [:alnum:]	1d7c4	1d7cb
+regex [:alnum:]	1d7ce	1d7ff
+regex [:alnum:]	1e800	1e8c4
+regex [:alnum:]	1e8c7	1e8cf
+regex [:alnum:]	1ee00	1ee03
+regex [:alnum:]	1ee05	1ee1f
+regex [:alnum:]	1ee21	1ee22
+regex [:alnum:]	1ee24	1ee24
+regex [:alnum:]	1ee27	1ee27
+regex [:alnum:]	1ee29	1ee32
+regex [:alnum:]	1ee34	1ee37
+regex [:alnum:]	1ee39	1ee39
+regex [:alnum:]	1ee3b	1ee3b
+regex [:alnum:]	1ee42	1ee42
+regex [:alnum:]	1ee47	1ee47
+regex [:alnum:]	1ee49	1ee49
+regex [:alnum:]	1ee4b	1ee4b
+regex [:alnum:]	1ee4d	1ee4f
+regex [:alnum:]	1ee51	1ee52
+regex [:alnum:]	1ee54	1ee54
+regex [:alnum:]	1ee57	1ee57
+regex [:alnum:]	1ee59	1ee59
+regex [:alnum:]	1ee5b	1ee5b
+regex [:alnum:]	1ee5d	1ee5d
+regex [:alnum:]	1ee5f	1ee5f
+regex [:alnum:]	1ee61	1ee62
+regex [:alnum:]	1ee64	1ee64
+regex [:alnum:]	1ee67	1ee6a
+regex [:alnum:]	1ee6c	1ee72
+regex [:alnum:]	1ee74	1ee77
+regex [:alnum:]	1ee79	1ee7c
+regex [:alnum:]	1ee7e	1ee7e
+regex [:alnum:]	1ee80	1ee89
+regex [:alnum:]	1ee8b	1ee9b
+regex [:alnum:]	1eea1	1eea3
+regex [:alnum:]	1eea5	1eea9
+regex [:alnum:]	1eeab	1eebb
+regex [:alnum:]	1f100	1f10c
+regex [:alnum:]	20000	2a6d6
+regex [:alnum:]	2a700	2b734
+regex [:alnum:]	2b740	2b81d
+regex [:alnum:]	2f800	2fa1d
+regex [:upper:]	0041	005a
+regex [:upper:]	00c0	00d6
+regex [:upper:]	00d8	00de
+regex [:upper:]	0100	0100
+regex [:upper:]	0102	0102
+regex [:upper:]	0104	0104
+regex [:upper:]	0106	0106
+regex [:upper:]	0108	0108
+regex [:upper:]	010a	010a
+regex [:upper:]	010c	010c
+regex [:upper:]	010e	010e
+regex [:upper:]	0110	0110
+regex [:upper:]	0112	0112
+regex [:upper:]	0114	0114
+regex [:upper:]	0116	0116
+regex [:upper:]	0118	0118
+regex [:upper:]	011a	011a
+regex [:upper:]	011c	011c
+regex [:upper:]	011e	011e
+regex [:upper:]	0120	0120
+regex [:upper:]	0122	0122
+regex [:upper:]	0124	0124
+regex [:upper:]	0126	0126
+regex [:upper:]	0128	0128
+regex [:upper:]	012a	012a
+regex [:upper:]	012c	012c
+regex [:upper:]	012e	012e
+regex [:upper:]	0130	0130
+regex [:upper:]	0132	0132
+regex [:upper:]	0134	0134
+regex [:upper:]	0136	0136
+regex [:upper:]	0139	0139
+regex [:upper:]	013b	013b
+regex [:upper:]	013d	013d
+regex [:upper:]	013f	013f
+regex [:upper:]	0141	0141
+regex [:upper:]	0143	0143
+regex [:upper:]	0145	0145
+regex [:upper:]	0147	0147
+regex [:upper:]	014a	014a
+regex [:upper:]	014c	014c
+regex [:upper:]	014e	014e
+regex [:upper:]	0150	0150
+regex [:upper:]	0152	0152
+regex [:upper:]	0154	0154
+regex [:upper:]	0156	0156
+regex [:upper:]	0158	0158
+regex [:upper:]	015a	015a
+regex [:upper:]	015c	015c
+regex [:upper:]	015e	015e
+regex [:upper:]	0160	0160
+regex [:upper:]	0162	0162
+regex [:upper:]	0164	0164
+regex [:upper:]	0166	0166
+regex [:upper:]	0168	0168
+regex [:upper:]	016a	016a
+regex [:upper:]	016c	016c
+regex [:upper:]	016e	016e
+regex [:upper:]	0170	0170
+regex [:upper:]	0172	0172
+regex [:upper:]	0174	0174
+regex [:upper:]	0176	0176
+regex [:upper:]	0178	0179
+regex [:upper:]	017b	017b
+regex [:upper:]	017d	017d
+regex [:upper:]	0181	0182
+regex [:upper:]	0184	0184
+regex [:upper:]	0186	0187
+regex [:upper:]	0189	018b
+regex [:upper:]	018e	0191
+regex [:upper:]	0193	0194
+regex [:upper:]	0196	0198
+regex [:upper:]	019c	019d
+regex [:upper:]	019f	01a0
+regex [:upper:]	01a2	01a2
+regex [:upper:]	01a4	01a4
+regex [:upper:]	01a6	01a7
+regex [:upper:]	01a9	01a9
+regex [:upper:]	01ac	01ac
+regex [:upper:]	01ae	01af
+regex [:upper:]	01b1	01b3
+regex [:upper:]	01b5	01b5
+regex [:upper:]	01b7	01b8
+regex [:upper:]	01bc	01bc
+regex [:upper:]	01c4	01c4
+regex [:upper:]	01c7	01c7
+regex [:upper:]	01ca	01ca
+regex [:upper:]	01cd	01cd
+regex [:upper:]	01cf	01cf
+regex [:upper:]	01d1	01d1
+regex [:upper:]	01d3	01d3
+regex [:upper:]	01d5	01d5
+regex [:upper:]	01d7	01d7
+regex [:upper:]	01d9	01d9
+regex [:upper:]	01db	01db
+regex [:upper:]	01de	01de
+regex [:upper:]	01e0	01e0
+regex [:upper:]	01e2	01e2
+regex [:upper:]	01e4	01e4
+regex [:upper:]	01e6	01e6
+regex [:upper:]	01e8	01e8
+regex [:upper:]	01ea	01ea
+regex [:upper:]	01ec	01ec
+regex [:upper:]	01ee	01ee
+regex [:upper:]	01f1	01f1
+regex [:upper:]	01f4	01f4
+regex [:upper:]	01f6	01f8
+regex [:upper:]	01fa	01fa
+regex [:upper:]	01fc	01fc
+regex [:upper:]	01fe	01fe
+regex [:upper:]	0200	0200
+regex [:upper:]	0202	0202
+regex [:upper:]	0204	0204
+regex [:upper:]	0206	0206
+regex [:upper:]	0208	0208
+regex [:upper:]	020a	020a
+regex [:upper:]	020c	020c
+regex [:upper:]	020e	020e
+regex [:upper:]	0210	0210
+regex [:upper:]	0212	0212
+regex [:upper:]	0214	0214
+regex [:upper:]	0216	0216
+regex [:upper:]	0218	0218
+regex [:upper:]	021a	021a
+regex [:upper:]	021c	021c
+regex [:upper:]	021e	021e
+regex [:upper:]	0220	0220
+regex [:upper:]	0222	0222
+regex [:upper:]	0224	0224
+regex [:upper:]	0226	0226
+regex [:upper:]	0228	0228
+regex [:upper:]	022a	022a
+regex [:upper:]	022c	022c
+regex [:upper:]	022e	022e
+regex [:upper:]	0230	0230
+regex [:upper:]	0232	0232
+regex [:upper:]	023a	023b
+regex [:upper:]	023d	023e
+regex [:upper:]	0241	0241
+regex [:upper:]	0243	0246
+regex [:upper:]	0248	0248
+regex [:upper:]	024a	024a
+regex [:upper:]	024c	024c
+regex [:upper:]	024e	024e
+regex [:upper:]	0370	0370
+regex [:upper:]	0372	0372
+regex [:upper:]	0376	0376
+regex [:upper:]	037f	037f
+regex [:upper:]	0386	0386
+regex [:upper:]	0388	038a
+regex [:upper:]	038c	038c
+regex [:upper:]	038e	038f
+regex [:upper:]	0391	03a1
+regex [:upper:]	03a3	03ab
+regex [:upper:]	03cf	03cf
+regex [:upper:]	03d2	03d4
+regex [:upper:]	03d8	03d8
+regex [:upper:]	03da	03da
+regex [:upper:]	03dc	03dc
+regex [:upper:]	03de	03de
+regex [:upper:]	03e0	03e0
+regex [:upper:]	03e2	03e2
+regex [:upper:]	03e4	03e4
+regex [:upper:]	03e6	03e6
+regex [:upper:]	03e8	03e8
+regex [:upper:]	03ea	03ea
+regex [:upper:]	03ec	03ec
+regex [:upper:]	03ee	03ee
+regex [:upper:]	03f4	03f4
+regex [:upper:]	03f7	03f7
+regex [:upper:]	03f9	03fa
+regex [:upper:]	03fd	042f
+regex [:upper:]	0460	0460
+regex [:upper:]	0462	0462
+regex [:upper:]	0464	0464
+regex [:upper:]	0466	0466
+regex [:upper:]	0468	0468
+regex [:upper:]	046a	046a
+regex [:upper:]	046c	046c
+regex [:upper:]	046e	046e
+regex [:upper:]	0470	0470
+regex [:upper:]	0472	0472
+regex [:upper:]	0474	0474
+regex [:upper:]	0476	0476
+regex [:upper:]	0478	0478
+regex [:upper:]	047a	047a
+regex [:upper:]	047c	047c
+regex [:upper:]	047e	047e
+regex [:upper:]	0480	0480
+regex [:upper:]	048a	048a
+regex [:upper:]	048c	048c
+regex [:upper:]	048e	048e
+regex [:upper:]	0490	0490
+regex [:upper:]	0492	0492
+regex [:upper:]	0494	0494
+regex [:upper:]	0496	0496
+regex [:upper:]	0498	0498
+regex [:upper:]	049a	049a
+regex [:upper:]	049c	049c
+regex [:upper:]	049e	049e
+regex [:upper:]	04a0	04a0
+regex [:upper:]	04a2	04a2
+regex [:upper:]	04a4	04a4
+regex [:upper:]	04a6	04a6
+regex [:upper:]	04a8	04a8
+regex [:upper:]	04aa	04aa
+regex [:upper:]	04ac	04ac
+regex [:upper:]	04ae	04ae
+regex [:upper:]	04b0	04b0
+regex [:upper:]	04b2	04b2
+regex [:upper:]	04b4	04b4
+regex [:upper:]	04b6	04b6
+regex [:upper:]	04b8	04b8
+regex [:upper:]	04ba	04ba
+regex [:upper:]	04bc	04bc
+regex [:upper:]	04be	04be
+regex [:upper:]	04c0	04c1
+regex [:upper:]	04c3	04c3
+regex [:upper:]	04c5	04c5
+regex [:upper:]	04c7	04c7
+regex [:upper:]	04c9	04c9
+regex [:upper:]	04cb	04cb
+regex [:upper:]	04cd	04cd
+regex [:upper:]	04d0	04d0
+regex [:upper:]	04d2	04d2
+regex [:upper:]	04d4	04d4
+regex [:upper:]	04d6	04d6
+regex [:upper:]	04d8	04d8
+regex [:upper:]	04da	04da
+regex [:upper:]	04dc	04dc
+regex [:upper:]	04de	04de
+regex [:upper:]	04e0	04e0
+regex [:upper:]	04e2	04e2
+regex [:upper:]	04e4	04e4
+regex [:upper:]	04e6	04e6
+regex [:upper:]	04e8	04e8
+regex [:upper:]	04ea	04ea
+regex [:upper:]	04ec	04ec
+regex [:upper:]	04ee	04ee
+regex [:upper:]	04f0	04f0
+regex [:upper:]	04f2	04f2
+regex [:upper:]	04f4	04f4
+regex [:upper:]	04f6	04f6
+regex [:upper:]	04f8	04f8
+regex [:upper:]	04fa	04fa
+regex [:upper:]	04fc	04fc
+regex [:upper:]	04fe	04fe
+regex [:upper:]	0500	0500
+regex [:upper:]	0502	0502
+regex [:upper:]	0504	0504
+regex [:upper:]	0506	0506
+regex [:upper:]	0508	0508
+regex [:upper:]	050a	050a
+regex [:upper:]	050c	050c
+regex [:upper:]	050e	050e
+regex [:upper:]	0510	0510
+regex [:upper:]	0512	0512
+regex [:upper:]	0514	0514
+regex [:upper:]	0516	0516
+regex [:upper:]	0518	0518
+regex [:upper:]	051a	051a
+regex [:upper:]	051c	051c
+regex [:upper:]	051e	051e
+regex [:upper:]	0520	0520
+regex [:upper:]	0522	0522
+regex [:upper:]	0524	0524
+regex [:upper:]	0526	0526
+regex [:upper:]	0528	0528
+regex [:upper:]	052a	052a
+regex [:upper:]	052c	052c
+regex [:upper:]	052e	052e
+regex [:upper:]	0531	0556
+regex [:upper:]	10a0	10c5
+regex [:upper:]	10c7	10c7
+regex [:upper:]	10cd	10cd
+regex [:upper:]	1e00	1e00
+regex [:upper:]	1e02	1e02
+regex [:upper:]	1e04	1e04
+regex [:upper:]	1e06	1e06
+regex [:upper:]	1e08	1e08
+regex [:upper:]	1e0a	1e0a
+regex [:upper:]	1e0c	1e0c
+regex [:upper:]	1e0e	1e0e
+regex [:upper:]	1e10	1e10
+regex [:upper:]	1e12	1e12
+regex [:upper:]	1e14	1e14
+regex [:upper:]	1e16	1e16
+regex [:upper:]	1e18	1e18
+regex [:upper:]	1e1a	1e1a
+regex [:upper:]	1e1c	1e1c
+regex [:upper:]	1e1e	1e1e
+regex [:upper:]	1e20	1e20
+regex [:upper:]	1e22	1e22
+regex [:upper:]	1e24	1e24
+regex [:upper:]	1e26	1e26
+regex [:upper:]	1e28	1e28
+regex [:upper:]	1e2a	1e2a
+regex [:upper:]	1e2c	1e2c
+regex [:upper:]	1e2e	1e2e
+regex [:upper:]	1e30	1e30
+regex [:upper:]	1e32	1e32
+regex [:upper:]	1e34	1e34
+regex [:upper:]	1e36	1e36
+regex [:upper:]	1e38	1e38
+regex [:upper:]	1e3a	1e3a
+regex [:upper:]	1e3c	1e3c
+regex [:upper:]	1e3e	1e3e
+regex [:upper:]	1e40	1e40
+regex [:upper:]	1e42	1e42
+regex [:upper:]	1e44	1e44
+regex [:upper:]	1e46	1e46
+regex [:upper:]	1e48	1e48
+regex [:upper:]	1e4a	1e4a
+regex [:upper:]	1e4c	1e4c
+regex [:upper:]	1e4e	1e4e
+regex [:upper:]	1e50	1e50
+regex [:upper:]	1e52	1e52
+regex [:upper:]	1e54	1e54
+regex [:upper:]	1e56	1e56
+regex [:upper:]	1e58	1e58
+regex [:upper:]	1e5a	1e5a
+regex [:upper:]	1e5c	1e5c
+regex [:upper:]	1e5e	1e5e
+regex [:upper:]	1e60	1e60
+regex [:upper:]	1e62	1e62
+regex [:upper:]	1e64	1e64
+regex [:upper:]	1e66	1e66
+regex [:upper:]	1e68	1e68
+regex [:upper:]	1e6a	1e6a
+regex [:upper:]	1e6c	1e6c
+regex [:upper:]	1e6e	1e6e
+regex [:upper:]	1e70	1e70
+regex [:upper:]	1e72	1e72
+regex [:upper:]	1e74	1e74
+regex [:upper:]	1e76	1e76
+regex [:upper:]	1e78	1e78
+regex [:upper:]	1e7a	1e7a
+regex [:upper:]	1e7c	1e7c
+regex [:upper:]	1e7e	1e7e
+regex [:upper:]	1e80	1e80
+regex [:upper:]	1e82	1e82
+regex [:upper:]	1e84	1e84
+regex [:upper:]	1e86	1e86
+regex [:upper:]	1e88	1e88
+regex [:upper:]	1e8a	1e8a
+regex [:upper:]	1e8c	1e8c
+regex [:upper:]	1e8e	1e8e
+regex [:upper:]	1e90	1e90
+regex [:upper:]	1e92	1e92
+regex [:upper:]	1e94	1e94
+regex [:upper:]	1e9e	1e9e
+regex [:upper:]	1ea0	1ea0
+regex [:upper:]	1ea2	1ea2
+regex [:upper:]	1ea4	1ea4
+regex [:upper:]	1ea6	1ea6
+regex [:upper:]	1ea8	1ea8
+regex [:upper:]	1eaa	1eaa
+regex [:upper:]	1eac	1eac
+regex [:upper:]	1eae	1eae
+regex [:upper:]	1eb0	1eb0
+regex [:upper:]	1eb2	1eb2
+regex [:upper:]	1eb4	1eb4
+regex [:upper:]	1eb6	1eb6
+regex [:upper:]	1eb8	1eb8
+regex [:upper:]	1eba	1eba
+regex [:upper:]	1ebc	1ebc
+regex [:upper:]	1ebe	1ebe
+regex [:upper:]	1ec0	1ec0
+regex [:upper:]	1ec2	1ec2
+regex [:upper:]	1ec4	1ec4
+regex [:upper:]	1ec6	1ec6
+regex [:upper:]	1ec8	1ec8
+regex [:upper:]	1eca	1eca
+regex [:upper:]	1ecc	1ecc
+regex [:upper:]	1ece	1ece
+regex [:upper:]	1ed0	1ed0
+regex [:upper:]	1ed2	1ed2
+regex [:upper:]	1ed4	1ed4
+regex [:upper:]	1ed6	1ed6
+regex [:upper:]	1ed8	1ed8
+regex [:upper:]	1eda	1eda
+regex [:upper:]	1edc	1edc
+regex [:upper:]	1ede	1ede
+regex [:upper:]	1ee0	1ee0
+regex [:upper:]	1ee2	1ee2
+regex [:upper:]	1ee4	1ee4
+regex [:upper:]	1ee6	1ee6
+regex [:upper:]	1ee8	1ee8
+regex [:upper:]	1eea	1eea
+regex [:upper:]	1eec	1eec
+regex [:upper:]	1eee	1eee
+regex [:upper:]	1ef0	1ef0
+regex [:upper:]	1ef2	1ef2
+regex [:upper:]	1ef4	1ef4
+regex [:upper:]	1ef6	1ef6
+regex [:upper:]	1ef8	1ef8
+regex [:upper:]	1efa	1efa
+regex [:upper:]	1efc	1efc
+regex [:upper:]	1efe	1efe
+regex [:upper:]	1f08	1f0f
+regex [:upper:]	1f18	1f1d
+regex [:upper:]	1f28	1f2f
+regex [:upper:]	1f38	1f3f
+regex [:upper:]	1f48	1f4d
+regex [:upper:]	1f59	1f59
+regex [:upper:]	1f5b	1f5b
+regex [:upper:]	1f5d	1f5d
+regex [:upper:]	1f5f	1f5f
+regex [:upper:]	1f68	1f6f
+regex [:upper:]	1fb8	1fbb
+regex [:upper:]	1fc8	1fcb
+regex [:upper:]	1fd8	1fdb
+regex [:upper:]	1fe8	1fec
+regex [:upper:]	1ff8	1ffb
+regex [:upper:]	2102	2102
+regex [:upper:]	2107	2107
+regex [:upper:]	210b	210d
+regex [:upper:]	2110	2112
+regex [:upper:]	2115	2115
+regex [:upper:]	2119	211d
+regex [:upper:]	2124	2124
+regex [:upper:]	2126	2126
+regex [:upper:]	2128	2128
+regex [:upper:]	212a	212a
+regex [:upper:]	212c	212d
+regex [:upper:]	2130	2133
+regex [:upper:]	213e	213f
+regex [:upper:]	2145	2145
+regex [:upper:]	2183	2183
+regex [:upper:]	2c00	2c2e
+regex [:upper:]	2c60	2c60
+regex [:upper:]	2c62	2c64
+regex [:upper:]	2c67	2c67
+regex [:upper:]	2c69	2c69
+regex [:upper:]	2c6b	2c6b
+regex [:upper:]	2c6d	2c70
+regex [:upper:]	2c72	2c72
+regex [:upper:]	2c75	2c75
+regex [:upper:]	2c7e	2c80
+regex [:upper:]	2c82	2c82
+regex [:upper:]	2c84	2c84
+regex [:upper:]	2c86	2c86
+regex [:upper:]	2c88	2c88
+regex [:upper:]	2c8a	2c8a
+regex [:upper:]	2c8c	2c8c
+regex [:upper:]	2c8e	2c8e
+regex [:upper:]	2c90	2c90
+regex [:upper:]	2c92	2c92
+regex [:upper:]	2c94	2c94
+regex [:upper:]	2c96	2c96
+regex [:upper:]	2c98	2c98
+regex [:upper:]	2c9a	2c9a
+regex [:upper:]	2c9c	2c9c
+regex [:upper:]	2c9e	2c9e
+regex [:upper:]	2ca0	2ca0
+regex [:upper:]	2ca2	2ca2
+regex [:upper:]	2ca4	2ca4
+regex [:upper:]	2ca6	2ca6
+regex [:upper:]	2ca8	2ca8
+regex [:upper:]	2caa	2caa
+regex [:upper:]	2cac	2cac
+regex [:upper:]	2cae	2cae
+regex [:upper:]	2cb0	2cb0
+regex [:upper:]	2cb2	2cb2
+regex [:upper:]	2cb4	2cb4
+regex [:upper:]	2cb6	2cb6
+regex [:upper:]	2cb8	2cb8
+regex [:upper:]	2cba	2cba
+regex [:upper:]	2cbc	2cbc
+regex [:upper:]	2cbe	2cbe
+regex [:upper:]	2cc0	2cc0
+regex [:upper:]	2cc2	2cc2
+regex [:upper:]	2cc4	2cc4
+regex [:upper:]	2cc6	2cc6
+regex [:upper:]	2cc8	2cc8
+regex [:upper:]	2cca	2cca
+regex [:upper:]	2ccc	2ccc
+regex [:upper:]	2cce	2cce
+regex [:upper:]	2cd0	2cd0
+regex [:upper:]	2cd2	2cd2
+regex [:upper:]	2cd4	2cd4
+regex [:upper:]	2cd6	2cd6
+regex [:upper:]	2cd8	2cd8
+regex [:upper:]	2cda	2cda
+regex [:upper:]	2cdc	2cdc
+regex [:upper:]	2cde	2cde
+regex [:upper:]	2ce0	2ce0
+regex [:upper:]	2ce2	2ce2
+regex [:upper:]	2ceb	2ceb
+regex [:upper:]	2ced	2ced
+regex [:upper:]	2cf2	2cf2
+regex [:upper:]	a640	a640
+regex [:upper:]	a642	a642
+regex [:upper:]	a644	a644
+regex [:upper:]	a646	a646
+regex [:upper:]	a648	a648
+regex [:upper:]	a64a	a64a
+regex [:upper:]	a64c	a64c
+regex [:upper:]	a64e	a64e
+regex [:upper:]	a650	a650
+regex [:upper:]	a652	a652
+regex [:upper:]	a654	a654
+regex [:upper:]	a656	a656
+regex [:upper:]	a658	a658
+regex [:upper:]	a65a	a65a
+regex [:upper:]	a65c	a65c
+regex [:upper:]	a65e	a65e
+regex [:upper:]	a660	a660
+regex [:upper:]	a662	a662
+regex [:upper:]	a664	a664
+regex [:upper:]	a666	a666
+regex [:upper:]	a668	a668
+regex [:upper:]	a66a	a66a
+regex [:upper:]	a66c	a66c
+regex [:upper:]	a680	a680
+regex [:upper:]	a682	a682
+regex [:upper:]	a684	a684
+regex [:upper:]	a686	a686
+regex [:upper:]	a688	a688
+regex [:upper:]	a68a	a68a
+regex [:upper:]	a68c	a68c
+regex [:upper:]	a68e	a68e
+regex [:upper:]	a690	a690
+regex [:upper:]	a692	a692
+regex [:upper:]	a694	a694
+regex [:upper:]	a696	a696
+regex [:upper:]	a698	a698
+regex [:upper:]	a69a	a69a
+regex [:upper:]	a722	a722
+regex [:upper:]	a724	a724
+regex [:upper:]	a726	a726
+regex [:upper:]	a728	a728
+regex [:upper:]	a72a	a72a
+regex [:upper:]	a72c	a72c
+regex [:upper:]	a72e	a72e
+regex [:upper:]	a732	a732
+regex [:upper:]	a734	a734
+regex [:upper:]	a736	a736
+regex [:upper:]	a738	a738
+regex [:upper:]	a73a	a73a
+regex [:upper:]	a73c	a73c
+regex [:upper:]	a73e	a73e
+regex [:upper:]	a740	a740
+regex [:upper:]	a742	a742
+regex [:upper:]	a744	a744
+regex [:upper:]	a746	a746
+regex [:upper:]	a748	a748
+regex [:upper:]	a74a	a74a
+regex [:upper:]	a74c	a74c
+regex [:upper:]	a74e	a74e
+regex [:upper:]	a750	a750
+regex [:upper:]	a752	a752
+regex [:upper:]	a754	a754
+regex [:upper:]	a756	a756
+regex [:upper:]	a758	a758
+regex [:upper:]	a75a	a75a
+regex [:upper:]	a75c	a75c
+regex [:upper:]	a75e	a75e
+regex [:upper:]	a760	a760
+regex [:upper:]	a762	a762
+regex [:upper:]	a764	a764
+regex [:upper:]	a766	a766
+regex [:upper:]	a768	a768
+regex [:upper:]	a76a	a76a
+regex [:upper:]	a76c	a76c
+regex [:upper:]	a76e	a76e
+regex [:upper:]	a779	a779
+regex [:upper:]	a77b	a77b
+regex [:upper:]	a77d	a77e
+regex [:upper:]	a780	a780
+regex [:upper:]	a782	a782
+regex [:upper:]	a784	a784
+regex [:upper:]	a786	a786
+regex [:upper:]	a78b	a78b
+regex [:upper:]	a78d	a78d
+regex [:upper:]	a790	a790
+regex [:upper:]	a792	a792
+regex [:upper:]	a796	a796
+regex [:upper:]	a798	a798
+regex [:upper:]	a79a	a79a
+regex [:upper:]	a79c	a79c
+regex [:upper:]	a79e	a79e
+regex [:upper:]	a7a0	a7a0
+regex [:upper:]	a7a2	a7a2
+regex [:upper:]	a7a4	a7a4
+regex [:upper:]	a7a6	a7a6
+regex [:upper:]	a7a8	a7a8
+regex [:upper:]	a7aa	a7ad
+regex [:upper:]	a7b0	a7b1
+regex [:upper:]	f770	f770
+regex [:upper:]	f772	f773
+regex [:upper:]	f776	f776
+regex [:upper:]	f779	f77a
+regex [:upper:]	f77d	f780
+regex [:upper:]	f782	f78b
+regex [:upper:]	f78d	f790
+regex [:upper:]	f793	f79a
+regex [:upper:]	f79c	f7a2
+regex [:upper:]	f7a4	f7bd
+regex [:upper:]	f81a	f844
+regex [:upper:]	f846	f84c
+regex [:upper:]	f875	f875
+regex [:upper:]	f87d	f87d
+regex [:upper:]	f87f	f87f
+regex [:upper:]	f881	f881
+regex [:upper:]	f883	f883
+regex [:upper:]	ff21	ff3a
+regex [:upper:]	10400	10427
+regex [:upper:]	118a0	118bf
+regex [:upper:]	1d400	1d419
+regex [:upper:]	1d434	1d44d
+regex [:upper:]	1d468	1d481
+regex [:upper:]	1d49c	1d49c
+regex [:upper:]	1d49e	1d49f
+regex [:upper:]	1d4a2	1d4a2
+regex [:upper:]	1d4a5	1d4a6
+regex [:upper:]	1d4a9	1d4ac
+regex [:upper:]	1d4ae	1d4b5
+regex [:upper:]	1d4d0	1d4e9
+regex [:upper:]	1d504	1d505
+regex [:upper:]	1d507	1d50a
+regex [:upper:]	1d50d	1d514
+regex [:upper:]	1d516	1d51c
+regex [:upper:]	1d538	1d539
+regex [:upper:]	1d53b	1d53e
+regex [:upper:]	1d540	1d544
+regex [:upper:]	1d546	1d546
+regex [:upper:]	1d54a	1d550
+regex [:upper:]	1d56c	1d585
+regex [:upper:]	1d5a0	1d5b9
+regex [:upper:]	1d5d4	1d5ed
+regex [:upper:]	1d608	1d621
+regex [:upper:]	1d63c	1d655
+regex [:upper:]	1d670	1d689
+regex [:upper:]	1d6a8	1d6c0
+regex [:upper:]	1d6e2	1d6fa
+regex [:upper:]	1d71c	1d734
+regex [:upper:]	1d756	1d76e
+regex [:upper:]	1d790	1d7a8
+regex [:upper:]	1d7ca	1d7ca
+regex [:lower:]	0061	007a
+regex [:lower:]	00b5	00b5
+regex [:lower:]	00df	00f6
+regex [:lower:]	00f8	00ff
+regex [:lower:]	0101	0101
+regex [:lower:]	0103	0103
+regex [:lower:]	0105	0105
+regex [:lower:]	0107	0107
+regex [:lower:]	0109	0109
+regex [:lower:]	010b	010b
+regex [:lower:]	010d	010d
+regex [:lower:]	010f	010f
+regex [:lower:]	0111	0111
+regex [:lower:]	0113	0113
+regex [:lower:]	0115	0115
+regex [:lower:]	0117	0117
+regex [:lower:]	0119	0119
+regex [:lower:]	011b	011b
+regex [:lower:]	011d	011d
+regex [:lower:]	011f	011f
+regex [:lower:]	0121	0121
+regex [:lower:]	0123	0123
+regex [:lower:]	0125	0125
+regex [:lower:]	0127	0127
+regex [:lower:]	0129	0129
+regex [:lower:]	012b	012b
+regex [:lower:]	012d	012d
+regex [:lower:]	012f	012f
+regex [:lower:]	0131	0131
+regex [:lower:]	0133	0133
+regex [:lower:]	0135	0135
+regex [:lower:]	0137	0138
+regex [:lower:]	013a	013a
+regex [:lower:]	013c	013c
+regex [:lower:]	013e	013e
+regex [:lower:]	0140	0140
+regex [:lower:]	0142	0142
+regex [:lower:]	0144	0144
+regex [:lower:]	0146	0146
+regex [:lower:]	0148	0149
+regex [:lower:]	014b	014b
+regex [:lower:]	014d	014d
+regex [:lower:]	014f	014f
+regex [:lower:]	0151	0151
+regex [:lower:]	0153	0153
+regex [:lower:]	0155	0155
+regex [:lower:]	0157	0157
+regex [:lower:]	0159	0159
+regex [:lower:]	015b	015b
+regex [:lower:]	015d	015d
+regex [:lower:]	015f	015f
+regex [:lower:]	0161	0161
+regex [:lower:]	0163	0163
+regex [:lower:]	0165	0165
+regex [:lower:]	0167	0167
+regex [:lower:]	0169	0169
+regex [:lower:]	016b	016b
+regex [:lower:]	016d	016d
+regex [:lower:]	016f	016f
+regex [:lower:]	0171	0171
+regex [:lower:]	0173	0173
+regex [:lower:]	0175	0175
+regex [:lower:]	0177	0177
+regex [:lower:]	017a	017a
+regex [:lower:]	017c	017c
+regex [:lower:]	017e	0180
+regex [:lower:]	0183	0183
+regex [:lower:]	0185	0185
+regex [:lower:]	0188	0188
+regex [:lower:]	018c	018d
+regex [:lower:]	0192	0192
+regex [:lower:]	0195	0195
+regex [:lower:]	0199	019b
+regex [:lower:]	019e	019e
+regex [:lower:]	01a1	01a1
+regex [:lower:]	01a3	01a3
+regex [:lower:]	01a5	01a5
+regex [:lower:]	01a8	01a8
+regex [:lower:]	01aa	01ab
+regex [:lower:]	01ad	01ad
+regex [:lower:]	01b0	01b0
+regex [:lower:]	01b4	01b4
+regex [:lower:]	01b6	01b6
+regex [:lower:]	01b9	01ba
+regex [:lower:]	01bd	01bf
+regex [:lower:]	01c6	01c6
+regex [:lower:]	01c9	01c9
+regex [:lower:]	01cc	01cc
+regex [:lower:]	01ce	01ce
+regex [:lower:]	01d0	01d0
+regex [:lower:]	01d2	01d2
+regex [:lower:]	01d4	01d4
+regex [:lower:]	01d6	01d6
+regex [:lower:]	01d8	01d8
+regex [:lower:]	01da	01da
+regex [:lower:]	01dc	01dd
+regex [:lower:]	01df	01df
+regex [:lower:]	01e1	01e1
+regex [:lower:]	01e3	01e3
+regex [:lower:]	01e5	01e5
+regex [:lower:]	01e7	01e7
+regex [:lower:]	01e9	01e9
+regex [:lower:]	01eb	01eb
+regex [:lower:]	01ed	01ed
+regex [:lower:]	01ef	01f0
+regex [:lower:]	01f3	01f3
+regex [:lower:]	01f5	01f5
+regex [:lower:]	01f9	01f9
+regex [:lower:]	01fb	01fb
+regex [:lower:]	01fd	01fd
+regex [:lower:]	01ff	01ff
+regex [:lower:]	0201	0201
+regex [:lower:]	0203	0203
+regex [:lower:]	0205	0205
+regex [:lower:]	0207	0207
+regex [:lower:]	0209	0209
+regex [:lower:]	020b	020b
+regex [:lower:]	020d	020d
+regex [:lower:]	020f	020f
+regex [:lower:]	0211	0211
+regex [:lower:]	0213	0213
+regex [:lower:]	0215	0215
+regex [:lower:]	0217	0217
+regex [:lower:]	0219	0219
+regex [:lower:]	021b	021b
+regex [:lower:]	021d	021d
+regex [:lower:]	021f	021f
+regex [:lower:]	0221	0221
+regex [:lower:]	0223	0223
+regex [:lower:]	0225	0225
+regex [:lower:]	0227	0227
+regex [:lower:]	0229	0229
+regex [:lower:]	022b	022b
+regex [:lower:]	022d	022d
+regex [:lower:]	022f	022f
+regex [:lower:]	0231	0231
+regex [:lower:]	0233	0239
+regex [:lower:]	023c	023c
+regex [:lower:]	023f	0240
+regex [:lower:]	0242	0242
+regex [:lower:]	0247	0247
+regex [:lower:]	0249	0249
+regex [:lower:]	024b	024b
+regex [:lower:]	024d	024d
+regex [:lower:]	024f	0293
+regex [:lower:]	0295	02af
+regex [:lower:]	0371	0371
+regex [:lower:]	0373	0373
+regex [:lower:]	0377	0377
+regex [:lower:]	037b	037d
+regex [:lower:]	0390	0390
+regex [:lower:]	03ac	03ce
+regex [:lower:]	03d0	03d1
+regex [:lower:]	03d5	03d7
+regex [:lower:]	03d9	03d9
+regex [:lower:]	03db	03db
+regex [:lower:]	03dd	03dd
+regex [:lower:]	03df	03df
+regex [:lower:]	03e1	03e1
+regex [:lower:]	03e3	03e3
+regex [:lower:]	03e5	03e5
+regex [:lower:]	03e7	03e7
+regex [:lower:]	03e9	03e9
+regex [:lower:]	03eb	03eb
+regex [:lower:]	03ed	03ed
+regex [:lower:]	03ef	03f3
+regex [:lower:]	03f5	03f5
+regex [:lower:]	03f8	03f8
+regex [:lower:]	03fb	03fc
+regex [:lower:]	0430	045f
+regex [:lower:]	0461	0461
+regex [:lower:]	0463	0463
+regex [:lower:]	0465	0465
+regex [:lower:]	0467	0467
+regex [:lower:]	0469	0469
+regex [:lower:]	046b	046b
+regex [:lower:]	046d	046d
+regex [:lower:]	046f	046f
+regex [:lower:]	0471	0471
+regex [:lower:]	0473	0473
+regex [:lower:]	0475	0475
+regex [:lower:]	0477	0477
+regex [:lower:]	0479	0479
+regex [:lower:]	047b	047b
+regex [:lower:]	047d	047d
+regex [:lower:]	047f	047f
+regex [:lower:]	0481	0481
+regex [:lower:]	048b	048b
+regex [:lower:]	048d	048d
+regex [:lower:]	048f	048f
+regex [:lower:]	0491	0491
+regex [:lower:]	0493	0493
+regex [:lower:]	0495	0495
+regex [:lower:]	0497	0497
+regex [:lower:]	0499	0499
+regex [:lower:]	049b	049b
+regex [:lower:]	049d	049d
+regex [:lower:]	049f	049f
+regex [:lower:]	04a1	04a1
+regex [:lower:]	04a3	04a3
+regex [:lower:]	04a5	04a5
+regex [:lower:]	04a7	04a7
+regex [:lower:]	04a9	04a9
+regex [:lower:]	04ab	04ab
+regex [:lower:]	04ad	04ad
+regex [:lower:]	04af	04af
+regex [:lower:]	04b1	04b1
+regex [:lower:]	04b3	04b3
+regex [:lower:]	04b5	04b5
+regex [:lower:]	04b7	04b7
+regex [:lower:]	04b9	04b9
+regex [:lower:]	04bb	04bb
+regex [:lower:]	04bd	04bd
+regex [:lower:]	04bf	04bf
+regex [:lower:]	04c2	04c2
+regex [:lower:]	04c4	04c4
+regex [:lower:]	04c6	04c6
+regex [:lower:]	04c8	04c8
+regex [:lower:]	04ca	04ca
+regex [:lower:]	04cc	04cc
+regex [:lower:]	04ce	04cf
+regex [:lower:]	04d1	04d1
+regex [:lower:]	04d3	04d3
+regex [:lower:]	04d5	04d5
+regex [:lower:]	04d7	04d7
+regex [:lower:]	04d9	04d9
+regex [:lower:]	04db	04db
+regex [:lower:]	04dd	04dd
+regex [:lower:]	04df	04df
+regex [:lower:]	04e1	04e1
+regex [:lower:]	04e3	04e3
+regex [:lower:]	04e5	04e5
+regex [:lower:]	04e7	04e7
+regex [:lower:]	04e9	04e9
+regex [:lower:]	04eb	04eb
+regex [:lower:]	04ed	04ed
+regex [:lower:]	04ef	04ef
+regex [:lower:]	04f1	04f1
+regex [:lower:]	04f3	04f3
+regex [:lower:]	04f5	04f5
+regex [:lower:]	04f7	04f7
+regex [:lower:]	04f9	04f9
+regex [:lower:]	04fb	04fb
+regex [:lower:]	04fd	04fd
+regex [:lower:]	04ff	04ff
+regex [:lower:]	0501	0501
+regex [:lower:]	0503	0503
+regex [:lower:]	0505	0505
+regex [:lower:]	0507	0507
+regex [:lower:]	0509	0509
+regex [:lower:]	050b	050b
+regex [:lower:]	050d	050d
+regex [:lower:]	050f	050f
+regex [:lower:]	0511	0511
+regex [:lower:]	0513	0513
+regex [:lower:]	0515	0515
+regex [:lower:]	0517	0517
+regex [:lower:]	0519	0519
+regex [:lower:]	051b	051b
+regex [:lower:]	051d	051d
+regex [:lower:]	051f	051f
+regex [:lower:]	0521	0521
+regex [:lower:]	0523	0523
+regex [:lower:]	0525	0525
+regex [:lower:]	0527	0527
+regex [:lower:]	0529	0529
+regex [:lower:]	052b	052b
+regex [:lower:]	052d	052d
+regex [:lower:]	052f	052f
+regex [:lower:]	0561	0587
+regex [:lower:]	1d00	1d2b
+regex [:lower:]	1d6b	1d77
+regex [:lower:]	1d79	1d9a
+regex [:lower:]	1e01	1e01
+regex [:lower:]	1e03	1e03
+regex [:lower:]	1e05	1e05
+regex [:lower:]	1e07	1e07
+regex [:lower:]	1e09	1e09
+regex [:lower:]	1e0b	1e0b
+regex [:lower:]	1e0d	1e0d
+regex [:lower:]	1e0f	1e0f
+regex [:lower:]	1e11	1e11
+regex [:lower:]	1e13	1e13
+regex [:lower:]	1e15	1e15
+regex [:lower:]	1e17	1e17
+regex [:lower:]	1e19	1e19
+regex [:lower:]	1e1b	1e1b
+regex [:lower:]	1e1d	1e1d
+regex [:lower:]	1e1f	1e1f
+regex [:lower:]	1e21	1e21
+regex [:lower:]	1e23	1e23
+regex [:lower:]	1e25	1e25
+regex [:lower:]	1e27	1e27
+regex [:lower:]	1e29	1e29
+regex [:lower:]	1e2b	1e2b
+regex [:lower:]	1e2d	1e2d
+regex [:lower:]	1e2f	1e2f
+regex [:lower:]	1e31	1e31
+regex [:lower:]	1e33	1e33
+regex [:lower:]	1e35	1e35
+regex [:lower:]	1e37	1e37
+regex [:lower:]	1e39	1e39
+regex [:lower:]	1e3b	1e3b
+regex [:lower:]	1e3d	1e3d
+regex [:lower:]	1e3f	1e3f
+regex [:lower:]	1e41	1e41
+regex [:lower:]	1e43	1e43
+regex [:lower:]	1e45	1e45
+regex [:lower:]	1e47	1e47
+regex [:lower:]	1e49	1e49
+regex [:lower:]	1e4b	1e4b
+regex [:lower:]	1e4d	1e4d
+regex [:lower:]	1e4f	1e4f
+regex [:lower:]	1e51	1e51
+regex [:lower:]	1e53	1e53
+regex [:lower:]	1e55	1e55
+regex [:lower:]	1e57	1e57
+regex [:lower:]	1e59	1e59
+regex [:lower:]	1e5b	1e5b
+regex [:lower:]	1e5d	1e5d
+regex [:lower:]	1e5f	1e5f
+regex [:lower:]	1e61	1e61
+regex [:lower:]	1e63	1e63
+regex [:lower:]	1e65	1e65
+regex [:lower:]	1e67	1e67
+regex [:lower:]	1e69	1e69
+regex [:lower:]	1e6b	1e6b
+regex [:lower:]	1e6d	1e6d
+regex [:lower:]	1e6f	1e6f
+regex [:lower:]	1e71	1e71
+regex [:lower:]	1e73	1e73
+regex [:lower:]	1e75	1e75
+regex [:lower:]	1e77	1e77
+regex [:lower:]	1e79	1e79
+regex [:lower:]	1e7b	1e7b
+regex [:lower:]	1e7d	1e7d
+regex [:lower:]	1e7f	1e7f
+regex [:lower:]	1e81	1e81
+regex [:lower:]	1e83	1e83
+regex [:lower:]	1e85	1e85
+regex [:lower:]	1e87	1e87
+regex [:lower:]	1e89	1e89
+regex [:lower:]	1e8b	1e8b
+regex [:lower:]	1e8d	1e8d
+regex [:lower:]	1e8f	1e8f
+regex [:lower:]	1e91	1e91
+regex [:lower:]	1e93	1e93
+regex [:lower:]	1e95	1e9d
+regex [:lower:]	1e9f	1e9f
+regex [:lower:]	1ea1	1ea1
+regex [:lower:]	1ea3	1ea3
+regex [:lower:]	1ea5	1ea5
+regex [:lower:]	1ea7	1ea7
+regex [:lower:]	1ea9	1ea9
+regex [:lower:]	1eab	1eab
+regex [:lower:]	1ead	1ead
+regex [:lower:]	1eaf	1eaf
+regex [:lower:]	1eb1	1eb1
+regex [:lower:]	1eb3	1eb3
+regex [:lower:]	1eb5	1eb5
+regex [:lower:]	1eb7	1eb7
+regex [:lower:]	1eb9	1eb9
+regex [:lower:]	1ebb	1ebb
+regex [:lower:]	1ebd	1ebd
+regex [:lower:]	1ebf	1ebf
+regex [:lower:]	1ec1	1ec1
+regex [:lower:]	1ec3	1ec3
+regex [:lower:]	1ec5	1ec5
+regex [:lower:]	1ec7	1ec7
+regex [:lower:]	1ec9	1ec9
+regex [:lower:]	1ecb	1ecb
+regex [:lower:]	1ecd	1ecd
+regex [:lower:]	1ecf	1ecf
+regex [:lower:]	1ed1	1ed1
+regex [:lower:]	1ed3	1ed3
+regex [:lower:]	1ed5	1ed5
+regex [:lower:]	1ed7	1ed7
+regex [:lower:]	1ed9	1ed9
+regex [:lower:]	1edb	1edb
+regex [:lower:]	1edd	1edd
+regex [:lower:]	1edf	1edf
+regex [:lower:]	1ee1	1ee1
+regex [:lower:]	1ee3	1ee3
+regex [:lower:]	1ee5	1ee5
+regex [:lower:]	1ee7	1ee7
+regex [:lower:]	1ee9	1ee9
+regex [:lower:]	1eeb	1eeb
+regex [:lower:]	1eed	1eed
+regex [:lower:]	1eef	1eef
+regex [:lower:]	1ef1	1ef1
+regex [:lower:]	1ef3	1ef3
+regex [:lower:]	1ef5	1ef5
+regex [:lower:]	1ef7	1ef7
+regex [:lower:]	1ef9	1ef9
+regex [:lower:]	1efb	1efb
+regex [:lower:]	1efd	1efd
+regex [:lower:]	1eff	1f07
+regex [:lower:]	1f10	1f15
+regex [:lower:]	1f20	1f27
+regex [:lower:]	1f30	1f37
+regex [:lower:]	1f40	1f45
+regex [:lower:]	1f50	1f57
+regex [:lower:]	1f60	1f67
+regex [:lower:]	1f70	1f7d
+regex [:lower:]	1f80	1f87
+regex [:lower:]	1f90	1f97
+regex [:lower:]	1fa0	1fa7
+regex [:lower:]	1fb0	1fb4
+regex [:lower:]	1fb6	1fb7
+regex [:lower:]	1fbe	1fbe
+regex [:lower:]	1fc2	1fc4
+regex [:lower:]	1fc6	1fc7
+regex [:lower:]	1fd0	1fd3
+regex [:lower:]	1fd6	1fd7
+regex [:lower:]	1fe0	1fe7
+regex [:lower:]	1ff2	1ff4
+regex [:lower:]	1ff6	1ff7
+regex [:lower:]	210a	210a
+regex [:lower:]	210e	210e
+regex [:lower:]	2113	2113
+regex [:lower:]	212f	212f
+regex [:lower:]	2134	2134
+regex [:lower:]	2139	2139
+regex [:lower:]	213c	213d
+regex [:lower:]	2146	2149
+regex [:lower:]	214e	214e
+regex [:lower:]	2184	2184
+regex [:lower:]	2c30	2c5e
+regex [:lower:]	2c61	2c61
+regex [:lower:]	2c65	2c66
+regex [:lower:]	2c68	2c68
+regex [:lower:]	2c6a	2c6a
+regex [:lower:]	2c6c	2c6c
+regex [:lower:]	2c71	2c71
+regex [:lower:]	2c73	2c74
+regex [:lower:]	2c76	2c7b
+regex [:lower:]	2c81	2c81
+regex [:lower:]	2c83	2c83
+regex [:lower:]	2c85	2c85
+regex [:lower:]	2c87	2c87
+regex [:lower:]	2c89	2c89
+regex [:lower:]	2c8b	2c8b
+regex [:lower:]	2c8d	2c8d
+regex [:lower:]	2c8f	2c8f
+regex [:lower:]	2c91	2c91
+regex [:lower:]	2c93	2c93
+regex [:lower:]	2c95	2c95
+regex [:lower:]	2c97	2c97
+regex [:lower:]	2c99	2c99
+regex [:lower:]	2c9b	2c9b
+regex [:lower:]	2c9d	2c9d
+regex [:lower:]	2c9f	2c9f
+regex [:lower:]	2ca1	2ca1
+regex [:lower:]	2ca3	2ca3
+regex [:lower:]	2ca5	2ca5
+regex [:lower:]	2ca7	2ca7
+regex [:lower:]	2ca9	2ca9
+regex [:lower:]	2cab	2cab
+regex [:lower:]	2cad	2cad
+regex [:lower:]	2caf	2caf
+regex [:lower:]	2cb1	2cb1
+regex [:lower:]	2cb3	2cb3
+regex [:lower:]	2cb5	2cb5
+regex [:lower:]	2cb7	2cb7
+regex [:lower:]	2cb9	2cb9
+regex [:lower:]	2cbb	2cbb
+regex [:lower:]	2cbd	2cbd
+regex [:lower:]	2cbf	2cbf
+regex [:lower:]	2cc1	2cc1
+regex [:lower:]	2cc3	2cc3
+regex [:lower:]	2cc5	2cc5
+regex [:lower:]	2cc7	2cc7
+regex [:lower:]	2cc9	2cc9
+regex [:lower:]	2ccb	2ccb
+regex [:lower:]	2ccd	2ccd
+regex [:lower:]	2ccf	2ccf
+regex [:lower:]	2cd1	2cd1
+regex [:lower:]	2cd3	2cd3
+regex [:lower:]	2cd5	2cd5
+regex [:lower:]	2cd7	2cd7
+regex [:lower:]	2cd9	2cd9
+regex [:lower:]	2cdb	2cdb
+regex [:lower:]	2cdd	2cdd
+regex [:lower:]	2cdf	2cdf
+regex [:lower:]	2ce1	2ce1
+regex [:lower:]	2ce3	2ce4
+regex [:lower:]	2cec	2cec
+regex [:lower:]	2cee	2cee
+regex [:lower:]	2cf3	2cf3
+regex [:lower:]	2d00	2d25
+regex [:lower:]	2d27	2d27
+regex [:lower:]	2d2d	2d2d
+regex [:lower:]	a641	a641
+regex [:lower:]	a643	a643
+regex [:lower:]	a645	a645
+regex [:lower:]	a647	a647
+regex [:lower:]	a649	a649
+regex [:lower:]	a64b	a64b
+regex [:lower:]	a64d	a64d
+regex [:lower:]	a64f	a64f
+regex [:lower:]	a651	a651
+regex [:lower:]	a653	a653
+regex [:lower:]	a655	a655
+regex [:lower:]	a657	a657
+regex [:lower:]	a659	a659
+regex [:lower:]	a65b	a65b
+regex [:lower:]	a65d	a65d
+regex [:lower:]	a65f	a65f
+regex [:lower:]	a661	a661
+regex [:lower:]	a663	a663
+regex [:lower:]	a665	a665
+regex [:lower:]	a667	a667
+regex [:lower:]	a669	a669
+regex [:lower:]	a66b	a66b
+regex [:lower:]	a66d	a66d
+regex [:lower:]	a681	a681
+regex [:lower:]	a683	a683
+regex [:lower:]	a685	a685
+regex [:lower:]	a687	a687
+regex [:lower:]	a689	a689
+regex [:lower:]	a68b	a68b
+regex [:lower:]	a68d	a68d
+regex [:lower:]	a68f	a68f
+regex [:lower:]	a691	a691
+regex [:lower:]	a693	a693
+regex [:lower:]	a695	a695
+regex [:lower:]	a697	a697
+regex [:lower:]	a699	a699
+regex [:lower:]	a69b	a69b
+regex [:lower:]	a723	a723
+regex [:lower:]	a725	a725
+regex [:lower:]	a727	a727
+regex [:lower:]	a729	a729
+regex [:lower:]	a72b	a72b
+regex [:lower:]	a72d	a72d
+regex [:lower:]	a72f	a731
+regex [:lower:]	a733	a733
+regex [:lower:]	a735	a735
+regex [:lower:]	a737	a737
+regex [:lower:]	a739	a739
+regex [:lower:]	a73b	a73b
+regex [:lower:]	a73d	a73d
+regex [:lower:]	a73f	a73f
+regex [:lower:]	a741	a741
+regex [:lower:]	a743	a743
+regex [:lower:]	a745	a745
+regex [:lower:]	a747	a747
+regex [:lower:]	a749	a749
+regex [:lower:]	a74b	a74b
+regex [:lower:]	a74d	a74d
+regex [:lower:]	a74f	a74f
+regex [:lower:]	a751	a751
+regex [:lower:]	a753	a753
+regex [:lower:]	a755	a755
+regex [:lower:]	a757	a757
+regex [:lower:]	a759	a759
+regex [:lower:]	a75b	a75b
+regex [:lower:]	a75d	a75d
+regex [:lower:]	a75f	a75f
+regex [:lower:]	a761	a761
+regex [:lower:]	a763	a763
+regex [:lower:]	a765	a765
+regex [:lower:]	a767	a767
+regex [:lower:]	a769	a769
+regex [:lower:]	a76b	a76b
+regex [:lower:]	a76d	a76d
+regex [:lower:]	a76f	a76f
+regex [:lower:]	a771	a778
+regex [:lower:]	a77a	a77a
+regex [:lower:]	a77c	a77c
+regex [:lower:]	a77f	a77f
+regex [:lower:]	a781	a781
+regex [:lower:]	a783	a783
+regex [:lower:]	a785	a785
+regex [:lower:]	a787	a787
+regex [:lower:]	a78c	a78c
+regex [:lower:]	a78e	a78e
+regex [:lower:]	a791	a791
+regex [:lower:]	a793	a795
+regex [:lower:]	a797	a797
+regex [:lower:]	a799	a799
+regex [:lower:]	a79b	a79b
+regex [:lower:]	a79d	a79d
+regex [:lower:]	a79f	a79f
+regex [:lower:]	a7a1	a7a1
+regex [:lower:]	a7a3	a7a3
+regex [:lower:]	a7a5	a7a5
+regex [:lower:]	a7a7	a7a7
+regex [:lower:]	a7a9	a7a9
+regex [:lower:]	a7fa	a7fa
+regex [:lower:]	ab30	ab5a
+regex [:lower:]	ab64	ab65
+regex [:lower:]	f6b2	f6b5
+regex [:lower:]	f6b7	f6b7
+regex [:lower:]	f6b9	f6bc
+regex [:lower:]	f6be	f6bf
+regex [:lower:]	f6c1	f700
+regex [:lower:]	f730	f731
+regex [:lower:]	f800	f819
+regex [:lower:]	f854	f86c
+regex [:lower:]	f874	f874
+regex [:lower:]	f878	f879
+regex [:lower:]	f87e	f87e
+regex [:lower:]	f880	f880
+regex [:lower:]	f882	f882
+regex [:lower:]	f884	f886
+regex [:lower:]	f88a	f88a
+regex [:lower:]	fb00	fb00
+regex [:lower:]	fb03	fb06
+regex [:lower:]	fb13	fb17
+regex [:lower:]	ff41	ff5a
+regex [:lower:]	10428	1044f
+regex [:lower:]	118c0	118df
+regex [:lower:]	1d41a	1d433
+regex [:lower:]	1d44e	1d454
+regex [:lower:]	1d456	1d467
+regex [:lower:]	1d482	1d49b
+regex [:lower:]	1d4b6	1d4b9
+regex [:lower:]	1d4bb	1d4bb
+regex [:lower:]	1d4bd	1d4c3
+regex [:lower:]	1d4c5	1d4cf
+regex [:lower:]	1d4ea	1d503
+regex [:lower:]	1d51e	1d537
+regex [:lower:]	1d552	1d56b
+regex [:lower:]	1d586	1d59f
+regex [:lower:]	1d5ba	1d5d3
+regex [:lower:]	1d5ee	1d607
+regex [:lower:]	1d622	1d63b
+regex [:lower:]	1d656	1d66f
+regex [:lower:]	1d68a	1d6a5
+regex [:lower:]	1d6c2	1d6da
+regex [:lower:]	1d6dc	1d6e1
+regex [:lower:]	1d6fc	1d714
+regex [:lower:]	1d716	1d71b
+regex [:lower:]	1d736	1d74e
+regex [:lower:]	1d750	1d755
+regex [:lower:]	1d770	1d788
+regex [:lower:]	1d78a	1d78f
+regex [:lower:]	1d7aa	1d7c2
+regex [:lower:]	1d7c4	1d7c9
+regex [:lower:]	1d7cb	1d7cb
+regex [:space:]	0009	000d
+regex [:space:]	0020	0020
+regex [:space:]	0085	0085
+regex [:space:]	00a0	00a0
+regex [:space:]	1680	1680
+regex [:space:]	180e	180e
+regex [:space:]	2000	200a
+regex [:space:]	2028	2029
+regex [:space:]	202f	202f
+regex [:space:]	205f	2060
+regex [:space:]	2423	2423
+regex [:space:]	3000	3000
+regex [:space:]	f360	f360
+regex [:space:]	f380	f380
+regex [:space:]	f382	f384
+regex [:space:]	f3a2	f3a3
+regex [:space:]	f3b1	f3b2
+regex [:space:]	f3bd	f3bf
+regex [:space:]	f3c6	f3c6
+regex [:space:]	f760	f760
+regex [:space:]	f76e	f76f
+regex [:blank:]	0009	0009
+regex [:blank:]	0020	0020
+regex [:blank:]	00a0	00a0
+regex [:blank:]	1680	1680
+regex [:blank:]	180e	180e
+regex [:blank:]	2000	200a
+regex [:blank:]	202f	202f
+regex [:blank:]	205f	205f
+regex [:blank:]	3000	3000
+regex [:punct:]	0021	002f
+regex [:punct:]	003a	0040
+regex [:punct:]	005b	0060
+regex [:punct:]	007b	007e
+regex [:punct:]	00a1	00a1
+regex [:punct:]	00a7	00a7
+regex [:punct:]	00ab	00ab
+regex [:punct:]	00b6	00b7
+regex [:punct:]	00bb	00bb
+regex [:punct:]	00bf	00bf
+regex [:punct:]	037e	037e
+regex [:punct:]	0387	0387
+regex [:punct:]	055a	055f
+regex [:punct:]	0589	058a
+regex [:punct:]	05be	05be
+regex [:punct:]	05c0	05c0
+regex [:punct:]	05c3	05c3
+regex [:punct:]	05c6	05c6
+regex [:punct:]	05f3	05f4
+regex [:punct:]	0609	060a
+regex [:punct:]	060c	060d
+regex [:punct:]	061b	061b
+regex [:punct:]	061e	061f
+regex [:punct:]	066a	066d
+regex [:punct:]	06d4	06d4
+regex [:punct:]	0700	070d
+regex [:punct:]	07f7	07f9
+regex [:punct:]	0830	083e
+regex [:punct:]	085e	085e
+regex [:punct:]	0964	0965
+regex [:punct:]	0970	0970
+regex [:punct:]	0af0	0af0
+regex [:punct:]	0df4	0df4
+regex [:punct:]	0e4f	0e4f
+regex [:punct:]	0e5a	0e5b
+regex [:punct:]	0f04	0f12
+regex [:punct:]	0f14	0f14
+regex [:punct:]	0f3a	0f3d
+regex [:punct:]	0f85	0f85
+regex [:punct:]	0fd0	0fd4
+regex [:punct:]	0fd9	0fda
+regex [:punct:]	104a	104f
+regex [:punct:]	10fb	10fb
+regex [:punct:]	1360	1368
+regex [:punct:]	1400	1400
+regex [:punct:]	166d	166e
+regex [:punct:]	169b	169c
+regex [:punct:]	16eb	16ed
+regex [:punct:]	1735	1736
+regex [:punct:]	17d4	17d6
+regex [:punct:]	17d8	17da
+regex [:punct:]	1800	180a
+regex [:punct:]	1944	1945
+regex [:punct:]	1a1e	1a1f
+regex [:punct:]	1aa0	1aa6
+regex [:punct:]	1aa8	1aad
+regex [:punct:]	1b5a	1b60
+regex [:punct:]	1bfc	1bff
+regex [:punct:]	1c3b	1c3f
+regex [:punct:]	1c7e	1c7f
+regex [:punct:]	1cc0	1cc7
+regex [:punct:]	1cd3	1cd3
+regex [:punct:]	2010	2027
+regex [:punct:]	2030	2043
+regex [:punct:]	2045	2051
+regex [:punct:]	2053	205e
+regex [:punct:]	207d	207e
+regex [:punct:]	208d	208e
+regex [:punct:]	2308	230b
+regex [:punct:]	2329	232a
+regex [:punct:]	2768	2775
+regex [:punct:]	27c5	27c6
+regex [:punct:]	27e6	27ef
+regex [:punct:]	2983	2998
+regex [:punct:]	29d8	29db
+regex [:punct:]	29fc	29fd
+regex [:punct:]	2cf9	2cfc
+regex [:punct:]	2cfe	2cff
+regex [:punct:]	2d70	2d70
+regex [:punct:]	2e00	2e2e
+regex [:punct:]	2e30	2e42
+regex [:punct:]	3001	3003
+regex [:punct:]	3008	3011
+regex [:punct:]	3014	301f
+regex [:punct:]	3030	3030
+regex [:punct:]	303d	303d
+regex [:punct:]	30a0	30a0
+regex [:punct:]	30fb	30fb
+regex [:punct:]	a4fe	a4ff
+regex [:punct:]	a60d	a60f
+regex [:punct:]	a673	a673
+regex [:punct:]	a67e	a67e
+regex [:punct:]	a6f2	a6f7
+regex [:punct:]	a874	a877
+regex [:punct:]	a8ce	a8cf
+regex [:punct:]	a8f8	a8fa
+regex [:punct:]	a92e	a92f
+regex [:punct:]	a95f	a95f
+regex [:punct:]	a9c1	a9cd
+regex [:punct:]	a9de	a9df
+regex [:punct:]	aa5c	aa5f
+regex [:punct:]	aade	aadf
+regex [:punct:]	aaf0	aaf1
+regex [:punct:]	abeb	abeb
+regex [:punct:]	fd3e	fd3f
+regex [:punct:]	fe10	fe19
+regex [:punct:]	fe30	fe52
+regex [:punct:]	fe54	fe61
+regex [:punct:]	fe63	fe63
+regex [:punct:]	fe68	fe68
+regex [:punct:]	fe6a	fe6b
+regex [:punct:]	ff01	ff03
+regex [:punct:]	ff05	ff0a
+regex [:punct:]	ff0c	ff0f
+regex [:punct:]	ff1a	ff1b
+regex [:punct:]	ff1f	ff20
+regex [:punct:]	ff3b	ff3d
+regex [:punct:]	ff3f	ff3f
+regex [:punct:]	ff5b	ff5b
+regex [:punct:]	ff5d	ff5d
+regex [:punct:]	ff5f	ff65
+regex [:punct:]	10100	10102
+regex [:punct:]	1039f	1039f
+regex [:punct:]	103d0	103d0
+regex [:punct:]	1056f	1056f
+regex [:punct:]	10857	10857
+regex [:punct:]	1091f	1091f
+regex [:punct:]	1093f	1093f
+regex [:punct:]	10a50	10a58
+regex [:punct:]	10a7f	10a7f
+regex [:punct:]	10af0	10af6
+regex [:punct:]	10b39	10b3f
+regex [:punct:]	10b99	10b9c
+regex [:punct:]	11047	1104d
+regex [:punct:]	110bb	110bc
+regex [:punct:]	110be	110c1
+regex [:punct:]	11140	11143
+regex [:punct:]	11174	11175
+regex [:punct:]	111c5	111c8
+regex [:punct:]	111cd	111cd
+regex [:punct:]	11238	1123d
+regex [:punct:]	114c6	114c6
+regex [:punct:]	115c1	115c9
+regex [:punct:]	11641	11643
+regex [:punct:]	12470	12474
+regex [:punct:]	16a6e	16a6f
+regex [:punct:]	16af5	16af5
+regex [:punct:]	16b37	16b3b
+regex [:punct:]	16b44	16b44
+regex [:punct:]	1bc9f	1bc9f
+regex [:xdigit:]	0030	0039
+regex [:xdigit:]	0041	0046
+regex [:xdigit:]	0061	0066
+regex [:cntrl:]	0000	001f
+regex [:cntrl:]	007f	007f
+regex [:print:]	0020	007e
+regex [:print:]	00a0	0377
+regex [:print:]	037a	037f
+regex [:print:]	0384	038a
+regex [:print:]	038c	038c
+regex [:print:]	038e	03a1
+regex [:print:]	03a3	052f
+regex [:print:]	0531	0556
+regex [:print:]	0559	055f
+regex [:print:]	0561	0587
+regex [:print:]	0589	058a
+regex [:print:]	058d	058f
+regex [:print:]	0591	05c7
+regex [:print:]	05d0	05ea
+regex [:print:]	05f0	05f4
+regex [:print:]	0600	061b
+regex [:print:]	061e	070d
+regex [:print:]	070f	074a
+regex [:print:]	074d	07b1
+regex [:print:]	07c0	07fa
+regex [:print:]	0800	082d
+regex [:print:]	0830	083e
+regex [:print:]	0840	085b
+regex [:print:]	085e	085e
+regex [:print:]	08a0	08b2
+regex [:print:]	08e4	0983
+regex [:print:]	0985	098c
+regex [:print:]	098f	0990
+regex [:print:]	0993	09a8
+regex [:print:]	09aa	09b0
+regex [:print:]	09b2	09b2
+regex [:print:]	09b6	09b9
+regex [:print:]	09bc	09c4
+regex [:print:]	09c7	09c8
+regex [:print:]	09cb	09ce
+regex [:print:]	09d7	09d7
+regex [:print:]	09dc	09dd
+regex [:print:]	09df	09e3
+regex [:print:]	09e6	09fb
+regex [:print:]	0a01	0a03
+regex [:print:]	0a05	0a0a
+regex [:print:]	0a0f	0a10
+regex [:print:]	0a13	0a28
+regex [:print:]	0a2a	0a30
+regex [:print:]	0a32	0a33
+regex [:print:]	0a35	0a36
+regex [:print:]	0a38	0a39
+regex [:print:]	0a3c	0a3c
+regex [:print:]	0a3e	0a42
+regex [:print:]	0a47	0a48
+regex [:print:]	0a4b	0a4d
+regex [:print:]	0a51	0a51
+regex [:print:]	0a59	0a5c
+regex [:print:]	0a5e	0a5e
+regex [:print:]	0a66	0a75
+regex [:print:]	0a81	0a83
+regex [:print:]	0a85	0a8d
+regex [:print:]	0a8f	0a91
+regex [:print:]	0a93	0aa8
+regex [:print:]	0aaa	0ab0
+regex [:print:]	0ab2	0ab3
+regex [:print:]	0ab5	0ab9
+regex [:print:]	0abc	0ac5
+regex [:print:]	0ac7	0ac9
+regex [:print:]	0acb	0acd
+regex [:print:]	0ad0	0ad0
+regex [:print:]	0ae0	0ae3
+regex [:print:]	0ae6	0af1
+regex [:print:]	0b01	0b03
+regex [:print:]	0b05	0b0c
+regex [:print:]	0b0f	0b10
+regex [:print:]	0b13	0b28
+regex [:print:]	0b2a	0b30
+regex [:print:]	0b32	0b33
+regex [:print:]	0b35	0b39
+regex [:print:]	0b3c	0b44
+regex [:print:]	0b47	0b48
+regex [:print:]	0b4b	0b4d
+regex [:print:]	0b56	0b57
+regex [:print:]	0b5c	0b5d
+regex [:print:]	0b5f	0b63
+regex [:print:]	0b66	0b77
+regex [:print:]	0b82	0b83
+regex [:print:]	0b85	0b8a
+regex [:print:]	0b8e	0b90
+regex [:print:]	0b92	0b95
+regex [:print:]	0b99	0b9a
+regex [:print:]	0b9c	0b9c
+regex [:print:]	0b9e	0b9f
+regex [:print:]	0ba3	0ba4
+regex [:print:]	0ba8	0baa
+regex [:print:]	0bae	0bb9
+regex [:print:]	0bbe	0bc2
+regex [:print:]	0bc6	0bc8
+regex [:print:]	0bca	0bcd
+regex [:print:]	0bd0	0bd0
+regex [:print:]	0bd7	0bd7
+regex [:print:]	0be6	0bfa
+regex [:print:]	0c00	0c03
+regex [:print:]	0c05	0c0c
+regex [:print:]	0c0e	0c10
+regex [:print:]	0c12	0c28
+regex [:print:]	0c2a	0c39
+regex [:print:]	0c3d	0c44
+regex [:print:]	0c46	0c48
+regex [:print:]	0c4a	0c4d
+regex [:print:]	0c55	0c56
+regex [:print:]	0c58	0c59
+regex [:print:]	0c60	0c63
+regex [:print:]	0c66	0c6f
+regex [:print:]	0c78	0c7f
+regex [:print:]	0c81	0c83
+regex [:print:]	0c85	0c8c
+regex [:print:]	0c8e	0c90
+regex [:print:]	0c92	0ca8
+regex [:print:]	0caa	0cb3
+regex [:print:]	0cb5	0cb9
+regex [:print:]	0cbc	0cc4
+regex [:print:]	0cc6	0cc8
+regex [:print:]	0cca	0ccd
+regex [:print:]	0cd5	0cd6
+regex [:print:]	0cde	0cde
+regex [:print:]	0ce0	0ce3
+regex [:print:]	0ce6	0cef
+regex [:print:]	0cf1	0cf2
+regex [:print:]	0d01	0d03
+regex [:print:]	0d05	0d0c
+regex [:print:]	0d0e	0d10
+regex [:print:]	0d12	0d3a
+regex [:print:]	0d3d	0d44
+regex [:print:]	0d46	0d48
+regex [:print:]	0d4a	0d4e
+regex [:print:]	0d57	0d57
+regex [:print:]	0d60	0d63
+regex [:print:]	0d66	0d75
+regex [:print:]	0d79	0d7f
+regex [:print:]	0d82	0d83
+regex [:print:]	0d85	0d96
+regex [:print:]	0d9a	0db1
+regex [:print:]	0db3	0dbb
+regex [:print:]	0dbd	0dbd
+regex [:print:]	0dc0	0dc6
+regex [:print:]	0dca	0dca
+regex [:print:]	0dcf	0dd4
+regex [:print:]	0dd6	0dd6
+regex [:print:]	0dd8	0ddf
+regex [:print:]	0de6	0def
+regex [:print:]	0df2	0df4
+regex [:print:]	0e01	0e3a
+regex [:print:]	0e3f	0e5b
+regex [:print:]	0e81	0e82
+regex [:print:]	0e84	0e84
+regex [:print:]	0e87	0e88
+regex [:print:]	0e8a	0e8a
+regex [:print:]	0e8d	0e8d
+regex [:print:]	0e94	0e97
+regex [:print:]	0e99	0e9f
+regex [:print:]	0ea1	0ea3
+regex [:print:]	0ea5	0ea5
+regex [:print:]	0ea7	0ea7
+regex [:print:]	0eaa	0eab
+regex [:print:]	0ead	0eb9
+regex [:print:]	0ebb	0ebd
+regex [:print:]	0ec0	0ec4
+regex [:print:]	0ec6	0ec6
+regex [:print:]	0ec8	0ecd
+regex [:print:]	0ed0	0ed9
+regex [:print:]	0edc	0edf
+regex [:print:]	0f00	0f47
+regex [:print:]	0f49	0f6c
+regex [:print:]	0f71	0f97
+regex [:print:]	0f99	0fbc
+regex [:print:]	0fbe	0fcc
+regex [:print:]	0fce	0fda
+regex [:print:]	1000	10c5
+regex [:print:]	10c7	10c7
+regex [:print:]	10cd	10cd
+regex [:print:]	10d0	1248
+regex [:print:]	124a	124d
+regex [:print:]	1250	1256
+regex [:print:]	1258	1258
+regex [:print:]	125a	125d
+regex [:print:]	1260	1288
+regex [:print:]	128a	128d
+regex [:print:]	1290	12b0
+regex [:print:]	12b2	12b5
+regex [:print:]	12b8	12be
+regex [:print:]	12c0	12c0
+regex [:print:]	12c2	12c5
+regex [:print:]	12c8	12d6
+regex [:print:]	12d8	1310
+regex [:print:]	1312	1315
+regex [:print:]	1318	135a
+regex [:print:]	135d	137c
+regex [:print:]	1380	1399
+regex [:print:]	13a0	13f4
+regex [:print:]	1400	169c
+regex [:print:]	16a0	16f8
+regex [:print:]	1700	170c
+regex [:print:]	170e	1714
+regex [:print:]	1720	1736
+regex [:print:]	1740	1753
+regex [:print:]	1760	176c
+regex [:print:]	176e	1770
+regex [:print:]	1772	1773
+regex [:print:]	1780	17dd
+regex [:print:]	17e0	17e9
+regex [:print:]	17f0	17f9
+regex [:print:]	1800	180e
+regex [:print:]	1810	1819
+regex [:print:]	1820	1877
+regex [:print:]	1880	18aa
+regex [:print:]	18b0	18f5
+regex [:print:]	1900	191e
+regex [:print:]	1920	192b
+regex [:print:]	1930	193b
+regex [:print:]	1940	1940
+regex [:print:]	1944	196d
+regex [:print:]	1970	1974
+regex [:print:]	1980	19ab
+regex [:print:]	19b0	19c9
+regex [:print:]	19d0	19da
+regex [:print:]	19de	1a1b
+regex [:print:]	1a1e	1a5e
+regex [:print:]	1a60	1a7c
+regex [:print:]	1a7f	1a89
+regex [:print:]	1a90	1a99
+regex [:print:]	1aa0	1aad
+regex [:print:]	1ab0	1abe
+regex [:print:]	1b00	1b4b
+regex [:print:]	1b50	1b7c
+regex [:print:]	1b80	1bf3
+regex [:print:]	1bfc	1c37
+regex [:print:]	1c3b	1c49
+regex [:print:]	1c4d	1c7f
+regex [:print:]	1cc0	1cc7
+regex [:print:]	1cd0	1cf6
+regex [:print:]	1cf8	1cf9
+regex [:print:]	1d00	1df5
+regex [:print:]	1dfc	1f15
+regex [:print:]	1f18	1f1d
+regex [:print:]	1f20	1f45
+regex [:print:]	1f48	1f4d
+regex [:print:]	1f50	1f57
+regex [:print:]	1f59	1f59
+regex [:print:]	1f5b	1f5b
+regex [:print:]	1f5d	1f5d
+regex [:print:]	1f5f	1f7d
+regex [:print:]	1f80	1fb4
+regex [:print:]	1fb6	1fc4
+regex [:print:]	1fc6	1fd3
+regex [:print:]	1fd6	1fdb
+regex [:print:]	1fdd	1fef
+regex [:print:]	1ff2	1ff4
+regex [:print:]	1ff6	1ffe
+regex [:print:]	2000	2027
+regex [:print:]	202a	2064
+regex [:print:]	206a	2071
+regex [:print:]	2074	208e
+regex [:print:]	2090	209c
+regex [:print:]	20a0	20bd
+regex [:print:]	20d0	20f0
+regex [:print:]	2100	2189
+regex [:print:]	2190	23fa
+regex [:print:]	2400	2426
+regex [:print:]	2440	244a
+regex [:print:]	2460	2b73
+regex [:print:]	2b76	2b95
+regex [:print:]	2b98	2bb9
+regex [:print:]	2bbd	2bc8
+regex [:print:]	2bca	2bd1
+regex [:print:]	2c00	2c2e
+regex [:print:]	2c30	2c5e
+regex [:print:]	2c60	2cf3
+regex [:print:]	2cf9	2d25
+regex [:print:]	2d27	2d27
+regex [:print:]	2d2d	2d2d
+regex [:print:]	2d30	2d67
+regex [:print:]	2d6f	2d70
+regex [:print:]	2d7f	2d96
+regex [:print:]	2da0	2da6
+regex [:print:]	2da8	2dae
+regex [:print:]	2db0	2db6
+regex [:print:]	2db8	2dbe
+regex [:print:]	2dc0	2dc6
+regex [:print:]	2dc8	2dce
+regex [:print:]	2dd0	2dd6
+regex [:print:]	2dd8	2dde
+regex [:print:]	2de0	2e42
+regex [:print:]	2e80	2e99
+regex [:print:]	2e9b	2ef3
+regex [:print:]	2f00	2fd5
+regex [:print:]	2ff0	2ffb
+regex [:print:]	3000	303f
+regex [:print:]	3041	3096
+regex [:print:]	3099	30ff
+regex [:print:]	3105	312d
+regex [:print:]	3131	318e
+regex [:print:]	3190	31ba
+regex [:print:]	31c0	31e3
+regex [:print:]	31f0	321e
+regex [:print:]	3220	32fe
+regex [:print:]	3300	4db5
+regex [:print:]	4dc0	9fcc
+regex [:print:]	a000	a48c
+regex [:print:]	a490	a4c6
+regex [:print:]	a4d0	a62b
+regex [:print:]	a640	a69d
+regex [:print:]	a69f	a6f7
+regex [:print:]	a700	a78e
+regex [:print:]	a790	a7ad
+regex [:print:]	a7b0	a7b1
+regex [:print:]	a7f7	a82b
+regex [:print:]	a830	a839
+regex [:print:]	a840	a877
+regex [:print:]	a880	a8c4
+regex [:print:]	a8ce	a8d9
+regex [:print:]	a8e0	a8fb
+regex [:print:]	a900	a953
+regex [:print:]	a95f	a97c
+regex [:print:]	a980	a9cd
+regex [:print:]	a9cf	a9d9
+regex [:print:]	a9de	a9fe
+regex [:print:]	aa00	aa36
+regex [:print:]	aa40	aa4d
+regex [:print:]	aa50	aa59
+regex [:print:]	aa5c	aac2
+regex [:print:]	aadb	aaf6
+regex [:print:]	ab01	ab06
+regex [:print:]	ab09	ab0e
+regex [:print:]	ab11	ab16
+regex [:print:]	ab20	ab26
+regex [:print:]	ab28	ab2e
+regex [:print:]	ab30	ab5f
+regex [:print:]	ab64	ab65
+regex [:print:]	abc0	abed
+regex [:print:]	abf0	abf9
+regex [:print:]	ac00	d7a3
+regex [:print:]	d7b0	d7c6
+regex [:print:]	d7cb	d7fb
+regex [:print:]	f6b2	f6b5
+regex [:print:]	f6b7	f6b7
+regex [:print:]	f6b9	f6bc
+regex [:print:]	f6be	f6bf
+regex [:print:]	f6c1	f700
+regex [:print:]	f730	f731
+regex [:print:]	f770	f770
+regex [:print:]	f772	f773
+regex [:print:]	f776	f776
+regex [:print:]	f779	f77a
+regex [:print:]	f77d	f780
+regex [:print:]	f782	f78b
+regex [:print:]	f78d	f790
+regex [:print:]	f793	f79a
+regex [:print:]	f79c	f7a2
+regex [:print:]	f7a4	f7bd
+regex [:print:]	f800	f844
+regex [:print:]	f846	f84c
+regex [:print:]	f854	f86c
+regex [:print:]	f874	f875
+regex [:print:]	f878	f879
+regex [:print:]	f87d	f886
+regex [:print:]	f88a	f88a
+regex [:print:]	f900	fa6d
+regex [:print:]	fa70	fad9
+regex [:print:]	fb00	fb06
+regex [:print:]	fb13	fb17
+regex [:print:]	fb1d	fb36
+regex [:print:]	fb38	fb3c
+regex [:print:]	fb3e	fb3e
+regex [:print:]	fb40	fb41
+regex [:print:]	fb43	fb44
+regex [:print:]	fb46	fbc1
+regex [:print:]	fbd3	fd3f
+regex [:print:]	fd50	fd8f
+regex [:print:]	fd92	fdc7
+regex [:print:]	fdf0	fdfd
+regex [:print:]	fe00	fe19
+regex [:print:]	fe20	fe2d
+regex [:print:]	fe30	fe52
+regex [:print:]	fe54	fe66
+regex [:print:]	fe68	fe6b
+regex [:print:]	fe70	fe74
+regex [:print:]	fe76	fefc
+regex [:print:]	feff	feff
+regex [:print:]	ff01	ffbe
+regex [:print:]	ffc2	ffc7
+regex [:print:]	ffca	ffcf
+regex [:print:]	ffd2	ffd7
+regex [:print:]	ffda	ffdc
+regex [:print:]	ffe0	ffe6
+regex [:print:]	ffe8	ffee
+regex [:print:]	fff9	fffd
+regex [:print:]	10000	1000b
+regex [:print:]	1000d	10026
+regex [:print:]	10028	1003a
+regex [:print:]	1003c	1003d
+regex [:print:]	1003f	1004d
+regex [:print:]	10050	1005d
+regex [:print:]	10080	100fa
+regex [:print:]	10100	10102
+regex [:print:]	10107	10133
+regex [:print:]	10137	1018c
+regex [:print:]	10190	1019b
+regex [:print:]	101a0	101a0
+regex [:print:]	101d0	101fd
+regex [:print:]	10280	1029c
+regex [:print:]	102a0	102d0
+regex [:print:]	102e0	102fb
+regex [:print:]	10300	10323
+regex [:print:]	10330	1034a
+regex [:print:]	10350	1037a
+regex [:print:]	10380	1039d
+regex [:print:]	1039f	103c3
+regex [:print:]	103c8	103d5
+regex [:print:]	10400	1049d
+regex [:print:]	104a0	104a9
+regex [:print:]	10500	10527
+regex [:print:]	10530	10563
+regex [:print:]	1056f	1056f
+regex [:print:]	10600	10736
+regex [:print:]	10740	10755
+regex [:print:]	10760	10767
+regex [:print:]	10800	10805
+regex [:print:]	10808	10808
+regex [:print:]	1080a	10835
+regex [:print:]	10837	10838
+regex [:print:]	1083c	1083c
+regex [:print:]	1083f	10855
+regex [:print:]	10857	1089e
+regex [:print:]	108a7	108af
+regex [:print:]	10900	1091b
+regex [:print:]	1091f	10939
+regex [:print:]	1093f	1093f
+regex [:print:]	10980	109b7
+regex [:print:]	109be	109bf
+regex [:print:]	10a00	10a03
+regex [:print:]	10a05	10a06
+regex [:print:]	10a0c	10a13
+regex [:print:]	10a15	10a17
+regex [:print:]	10a19	10a33
+regex [:print:]	10a38	10a3a
+regex [:print:]	10a3f	10a47
+regex [:print:]	10a50	10a58
+regex [:print:]	10a60	10a9f
+regex [:print:]	10ac0	10ae6
+regex [:print:]	10aeb	10af6
+regex [:print:]	10b00	10b35
+regex [:print:]	10b39	10b55
+regex [:print:]	10b58	10b72
+regex [:print:]	10b78	10b91
+regex [:print:]	10b99	10b9c
+regex [:print:]	10ba9	10baf
+regex [:print:]	10c00	10c48
+regex [:print:]	10e60	10e7e
+regex [:print:]	11000	1104d
+regex [:print:]	11052	1106f
+regex [:print:]	1107f	110c1
+regex [:print:]	110d0	110e8
+regex [:print:]	110f0	110f9
+regex [:print:]	11100	11134
+regex [:print:]	11136	11143
+regex [:print:]	11150	11176
+regex [:print:]	11180	111c8
+regex [:print:]	111cd	111cd
+regex [:print:]	111d0	111da
+regex [:print:]	111e1	111f4
+regex [:print:]	11200	11211
+regex [:print:]	11213	1123d
+regex [:print:]	112b0	112ea
+regex [:print:]	112f0	112f9
+regex [:print:]	11301	11303
+regex [:print:]	11305	1130c
+regex [:print:]	1130f	11310
+regex [:print:]	11313	11328
+regex [:print:]	1132a	11330
+regex [:print:]	11332	11333
+regex [:print:]	11335	11339
+regex [:print:]	1133c	11344
+regex [:print:]	11347	11348
+regex [:print:]	1134b	1134d
+regex [:print:]	11357	11357
+regex [:print:]	1135d	11363
+regex [:print:]	11366	1136c
+regex [:print:]	11370	11374
+regex [:print:]	11480	114c7
+regex [:print:]	114d0	114d9
+regex [:print:]	11580	115b5
+regex [:print:]	115b8	115c9
+regex [:print:]	11600	11644
+regex [:print:]	11650	11659
+regex [:print:]	11680	116b7
+regex [:print:]	116c0	116c9
+regex [:print:]	118a0	118f2
+regex [:print:]	118ff	118ff
+regex [:print:]	11ac0	11af8
+regex [:print:]	12000	12398
+regex [:print:]	12400	1246e
+regex [:print:]	12470	12474
+regex [:print:]	13000	1342e
+regex [:print:]	16800	16a38
+regex [:print:]	16a40	16a5e
+regex [:print:]	16a60	16a69
+regex [:print:]	16a6e	16a6f
+regex [:print:]	16ad0	16aed
+regex [:print:]	16af0	16af5
+regex [:print:]	16b00	16b45
+regex [:print:]	16b50	16b59
+regex [:print:]	16b5b	16b61
+regex [:print:]	16b63	16b77
+regex [:print:]	16b7d	16b8f
+regex [:print:]	16f00	16f44
+regex [:print:]	16f50	16f7e
+regex [:print:]	16f8f	16f9f
+regex [:print:]	1b000	1b001
+regex [:print:]	1bc00	1bc6a
+regex [:print:]	1bc70	1bc7c
+regex [:print:]	1bc80	1bc88
+regex [:print:]	1bc90	1bc99
+regex [:print:]	1bc9c	1bca3
+regex [:print:]	1d000	1d0f5
+regex [:print:]	1d100	1d126
+regex [:print:]	1d129	1d1dd
+regex [:print:]	1d200	1d245
+regex [:print:]	1d300	1d356
+regex [:print:]	1d360	1d371
+regex [:print:]	1d400	1d454
+regex [:print:]	1d456	1d49c
+regex [:print:]	1d49e	1d49f
+regex [:print:]	1d4a2	1d4a2
+regex [:print:]	1d4a5	1d4a6
+regex [:print:]	1d4a9	1d4ac
+regex [:print:]	1d4ae	1d4b9
+regex [:print:]	1d4bb	1d4bb
+regex [:print:]	1d4bd	1d4c3
+regex [:print:]	1d4c5	1d505
+regex [:print:]	1d507	1d50a
+regex [:print:]	1d50d	1d514
+regex [:print:]	1d516	1d51c
+regex [:print:]	1d51e	1d539
+regex [:print:]	1d53b	1d53e
+regex [:print:]	1d540	1d544
+regex [:print:]	1d546	1d546
+regex [:print:]	1d54a	1d550
+regex [:print:]	1d552	1d6a5
+regex [:print:]	1d6a8	1d7cb
+regex [:print:]	1d7ce	1d7ff
+regex [:print:]	1e800	1e8c4
+regex [:print:]	1e8c7	1e8d6
+regex [:print:]	1ee00	1ee03
+regex [:print:]	1ee05	1ee1f
+regex [:print:]	1ee21	1ee22
+regex [:print:]	1ee24	1ee24
+regex [:print:]	1ee27	1ee27
+regex [:print:]	1ee29	1ee32
+regex [:print:]	1ee34	1ee37
+regex [:print:]	1ee39	1ee39
+regex [:print:]	1ee3b	1ee3b
+regex [:print:]	1ee42	1ee42
+regex [:print:]	1ee47	1ee47
+regex [:print:]	1ee49	1ee49
+regex [:print:]	1ee4b	1ee4b
+regex [:print:]	1ee4d	1ee4f
+regex [:print:]	1ee51	1ee52
+regex [:print:]	1ee54	1ee54
+regex [:print:]	1ee57	1ee57
+regex [:print:]	1ee59	1ee59
+regex [:print:]	1ee5b	1ee5b
+regex [:print:]	1ee5d	1ee5d
+regex [:print:]	1ee5f	1ee5f
+regex [:print:]	1ee61	1ee62
+regex [:print:]	1ee64	1ee64
+regex [:print:]	1ee67	1ee6a
+regex [:print:]	1ee6c	1ee72
+regex [:print:]	1ee74	1ee77
+regex [:print:]	1ee79	1ee7c
+regex [:print:]	1ee7e	1ee7e
+regex [:print:]	1ee80	1ee89
+regex [:print:]	1ee8b	1ee9b
+regex [:print:]	1eea1	1eea3
+regex [:print:]	1eea5	1eea9
+regex [:print:]	1eeab	1eebb
+regex [:print:]	1eef0	1eef1
+regex [:print:]	1f000	1f02b
+regex [:print:]	1f030	1f093
+regex [:print:]	1f0a0	1f0ae
+regex [:print:]	1f0b1	1f0bf
+regex [:print:]	1f0c1	1f0cf
+regex [:print:]	1f0d1	1f0f5
+regex [:print:]	1f100	1f10c
+regex [:print:]	1f110	1f12e
+regex [:print:]	1f130	1f16b
+regex [:print:]	1f170	1f19a
+regex [:print:]	1f1e6	1f202
+regex [:print:]	1f210	1f23a
+regex [:print:]	1f240	1f248
+regex [:print:]	1f250	1f251
+regex [:print:]	1f300	1f32c
+regex [:print:]	1f330	1f37d
+regex [:print:]	1f380	1f3ce
+regex [:print:]	1f3d4	1f3f7
+regex [:print:]	1f400	1f4fe
+regex [:print:]	1f500	1f54a
+regex [:print:]	1f550	1f579
+regex [:print:]	1f57b	1f5a3
+regex [:print:]	1f5a5	1f642
+regex [:print:]	1f645	1f6cf
+regex [:print:]	1f6e0	1f6ec
+regex [:print:]	1f6f0	1f6f3
+regex [:print:]	1f700	1f773
+regex [:print:]	1f780	1f7d4
+regex [:print:]	1f800	1f80b
+regex [:print:]	1f810	1f847
+regex [:print:]	1f850	1f859
+regex [:print:]	1f860	1f887
+regex [:print:]	1f890	1f8ad
+regex [:print:]	20000	2a6d6
+regex [:print:]	2a700	2b734
+regex [:print:]	2b740	2b81d
+regex [:print:]	2f800	2fa1d
+regex [:print:]	e0001	e0001
+regex [:print:]	e0020	e007f
+regex [:print:]	e0100	e01ef
+regex [:graph:]	0021	007e
+regex [:graph:]	00a1	0377
+regex [:graph:]	037a	037f
+regex [:graph:]	0384	038a
+regex [:graph:]	038c	038c
+regex [:graph:]	038e	03a1
+regex [:graph:]	03a3	052f
+regex [:graph:]	0531	0556
+regex [:graph:]	0559	055f
+regex [:graph:]	0561	0587
+regex [:graph:]	0589	058a
+regex [:graph:]	058d	058f
+regex [:graph:]	0591	05c7
+regex [:graph:]	05d0	05ea
+regex [:graph:]	05f0	05f4
+regex [:graph:]	0600	061b
+regex [:graph:]	061e	070d
+regex [:graph:]	070f	074a
+regex [:graph:]	074d	07b1
+regex [:graph:]	07c0	07fa
+regex [:graph:]	0800	082d
+regex [:graph:]	0830	083e
+regex [:graph:]	0840	085b
+regex [:graph:]	085e	085e
+regex [:graph:]	08a0	08b2
+regex [:graph:]	08e4	0983
+regex [:graph:]	0985	098c
+regex [:graph:]	098f	0990
+regex [:graph:]	0993	09a8
+regex [:graph:]	09aa	09b0
+regex [:graph:]	09b2	09b2
+regex [:graph:]	09b6	09b9
+regex [:graph:]	09bc	09c4
+regex [:graph:]	09c7	09c8
+regex [:graph:]	09cb	09ce
+regex [:graph:]	09d7	09d7
+regex [:graph:]	09dc	09dd
+regex [:graph:]	09df	09e3
+regex [:graph:]	09e6	09fb
+regex [:graph:]	0a01	0a03
+regex [:graph:]	0a05	0a0a
+regex [:graph:]	0a0f	0a10
+regex [:graph:]	0a13	0a28
+regex [:graph:]	0a2a	0a30
+regex [:graph:]	0a32	0a33
+regex [:graph:]	0a35	0a36
+regex [:graph:]	0a38	0a39
+regex [:graph:]	0a3c	0a3c
+regex [:graph:]	0a3e	0a42
+regex [:graph:]	0a47	0a48
+regex [:graph:]	0a4b	0a4d
+regex [:graph:]	0a51	0a51
+regex [:graph:]	0a59	0a5c
+regex [:graph:]	0a5e	0a5e
+regex [:graph:]	0a66	0a75
+regex [:graph:]	0a81	0a83
+regex [:graph:]	0a85	0a8d
+regex [:graph:]	0a8f	0a91
+regex [:graph:]	0a93	0aa8
+regex [:graph:]	0aaa	0ab0
+regex [:graph:]	0ab2	0ab3
+regex [:graph:]	0ab5	0ab9
+regex [:graph:]	0abc	0ac5
+regex [:graph:]	0ac7	0ac9
+regex [:graph:]	0acb	0acd
+regex [:graph:]	0ad0	0ad0
+regex [:graph:]	0ae0	0ae3
+regex [:graph:]	0ae6	0af1
+regex [:graph:]	0b01	0b03
+regex [:graph:]	0b05	0b0c
+regex [:graph:]	0b0f	0b10
+regex [:graph:]	0b13	0b28
+regex [:graph:]	0b2a	0b30
+regex [:graph:]	0b32	0b33
+regex [:graph:]	0b35	0b39
+regex [:graph:]	0b3c	0b44
+regex [:graph:]	0b47	0b48
+regex [:graph:]	0b4b	0b4d
+regex [:graph:]	0b56	0b57
+regex [:graph:]	0b5c	0b5d
+regex [:graph:]	0b5f	0b63
+regex [:graph:]	0b66	0b77
+regex [:graph:]	0b82	0b83
+regex [:graph:]	0b85	0b8a
+regex [:graph:]	0b8e	0b90
+regex [:graph:]	0b92	0b95
+regex [:graph:]	0b99	0b9a
+regex [:graph:]	0b9c	0b9c
+regex [:graph:]	0b9e	0b9f
+regex [:graph:]	0ba3	0ba4
+regex [:graph:]	0ba8	0baa
+regex [:graph:]	0bae	0bb9
+regex [:graph:]	0bbe	0bc2
+regex [:graph:]	0bc6	0bc8
+regex [:graph:]	0bca	0bcd
+regex [:graph:]	0bd0	0bd0
+regex [:graph:]	0bd7	0bd7
+regex [:graph:]	0be6	0bfa
+regex [:graph:]	0c00	0c03
+regex [:graph:]	0c05	0c0c
+regex [:graph:]	0c0e	0c10
+regex [:graph:]	0c12	0c28
+regex [:graph:]	0c2a	0c39
+regex [:graph:]	0c3d	0c44
+regex [:graph:]	0c46	0c48
+regex [:graph:]	0c4a	0c4d
+regex [:graph:]	0c55	0c56
+regex [:graph:]	0c58	0c59
+regex [:graph:]	0c60	0c63
+regex [:graph:]	0c66	0c6f
+regex [:graph:]	0c78	0c7f
+regex [:graph:]	0c81	0c83
+regex [:graph:]	0c85	0c8c
+regex [:graph:]	0c8e	0c90
+regex [:graph:]	0c92	0ca8
+regex [:graph:]	0caa	0cb3
+regex [:graph:]	0cb5	0cb9
+regex [:graph:]	0cbc	0cc4
+regex [:graph:]	0cc6	0cc8
+regex [:graph:]	0cca	0ccd
+regex [:graph:]	0cd5	0cd6
+regex [:graph:]	0cde	0cde
+regex [:graph:]	0ce0	0ce3
+regex [:graph:]	0ce6	0cef
+regex [:graph:]	0cf1	0cf2
+regex [:graph:]	0d01	0d03
+regex [:graph:]	0d05	0d0c
+regex [:graph:]	0d0e	0d10
+regex [:graph:]	0d12	0d3a
+regex [:graph:]	0d3d	0d44
+regex [:graph:]	0d46	0d48
+regex [:graph:]	0d4a	0d4e
+regex [:graph:]	0d57	0d57
+regex [:graph:]	0d60	0d63
+regex [:graph:]	0d66	0d75
+regex [:graph:]	0d79	0d7f
+regex [:graph:]	0d82	0d83
+regex [:graph:]	0d85	0d96
+regex [:graph:]	0d9a	0db1
+regex [:graph:]	0db3	0dbb
+regex [:graph:]	0dbd	0dbd
+regex [:graph:]	0dc0	0dc6
+regex [:graph:]	0dca	0dca
+regex [:graph:]	0dcf	0dd4
+regex [:graph:]	0dd6	0dd6
+regex [:graph:]	0dd8	0ddf
+regex [:graph:]	0de6	0def
+regex [:graph:]	0df2	0df4
+regex [:graph:]	0e01	0e3a
+regex [:graph:]	0e3f	0e5b
+regex [:graph:]	0e81	0e82
+regex [:graph:]	0e84	0e84
+regex [:graph:]	0e87	0e88
+regex [:graph:]	0e8a	0e8a
+regex [:graph:]	0e8d	0e8d
+regex [:graph:]	0e94	0e97
+regex [:graph:]	0e99	0e9f
+regex [:graph:]	0ea1	0ea3
+regex [:graph:]	0ea5	0ea5
+regex [:graph:]	0ea7	0ea7
+regex [:graph:]	0eaa	0eab
+regex [:graph:]	0ead	0eb9
+regex [:graph:]	0ebb	0ebd
+regex [:graph:]	0ec0	0ec4
+regex [:graph:]	0ec6	0ec6
+regex [:graph:]	0ec8	0ecd
+regex [:graph:]	0ed0	0ed9
+regex [:graph:]	0edc	0edf
+regex [:graph:]	0f00	0f47
+regex [:graph:]	0f49	0f6c
+regex [:graph:]	0f71	0f97
+regex [:graph:]	0f99	0fbc
+regex [:graph:]	0fbe	0fcc
+regex [:graph:]	0fce	0fda
+regex [:graph:]	1000	10c5
+regex [:graph:]	10c7	10c7
+regex [:graph:]	10cd	10cd
+regex [:graph:]	10d0	1248
+regex [:graph:]	124a	124d
+regex [:graph:]	1250	1256
+regex [:graph:]	1258	1258
+regex [:graph:]	125a	125d
+regex [:graph:]	1260	1288
+regex [:graph:]	128a	128d
+regex [:graph:]	1290	12b0
+regex [:graph:]	12b2	12b5
+regex [:graph:]	12b8	12be
+regex [:graph:]	12c0	12c0
+regex [:graph:]	12c2	12c5
+regex [:graph:]	12c8	12d6
+regex [:graph:]	12d8	1310
+regex [:graph:]	1312	1315
+regex [:graph:]	1318	135a
+regex [:graph:]	135d	137c
+regex [:graph:]	1380	1399
+regex [:graph:]	13a0	13f4
+regex [:graph:]	1400	167f
+regex [:graph:]	1681	169c
+regex [:graph:]	16a0	16f8
+regex [:graph:]	1700	170c
+regex [:graph:]	170e	1714
+regex [:graph:]	1720	1736
+regex [:graph:]	1740	1753
+regex [:graph:]	1760	176c
+regex [:graph:]	176e	1770
+regex [:graph:]	1772	1773
+regex [:graph:]	1780	17dd
+regex [:graph:]	17e0	17e9
+regex [:graph:]	17f0	17f9
+regex [:graph:]	1800	180d
+regex [:graph:]	1810	1819
+regex [:graph:]	1820	1877
+regex [:graph:]	1880	18aa
+regex [:graph:]	18b0	18f5
+regex [:graph:]	1900	191e
+regex [:graph:]	1920	192b
+regex [:graph:]	1930	193b
+regex [:graph:]	1940	1940
+regex [:graph:]	1944	196d
+regex [:graph:]	1970	1974
+regex [:graph:]	1980	19ab
+regex [:graph:]	19b0	19c9
+regex [:graph:]	19d0	19da
+regex [:graph:]	19de	1a1b
+regex [:graph:]	1a1e	1a5e
+regex [:graph:]	1a60	1a7c
+regex [:graph:]	1a7f	1a89
+regex [:graph:]	1a90	1a99
+regex [:graph:]	1aa0	1aad
+regex [:graph:]	1ab0	1abe
+regex [:graph:]	1b00	1b4b
+regex [:graph:]	1b50	1b7c
+regex [:graph:]	1b80	1bf3
+regex [:graph:]	1bfc	1c37
+regex [:graph:]	1c3b	1c49
+regex [:graph:]	1c4d	1c7f
+regex [:graph:]	1cc0	1cc7
+regex [:graph:]	1cd0	1cf6
+regex [:graph:]	1cf8	1cf9
+regex [:graph:]	1d00	1df5
+regex [:graph:]	1dfc	1f15
+regex [:graph:]	1f18	1f1d
+regex [:graph:]	1f20	1f45
+regex [:graph:]	1f48	1f4d
+regex [:graph:]	1f50	1f57
+regex [:graph:]	1f59	1f59
+regex [:graph:]	1f5b	1f5b
+regex [:graph:]	1f5d	1f5d
+regex [:graph:]	1f5f	1f7d
+regex [:graph:]	1f80	1fb4
+regex [:graph:]	1fb6	1fc4
+regex [:graph:]	1fc6	1fd3
+regex [:graph:]	1fd6	1fdb
+regex [:graph:]	1fdd	1fef
+regex [:graph:]	1ff2	1ff4
+regex [:graph:]	1ff6	1ffe
+regex [:graph:]	200b	2027
+regex [:graph:]	202a	202e
+regex [:graph:]	2030	205e
+regex [:graph:]	2060	2064
+regex [:graph:]	206a	2071
+regex [:graph:]	2074	208e
+regex [:graph:]	2090	209c
+regex [:graph:]	20a0	20bd
+regex [:graph:]	20d0	20f0
+regex [:graph:]	2100	2189
+regex [:graph:]	2190	23fa
+regex [:graph:]	2400	2426
+regex [:graph:]	2440	244a
+regex [:graph:]	2460	2b73
+regex [:graph:]	2b76	2b95
+regex [:graph:]	2b98	2bb9
+regex [:graph:]	2bbd	2bc8
+regex [:graph:]	2bca	2bd1
+regex [:graph:]	2c00	2c2e
+regex [:graph:]	2c30	2c5e
+regex [:graph:]	2c60	2cf3
+regex [:graph:]	2cf9	2d25
+regex [:graph:]	2d27	2d27
+regex [:graph:]	2d2d	2d2d
+regex [:graph:]	2d30	2d67
+regex [:graph:]	2d6f	2d70
+regex [:graph:]	2d7f	2d96
+regex [:graph:]	2da0	2da6
+regex [:graph:]	2da8	2dae
+regex [:graph:]	2db0	2db6
+regex [:graph:]	2db8	2dbe
+regex [:graph:]	2dc0	2dc6
+regex [:graph:]	2dc8	2dce
+regex [:graph:]	2dd0	2dd6
+regex [:graph:]	2dd8	2dde
+regex [:graph:]	2de0	2e42
+regex [:graph:]	2e80	2e99
+regex [:graph:]	2e9b	2ef3
+regex [:graph:]	2f00	2fd5
+regex [:graph:]	2ff0	2ffb
+regex [:graph:]	3001	303f
+regex [:graph:]	3041	3096
+regex [:graph:]	3099	30ff
+regex [:graph:]	3105	312d
+regex [:graph:]	3131	318e
+regex [:graph:]	3190	31ba
+regex [:graph:]	31c0	31e3
+regex [:graph:]	31f0	321e
+regex [:graph:]	3220	32fe
+regex [:graph:]	3300	4db5
+regex [:graph:]	4dc0	9fcc
+regex [:graph:]	a000	a48c
+regex [:graph:]	a490	a4c6
+regex [:graph:]	a4d0	a62b
+regex [:graph:]	a640	a69d
+regex [:graph:]	a69f	a6f7
+regex [:graph:]	a700	a78e
+regex [:graph:]	a790	a7ad
+regex [:graph:]	a7b0	a7b1
+regex [:graph:]	a7f7	a82b
+regex [:graph:]	a830	a839
+regex [:graph:]	a840	a877
+regex [:graph:]	a880	a8c4
+regex [:graph:]	a8ce	a8d9
+regex [:graph:]	a8e0	a8fb
+regex [:graph:]	a900	a953
+regex [:graph:]	a95f	a97c
+regex [:graph:]	a980	a9cd
+regex [:graph:]	a9cf	a9d9
+regex [:graph:]	a9de	a9fe
+regex [:graph:]	aa00	aa36
+regex [:graph:]	aa40	aa4d
+regex [:graph:]	aa50	aa59
+regex [:graph:]	aa5c	aac2
+regex [:graph:]	aadb	aaf6
+regex [:graph:]	ab01	ab06
+regex [:graph:]	ab09	ab0e
+regex [:graph:]	ab11	ab16
+regex [:graph:]	ab20	ab26
+regex [:graph:]	ab28	ab2e
+regex [:graph:]	ab30	ab5f
+regex [:graph:]	ab64	ab65
+regex [:graph:]	abc0	abed
+regex [:graph:]	abf0	abf9
+regex [:graph:]	ac00	d7a3
+regex [:graph:]	d7b0	d7c6
+regex [:graph:]	d7cb	d7fb
+regex [:graph:]	f6b2	f6b5
+regex [:graph:]	f6b7	f6b7
+regex [:graph:]	f6b9	f6bc
+regex [:graph:]	f6be	f6bf
+regex [:graph:]	f6c1	f700
+regex [:graph:]	f730	f731
+regex [:graph:]	f770	f770
+regex [:graph:]	f772	f773
+regex [:graph:]	f776	f776
+regex [:graph:]	f779	f77a
+regex [:graph:]	f77d	f780
+regex [:graph:]	f782	f78b
+regex [:graph:]	f78d	f790
+regex [:graph:]	f793	f79a
+regex [:graph:]	f79c	f7a2
+regex [:graph:]	f7a4	f7bd
+regex [:graph:]	f800	f844
+regex [:graph:]	f846	f84c
+regex [:graph:]	f854	f86c
+regex [:graph:]	f874	f875
+regex [:graph:]	f878	f879
+regex [:graph:]	f87d	f886
+regex [:graph:]	f88a	f88a
+regex [:graph:]	f900	fa6d
+regex [:graph:]	fa70	fad9
+regex [:graph:]	fb00	fb06
+regex [:graph:]	fb13	fb17
+regex [:graph:]	fb1d	fb36
+regex [:graph:]	fb38	fb3c
+regex [:graph:]	fb3e	fb3e
+regex [:graph:]	fb40	fb41
+regex [:graph:]	fb43	fb44
+regex [:graph:]	fb46	fbc1
+regex [:graph:]	fbd3	fd3f
+regex [:graph:]	fd50	fd8f
+regex [:graph:]	fd92	fdc7
+regex [:graph:]	fdf0	fdfd
+regex [:graph:]	fe00	fe19
+regex [:graph:]	fe20	fe2d
+regex [:graph:]	fe30	fe52
+regex [:graph:]	fe54	fe66
+regex [:graph:]	fe68	fe6b
+regex [:graph:]	fe70	fe74
+regex [:graph:]	fe76	fefc
+regex [:graph:]	feff	feff
+regex [:graph:]	ff01	ffbe
+regex [:graph:]	ffc2	ffc7
+regex [:graph:]	ffca	ffcf
+regex [:graph:]	ffd2	ffd7
+regex [:graph:]	ffda	ffdc
+regex [:graph:]	ffe0	ffe6
+regex [:graph:]	ffe8	ffee
+regex [:graph:]	fff9	fffd
+regex [:graph:]	10000	1000b
+regex [:graph:]	1000d	10026
+regex [:graph:]	10028	1003a
+regex [:graph:]	1003c	1003d
+regex [:graph:]	1003f	1004d
+regex [:graph:]	10050	1005d
+regex [:graph:]	10080	100fa
+regex [:graph:]	10100	10102
+regex [:graph:]	10107	10133
+regex [:graph:]	10137	1018c
+regex [:graph:]	10190	1019b
+regex [:graph:]	101a0	101a0
+regex [:graph:]	101d0	101fd
+regex [:graph:]	10280	1029c
+regex [:graph:]	102a0	102d0
+regex [:graph:]	102e0	102fb
+regex [:graph:]	10300	10323
+regex [:graph:]	10330	1034a
+regex [:graph:]	10350	1037a
+regex [:graph:]	10380	1039d
+regex [:graph:]	1039f	103c3
+regex [:graph:]	103c8	103d5
+regex [:graph:]	10400	1049d
+regex [:graph:]	104a0	104a9
+regex [:graph:]	10500	10527
+regex [:graph:]	10530	10563
+regex [:graph:]	1056f	1056f
+regex [:graph:]	10600	10736
+regex [:graph:]	10740	10755
+regex [:graph:]	10760	10767
+regex [:graph:]	10800	10805
+regex [:graph:]	10808	10808
+regex [:graph:]	1080a	10835
+regex [:graph:]	10837	10838
+regex [:graph:]	1083c	1083c
+regex [:graph:]	1083f	10855
+regex [:graph:]	10857	1089e
+regex [:graph:]	108a7	108af
+regex [:graph:]	10900	1091b
+regex [:graph:]	1091f	10939
+regex [:graph:]	1093f	1093f
+regex [:graph:]	10980	109b7
+regex [:graph:]	109be	109bf
+regex [:graph:]	10a00	10a03
+regex [:graph:]	10a05	10a06
+regex [:graph:]	10a0c	10a13
+regex [:graph:]	10a15	10a17
+regex [:graph:]	10a19	10a33
+regex [:graph:]	10a38	10a3a
+regex [:graph:]	10a3f	10a47
+regex [:graph:]	10a50	10a58
+regex [:graph:]	10a60	10a9f
+regex [:graph:]	10ac0	10ae6
+regex [:graph:]	10aeb	10af6
+regex [:graph:]	10b00	10b35
+regex [:graph:]	10b39	10b55
+regex [:graph:]	10b58	10b72
+regex [:graph:]	10b78	10b91
+regex [:graph:]	10b99	10b9c
+regex [:graph:]	10ba9	10baf
+regex [:graph:]	10c00	10c48
+regex [:graph:]	10e60	10e7e
+regex [:graph:]	11000	1104d
+regex [:graph:]	11052	1106f
+regex [:graph:]	1107f	110c1
+regex [:graph:]	110d0	110e8
+regex [:graph:]	110f0	110f9
+regex [:graph:]	11100	11134
+regex [:graph:]	11136	11143
+regex [:graph:]	11150	11176
+regex [:graph:]	11180	111c8
+regex [:graph:]	111cd	111cd
+regex [:graph:]	111d0	111da
+regex [:graph:]	111e1	111f4
+regex [:graph:]	11200	11211
+regex [:graph:]	11213	1123d
+regex [:graph:]	112b0	112ea
+regex [:graph:]	112f0	112f9
+regex [:graph:]	11301	11303
+regex [:graph:]	11305	1130c
+regex [:graph:]	1130f	11310
+regex [:graph:]	11313	11328
+regex [:graph:]	1132a	11330
+regex [:graph:]	11332	11333
+regex [:graph:]	11335	11339
+regex [:graph:]	1133c	11344
+regex [:graph:]	11347	11348
+regex [:graph:]	1134b	1134d
+regex [:graph:]	11357	11357
+regex [:graph:]	1135d	11363
+regex [:graph:]	11366	1136c
+regex [:graph:]	11370	11374
+regex [:graph:]	11480	114c7
+regex [:graph:]	114d0	114d9
+regex [:graph:]	11580	115b5
+regex [:graph:]	115b8	115c9
+regex [:graph:]	11600	11644
+regex [:graph:]	11650	11659
+regex [:graph:]	11680	116b7
+regex [:graph:]	116c0	116c9
+regex [:graph:]	118a0	118f2
+regex [:graph:]	118ff	118ff
+regex [:graph:]	11ac0	11af8
+regex [:graph:]	12000	12398
+regex [:graph:]	12400	1246e
+regex [:graph:]	12470	12474
+regex [:graph:]	13000	1342e
+regex [:graph:]	16800	16a38
+regex [:graph:]	16a40	16a5e
+regex [:graph:]	16a60	16a69
+regex [:graph:]	16a6e	16a6f
+regex [:graph:]	16ad0	16aed
+regex [:graph:]	16af0	16af5
+regex [:graph:]	16b00	16b45
+regex [:graph:]	16b50	16b59
+regex [:graph:]	16b5b	16b61
+regex [:graph:]	16b63	16b77
+regex [:graph:]	16b7d	16b8f
+regex [:graph:]	16f00	16f44
+regex [:graph:]	16f50	16f7e
+regex [:graph:]	16f8f	16f9f
+regex [:graph:]	1b000	1b001
+regex [:graph:]	1bc00	1bc6a
+regex [:graph:]	1bc70	1bc7c
+regex [:graph:]	1bc80	1bc88
+regex [:graph:]	1bc90	1bc99
+regex [:graph:]	1bc9c	1bca3
+regex [:graph:]	1d000	1d0f5
+regex [:graph:]	1d100	1d126
+regex [:graph:]	1d129	1d1dd
+regex [:graph:]	1d200	1d245
+regex [:graph:]	1d300	1d356
+regex [:graph:]	1d360	1d371
+regex [:graph:]	1d400	1d454
+regex [:graph:]	1d456	1d49c
+regex [:graph:]	1d49e	1d49f
+regex [:graph:]	1d4a2	1d4a2
+regex [:graph:]	1d4a5	1d4a6
+regex [:graph:]	1d4a9	1d4ac
+regex [:graph:]	1d4ae	1d4b9
+regex [:graph:]	1d4bb	1d4bb
+regex [:graph:]	1d4bd	1d4c3
+regex [:graph:]	1d4c5	1d505
+regex [:graph:]	1d507	1d50a
+regex [:graph:]	1d50d	1d514
+regex [:graph:]	1d516	1d51c
+regex [:graph:]	1d51e	1d539
+regex [:graph:]	1d53b	1d53e
+regex [:graph:]	1d540	1d544
+regex [:graph:]	1d546	1d546
+regex [:graph:]	1d54a	1d550
+regex [:graph:]	1d552	1d6a5
+regex [:graph:]	1d6a8	1d7cb
+regex [:graph:]	1d7ce	1d7ff
+regex [:graph:]	1e800	1e8c4
+regex [:graph:]	1e8c7	1e8d6
+regex [:graph:]	1ee00	1ee03
+regex [:graph:]	1ee05	1ee1f
+regex [:graph:]	1ee21	1ee22
+regex [:graph:]	1ee24	1ee24
+regex [:graph:]	1ee27	1ee27
+regex [:graph:]	1ee29	1ee32
+regex [:graph:]	1ee34	1ee37
+regex [:graph:]	1ee39	1ee39
+regex [:graph:]	1ee3b	1ee3b
+regex [:graph:]	1ee42	1ee42
+regex [:graph:]	1ee47	1ee47
+regex [:graph:]	1ee49	1ee49
+regex [:graph:]	1ee4b	1ee4b
+regex [:graph:]	1ee4d	1ee4f
+regex [:graph:]	1ee51	1ee52
+regex [:graph:]	1ee54	1ee54
+regex [:graph:]	1ee57	1ee57
+regex [:graph:]	1ee59	1ee59
+regex [:graph:]	1ee5b	1ee5b
+regex [:graph:]	1ee5d	1ee5d
+regex [:graph:]	1ee5f	1ee5f
+regex [:graph:]	1ee61	1ee62
+regex [:graph:]	1ee64	1ee64
+regex [:graph:]	1ee67	1ee6a
+regex [:graph:]	1ee6c	1ee72
+regex [:graph:]	1ee74	1ee77
+regex [:graph:]	1ee79	1ee7c
+regex [:graph:]	1ee7e	1ee7e
+regex [:graph:]	1ee80	1ee89
+regex [:graph:]	1ee8b	1ee9b
+regex [:graph:]	1eea1	1eea3
+regex [:graph:]	1eea5	1eea9
+regex [:graph:]	1eeab	1eebb
+regex [:graph:]	1eef0	1eef1
+regex [:graph:]	1f000	1f02b
+regex [:graph:]	1f030	1f093
+regex [:graph:]	1f0a0	1f0ae
+regex [:graph:]	1f0b1	1f0bf
+regex [:graph:]	1f0c1	1f0cf
+regex [:graph:]	1f0d1	1f0f5
+regex [:graph:]	1f100	1f10c
+regex [:graph:]	1f110	1f12e
+regex [:graph:]	1f130	1f16b
+regex [:graph:]	1f170	1f19a
+regex [:graph:]	1f1e6	1f202
+regex [:graph:]	1f210	1f23a
+regex [:graph:]	1f240	1f248
+regex [:graph:]	1f250	1f251
+regex [:graph:]	1f300	1f32c
+regex [:graph:]	1f330	1f37d
+regex [:graph:]	1f380	1f3ce
+regex [:graph:]	1f3d4	1f3f7
+regex [:graph:]	1f400	1f4fe
+regex [:graph:]	1f500	1f54a
+regex [:graph:]	1f550	1f579
+regex [:graph:]	1f57b	1f5a3
+regex [:graph:]	1f5a5	1f642
+regex [:graph:]	1f645	1f6cf
+regex [:graph:]	1f6e0	1f6ec
+regex [:graph:]	1f6f0	1f6f3
+regex [:graph:]	1f700	1f773
+regex [:graph:]	1f780	1f7d4
+regex [:graph:]	1f800	1f80b
+regex [:graph:]	1f810	1f847
+regex [:graph:]	1f850	1f859
+regex [:graph:]	1f860	1f887
+regex [:graph:]	1f890	1f8ad
+regex [:graph:]	20000	2a6d6
+regex [:graph:]	2a700	2b734
+regex [:graph:]	2b740	2b81d
+regex [:graph:]	2f800	2fa1d
+regex [:graph:]	e0001	e0001
+regex [:graph:]	e0020	e007f
+regex [:graph:]	e0100	e01ef
+regex [:word:]	0030	0039
+regex [:word:]	0041	005a
+regex [:word:]	005f	005f
+regex [:word:]	0061	007a
+regex [:word:]	00aa	00aa
+regex [:word:]	00b2	00b3
+regex [:word:]	00b5	00b5
+regex [:word:]	00b9	00ba
+regex [:word:]	00bc	00be
+regex [:word:]	00c0	00d6
+regex [:word:]	00d8	00f6
+regex [:word:]	00f8	02c1
+regex [:word:]	02c6	02d1
+regex [:word:]	02e0	02e4
+regex [:word:]	02ec	02ec
+regex [:word:]	02ee	02ee
+regex [:word:]	0370	0374
+regex [:word:]	0376	0377
+regex [:word:]	037a	037d
+regex [:word:]	037f	037f
+regex [:word:]	0386	0386
+regex [:word:]	0388	038a
+regex [:word:]	038c	038c
+regex [:word:]	038e	03a1
+regex [:word:]	03a3	03f5
+regex [:word:]	03f7	0481
+regex [:word:]	048a	052f
+regex [:word:]	0531	0556
+regex [:word:]	0559	0559
+regex [:word:]	0561	0587
+regex [:word:]	05d0	05ea
+regex [:word:]	05f0	05f2
+regex [:word:]	0620	064a
+regex [:word:]	0660	0669
+regex [:word:]	066e	066f
+regex [:word:]	0671	06d3
+regex [:word:]	06d5	06d5
+regex [:word:]	06e5	06e6
+regex [:word:]	06ee	06fc
+regex [:word:]	06ff	06ff
+regex [:word:]	0710	0710
+regex [:word:]	0712	072f
+regex [:word:]	074d	07a5
+regex [:word:]	07b1	07b1
+regex [:word:]	07c0	07ea
+regex [:word:]	07f4	07f5
+regex [:word:]	07fa	07fa
+regex [:word:]	0800	0815
+regex [:word:]	081a	081a
+regex [:word:]	0824	0824
+regex [:word:]	0828	0828
+regex [:word:]	0840	0858
+regex [:word:]	08a0	08b2
+regex [:word:]	0904	0939
+regex [:word:]	093d	093d
+regex [:word:]	0950	0950
+regex [:word:]	0958	0961
+regex [:word:]	0966	096f
+regex [:word:]	0971	0980
+regex [:word:]	0985	098c
+regex [:word:]	098f	0990
+regex [:word:]	0993	09a8
+regex [:word:]	09aa	09b0
+regex [:word:]	09b2	09b2
+regex [:word:]	09b6	09b9
+regex [:word:]	09bd	09bd
+regex [:word:]	09ce	09ce
+regex [:word:]	09dc	09dd
+regex [:word:]	09df	09e1
+regex [:word:]	09e6	09f1
+regex [:word:]	09f4	09f9
+regex [:word:]	0a05	0a0a
+regex [:word:]	0a0f	0a10
+regex [:word:]	0a13	0a28
+regex [:word:]	0a2a	0a30
+regex [:word:]	0a32	0a33
+regex [:word:]	0a35	0a36
+regex [:word:]	0a38	0a39
+regex [:word:]	0a59	0a5c
+regex [:word:]	0a5e	0a5e
+regex [:word:]	0a66	0a6f
+regex [:word:]	0a72	0a74
+regex [:word:]	0a85	0a8d
+regex [:word:]	0a8f	0a91
+regex [:word:]	0a93	0aa8
+regex [:word:]	0aaa	0ab0
+regex [:word:]	0ab2	0ab3
+regex [:word:]	0ab5	0ab9
+regex [:word:]	0abd	0abd
+regex [:word:]	0ad0	0ad0
+regex [:word:]	0ae0	0ae1
+regex [:word:]	0ae6	0aef
+regex [:word:]	0b05	0b0c
+regex [:word:]	0b0f	0b10
+regex [:word:]	0b13	0b28
+regex [:word:]	0b2a	0b30
+regex [:word:]	0b32	0b33
+regex [:word:]	0b35	0b39
+regex [:word:]	0b3d	0b3d
+regex [:word:]	0b5c	0b5d
+regex [:word:]	0b5f	0b61
+regex [:word:]	0b66	0b6f
+regex [:word:]	0b71	0b77
+regex [:word:]	0b83	0b83
+regex [:word:]	0b85	0b8a
+regex [:word:]	0b8e	0b90
+regex [:word:]	0b92	0b95
+regex [:word:]	0b99	0b9a
+regex [:word:]	0b9c	0b9c
+regex [:word:]	0b9e	0b9f
+regex [:word:]	0ba3	0ba4
+regex [:word:]	0ba8	0baa
+regex [:word:]	0bae	0bb9
+regex [:word:]	0bd0	0bd0
+regex [:word:]	0be6	0bf2
+regex [:word:]	0c05	0c0c
+regex [:word:]	0c0e	0c10
+regex [:word:]	0c12	0c28
+regex [:word:]	0c2a	0c39
+regex [:word:]	0c3d	0c3d
+regex [:word:]	0c58	0c59
+regex [:word:]	0c60	0c61
+regex [:word:]	0c66	0c6f
+regex [:word:]	0c78	0c7e
+regex [:word:]	0c85	0c8c
+regex [:word:]	0c8e	0c90
+regex [:word:]	0c92	0ca8
+regex [:word:]	0caa	0cb3
+regex [:word:]	0cb5	0cb9
+regex [:word:]	0cbd	0cbd
+regex [:word:]	0cde	0cde
+regex [:word:]	0ce0	0ce1
+regex [:word:]	0ce6	0cef
+regex [:word:]	0cf1	0cf2
+regex [:word:]	0d05	0d0c
+regex [:word:]	0d0e	0d10
+regex [:word:]	0d12	0d3a
+regex [:word:]	0d3d	0d3d
+regex [:word:]	0d4e	0d4e
+regex [:word:]	0d60	0d61
+regex [:word:]	0d66	0d75
+regex [:word:]	0d7a	0d7f
+regex [:word:]	0d85	0d96
+regex [:word:]	0d9a	0db1
+regex [:word:]	0db3	0dbb
+regex [:word:]	0dbd	0dbd
+regex [:word:]	0dc0	0dc6
+regex [:word:]	0de6	0def
+regex [:word:]	0e01	0e30
+regex [:word:]	0e32	0e33
+regex [:word:]	0e40	0e46
+regex [:word:]	0e50	0e59
+regex [:word:]	0e81	0e82
+regex [:word:]	0e84	0e84
+regex [:word:]	0e87	0e88
+regex [:word:]	0e8a	0e8a
+regex [:word:]	0e8d	0e8d
+regex [:word:]	0e94	0e97
+regex [:word:]	0e99	0e9f
+regex [:word:]	0ea1	0ea3
+regex [:word:]	0ea5	0ea5
+regex [:word:]	0ea7	0ea7
+regex [:word:]	0eaa	0eab
+regex [:word:]	0ead	0eb0
+regex [:word:]	0eb2	0eb3
+regex [:word:]	0ebd	0ebd
+regex [:word:]	0ec0	0ec4
+regex [:word:]	0ec6	0ec6
+regex [:word:]	0ed0	0ed9
+regex [:word:]	0edc	0edf
+regex [:word:]	0f00	0f00
+regex [:word:]	0f20	0f33
+regex [:word:]	0f40	0f47
+regex [:word:]	0f49	0f6c
+regex [:word:]	0f88	0f8c
+regex [:word:]	1000	102a
+regex [:word:]	103f	1049
+regex [:word:]	1050	1055
+regex [:word:]	105a	105d
+regex [:word:]	1061	1061
+regex [:word:]	1065	1066
+regex [:word:]	106e	1070
+regex [:word:]	1075	1081
+regex [:word:]	108e	108e
+regex [:word:]	1090	1099
+regex [:word:]	10a0	10c5
+regex [:word:]	10c7	10c7
+regex [:word:]	10cd	10cd
+regex [:word:]	10d0	10fa
+regex [:word:]	10fc	1248
+regex [:word:]	124a	124d
+regex [:word:]	1250	1256
+regex [:word:]	1258	1258
+regex [:word:]	125a	125d
+regex [:word:]	1260	1288
+regex [:word:]	128a	128d
+regex [:word:]	1290	12b0
+regex [:word:]	12b2	12b5
+regex [:word:]	12b8	12be
+regex [:word:]	12c0	12c0
+regex [:word:]	12c2	12c5
+regex [:word:]	12c8	12d6
+regex [:word:]	12d8	1310
+regex [:word:]	1312	1315
+regex [:word:]	1318	135a
+regex [:word:]	1369	137c
+regex [:word:]	1380	138f
+regex [:word:]	13a0	13f4
+regex [:word:]	1401	166c
+regex [:word:]	166f	167f
+regex [:word:]	1681	169a
+regex [:word:]	16a0	16ea
+regex [:word:]	16ee	16f8
+regex [:word:]	1700	170c
+regex [:word:]	170e	1711
+regex [:word:]	1720	1731
+regex [:word:]	1740	1751
+regex [:word:]	1760	176c
+regex [:word:]	176e	1770
+regex [:word:]	1780	17b3
+regex [:word:]	17d7	17d7
+regex [:word:]	17dc	17dc
+regex [:word:]	17e0	17e9
+regex [:word:]	17f0	17f9
+regex [:word:]	1810	1819
+regex [:word:]	1820	1877
+regex [:word:]	1880	18a8
+regex [:word:]	18aa	18aa
+regex [:word:]	18b0	18f5
+regex [:word:]	1900	191e
+regex [:word:]	1946	196d
+regex [:word:]	1970	1974
+regex [:word:]	1980	19ab
+regex [:word:]	19c1	19c7
+regex [:word:]	19d0	19da
+regex [:word:]	1a00	1a16
+regex [:word:]	1a20	1a54
+regex [:word:]	1a80	1a89
+regex [:word:]	1a90	1a99
+regex [:word:]	1aa7	1aa7
+regex [:word:]	1b05	1b33
+regex [:word:]	1b45	1b4b
+regex [:word:]	1b50	1b59
+regex [:word:]	1b83	1ba0
+regex [:word:]	1bae	1be5
+regex [:word:]	1c00	1c23
+regex [:word:]	1c40	1c49
+regex [:word:]	1c4d	1c7d
+regex [:word:]	1ce9	1cec
+regex [:word:]	1cee	1cf1
+regex [:word:]	1cf5	1cf6
+regex [:word:]	1d00	1dbf
+regex [:word:]	1e00	1f15
+regex [:word:]	1f18	1f1d
+regex [:word:]	1f20	1f45
+regex [:word:]	1f48	1f4d
+regex [:word:]	1f50	1f57
+regex [:word:]	1f59	1f59
+regex [:word:]	1f5b	1f5b
+regex [:word:]	1f5d	1f5d
+regex [:word:]	1f5f	1f7d
+regex [:word:]	1f80	1fb4
+regex [:word:]	1fb6	1fbc
+regex [:word:]	1fbe	1fbe
+regex [:word:]	1fc2	1fc4
+regex [:word:]	1fc6	1fcc
+regex [:word:]	1fd0	1fd3
+regex [:word:]	1fd6	1fdb
+regex [:word:]	1fe0	1fec
+regex [:word:]	1ff2	1ff4
+regex [:word:]	1ff6	1ffc
+regex [:word:]	2070	2071
+regex [:word:]	2074	2079
+regex [:word:]	207f	2089
+regex [:word:]	2090	209c
+regex [:word:]	2102	2102
+regex [:word:]	2107	2107
+regex [:word:]	210a	210e
+regex [:word:]	2110	2113
+regex [:word:]	2115	2115
+regex [:word:]	2119	211d
+regex [:word:]	2124	2124
+regex [:word:]	2126	2126
+regex [:word:]	2128	2128
+regex [:word:]	212a	212a
+regex [:word:]	212c	212d
+regex [:word:]	212f	2139
+regex [:word:]	213c	213f
+regex [:word:]	2145	2149
+regex [:word:]	214e	214e
+regex [:word:]	2150	2189
+regex [:word:]	2460	249b
+regex [:word:]	24ea	24ff
+regex [:word:]	2776	2793
+regex [:word:]	2c00	2c2e
+regex [:word:]	2c30	2c5e
+regex [:word:]	2c60	2ce4
+regex [:word:]	2ceb	2cee
+regex [:word:]	2cf2	2cf3
+regex [:word:]	2cfd	2cfd
+regex [:word:]	2d00	2d25
+regex [:word:]	2d27	2d27
+regex [:word:]	2d2d	2d2d
+regex [:word:]	2d30	2d67
+regex [:word:]	2d6f	2d6f
+regex [:word:]	2d80	2d96
+regex [:word:]	2da0	2da6
+regex [:word:]	2da8	2dae
+regex [:word:]	2db0	2db6
+regex [:word:]	2db8	2dbe
+regex [:word:]	2dc0	2dc6
+regex [:word:]	2dc8	2dce
+regex [:word:]	2dd0	2dd6
+regex [:word:]	2dd8	2dde
+regex [:word:]	2e2f	2e2f
+regex [:word:]	3005	3007
+regex [:word:]	3021	3029
+regex [:word:]	3031	3035
+regex [:word:]	3038	303c
+regex [:word:]	3041	3096
+regex [:word:]	309d	309f
+regex [:word:]	30a1	30fa
+regex [:word:]	30fc	30ff
+regex [:word:]	3105	312d
+regex [:word:]	3131	318e
+regex [:word:]	3192	3195
+regex [:word:]	31a0	31ba
+regex [:word:]	31f0	31ff
+regex [:word:]	3220	3229
+regex [:word:]	3248	324f
+regex [:word:]	3251	325f
+regex [:word:]	3280	3289
+regex [:word:]	32b1	32bf
+regex [:word:]	3400	4db5
+regex [:word:]	4e00	9fcc
+regex [:word:]	a000	a48c
+regex [:word:]	a4d0	a4fd
+regex [:word:]	a500	a60c
+regex [:word:]	a610	a62b
+regex [:word:]	a640	a66e
+regex [:word:]	a67f	a69d
+regex [:word:]	a6a0	a6ef
+regex [:word:]	a717	a71f
+regex [:word:]	a722	a788
+regex [:word:]	a78b	a78e
+regex [:word:]	a790	a7ad
+regex [:word:]	a7b0	a7b1
+regex [:word:]	a7f7	a801
+regex [:word:]	a803	a805
+regex [:word:]	a807	a80a
+regex [:word:]	a80c	a822
+regex [:word:]	a830	a835
+regex [:word:]	a840	a873
+regex [:word:]	a882	a8b3
+regex [:word:]	a8d0	a8d9
+regex [:word:]	a8f2	a8f7
+regex [:word:]	a8fb	a8fb
+regex [:word:]	a900	a925
+regex [:word:]	a930	a946
+regex [:word:]	a960	a97c
+regex [:word:]	a984	a9b2
+regex [:word:]	a9cf	a9d9
+regex [:word:]	a9e0	a9e4
+regex [:word:]	a9e6	a9fe
+regex [:word:]	aa00	aa28
+regex [:word:]	aa40	aa42
+regex [:word:]	aa44	aa4b
+regex [:word:]	aa50	aa59
+regex [:word:]	aa60	aa76
+regex [:word:]	aa7a	aa7a
+regex [:word:]	aa7e	aaaf
+regex [:word:]	aab1	aab1
+regex [:word:]	aab5	aab6
+regex [:word:]	aab9	aabd
+regex [:word:]	aac0	aac0
+regex [:word:]	aac2	aac2
+regex [:word:]	aadb	aadd
+regex [:word:]	aae0	aaea
+regex [:word:]	aaf2	aaf4
+regex [:word:]	ab01	ab06
+regex [:word:]	ab09	ab0e
+regex [:word:]	ab11	ab16
+regex [:word:]	ab20	ab26
+regex [:word:]	ab28	ab2e
+regex [:word:]	ab30	ab5a
+regex [:word:]	ab5c	ab5f
+regex [:word:]	ab64	ab65
+regex [:word:]	abc0	abe2
+regex [:word:]	abf0	abf9
+regex [:word:]	ac00	d7a3
+regex [:word:]	d7b0	d7c6
+regex [:word:]	d7cb	d7fb
+regex [:word:]	f6b2	f6b5
+regex [:word:]	f6b7	f6b7
+regex [:word:]	f6b9	f6bc
+regex [:word:]	f6be	f6bf
+regex [:word:]	f6c1	f700
+regex [:word:]	f730	f731
+regex [:word:]	f770	f770
+regex [:word:]	f772	f773
+regex [:word:]	f776	f776
+regex [:word:]	f779	f77a
+regex [:word:]	f77d	f780
+regex [:word:]	f782	f78b
+regex [:word:]	f78d	f790
+regex [:word:]	f793	f79a
+regex [:word:]	f79c	f7a2
+regex [:word:]	f7a4	f7bd
+regex [:word:]	f800	f844
+regex [:word:]	f846	f84c
+regex [:word:]	f854	f86c
+regex [:word:]	f874	f875
+regex [:word:]	f878	f879
+regex [:word:]	f87d	f886
+regex [:word:]	f88a	f88a
+regex [:word:]	f900	fa6d
+regex [:word:]	fa70	fad9
+regex [:word:]	fb00	fb06
+regex [:word:]	fb13	fb17
+regex [:word:]	fb1d	fb1d
+regex [:word:]	fb1f	fb28
+regex [:word:]	fb2a	fb36
+regex [:word:]	fb38	fb3c
+regex [:word:]	fb3e	fb3e
+regex [:word:]	fb40	fb41
+regex [:word:]	fb43	fb44
+regex [:word:]	fb46	fbb1
+regex [:word:]	fbd3	fd3d
+regex [:word:]	fd50	fd8f
+regex [:word:]	fd92	fdc7
+regex [:word:]	fdf0	fdfb
+regex [:word:]	fe70	fe74
+regex [:word:]	fe76	fefc
+regex [:word:]	ff10	ff19
+regex [:word:]	ff21	ff3a
+regex [:word:]	ff41	ff5a
+regex [:word:]	ff66	ffbe
+regex [:word:]	ffc2	ffc7
+regex [:word:]	ffca	ffcf
+regex [:word:]	ffd2	ffd7
+regex [:word:]	ffda	ffdc
+regex [:word:]	10000	1000b
+regex [:word:]	1000d	10026
+regex [:word:]	10028	1003a
+regex [:word:]	1003c	1003d
+regex [:word:]	1003f	1004d
+regex [:word:]	10050	1005d
+regex [:word:]	10080	100fa
+regex [:word:]	10107	10133
+regex [:word:]	10140	10178
+regex [:word:]	1018a	1018b
+regex [:word:]	10280	1029c
+regex [:word:]	102a0	102d0
+regex [:word:]	102e1	102fb
+regex [:word:]	10300	10323
+regex [:word:]	10330	1034a
+regex [:word:]	10350	10375
+regex [:word:]	10380	1039d
+regex [:word:]	103a0	103c3
+regex [:word:]	103c8	103cf
+regex [:word:]	103d1	103d5
+regex [:word:]	10400	1049d
+regex [:word:]	104a0	104a9
+regex [:word:]	10500	10527
+regex [:word:]	10530	10563
+regex [:word:]	10600	10736
+regex [:word:]	10740	10755
+regex [:word:]	10760	10767
+regex [:word:]	10800	10805
+regex [:word:]	10808	10808
+regex [:word:]	1080a	10835
+regex [:word:]	10837	10838
+regex [:word:]	1083c	1083c
+regex [:word:]	1083f	10855
+regex [:word:]	10858	10876
+regex [:word:]	10879	1089e
+regex [:word:]	108a7	108af
+regex [:word:]	10900	1091b
+regex [:word:]	10920	10939
+regex [:word:]	10980	109b7
+regex [:word:]	109be	109bf
+regex [:word:]	10a00	10a00
+regex [:word:]	10a10	10a13
+regex [:word:]	10a15	10a17
+regex [:word:]	10a19	10a33
+regex [:word:]	10a40	10a47
+regex [:word:]	10a60	10a7e
+regex [:word:]	10a80	10a9f
+regex [:word:]	10ac0	10ac7
+regex [:word:]	10ac9	10ae4
+regex [:word:]	10aeb	10aef
+regex [:word:]	10b00	10b35
+regex [:word:]	10b40	10b55
+regex [:word:]	10b58	10b72
+regex [:word:]	10b78	10b91
+regex [:word:]	10ba9	10baf
+regex [:word:]	10c00	10c48
+regex [:word:]	10e60	10e7e
+regex [:word:]	11003	11037
+regex [:word:]	11052	1106f
+regex [:word:]	11083	110af
+regex [:word:]	110d0	110e8
+regex [:word:]	110f0	110f9
+regex [:word:]	11103	11126
+regex [:word:]	11136	1113f
+regex [:word:]	11150	11172
+regex [:word:]	11176	11176
+regex [:word:]	11183	111b2
+regex [:word:]	111c1	111c4
+regex [:word:]	111d0	111da
+regex [:word:]	111e1	111f4
+regex [:word:]	11200	11211
+regex [:word:]	11213	1122b
+regex [:word:]	112b0	112de
+regex [:word:]	112f0	112f9
+regex [:word:]	11305	1130c
+regex [:word:]	1130f	11310
+regex [:word:]	11313	11328
+regex [:word:]	1132a	11330
+regex [:word:]	11332	11333
+regex [:word:]	11335	11339
+regex [:word:]	1133d	1133d
+regex [:word:]	1135d	11361
+regex [:word:]	11480	114af
+regex [:word:]	114c4	114c5
+regex [:word:]	114c7	114c7
+regex [:word:]	114d0	114d9
+regex [:word:]	11580	115ae
+regex [:word:]	11600	1162f
+regex [:word:]	11644	11644
+regex [:word:]	11650	11659
+regex [:word:]	11680	116aa
+regex [:word:]	116c0	116c9
+regex [:word:]	118a0	118f2
+regex [:word:]	118ff	118ff
+regex [:word:]	11ac0	11af8
+regex [:word:]	12000	12398
+regex [:word:]	12400	1246e
+regex [:word:]	13000	1342e
+regex [:word:]	16800	16a38
+regex [:word:]	16a40	16a5e
+regex [:word:]	16a60	16a69
+regex [:word:]	16ad0	16aed
+regex [:word:]	16b00	16b2f
+regex [:word:]	16b40	16b43
+regex [:word:]	16b50	16b59
+regex [:word:]	16b5b	16b61
+regex [:word:]	16b63	16b77
+regex [:word:]	16b7d	16b8f
+regex [:word:]	16f00	16f44
+regex [:word:]	16f50	16f50
+regex [:word:]	16f93	16f9f
+regex [:word:]	1b000	1b001
+regex [:word:]	1bc00	1bc6a
+regex [:word:]	1bc70	1bc7c
+regex [:word:]	1bc80	1bc88
+regex [:word:]	1bc90	1bc99
+regex [:word:]	1d360	1d371
+regex [:word:]	1d400	1d454
+regex [:word:]	1d456	1d49c
+regex [:word:]	1d49e	1d49f
+regex [:word:]	1d4a2	1d4a2
+regex [:word:]	1d4a5	1d4a6
+regex [:word:]	1d4a9	1d4ac
+regex [:word:]	1d4ae	1d4b9
+regex [:word:]	1d4bb	1d4bb
+regex [:word:]	1d4bd	1d4c3
+regex [:word:]	1d4c5	1d505
+regex [:word:]	1d507	1d50a
+regex [:word:]	1d50d	1d514
+regex [:word:]	1d516	1d51c
+regex [:word:]	1d51e	1d539
+regex [:word:]	1d53b	1d53e
+regex [:word:]	1d540	1d544
+regex [:word:]	1d546	1d546
+regex [:word:]	1d54a	1d550
+regex [:word:]	1d552	1d6a5
+regex [:word:]	1d6a8	1d6c0
+regex [:word:]	1d6c2	1d6da
+regex [:word:]	1d6dc	1d6fa
+regex [:word:]	1d6fc	1d714
+regex [:word:]	1d716	1d734
+regex [:word:]	1d736	1d74e
+regex [:word:]	1d750	1d76e
+regex [:word:]	1d770	1d788
+regex [:word:]	1d78a	1d7a8
+regex [:word:]	1d7aa	1d7c2
+regex [:word:]	1d7c4	1d7cb
+regex [:word:]	1d7ce	1d7ff
+regex [:word:]	1e800	1e8c4
+regex [:word:]	1e8c7	1e8cf
+regex [:word:]	1ee00	1ee03
+regex [:word:]	1ee05	1ee1f
+regex [:word:]	1ee21	1ee22
+regex [:word:]	1ee24	1ee24
+regex [:word:]	1ee27	1ee27
+regex [:word:]	1ee29	1ee32
+regex [:word:]	1ee34	1ee37
+regex [:word:]	1ee39	1ee39
+regex [:word:]	1ee3b	1ee3b
+regex [:word:]	1ee42	1ee42
+regex [:word:]	1ee47	1ee47
+regex [:word:]	1ee49	1ee49
+regex [:word:]	1ee4b	1ee4b
+regex [:word:]	1ee4d	1ee4f
+regex [:word:]	1ee51	1ee52
+regex [:word:]	1ee54	1ee54
+regex [:word:]	1ee57	1ee57
+regex [:word:]	1ee59	1ee59
+regex [:word:]	1ee5b	1ee5b
+regex [:word:]	1ee5d	1ee5d
+regex [:word:]	1ee5f	1ee5f
+regex [:word:]	1ee61	1ee62
+regex [:word:]	1ee64	1ee64
+regex [:word:]	1ee67	1ee6a
+regex [:word:]	1ee6c	1ee72
+regex [:word:]	1ee74	1ee77
+regex [:word:]	1ee79	1ee7c
+regex [:word:]	1ee7e	1ee7e
+regex [:word:]	1ee80	1ee89
+regex [:word:]	1ee8b	1ee9b
+regex [:word:]	1eea1	1eea3
+regex [:word:]	1eea5	1eea9
+regex [:word:]	1eeab	1eebb
+regex [:word:]	1f100	1f10c
+regex [:word:]	20000	2a6d6
+regex [:word:]	2a700	2b734
+regex [:word:]	2b740	2b81d
+regex [:word:]	2f800	2fa1d

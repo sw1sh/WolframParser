@@ -367,6 +367,25 @@ VerificationTest[
 ]
 
 VerificationTest[
+    With[{s = "aZ \:00e9\:05d0" <> FromCharacterCode[1635] <> ",;_\t"},
+        Map[Function[c, Parse[ParserCompile[ParseMany[ParseCharacter[c]]], s] === Parse[ParseMany[ParseCharacter[c]], s]],
+            {LetterCharacter, WhitespaceCharacter, PunctuationCharacter, HexadecimalCharacter, WordCharacter}]],
+    {True, True, True, True, True},
+    TestID -> "ParserCompile: a class string patterns name compiles to Wolfram 15's class, no fallback"
+]
+
+(* the character classes the paclet records, as runs of code points, in its WXF and TSV assets alike *)
+VerificationTest[
+    With[{runs = Wolfram`Parser`Private`characterClassRuns[],
+          tsv = Select[StringSplit[ReadString[FileNameJoin[{ParentDirectory[Wolfram`Parser`Private`$parserDirectory], "Assets", "CharacterClasses.tsv"}]], "\n"],
+            ! StringStartsQ[#, "#"] &]},
+        {Length[runs], Total[Length /@ runs] === Length[tsv],
+         Map[Function[r, {FromDigits[r[[2]], 16], FromDigits[r[[3]], 16]}], StringSplit[Select[tsv, StringStartsQ[#, "digit\t"] &], "\t"]] === Normal[runs["digit"]]}],
+    {24, True, True},
+    TestID -> "character classes: the WXF and TSV assets hold the same runs"
+]
+
+VerificationTest[
     {Parse[ParserCompile[ParseSome[ParseCharacter["a"]]], "aa"], Parse[ParserCompile[ParseSome[ParseCharacter["a" | "b"]]], "aab"],
      Parse[ParserCompile[ParseSome[ParseCharacter["a" | CharacterRange["0", "9"]]]], "a1a"]},
     {{"a", "a"}, {"a", "a", "b"}, {"a", "1", "a"}},
