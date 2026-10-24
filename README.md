@@ -61,7 +61,7 @@ deploys the paclet resource and publishes the documentation site, and
 WolframParser/
 |-- Parser/                         the paclet
 |   |-- PacletInfo.wl
-|   |-- Kernel/                     AST.wl EBNF.wl LaTeX.wl Markdown.wl Parser.wl TPTP.wl (+ Languages/)
+|   |-- Kernel/                     AST.wl EBNF.wl LaTeX.wl Markdown.wl Parser.wl TPTP.wl WolframLanguageReader.wl (+ Languages/)
 |   |-- Assets/                     hero.png, LaTeXMathParserCompiled.wxf
 |   |-- Tests/                      *.wlt, per subsystem
 |   `-- Documentation/English/      ref pages / guides / tutorials, built from docs/

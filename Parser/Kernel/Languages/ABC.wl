@@ -38,13 +38,15 @@ Begin["`Private`"]
 
 (* ABC.bnf holds the grammar of the specification 1.06 as published, in the classic BNF dialect
    EBNFParse reads: "::" arrows, quoted terminals, [...] for an optional part and
-   "a" | ... | "z" for a range of characters. *)
-ABCBNF = Import[FileNameJoin[{DirectoryName[$InputFileName], "ABC.bnf"}], "Text"];
+   "a" | ... | "z" for a range of characters. It is read at its first use, so loading the paclet
+   reads no file but its code. *)
+$abcDirectory = DirectoryName[$InputFileName];
+ABCBNF := ABCBNF = Import[FileNameJoin[{$abcDirectory, "ABC.bnf"}], "Text"];
 
 (* Read as a PEG, the published <Program> ends after its first line: the optional <NL> after a
    line takes every newline, and none is left for [<NL> Program]. With the two swapped the rule
    describes the same programs and reads them all. *)
-$abcPEGGrammar = StringReplace[ABCBNF,
+$abcPEGGrammar := $abcPEGGrammar = StringReplace[ABCBNF,
     "[<NL>] <Line> [<NL>] [<NL> Program]" -> "[<NL>] <Line> [<NL> Program] [<NL>]"];
 
 (* The specification: the space <SP> is required in <PrintOp> and ignored everywhere else, and a
@@ -132,8 +134,9 @@ ABCSemantic = <|
     "Program" -> Function[lines, lines]
 |>
 
-$astParser = ABCGrammar[abcAstAlgebra]
-$semParser = ABCGrammar[ABCSemantic]
+(* the parsers, built at their first use, as the grammar is read *)
+$astParser := $astParser = ABCGrammar[abcAstAlgebra]
+$semParser := $semParser = ABCGrammar[ABCSemantic]
 
 ABCAST[s_String] := With[{r = Parse[$astParser, s]},
     If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]]
