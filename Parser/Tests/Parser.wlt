@@ -357,6 +357,22 @@ VerificationTest[
     TestID -> "ParserCompile: compiled parser runs"
 ]
 
+(* a character test compiles to the test Parse makes: a character's code, a range, alternatives of
+   them, DigitCharacter as every decimal digit, not 0 to 9 alone *)
+VerificationTest[
+    With[{s = "12" <> FromCharacterCode[1635] <> FromCharacterCode[65297]},
+        {Parse[ParserCompile[ParseSome[ParseCharacter[DigitCharacter]]], s], Parse[ParseSome[ParseCharacter[DigitCharacter]], s]}],
+    {{"1", "2", "\:0663", "\:ff11"}, {"1", "2", "\:0663", "\:ff11"}},
+    TestID -> "ParserCompile: DigitCharacter is every decimal digit, as in Parse"
+]
+
+VerificationTest[
+    {Parse[ParserCompile[ParseSome[ParseCharacter["a"]]], "aa"], Parse[ParserCompile[ParseSome[ParseCharacter["a" | "b"]]], "aab"],
+     Parse[ParserCompile[ParseSome[ParseCharacter["a" | CharacterRange["0", "9"]]]], "a1a"]},
+    {{"a", "a"}, {"a", "a", "b"}, {"a", "1", "a"}},
+    TestID -> "ParserCompile: a character and alternatives of characters compile, no fallback"
+]
+
 VerificationTest[
     With[{p = ParseLiteral["a"] | ParseLiteral["b"]},
         {Parse[p, "a"], ParserCompile[p]["a"]}

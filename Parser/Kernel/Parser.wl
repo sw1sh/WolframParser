@@ -1483,22 +1483,28 @@ cgEmit[ParserCombinator["Character", pat_, _]] := With[{v = cgFreshV[]},
         cgSeq[cgSet[v, cgKF[cgStr, {"String"}, cgInertT][StringTake[cgInput, {cgPP, cgPP}]]], cgSet[cgPP, cgPP + 1]],
         cgSet[cgOK, False]], v}]
 
-(* native tests (DigitQ, ToCharacterCode ranges) inline to fast code; any
+(* native tests (character codes, code ranges) inline to fast code; any
    other class falls back to a KernelFunction wrapping the interpreter's
-   own charMatchesQ, so the compiled test matches Parse exactly. *)
-cgCharCond[pat_] := With[{t = cgCharTest[pat]}, Hold[cgPP <= StringLength[cgInput] && t]]
+   own charMatchesQ, so the compiled test matches Parse exactly. Each test
+   is built held: evaluated against the value-free cgInput and cgPP, a
+   character-code test would fold to a comparison of the character's string
+   with a number. DigitCharacter is every decimal digit: DigitQ inlines 0 to
+   9, and a character past ASCII asks charMatchesQ. *)
+cgCharCond[pat_] := Replace[cgCharTest[pat], Hold[t_] :> Hold[cgPP <= StringLength[cgInput] && t]]
 cgCharTest[pat_] := With[{nt = cgNativeCharTest[pat]},
     If[nt === $cgNoNative,
-        cgKF[(charMatchesQ[#, pat] &), {"String"}, "Boolean"][StringTake[cgInput, {cgPP, cgPP}]],
+        With[{k = cgKF[(charMatchesQ[#, pat] &), {"String"}, "Boolean"]}, Hold[k[StringTake[cgInput, {cgPP, cgPP}]]]],
         nt]]
-cgNativeCharTest[DigitCharacter] := DigitQ[StringTake[cgInput, {cgPP, cgPP}]]
+cgNativeCharTest[DigitCharacter] := With[{k = cgKF[(charMatchesQ[#, DigitCharacter] &), {"String"}, "Boolean"]},
+    Hold[DigitQ[StringTake[cgInput, {cgPP, cgPP}]] ||
+        (First[ToCharacterCode[StringTake[cgInput, {cgPP, cgPP}]]] > 127 && k[StringTake[cgInput, {cgPP, cgPP}]])]]
 cgNativeCharTest[s_String] /; StringLength[s] === 1 :=
-    With[{cc = First @ ToCharacterCode[s]}, First[ToCharacterCode[StringTake[cgInput, {cgPP, cgPP}]]] == cc]
+    With[{cc = First @ ToCharacterCode[s]}, Hold[First[ToCharacterCode[StringTake[cgInput, {cgPP, cgPP}]]] == cc]]
 cgNativeCharTest[HoldPattern[CharacterRange[a_String, b_String]]] :=
     With[{lo = First @ ToCharacterCode[a], hi = First @ ToCharacterCode[b]},
-        lo <= First[ToCharacterCode[StringTake[cgInput, {cgPP, cgPP}]]] <= hi]
+        Hold[lo <= First[ToCharacterCode[StringTake[cgInput, {cgPP, cgPP}]]] <= hi]]
 cgNativeCharTest[Verbatim[Alternatives][ps__]] :=
-    With[{sub = cgNativeCharTest /@ {ps}}, If[FreeQ[sub, $cgNoNative], Fold[Or, sub], $cgNoNative]]
+    With[{sub = cgNativeCharTest /@ {ps}}, If[FreeQ[sub, $cgNoNative], Replace[Join @@ sub, Hold[t___] :> Hold[Or[t]]], $cgNoNative]]
 cgNativeCharTest[_] := $cgNoNative
 
 cgEmit[ParserCombinator["Succeed", val_, _]] := With[{v = cgFreshV[]},
