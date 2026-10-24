@@ -479,21 +479,24 @@ symbolCall[name_String, args_List] := heldCall[heldSymbol[name], args]
 
 (* -x: a number literal folds the minus in, a product takes -1 as its
    first factor, anything else is Times[-1, x] *)
-negated[x_Association] := Which[
-    x["Literal"], Replace[x["Expr"], HoldComplete[n_] :> With[{m = -n}, HoldComplete[m]]],
-    x["Chain"],   Replace[x["Expr"], HoldComplete[_[a___]] :> HoldComplete[Times[-1, a]]],
-    True,         Replace[x["Expr"], HoldComplete[e_] :> HoldComplete[Times[-1, e]]]]
+negated[x_Association] := negatedHeld[x["Expr"], Which[x["Literal"], 1, x["Chain"], 2, True, 0]]
+
+(* the same of a held expression, its mark 1 for a number literal and 2 for a product *)
+negatedHeld[e_HoldComplete, 1] := Replace[e, HoldComplete[n_] :> With[{m = -n}, HoldComplete[m]]]
+negatedHeld[e_HoldComplete, 2] := Replace[e, HoldComplete[_[a___]] :> HoldComplete[Times[-1, a]]]
+negatedHeld[e_HoldComplete, _] := Replace[e, HoldComplete[x_] :> HoldComplete[Times[-1, x]]]
 
 (* x_h, __, x___., ...: the name before the underscores, their count, and
    the head or the . after them *)
-blankExpression[s_String] := Block[{run = First[StringPosition[s, "_" .., 1]], name, head, blank, named},
-    name = StringTake[s, run[[1]] - 1];
-    head = StringDrop[s, run[[2]]];
-    blank = symbolCall[{"Blank", "BlankSequence", "BlankNullSequence"}[[run[[2]] - run[[1]] + 1]],
-        If[head === "" || head === ".", {}, {heldName[head]}]];
-    named = If[name === "", blank, symbolCall["Pattern", {heldName[name], blank}]];
-    If[head === ".", symbolCall["Optional", {named}], named]
-]
+blankExpression[s_String] := Block[{under = StringPosition[s, "_"], name, head, blank},
+    name = StringTake[s, under[[1, 1]] - 1]; head = StringDrop[s, under[[-1, 1]]];
+    blank = If[ head === "" || head === ".", $heldBlanks[[Length[under]]],
+        heldCall[heldSymbol[$blankNames[[Length[under]]]], {heldName[head]}]];
+    If[name =!= "", blank = heldCall[heldSymbol["Pattern"], {heldName[name], blank}]];
+    If[head === ".", heldCall[heldSymbol["Optional"], {blank}], blank]]
+
+$blankNames = {"Blank", "BlankSequence", "BlankNullSequence"};
+$heldBlanks := $heldBlanks = symbolCall[#, {}] & /@ $blankNames
 
 slotExpression[s_String] /; StringStartsQ[s, "#\""] := symbolCall["Slot", {HoldComplete @@ {stringValue[StringDrop[s, 1]]}}]
 slotExpression[s_String] := With[{rest = StringDelete[s, "#"]},
@@ -582,16 +585,19 @@ $escapes = {
    string holds *)
 longNameCharacters[] := longNameCharacters[] = Map[FromCharacterCode, Get[FileNameJoin[{$languagesDirectory, "LongNameCharacters.wl"}]]]
 
-heldLeaf["Integer" | "Real", s_String] :=
-    <|"Expr" -> HoldComplete @@ {numberValue[s]}, "Literal" -> True, "Chain" -> False|>
-heldLeaf["String", s_String] := held[HoldComplete @@ {stringValue[s]}]
-heldLeaf["Symbol", s_String] := held[heldName[s]]
-heldLeaf["Blank", s_String] := held[blankExpression[s]]
-heldLeaf["Slot", s_String] := held[slotExpression[s]]
-heldLeaf["Out", s_String] := held[outExpression[s]]
-heldLeaf["Tag", s_String] := held[HoldComplete[s]]
-heldLeaf["File", s_String] := held[HoldComplete @@ {If[StringStartsQ[s, "\""], stringValue[s], fileValue[s]]}]
-heldLeaf["Boxes", s_String] := held[linearHeld[s]]
+(* a leaf's expression, held *)
+heldLeafValue["Integer" | "Real", s_String] := HoldComplete @@ {numberValue[s]}
+heldLeafValue["String", s_String] := HoldComplete @@ {stringValue[s]}
+heldLeafValue["Symbol", s_String] := heldName[s]
+heldLeafValue["Blank", s_String] := blankExpression[s]
+heldLeafValue["Slot", s_String] := slotExpression[s]
+heldLeafValue["Out", s_String] := outExpression[s]
+heldLeafValue["Tag", s_String] := HoldComplete[s]
+heldLeafValue["File", s_String] := HoldComplete @@ {If[StringStartsQ[s, "\""], stringValue[s], fileValue[s]]}
+heldLeafValue["Boxes", s_String] := linearHeld[s]
+
+heldLeaf["Integer" | "Real", s_String] := <|"Expr" -> heldLeafValue["Integer", s], "Literal" -> True, "Chain" -> False|>
+heldLeaf[kind_String, s_String] := held[heldLeafValue[kind, s]]
 
 (* --- linear syntax --- *)
 
@@ -816,11 +822,12 @@ $relationHeads = <|"NotEqual" -> "Unequal", "LessSlantEqual" -> "LessEqual", "Gr
    the factors before it over x; of a differential alone, Integrate[1, x]; of
    anything else, head[f]. Held, from the expression; as nodes, from a Times
    node whose last operand is a differential's, which the call keeps. *)
-integralOf[alg_, head_String, f_Association] := Replace[f["Expr"], {
-    HoldComplete[d_[x_]] /; differentialHeadQ[d] :> held[symbolCall["Integrate", {HoldComplete[1], HoldComplete[x]}]],
+integralOf[alg_, head_String, f_Association] := held[integralHeld[head, f["Expr"]]]
+integralHeld[head_String, e_HoldComplete] := Replace[e, {
+    HoldComplete[d_[x_]] /; differentialHeadQ[d] :> symbolCall["Integrate", {HoldComplete[1], HoldComplete[x]}],
     HoldComplete[t_[g___, d_[x_]]] /; MatchQ[Unevaluated[t], Times] && differentialHeadQ[d] :>
-        held[symbolCall["Integrate", {If[Length[HoldComplete[g]] === 1, HoldComplete[g], HoldComplete[Times[g]]], HoldComplete[x]}]],
-    _ :> alg["Prefix"][head, f]}]
+        symbolCall["Integrate", {If[Length[HoldComplete[g]] === 1, HoldComplete[g], HoldComplete[Times[g]]], HoldComplete[x]}],
+    _ :> symbolCall[head, {e}]}]
 integralOf[alg_, head_String, f_] := Replace[f, {
     PrefixNode["DifferentialD" | "CapitalDifferentialD", _, _] :> alg["Call"][alg["Leaf"]["Symbol", "Integrate"], {alg["Leaf"]["Integer", "1"], f}],
     InfixNode["Times", {g__, d : PrefixNode["DifferentialD" | "CapitalDifferentialD", _, _]}, _] :>
@@ -866,14 +873,15 @@ spliced[op_String, xs_List] := If[ KeyExistsQ[$atSpliceHeads, op],
     Map[If[KeyExistsQ[#, "At"] && First[#["At"]] === heldSymbol[op], Last[#["At"]], #] &, xs],
     xs]
 
+(* a/b is Times[a, Power[b, -1]] *)
+binaryHeld["Divide", l_, r_] := symbolCall["Times", {l, symbolCall["Power", {r, HoldComplete[-1]}]}]
+binaryHeld[op_String, l_, r_] := symbolCall[op, {l, r}]
+
 WolframLanguageSemantic = <|
     "Leaf"    -> Function[{kind, s}, heldLeaf[kind, s]],
     "Prefix"  -> Function[{op, x}, held[If[op === "Minus", negated[x], symbolCall[op, {x["Expr"]}]]]],
     "Postfix" -> Function[{x, op}, held[symbolCall[op, {x["Expr"]}]]],
-    (* a/b is Times[a, Power[b, -1]] *)
-    "Binary"  -> Function[{op, l, r}, held[If[op === "Divide",
-        symbolCall["Times", {l["Expr"], symbolCall["Power", {r["Expr"], HoldComplete[-1]}]}],
-        symbolCall[op, {l["Expr"], r["Expr"]}]]]],
+    "Binary"  -> Function[{op, l, r}, held[binaryHeld[op, l["Expr"], r["Expr"]]]],
     "Infix"   -> Function[{op, xs}, <|"Expr" -> symbolCall[op, expressions[spliced[op, xs]]], "Literal" -> False, "Chain" -> op === "Times"|>],
     "Ternary" -> Function[{op, a, b, c}, held[symbolCall[op, expressions[{a, b, c}]]]],
     "Call"    -> Function[{h, args}, held[heldCall[h["Expr"], expressions[args]]]],

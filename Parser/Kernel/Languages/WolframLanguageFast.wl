@@ -902,65 +902,114 @@ $fastKeyCodeArray := $fastKeyCodeArray = fastKeyCode /@ {"Plus", "Relation", "Di
 
 fastText[a_Integer, b_Integer] := FromCharacterCode[$fcodes[[a ;; b - 1]]]
 
-fastLeaf[kind_String, text_String] := $falg["Leaf"][kind, text]
-
-fastBinary[head_String, l_, r_] := Switch[ head,
-    "At", atCall[$falg, l, r],
-    "SlashSlash", $falg["Call"][r, {l}],
-    _, $falg["Binary"][head, l, r]]
-
 $fastLeafKinds = <|1 -> "Symbol", 2 -> "Blank", 3 -> "Integer", 4 -> "Real", 5 -> "String", 6 -> "Slot", 7 -> "Out", 8 -> "File", 20 -> "Boxes", 100 -> "Tag"|>
 
-(* the held values of a postfix program, by the held algebra's builders:
-   the statements'. The values wait in an association by their place on
-   the stack, which a write does not copy, as it does a list of them. The
-   names are Block's, not Module's, which would rewrite the body at every
-   call, and each instruction is the rule of its code. In a program of
-   more than a few instructions, a name, a pattern, a number or a string
-   read again is the value read before, as nothing is evaluated while the
-   program is built. *)
-fastBuild[prog_List] := Block[{vals = <||>, sp = 0, heads = ConstantArray[0, prog[[2]] + 1], hp = 0, statements = Internal`Bag[],
-        leaves = If[prog[[2]] > 24, <||>, None], xs, x, y, z, spec},
-    Do[fastStep[prog[[3 j]], prog[[3 j + 1]], prog[[3 j + 2]]], {j, prog[[2]]}];
-    expressions[Internal`BagPart[statements, All]]]
+(* the held values of a postfix program, its instructions {code, a, b} one after another: the
+   statements'. A value on the stack is its expression, held, and its mark what the kernel reads
+   differently for it: 1 a number literal, into which a minus folds, 2 a product, whose factors a
+   minus joins, 3 a name's call by @, the name and the argument in ats, a flat chain of the name
+   reading the argument, 0 anything else. The values wait in an association by their place on the
+   stack, which a write does not copy, as it does a list of them, and the marks in a packed array.
+   The leaves are made before, by fastLeaves. The names are Block's, not Module's, which would
+   rewrite the body at every call, and each instruction is the rule of its code, a call or an
+   operator of one or two operands its own rule. *)
+fastBuild[steps_List] := Block[{vals = <||>, mk = ConstantArray[0, Length[steps] / 3 + 1], ats = <||>, sp = 0, heads = ConstantArray[0, Length[steps] / 3 + 1],
+        hp = 0, statements = Internal`Bag[], leafValues, leafMarks, leafIndex = 0, xs, spec},
+    {leafValues, leafMarks} = fastLeaves[steps];
+    fastStep @@@ Partition[steps, 3];
+    Internal`BagPart[statements, All]]
+
+(* the values of a program's leaves, its instructions of code 1, in order, and their marks, 1 for a
+   number literal: their texts cut from the codes in one pass, and the value of each kind and text
+   made once, in the order they are read, as nothing is evaluated while the program is built *)
+fastLeaves[{}] := {{}, {}}
+fastLeaves[steps_List] := Block[{ops = steps[[1 ;; ;; 3]], kinds, toks, texts, keys, u},
+    toks = Pick[steps[[3 ;; ;; 3]], ops, 1];
+    kinds = Pick[steps[[2 ;; ;; 3]], ops, 1];
+    texts = tokenTexts[$fcodes, $fs[[toks]], $fe[[toks]]];
+    keys = Transpose[{kinds, texts}];
+    u = DeleteDuplicates[keys];
+    {Lookup[AssociationThread[u, fastLeafValue @@@ u], keys], 1 - Unitize[(kinds - 3) (kinds - 4)]}]
+
+(* the texts of the tokens from st to en in codes, in order, in one pass where they are *)
+tokenTexts[codes_List, st_List, en_List] := Which[
+    st === {}, {},
+    Length[st] === 1 || Min[Rest[st] - Most[en]] >= 0, FromCharacterCode[TakeList[codes[[st[[1]] ;; en[[-1]] - 1]], Riffle[en - st, Rest[st] - Most[en]]][[1 ;; ;; 2]]],
+    True, MapThread[FromCharacterCode[codes[[#1 ;; #2 - 1]]] &, {st, en}]]
+
+(* a leaf's value by the lexer's kind of it *)
+fastLeafValue[1, s_String] := heldName[s]
+fastLeafValue[2, s_String] := blankExpression[s]
+fastLeafValue[3 | 4, s_String] := HoldComplete @@ {numberValue[s]}
+fastLeafValue[5, s_String] := HoldComplete @@ {stringValue[s]}
+fastLeafValue[kind_Integer, s_String] := heldLeafValue[$fastLeafKinds[kind], s]
 
 (* an instruction {code, a, b} of the program on the stack of fastBuild, the codes of fastParse's *)
-fastStep[1, a_, b_] := (sp++; vals[sp] = If[a > 5 || leaves === None, fastLeaf[$fastLeafKinds[a], fastText[$fs[[b]], $fe[[b]]]],
-    With[{t = fastText[$fs[[b]], $fe[[b]]]}, If[KeyExistsQ[leaves, t], leaves[t], leaves[t] = fastLeaf[$fastLeafKinds[a], t]]]])
-fastStep[8, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = $falg["Call"][vals[sp], xs])
-fastStep[4, a_, _] := (y = vals[sp]; sp--; vals[sp] = fastBinary[$fastHeadNames[[a]], vals[sp], y])
+fastStep[1, _, _] := (sp++; leafIndex++; vals[sp] = leafValues[[leafIndex]]; mk[[sp]] = leafMarks[[leafIndex]])
+fastStep[8, 1, _] := (sp--; vals[sp] = heldCall[vals[sp], {vals[sp + 1]}]; mk[[sp]] = 0)
+fastStep[8, 2, _] := (sp -= 2; vals[sp] = heldCall[vals[sp], {vals[sp + 1], vals[sp + 2]}]; mk[[sp]] = 0)
+fastStep[8, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = heldCall[vals[sp], xs]; mk[[sp]] = 0)
+fastStep[4, a_, _] := (sp--; fastBinary[a, vals[sp + 1]])
 fastStep[25, _, _] := (Internal`StuffBag[statements, vals[sp]]; sp--)
-fastStep[5, a_, b_] := (xs = Lookup[vals, Range[sp - b + 1, sp]]; sp -= b - 1; vals[sp] = $falg["Infix"][$fastHeadNames[[a]], xs])
-fastStep[9, a_, b_] := (xs = Lookup[vals, Range[sp - b + 1, sp]]; sp -= b - 1; vals[sp] = $falg["Group"][$fastHeadNames[[a]], xs])
-fastStep[19, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = $falg["Infix"]["CompoundExpression", xs])
-fastStep[2, a_, _] := (vals[sp] = $falg["Prefix"][$fastHeadNames[[a]], vals[sp]])
-fastStep[3, a_, _] := (vals[sp] = $falg["Postfix"][vals[sp], $fastHeadNames[[a]]])
-fastStep[23, _, _] := (y = vals[sp]; sp--; vals[sp] = $falg["Binary"]["Pattern", vals[sp], y])
-fastStep[11, _, _] := (sp++; vals[sp] = fastLeaf["Symbol", "Null"])
-fastStep[14, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = $falg["Infix"]["MessageName", xs])
+fastStep[5, a_, 2] := (sp--;
+    vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]],
+        If[$fastSpliceHeads[[a]] === 1 && (mk[[sp]] === 3 || mk[[sp + 1]] === 3), splicedAt[a, {sp, sp + 1}], {vals[sp], vals[sp + 1]}]];
+    mk[[sp]] = If[a === $fastTimesHead, 2, 0])
+fastStep[5, a_, b_] := (xs = Range[sp - b + 1, sp]; sp -= b - 1;
+    vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], If[$fastSpliceHeads[[a]] === 1 && MemberQ[mk[[xs]], 3], splicedAt[a, xs], Lookup[vals, xs]]];
+    mk[[sp]] = If[a === $fastTimesHead, 2, 0])
+fastStep[9, a_, b_] := If[ a === $fastParenHead, mk[[sp]] = If[mk[[sp]] === 1, 1, 0],
+    xs = Lookup[vals, Range[sp - b + 1, sp]]; sp -= b - 1; vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], xs]; mk[[sp]] = 0]
+fastStep[19, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = symbolCall["CompoundExpression", xs]; mk[[sp]] = 0)
+fastStep[2, a_, _] := (vals[sp] = If[a === $fastMinusHead, negatedHeld[vals[sp], mk[[sp]]], heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp]}]]; mk[[sp]] = 0)
+fastStep[3, a_, _] := (vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp]}]; mk[[sp]] = 0)
+fastStep[23, _, _] := (sp--; vals[sp] = symbolCall["Pattern", {vals[sp], vals[sp + 1]}]; mk[[sp]] = 0)
+fastStep[11, _, _] := (sp++; vals[sp] = heldSymbol["Null"]; mk[[sp]] = 0)
+fastStep[14, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = symbolCall["MessageName", xs]; mk[[sp]] = 0)
 fastStep[6, a_, _] := (hp++; heads[[hp]] = a)
 fastStep[7, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1;
-    vals[sp] = relationValue[$falg, xs, $fastHeadNames[[heads[[hp - a + 2 ;; hp]]]]]; hp -= a - 1)
-fastStep[10, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = $falg["Infix"]["Part", Prepend[xs, vals[sp]]])
-fastStep[12, _, _] := (sp++; vals[sp] = fastLeaf["Symbol", "All"])
-fastStep[13, _, _] := (sp++; vals[sp] = fastLeaf["Integer", "1"])
-fastStep[15, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a;
-    vals[sp] = $falg["Call"][$falg["Call"][fastLeaf["Symbol", "TypeSpecifier"], {vals[sp]}], xs])
-fastStep[16, a_, _] := (vals[sp] = $falg["Call"][$falg["Call"][fastLeaf["Symbol", "Derivative"], {fastLeaf["Integer", ToString[a]]}], {vals[sp]}])
-fastStep[17, _, _] := (z = vals[sp]; y = vals[sp - 1]; x = vals[sp - 2]; sp -= 2; vals[sp] = $falg["Call"][y, {x, z}])
-fastStep[18, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = $falg["Infix"]["Span", xs])
-fastStep[20, 3, _] := (y = vals[sp]; sp--; vals[sp] = $falg["Binary"]["TagUnset", vals[sp], y])
-fastStep[20, a_, _] := (z = vals[sp]; y = vals[sp - 1]; x = vals[sp - 2]; sp -= 2;
-    vals[sp] = $falg["Ternary"][If[a === 1, "TagSetDelayed", "TagSet"], x, y, z])
-fastStep[21, a_, _] := (y = vals[sp]; sp--; vals[sp] = $falg["Binary"][$fastHeadNames[[a]], vals[sp], y])
-fastStep[22, _, _] := (vals[sp] = $falg["Prefix"]["Get", vals[sp]])
+    vals[sp] = relationValue[WolframLanguageSemantic, held /@ xs, $fastHeadNames[[heads[[hp - a + 2 ;; hp]]]]]["Expr"]; mk[[sp]] = 0; hp -= a - 1)
+fastStep[10, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = symbolCall["Part", Prepend[xs, vals[sp]]]; mk[[sp]] = 0)
+fastStep[12, _, _] := (sp++; vals[sp] = heldSymbol["All"]; mk[[sp]] = 0)
+fastStep[13, _, _] := (sp++; vals[sp] = HoldComplete[1]; mk[[sp]] = 1)
+fastStep[15, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = heldCall[symbolCall["TypeSpecifier", {vals[sp]}], xs]; mk[[sp]] = 0)
+fastStep[16, a_, _] := (vals[sp] = heldCall[symbolCall["Derivative", {HoldComplete @@ {a}}], {vals[sp]}]; mk[[sp]] = 0)
+fastStep[17, _, _] := (sp -= 2; vals[sp] = heldCall[vals[sp + 1], {vals[sp], vals[sp + 2]}]; mk[[sp]] = 0)
+fastStep[18, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = symbolCall["Span", xs]; mk[[sp]] = 0)
+fastStep[20, 3, _] := (sp--; vals[sp] = symbolCall["TagUnset", {vals[sp], vals[sp + 1]}]; mk[[sp]] = 0)
+fastStep[20, a_, _] := (sp -= 2; vals[sp] = symbolCall[If[a === 1, "TagSetDelayed", "TagSet"], {vals[sp], vals[sp + 1], vals[sp + 2]}]; mk[[sp]] = 0)
+fastStep[21, a_, _] := (sp--; vals[sp] = binaryHeld[$fastHeadNames[[a]], vals[sp], vals[sp + 1]]; mk[[sp]] = 0)
+fastStep[22, _, _] := (vals[sp] = symbolCall["Get", {vals[sp]}]; mk[[sp]] = 0)
 fastStep[24, a_, _] := (spec = $fastIntegralList[[a]];
-    vals[sp] = If[spec[[2]] === Integrate, integralOf[$falg, spec[[1]], vals[sp]], $falg["Prefix"][spec[[1]], vals[sp]]])
-fastStep[26, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = $falg["Infix"]["Divisible", Reverse[xs]])
-fastStep[27, _, _] := (vals[sp] = $falg["Prefix"]["Not", $falg["Prefix"]["Not", vals[sp]]])
-fastStep[28, a_, b_] := (sp++; vals[sp] = fastLeaf["String", "\"" <> StringReplace[fastText[a, b], "\t" -> " "] <> "\""])
-fastStep[29, a_, _] := (vals[sp] = $falg["Call"][fastLeaf["Symbol", "Information"], {vals[sp],
-    $falg["Binary"]["Rule", fastLeaf["Symbol", "LongForm"], fastLeaf["Symbol", If[a === 1, "True", "False"]]]}])
+    vals[sp] = If[spec[[2]] === Integrate, integralHeld[spec[[1]], vals[sp]], symbolCall[spec[[1]], {vals[sp]}]]; mk[[sp]] = 0)
+fastStep[26, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = symbolCall["Divisible", Reverse[xs]]; mk[[sp]] = 0)
+fastStep[27, _, _] := (vals[sp] = symbolCall["Not", {symbolCall["Not", {vals[sp]}]}]; mk[[sp]] = 0)
+fastStep[28, a_, b_] := (sp++; vals[sp] = heldLeafValue["String", "\"" <> StringReplace[fastText[a, b], "\t" -> " "] <> "\""]; mk[[sp]] = 0)
+fastStep[29, a_, _] := (vals[sp] = symbolCall["Information", {vals[sp], symbolCall["Rule", {heldSymbol["LongForm"], heldSymbol[If[a === 1, "True", "False"]]}]}];
+    mk[[sp]] = 0)
+
+(* the head codes the build pass reads apart, and the heads whose flat chain reads a call of the
+   head by @ as its argument *)
+$fastMinusHead := $fastMinusHead = fastHeadCode["Minus"]
+$fastParenHead := $fastParenHead = fastHeadCode["Paren"]
+$fastTimesHead := $fastTimesHead = fastHeadCode["Times"]
+$fastAtHead := $fastAtHead = fastHeadCode["At"]
+$fastSlashSlashHead := $fastSlashSlashHead = fastHeadCode["SlashSlash"]
+$fastDivideHead := $fastDivideHead = fastHeadCode["Divide"]
+$fastSpliceHeads := $fastSpliceHeads = Boole[KeyExistsQ[$atSpliceHeads, #] & /@ $fastHeadNames]
+
+(* the binary operator of code 4 on the value at the top and y: f @ x the call, marked as the
+   name's where f is one; x // f the call of f; a/b Times[a, Power[b, -1]]; the rest the call of its
+   head *)
+fastBinary[a_Integer, y_] := Which[
+    a === $fastAtHead,
+        If[MatchQ[vals[sp], HoldComplete[_Symbol]], ats[sp] = {vals[sp], y}; mk[[sp]] = 3, mk[[sp]] = 0]; vals[sp] = heldCall[vals[sp], {y}],
+    a === $fastSlashSlashHead, vals[sp] = heldCall[y, {vals[sp]}]; mk[[sp]] = 0,
+    a === $fastDivideHead, vals[sp] = binaryHeld["Divide", vals[sp], y]; mk[[sp]] = 0,
+    True, vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp], y}]; mk[[sp]] = 0]
+
+(* the operands of the flat chain of head a at the slots, a call of the head by @ its argument *)
+splicedAt[a_Integer, slots_List] := With[{h = heldSymbol[$fastHeadNames[[a]]]}, Map[If[mk[[#]] === 3 && ats[#][[1]] === h, ats[#][[2]], vals[#]] &, slots]]
 
 (* the source's top-level expressions, held, by the lexer, the parser and
    the build pass; source that is no Wolfram Language a failure where the
@@ -982,8 +1031,8 @@ fastHeld[s_String] := Catch[Block[{codes = ToCharacterCode[s], padded, lexed, cu
         0, Null,
         1, Throw[stoppedFailure[lexed, prog[[2]]], $fastGiveUp],
         _, fastGiveUp[]];
-    Block[{$fcodes = codes, $fs = lexed[[5 ;; ;; 5]], $fe = lexed[[6 ;; ;; 5]], $falg = WolframLanguageSemantic},
-        fastBuild[prog]]], $fastGiveUp]
+    Block[{$fcodes = codes, $fs = lexed[[5 ;; ;; 5]], $fe = lexed[[6 ;; ;; 5]]},
+        fastBuild[prog[[3 ;; 3 prog[[2]] + 2]]]]], $fastGiveUp]
 
 (* the typed parser over the lexer's tokens of a source, its codes padded *)
 fastParseTokens[lexed_List, padded_List] := fastParseFunction[lexed, fastLedIndices[lexed[[3 ;; ;; 5]], lexed[[4 ;; ;; 5]]], $fastSpecTable,
@@ -1266,8 +1315,8 @@ statementWarnings[state_Association, row_List] := With[{segment = state["Segment
 
 (* the statement of a row, held, its names made now *)
 heldNextStatement[state_Association, row_List] := With[{segment = state["Segments"][[row[[4]]]]},
-    Block[{$fcodes = segment["Codes"], $fs = segment["Starts"], $fe = segment["Ends"], $falg = WolframLanguageSemantic},
-        First[fastBuild[Join[{0, row[[6]] - row[[5]] + 1}, segment["Program"][[3 row[[5]] ;; 3 row[[6]] + 2]]]]]]]
+    Block[{$fcodes = segment["Codes"], $fs = segment["Starts"], $fe = segment["Ends"]},
+        First[fastBuild[segment["Program"][[3 row[[5]] ;; 3 row[[6]] + 2]]]]]]
 
 (* the state, its part i, the last, a statement the grammar reads, read: a failure, or the statement,
    and the parts of the source after it read *)
