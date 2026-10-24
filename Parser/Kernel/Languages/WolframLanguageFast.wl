@@ -1172,11 +1172,13 @@ fastBuild[steps_List, kinds_List, texts_List, marks_List] := Block[{vals = <||>,
     fastStep @@@ Partition[steps, 3];
     Values[statements]]
 
-(* the values of the leaves of the kinds and texts, each kind and text made once: a statement's few
-   one at a time, more by their distinct pairs *)
-fastLeafValues[kinds_List, texts_List] := If[ Length[texts] <= 64,
-    Block[{seen = <||>}, Table[fastLeafOnce[kinds[[i]], texts[[i]]], {i, Length[texts]}]],
-    With[{keys = Transpose[{kinds, texts}]}, With[{u = DeleteDuplicates[keys]}, Lookup[AssociationThread[u, fastLeafValue @@@ u], keys]]]]
+(* the values of the leaves of the kinds and texts: up to four each made, where a repeat costs less
+   than looking for one, as nothing is evaluated while the program is built; else each kind and
+   text made once, a statement's few one at a time, more by their distinct pairs *)
+fastLeafValues[kinds_List, texts_List] := Which[
+    Length[texts] <= 4, Table[fastLeafValue[kinds[[i]], texts[[i]]], {i, Length[texts]}],
+    Length[texts] <= 64, Block[{seen = <||>}, Table[fastLeafOnce[kinds[[i]], texts[[i]]], {i, Length[texts]}]],
+    True, With[{keys = Transpose[{kinds, texts}]}, With[{u = DeleteDuplicates[keys]}, Lookup[AssociationThread[u, fastLeafValue @@@ u], keys]]]]
 
 (* a leaf's value, made at its first kind and text among those seen *)
 fastLeafOnce[kind_Integer, text_String] := With[{key = {kind, text}}, If[KeyExistsQ[seen, key], seen[key], seen[key] = fastLeafValue[kind, text]]]
@@ -1519,10 +1521,12 @@ statementWarnings[state_Association, row_List] := With[{segment = state["Segment
 
 (* the statement of a row, held, its names made now: its instructions, and its leaves among the
    segment's *)
-heldNextStatement[state_Association, row_List] := With[{segment = state["Segments"][[row[[4]]]]},
-    With[{leaves = segment["Leaves"], span = segment["Leaves"]["Before"][[row[[5]]]] + 1 ;; segment["Leaves"]["Before"][[row[[6]] + 1]]},
-        Block[{$fcodes = segment["Codes"], $fs = segment["Starts"], $fe = segment["Ends"]},
-            First[fastBuild[segment["Program"][[3 row[[5]] ;; 3 row[[6]] + 2]], leaves["Kinds"][[span]], leaves["Texts"][[span]], leaves["Marks"][[span]]]]]]]
+heldNextStatement[state_Association, row_List] := Block[{$nextSegment = state["Segments"][[row[[4]]]], $nextLeaves, $nextSpan, $fcodes, $fs, $fe},
+    $nextLeaves = $nextSegment["Leaves"];
+    $nextSpan = $nextLeaves["Before"][[row[[5]]]] + 1 ;; $nextLeaves["Before"][[row[[6]] + 1]];
+    $fcodes = $nextSegment["Codes"]; $fs = $nextSegment["Starts"]; $fe = $nextSegment["Ends"];
+    First[fastBuild[$nextSegment["Program"][[3 row[[5]] ;; 3 row[[6]] + 2]], $nextLeaves["Kinds"][[$nextSpan]], $nextLeaves["Texts"][[$nextSpan]],
+        $nextLeaves["Marks"][[$nextSpan]]]]]
 
 (* the state, its part i, the last, a statement the grammar reads, read: a failure, or the statement,
    and the parts of the source after it read *)
