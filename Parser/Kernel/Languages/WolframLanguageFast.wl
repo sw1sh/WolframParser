@@ -91,13 +91,13 @@ $fastLongNameOps := $fastLongNameOps = Join[
 (* the tables of the lexer, packed: the 2-character operators by the codes
    of both, {c1, c2, c3, operator} for each of 3, and for each long name
    that is an operator its length, its codes and the operator *)
-$fastOp2Flat := $fastOp2Flat = Flatten[$fastOp2]
-$fastOp3Table = Flatten[KeyValueMap[Append[#1, #2] &, $fastOp3]]
-$fastLongOpTable := $fastLongOpTable = Flatten[KeyValueMap[Join[{StringLength[#1]}, ToCharacterCode[#1], {#2}] &, $fastLongNameOps]]
+$fastOp2Flat := $fastOp2Flat = Developer`ToPackedArray[Flatten[$fastOp2]]
+$fastOp3Table = Developer`ToPackedArray[Flatten[KeyValueMap[Append[#1, #2] &, $fastOp3]]]
+$fastLongOpTable := $fastLongOpTable = Developer`ToPackedArray[Flatten[KeyValueMap[Join[{StringLength[#1]}, ToCharacterCode[#1], {#2}] &, $fastLongNameOps]]]
 $fastOpenAssociation = fastOp["<|"]; $fastCloseAssociation = fastOp["|>"]
 $fastGet = fastOp["<<"]; $fastPut = fastOp[">>"]; $fastPutAppend = fastOp[">>>"]
-$fastSpecial := $fastSpecial = {$fastOpenAssociation, $fastCloseAssociation, $fastGet, $fastPut, $fastPutAppend, fastOp["=."], fastOp["="],
-    $fastSpaceId, $fastInvisibleCommaId, $fastNewlineId}
+$fastSpecial := $fastSpecial = Developer`ToPackedArray[{$fastOpenAssociation, $fastCloseAssociation, $fastGet, $fastPut, $fastPutAppend, fastOp["=."], fastOp["="],
+    $fastSpaceId, $fastInvisibleCommaId, $fastNewlineId}]
 
 (* --- tokens --- *)
 
@@ -473,17 +473,18 @@ $fastColonEqual = fastOp[":="]; $fastEqual = fastOp["="]; $fastEqualDot = fastOp
 $fastSpecList := $fastSpecList = DeleteDuplicates[Join[Values[$fastLedTable],
     {{176, "Call", "Call"}, {154, "Derivative", "Derivative"}, {$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}, {9, "Unset", "Unset"}}]]
 fastSpecIndex[spec_] := First[FirstPosition[$fastSpecList, spec, {0}, {1}, Heads -> False]]
-$fastOpSpecIndex := $fastOpSpecIndex = With[{n = $fastNotId + 1},
+$fastOpSpecIndex := $fastOpSpecIndex = With[{n = $fastNotId + 1}, Developer`ToPackedArray[
     Table[Which[KeyExistsQ[$fastLedTable, k], fastSpecIndex[$fastLedTable[k]],
-        KeyExistsQ[$fastPrefixOnly, k], fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}], True, 0], {k, 0, n}]]
-$fastKindSpecIndex := $fastKindSpecIndex = ReplacePart[ConstantArray[0, 21], Join[
+        KeyExistsQ[$fastPrefixOnly, k], fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}], True, 0], {k, 0, n}]]]
+$fastKindSpecIndex := $fastKindSpecIndex = Developer`ToPackedArray[ReplacePart[ConstantArray[0, 21], Join[
     {($tkOpenSquare + 1) -> fastSpecIndex[{176, "Call", "Call"}], ($tkPrimes + 1) -> fastSpecIndex[{154, "Derivative", "Derivative"}]},
     Map[(# + 1) -> fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}] &,
-        {$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation, $tkBoxes}]]]
-fastLedIndices[kinds_List, ops_List] := Module[{index, unset},
+        {$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation, $tkBoxes}]]]]
+fastLedIndices[kinds_List, ops_List] := Block[{index, unset},
     index = $fastKindSpecIndex[[kinds + 1]] + $fastOpSpecIndex[[ops + 1]] (1 - Unitize[kinds - $tkOperator]);
     unset = (1 - Unitize[ops - $fastEqual]) (1 - Unitize[RotateLeft[ops] - $fastDot]) (1 - Unitize[RotateLeft[kinds] - $tkOperator]);
-    index (1 - unset) + unset fastSpecIndex[{9, "Unset", "Unset"}]]
+    index (1 - unset) + unset $fastUnsetSpecIndex]
+$fastUnsetSpecIndex := $fastUnsetSpecIndex = fastSpecIndex[{9, "Unset", "Unset"}]
 
 (* --- the typed parser --- *)
 
@@ -878,25 +879,25 @@ $fastFixityCodes = <|"InfixL" -> 1, "InfixR" -> 2, "InfixN" -> 3, "Postfix" -> 4
 
 (* each spec: precedence, fixity (15 the product an operand begins), head
    and chain key *)
-$fastSpecTable := $fastSpecTable = Flatten[Map[{#[[1]], If[Length[#] >= 5, 15, $fastFixityCodes[#[[2]]]], fastHeadCode[#[[3]]],
-    If[#[[2]] === "InfixN", fastKeyCode[fastChainKey[#]], 0]} &, $fastSpecList]]
+$fastSpecTable := $fastSpecTable = Developer`ToPackedArray[Flatten[Map[{#[[1]], If[Length[#] >= 5, 15, $fastFixityCodes[#[[2]]]], fastHeadCode[#[[3]]],
+    If[#[[2]] === "InfixN", fastKeyCode[fastChainKey[#]], 0]} &, $fastSpecList]]]
 (* by operator, from 0: the prefix ones' precedence and head, the
    brackets' closer and head, and the integral *)
-$fastPrefixArray := $fastPrefixArray = Flatten[Table[
-    If[KeyExistsQ[$fastPrefixTable, o], {$fastPrefixTable[o][[1]], fastHeadCode[$fastPrefixTable[o][[2]]]}, {0, 0}], {o, 0, $fastNotId}]]
-$fastGroupArray := $fastGroupArray = Flatten[Table[
-    If[KeyExistsQ[$fastGroupTable, o], {$fastGroupTable[o][[1]], fastHeadCode[$fastGroupTable[o][[2]]]}, {0, 0}], {o, 0, $fastNotId}]]
+$fastPrefixArray := $fastPrefixArray = Developer`ToPackedArray[Flatten[Table[
+    If[KeyExistsQ[$fastPrefixTable, o], {$fastPrefixTable[o][[1]], fastHeadCode[$fastPrefixTable[o][[2]]]}, {0, 0}], {o, 0, $fastNotId}]]]
+$fastGroupArray := $fastGroupArray = Developer`ToPackedArray[Flatten[Table[
+    If[KeyExistsQ[$fastGroupTable, o], {$fastGroupTable[o][[1]], fastHeadCode[$fastGroupTable[o][[2]]]}, {0, 0}], {o, 0, $fastNotId}]]]
 $fastIntegralList := $fastIntegralList = Values[$fastIntegralTable]
-$fastIntegralArray := $fastIntegralArray = Table[
-    If[KeyExistsQ[$fastIntegralTable, o], First[FirstPosition[Keys[$fastIntegralTable], o]], 0], {o, 0, $fastNotId}]
+$fastIntegralArray := $fastIntegralArray = Developer`ToPackedArray[Table[
+    If[KeyExistsQ[$fastIntegralTable, o], First[FirstPosition[Keys[$fastIntegralTable], o]], 0], {o, 0, $fastNotId}]]
 (* the operators and precedences the parser names, the heads it emits and
    the chain keys it tells *)
-$fastSpecialArray := $fastSpecialArray = Join[
+$fastSpecialArray := $fastSpecialArray = Developer`ToPackedArray[Join[
     {$fastColon, $fastSemiSemi, $fastSemi, $fastColonColon, $fastEqual, $fastEqualDot, $fastDot, $fastTilde, $fastGet, $fastColonEqual,
      $fastMinus, $fastLongMinus, $fastRightDoubleBracket, $fastQuestion},
-    {$integralPrecedence, $fastPatternColon, $fastSpanOperand, $fastCompoundOperand, $fastTagLeft, $fastTagRight, $fastOptionalColon}]
-$fastHeadCodeArray := $fastHeadCodeArray = fastHeadCode /@ {"Minus", "Unset", "Paren", "List", "Association", "NotNot", "Optional"}
-$fastKeyCodeArray := $fastKeyCodeArray = fastKeyCode /@ {"Plus", "Relation", "Divisible"}
+    {$integralPrecedence, $fastPatternColon, $fastSpanOperand, $fastCompoundOperand, $fastTagLeft, $fastTagRight, $fastOptionalColon}]]
+$fastHeadCodeArray := $fastHeadCodeArray = Developer`ToPackedArray[fastHeadCode /@ {"Minus", "Unset", "Paren", "List", "Association", "NotNot", "Optional"}]
+$fastKeyCodeArray := $fastKeyCodeArray = Developer`ToPackedArray[fastKeyCode /@ {"Plus", "Relation", "Divisible"}]
 
 (* --- the build pass --- *)
 
@@ -978,7 +979,7 @@ fastStep[11, _, _] := (sp++; vals[sp] = heldSymbol["Null"]; mk[[sp]] = 0)
 fastStep[14, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = symbolCall["MessageName", xs]; mk[[sp]] = 0)
 fastStep[6, a_, _] := (hp++; heads[[hp]] = a)
 fastStep[7, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1;
-    vals[sp] = relationValue[WolframLanguageSemantic, held /@ xs, $fastHeadNames[[heads[[hp - a + 2 ;; hp]]]]]["Expr"]; mk[[sp]] = 0; hp -= a - 1)
+    vals[sp] = relationHeld[xs, $fastHeadNames[[heads[[hp - a + 2 ;; hp]]]]]; mk[[sp]] = 0; hp -= a - 1)
 fastStep[10, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = symbolCall["Part", Prepend[xs, vals[sp]]]; mk[[sp]] = 0)
 fastStep[12, _, _] := (sp++; vals[sp] = heldSymbol["All"]; mk[[sp]] = 0)
 fastStep[13, _, _] := (sp++; vals[sp] = HoldComplete[1]; mk[[sp]] = 1)
@@ -1017,6 +1018,11 @@ fastBinary[a_Integer, y_] := Which[
     a === $fastSlashSlashHead, vals[sp] = heldCall[y, {vals[sp]}]; mk[[sp]] = 0,
     a === $fastDivideHead, vals[sp] = binaryHeld["Divide", vals[sp], y]; mk[[sp]] = 0,
     True, vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp], y}]; mk[[sp]] = 0]
+
+(* a chain of relations: of one kind, not a vector one, the call of its head; else as the held
+   algebra reads it *)
+relationHeld[xs_List, {h_String ..}] /; ! KeyExistsQ[$vectorRelations, h] := symbolCall[h, xs]
+relationHeld[xs_List, heads_List] := relationValue[WolframLanguageSemantic, held /@ xs, heads]["Expr"]
 
 (* the operands of the flat chain of head a at the slots, a call of the head by @ its argument *)
 splicedAt[a_Integer, slots_List] := With[{h = heldSymbol[$fastHeadNames[[a]]]}, Map[If[mk[[#]] === 3 && ats[#][[1]] === h, ats[#][[2]], vals[#]] &, slots]]
@@ -1262,13 +1268,15 @@ warningsAt[codes_List, lexed_List, from_Integer, to_Integer, stop_Integer, ts_Li
     Internal`BagPart[out, All]]
 
 (* The tokens of a lexed source a statement's warning may come from, each read in one pass: a
-   comma after a token that may open a bracket or before one that may close it or a comma, and a
+   comma after a token that opens a bracket or before one that closes it, a comma or the end, and a
    string with a \ in it. With them, for each token t, how many come before it. *)
-warningTokens[codes_List, lexed_List] := Module[{kinds = lexed[[3 ;; ;; 5]], n, commas, strings, slashes, marks},
+warningTokens[codes_List, lexed_List] := Module[{kinds = lexed[[3 ;; ;; 5]], ops = lexed[[4 ;; ;; 5]], n, commas, strings, slashes, marks, before, after},
     n = Length[kinds];
     commas = Flatten[Position[kinds, $tkComma]];
     If[ commas =!= {},
-        commas = Pick[commas, Unitize[$openKindFlags[[kinds[[Clip[commas - 1, {1, n}]]] + 1]] + $closeKindFlags[[kinds[[Clip[commas + 1, {1, n}]]] + 1]]], 1]];
+        before = Clip[commas - 1, {1, n}]; after = Clip[commas + 1, {1, n}];
+        commas = Pick[commas, Unitize[bracketFlags[$openKindFlags, $warnOpenOps, kinds[[before]], ops[[before]]] +
+            bracketFlags[$closeKindFlags, $warnCloseOps, kinds[[after]], ops[[after]]]], 1]];
     strings = Flatten[Position[kinds, $tkString]];
     If[ strings =!= {},
         slashes = Accumulate[Prepend[1 - Unitize[codes - 92], 0]];
@@ -1277,9 +1285,19 @@ warningTokens[codes_List, lexed_List] := Module[{kinds = lexed[[3 ;; ;; 5]], n, 
     marks[[Union[commas, strings]]] = 1;
     {Union[commas, strings], Accumulate[Prepend[marks, 0]]}]
 
-(* the kinds of token that may open a bracket's items, and close them, by kind + 1 *)
-$openKindFlags = ReplacePart[ConstantArray[0, 21], Thread[{9, 12, 14, 16} + 1 -> 1]];
-$closeKindFlags = ReplacePart[ConstantArray[0, 21], Thread[{0, 9, 13, 15, 17, 18} + 1 -> 1]];
+(* the kinds of token that open a bracket's items, and that close them, by kind + 1, and the
+   operators that do, the long-name brackets, by operator + 1 *)
+$openKindFlags = Developer`ToPackedArray[ReplacePart[ConstantArray[0, 21], Thread[{12, 14, 16} + 1 -> 1]]];
+$closeKindFlags = Developer`ToPackedArray[ReplacePart[ConstantArray[0, 21], Thread[{0, 13, 15, 17, 18} + 1 -> 1]]];
+$warnOpenOps := $warnOpenOps = Developer`ToPackedArray[ReplacePart[ConstantArray[0, $fastNotId + 2],
+    Thread[(Append[Keys[$fastGroupTable], fastLongOp["LeftDoubleBracket"]] + 1) -> 1]]]
+$warnCloseOps := $warnCloseOps = Developer`ToPackedArray[ReplacePart[ConstantArray[0, $fastNotId + 2],
+    Thread[(Append[Values[$fastGroupTable][[All, 1]], $fastRightDoubleBracket] + 1) -> 1]]]
+
+(* 1 for each token of the kinds and operators that is one of the kind flags, or an operator of the
+   operator flags, else 0 *)
+bracketFlags[kindFlags_List, opFlags_List, kinds_List, ops_List] :=
+    kindFlags[[kinds + 1]] + (1 - Unitize[kinds - $tkOperator]) opFlags[[Clip[ops, {0, Length[opFlags] - 1}] + 1]]
 
 (* the letters and digits of a long name's name, from its character i on *)
 longNameText[codes_List, i_Integer] := FromCharacterCode[TakeWhile[codes[[i ;;]], 48 <= # <= 57 || 65 <= # <= 90 || 97 <= # <= 122 &]]
