@@ -1396,7 +1396,10 @@ continuedOffsets[tree_, kept_List] := With[{at = Function[o, If[o === 1, 1, kept
 (* a failure at a character of the source read without its line
    continuations, placed at that character of the source *)
 continuedFailure[f_Failure, kept_List, s_String] := With[{at = f["Position"]},
-    If[IntegerQ[at], parseFailure[If[at <= Length[kept], kept[[at]], StringLength[s] + 1], f["Expected"], f["Found"]], f]]
+    If[ IntegerQ[at],
+        With[{p = If[at <= Length[kept], kept[[at]], StringLength[s] + 1]},
+            Failure[f[[1]], Join[f[[2]], <|"Position" -> p, "MessageParameters" -> Append[Lookup[f[[2]], "MessageParameters", <||>], "Position" -> p]|>]]],
+        f]]
 
 (* the leaves of a tree read from s without its line continuations, each
    given its text in s: kept is the positions in s of the characters read *)
@@ -1501,17 +1504,24 @@ WolframLanguageAST[s_String] := With[{spans = lineContinuations[s]},
             If[FailureQ[r], continuedFailure[r, kept, s], ASTAddSource[continuedOffsets[ASTContainer[r], kept], s]]]]]
 
 (* The held expressions read first by the reader of WolframLanguageFast.wl,
-   which reads the grammar's source in one pass over its tokens; source it
-   does not take the grammar reads. *)
+   which reads the grammar's source in one pass over its tokens and fails
+   where the kernel's reader stops; source it does not take the grammar
+   reads. *)
 $fastHeldReader = True
 
 WolframLanguageHeld[s_String] := With[{spans = lineContinuations[s]},
     With[{clean = If[spans === {}, s, StringReplacePart[s, "", spans]]},
         With[{fast = If[TrueQ[$fastHeldReader], fastHeld[clean], None]},
-            If[ ListQ[fast],
-                DeleteCases[fast, HoldComplete[Null]],
-                With[{r = parsed[$heldGrammar, clean]},
+            Which[
+                ListQ[fast], DeleteCases[fast, HoldComplete[Null]],
+                FailureQ[fast], If[spans === {}, fast, continuedFailure[fast, keptPositions[s, spans], s]],
+                True, With[{r = grammarFailure[parsed[$heldGrammar, clean], StringLength[clean]]},
                     Which[! FailureQ[r], DeleteCases[expressions[r], HoldComplete[Null]], spans === {}, r, True, continuedFailure[r, keptPositions[s, spans], s]]]]]]]
+
+(* a failure of the grammar, which reads only the source the fast reader does not take: the
+   source ending too early where it stops past its end *)
+grammarFailure[f_Failure, length_Integer] := Failure[f[[1]], Append[f[[2]], "Incomplete" -> TrueQ[f["Position"] > length]]]
+grammarFailure[other_, _] := other
 
 $concreteGrammar := $concreteGrammar = concreteGrammar[]
 

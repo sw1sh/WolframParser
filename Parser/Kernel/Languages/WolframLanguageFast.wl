@@ -8,10 +8,9 @@
     three passes: the characters into tokens, one loop over their codes;
     the tokens into a postfix program, by precedence climbing over the
     levels of the grammar's operator table; and the program into the held
-    values, each built by the held algebra's own builders. Source this
-    reader does not take, and source that is no Wolfram Language, the
-    grammar reads instead, so what WolframLanguageHeld gives, failures too,
-    is the grammar's.
+    values, each built by the held algebra's own builders. Source that is
+    no Wolfram Language fails where the kernel's reader stops, and source
+    this reader does not take the grammar reads instead.
 
     The lexer and the parser are typed code over packed integers,
     $fastLexDeclaration and $fastParseDeclaration, FunctionDeclarations
@@ -105,6 +104,25 @@ $tkCloseCurly = 15; $tkOpenAssociation = 16; $tkCloseAssociation = 17; $tkComma 
 (* the source is not one this reader takes: the grammar reads it *)
 fastGiveUp[] := Throw[$fastGiveUp, $fastGiveUp]
 
+(* the source is no Wolfram Language: the character where reading stops, as
+   the kernel's reader stops there, and whether the source ends before its
+   expression does, as "f[x" does *)
+(* reading stopped at token t, where the kernel's message points: just past the token, or, at the
+   end of the source, the source ending too early. But for a :: with no tag after it, or a <<, >>
+   or >>> with no file, the kernel's error, at the end of the ::, at the start of the file's
+   operator. *)
+stoppedFailure[lexed_List, t_Integer] := With[{before = If[t > 1, lexed[[5 (t - 1) - 1]], 0]},
+    Which[
+        lexed[[5 t - 2]] =!= $tkEnd, fastFailure[lexed[[5 t + 1]], False],
+        t > 1 && lexed[[5 (t - 1) - 2]] === $tkOperator && before === $fastColonColon, fastFailure[lexed[[5 t]], False],
+        t > 1 && lexed[[5 (t - 1) - 2]] === $tkOperator && MemberQ[{$fastGet, $fastPut, $fastPutAppend}, before], fastFailure[lexed[[5 (t - 1)]], False],
+        True, fastFailure[lexed[[5 t]], True]]]
+
+fastFailure[position_Integer, incomplete_] := Failure["ParseError", <|
+    "MessageTemplate" -> If[TrueQ[incomplete], "The source ends at position `Position` before its expression does.", "Reading stopped at position `Position`."],
+    "MessageParameters" -> <|"Position" -> position|>,
+    "Position" -> position, "Incomplete" -> TrueQ[incomplete]|>]
+
 (* The lexer, typed code over packed integers: the codes of a source and
    three zeros after them, so that no look ahead reads past them, the
    class of each code, the operators of 1, 2 and 3 characters, the long-name
@@ -112,16 +130,18 @@ fastGiveUp[] := Throw[$fastGiveUp, $fastGiveUp]
    =., =, whitespace, the invisible comma} -> {status, k, then for each of the
    k tokens its kind, operator, start, end (just past it) and newline mark
    (1 where a newline outside a comment comes before it)}, the last token
-   the end. Status 1: the source holds what the lexer does not take, a
-   string or a comment not closed, a character no token has. Whitespace and
-   comments are in no token; after << and >> the file is one token. *)
+   the end. Status 1: the source holds a character no token has, where the
+   last token, the one that stops there, ends; 3: the source ends in a
+   string or a comment not closed. Whitespace and comments are in no
+   token; after << and >> the file is one token. *)
 $fastLexDeclaration = FunctionDeclaration[fastLex,
     Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
         "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
         "PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
     Function[{lexCodes, lexClasses, lexOp1, lexOp2, lexOp3, lexLongOps, lexSpecial},
         Module[{n = Length[lexCodes] - 3, out, lnEnd, lnOp, k = 0, i = 1, j = 0, c = 0, c2 = 0, cl = 0, nl = 0, kind = 0, op = 0, file = 0,
-                status = 0, done = 0, scanning = 0, depth = 0, m = 0, count = 0, a = 0, len = 0, match = 0, q = 0, base = 0, real = 0, start = 0},
+                status = 0, done = 0, scanning = 0, depth = 0, m = 0, count = 0, a = 0, len = 0, match = 0, q = 0, base = 0, real = 0, start = 0,
+                tick = 0},
             out = Table[0, {5 n + 7}];
             lnEnd = Table[0, {n + 1}];
             lnOp = Table[0, {n + 1}];
@@ -156,7 +176,7 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                             depth = 1; j = i + 2;
                             While[ depth > 0,
                                 Which[
-                                    j + 1 > n, status = 1; depth = 0,
+                                    j + 1 > n, status = 3; depth = 0,
                                     lexCodes[[j]] == 40 && lexCodes[[j + 1]] == 42, depth++; j += 2,
                                     lexCodes[[j]] == 42 && lexCodes[[j + 1]] == 41, depth--; j += 2,
                                     True, j++]];
@@ -172,7 +192,7 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                         file == 1 && c == 34,
                             scanning = 1;
                             While[ scanning == 1,
-                                If[ j > n, status = 1; scanning = 0,
+                                If[ j > n, status = 3; scanning = 0,
                                     c2 = lexCodes[[j]];
                                     Which[c2 == 34, j++; scanning = 0, c2 == 92, j += 2, True, j++]]];
                             kind = 8,
@@ -196,6 +216,14 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                                     cl == 1 || cl == 5 || (cl == 2 && j > start), j++,
                                     c2 == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == -1, j = lnEnd[[j]],
                                     True, scanning = 0]];
+                            (* a context mark that ends the name, or comes before a digit or another
+                               mark, makes no name: reading stops at the name *)
+                            m = i; tick = 0;
+                            While[ m < j && status == 0,
+                                If[lexCodes[[m]] == 96, If[tick == 1, status = 1, tick = 1], If[tick == 1 && 48 <= lexCodes[[m]] <= 57, status = 1]; tick = 0];
+                                m++];
+                            If[tick == 1, status = 1];
+                            If[status == 1, j = i];
                             kind = 1;
                             If[ j <= n && lexCodes[[j]] == 95, kind = 2; c = 95],
                         c == 95, j = i; kind = 2,
@@ -207,10 +235,22 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                                 Which[
                                     j + 2 <= n && lexCodes[[j]] == 94 && lexCodes[[j + 1]] == 94 &&
                                         ((48 <= lexCodes[[j + 2]] <= 57) || (65 <= lexCodes[[j + 2]] <= 90) || (97 <= lexCodes[[j + 2]] <= 122)),
+                                        (* the base, 2 to 36, and each digit after ^^ less than it, else no number:
+                                           reading stops past it *)
+                                        a = 0; m = i;
+                                        While[m < j, If[a <= 36, a = 10 a + lexCodes[[m]] - 48]; m++];
                                         j += 2;
                                         While[j <= n && ((48 <= lexCodes[[j]] <= 57) || (65 <= lexCodes[[j]] <= 90) || (97 <= lexCodes[[j]] <= 122)), j++];
                                         If[ j <= n && lexCodes[[j]] == 46,
-                                            j++; While[j <= n && ((48 <= lexCodes[[j]] <= 57) || (65 <= lexCodes[[j]] <= 90) || (97 <= lexCodes[[j]] <= 122)), j++]],
+                                            j++; While[j <= n && ((48 <= lexCodes[[j]] <= 57) || (65 <= lexCodes[[j]] <= 90) || (97 <= lexCodes[[j]] <= 122)), j++]];
+                                        If[a < 2 || a > 36, status = 1];
+                                        m = i;
+                                        While[m < j && lexCodes[[m]] != 94, m++];
+                                        m += 2;
+                                        While[ m < j && status == 0,
+                                            c2 = lexCodes[[m]];
+                                            If[ c2 != 46 && If[c2 <= 57, c2 - 48, If[c2 <= 90, c2 - 55, c2 - 87]] >= a, status = 1];
+                                            m++],
                                     j <= n && lexCodes[[j]] == 46 && ! (j + 1 <= n && lexCodes[[j + 1]] == 46),
                                         j++; While[j <= n && 48 <= lexCodes[[j]] <= 57, j++],
                                     True, j = j]];
@@ -238,7 +278,7 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                         c == 34 || (c == 35 && i < n && lexCodes[[i + 1]] == 34),
                             j = If[c == 35, i + 2, i + 1]; scanning = 1;
                             While[ scanning == 1,
-                                If[ j > n, status = 1; scanning = 0,
+                                If[ j > n, status = 3; scanning = 0,
                                     c2 = lexCodes[[j]];
                                     Which[c2 == 34, j++; scanning = 0, c2 == 92, j += 2, True, j++]]];
                             kind = If[c == 35, 6, 5],
@@ -266,7 +306,7 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                         c == 92,
                             If[ lnEnd[[i]] > 0 && lnOp[[i]] > 0,
                                 op = lnOp[[i]]; j = lnEnd[[i]]; kind = If[op == lexSpecial[[9]], 18, 9],
-                                status = 1],
+                                If[i == n, status = 3, status = 1; j = i]],
                         (* an operator, the longest there *)
                         True,
                             len = 0;
@@ -280,7 +320,7 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                             (* =. before a digit: =, then a number *)
                             If[op == lexSpecial[[6]] && i + 2 <= n && 48 <= lexCodes[[i + 2]] <= 57, op = lexSpecial[[7]]; len = 1];
                             j = i + len;
-                            Which[op == 0, status = 1, op == lexSpecial[[1]], kind = 16, op == lexSpecial[[2]], kind = 17, op == lexSpecial[[9]], kind = 18, True, kind = 9]];
+                            Which[op == 0, status = 1; j = i, op == lexSpecial[[1]], kind = 16, op == lexSpecial[[2]], kind = 17, op == lexSpecial[[9]], kind = 18, True, kind = 9]];
                     (* a blank: _, __ or ___, then a . or a name *)
                     If[ kind == 2 && status == 0,
                         count = 0;
@@ -295,7 +335,14 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                                     Which[
                                         cl == 1 || cl == 5 || (cl == 2 && j > start), j++,
                                         c2 == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == -1, j = lnEnd[[j]],
-                                        True, scanning = 0]]]]];
+                                        True, scanning = 0]];
+                                (* the head's context marks, as a name's *)
+                                m = start; tick = 0;
+                                While[ m < j && status == 0,
+                                    If[lexCodes[[m]] == 96, If[tick == 1, status = 1, tick = 1], If[tick == 1 && 48 <= lexCodes[[m]] <= 57, status = 1]; tick = 0];
+                                    m++];
+                                If[tick == 1, status = 1];
+                                If[status == 1, j = i]]]];
                     file = If[kind == 9 && (op == lexSpecial[[3]] || op == lexSpecial[[4]] || op == lexSpecial[[5]]), 1, 0];
                     out[[base + 1]] = kind; out[[base + 2]] = If[kind == 9, op, 0]; out[[base + 4]] = j;
                     If[status != 0, done = 1];
@@ -431,8 +478,9 @@ fastLedIndices[kinds_List, ops_List] := Module[{index, unset},
    precedences, heads and chain keys, and the codes and classes the lexer
    read, for the words of a ? query -> {status, n, then n instructions of
    three integers}: a postfix program the build pass makes the held values
-   of. Status 1: the tokens are no Wolfram Language; 2: they hold what this
-   parser does not take. It climbs as the grammar's table does, with no
+   of. Status 1: the tokens are no Wolfram Language, and the second number
+   is the farthest token reading reached, where the kernel's reader stops;
+   2: they hold what this parser does not take. It climbs as the grammar's table does, with no
    recursion: a stack of frames of eight integers, the expression being
    read and what waits for it, backtracking to a pattern's name or to an
    operand left out by the token and the program's length a frame saved.
@@ -466,7 +514,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
     Function[{pTok, pLed, pSpecs, pPrefix, pGroups, pIntegrals, pSpecial, pHeads, pKeys, pCodes, pClasses},
         Module[{n = pTok[[2]], out, fr, maxFrames, sp = 0, on = 0, t = 1, brackets = 0, status = 0, mode = 0,
                 pMin = 0, pRbp = 0, pPlain = 0, base = 0, k = 0, o = 0, i = 0, bp = 0, fx = 0, hd = 0, ky = 0, mn = 0, rb = 0, pl = 0,
-                ft = 0, cnt = 0, bt = 0, colons = 0, ok = 0, x = 0, lg = 0, e = 0, we = 0, c = 0, cl = 0, tt = 0},
+                ft = 0, cnt = 0, bt = 0, colons = 0, ok = 0, x = 0, lg = 0, e = 0, we = 0, c = 0, cl = 0, tt = 0, far = 0},
             out = Table[0, {3 (8 n + 16) + 2}];
             maxFrames = 4 n + 64;
             fr = Table[0, {8 maxFrames}];
@@ -688,6 +736,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                 True, mode = 5]],
                     (* no Wolfram Language: back to a pattern's name or an operand left out, else the end *)
                     mode == 5,
+                        If[t > far, far = t];
                         While[sp > 0 && fr[[8 (sp - 1) + 1]] != 7 && fr[[8 (sp - 1) + 1]] != 8, sp--];
                         If[ sp == 0,
                             status = 1; mode = 99,
@@ -716,7 +765,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                     mode == 9,
                         base = 8 (sp - 1); bt = fr[[base + 2]]; cnt = fr[[base + 5]];
                         Which[
-                            bt == 2, If[pTok[[5 t - 2]] == 13 && t < n && pTok[[5 t + 3]] == 13, t += 2; ok = 1, ok = 0],
+                            bt == 2, If[pTok[[5 t - 2]] == 13 && t < n && pTok[[5 t + 3]] == 13, t += 2; ok = 1, If[pTok[[5 t - 2]] == 13 && t < n, t++]; ok = 0],
                             pTok[[5 t - 2]] == fr[[base + 3]] && (fr[[base + 3]] != 9 || pTok[[5 t - 1]] == fr[[base + 4]]), t++; ok = 1,
                             True, ok = 0];
                         If[ ok == 0, mode = 5,
@@ -758,8 +807,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                             base = 8 (sp - 1);
                             on++; out[[3 on]] = 19; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3],
                     True, status = 2; mode = 99]];
-            out[[1]] = status; out[[2]] = on;
-            Take[out, 2 + 3 on]]]]
+            out[[1]] = status; out[[2]] = If[status == 1, far, on];
+            Take[out, If[status == 0, 2 + 3 on, 2]]]]]
 
 (* the parser run here, fixed at its first use *)
 fastParseFunction := fastParseFunction = typedFunction[fastParse, $fastParseDeclaration]
@@ -858,15 +907,22 @@ fastBuild[prog_List] := Module[{n = prog[[2]], vals = <||>, sp = 0, heads, hp = 
     expressions[Internal`BagPart[statements, All]]]
 
 (* the source's top-level expressions, held, by the lexer, the parser and
-   the build pass; the grammar reads what they do not *)
+   the build pass; source that is no Wolfram Language a failure where the
+   kernel's reader stops, and the grammar reads what they do not take *)
 fastHeld[s_String] := Catch[Module[{codes = ToCharacterCode[s], padded, lexed, kinds, ops, prog},
     padded = Join[codes, {0, 0, 0}];
     lexed = fastLexFunction[padded, $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];
-    If[lexed[[1]] =!= 0, fastGiveUp[]];
+    Switch[ lexed[[1]],
+        0, Null,
+        3, Throw[fastFailure[Length[codes] + 1, True], $fastGiveUp],
+        _, Throw[fastFailure[lexed[[2 + 5 (lexed[[2]] - 1) + 4]], False], $fastGiveUp]];
     kinds = lexed[[3 ;; ;; 5]]; ops = lexed[[4 ;; ;; 5]];
     prog = fastParseFunction[lexed, fastLedIndices[kinds, ops], $fastSpecTable, $fastPrefixArray, $fastGroupArray,
         $fastIntegralArray, $fastSpecialArray, $fastHeadCodeArray, $fastKeyCodeArray, padded, $fastClasses];
-    If[prog[[1]] =!= 0, fastGiveUp[]];
+    Switch[ prog[[1]],
+        0, Null,
+        1, Throw[stoppedFailure[lexed, prog[[2]]], $fastGiveUp],
+        _, fastGiveUp[]];
     Block[{$fcodes = codes, $fs = lexed[[5 ;; ;; 5]], $fe = lexed[[6 ;; ;; 5]], $falg = WolframLanguageSemantic},
         fastBuild[prog]]], $fastGiveUp]
 

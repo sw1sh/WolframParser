@@ -23,8 +23,8 @@ RelatedGuides: [ParserZoo]
 - A long name that is an operator, a bracket or an integral reads as the kernel reads it, spelt out or as its character: `a \[CircleTimes] b` is `CircleTimes[a, b]`, `\[LeftFloor]x\[RightFloor]` is `Floor[x]` and `\[Integral] f \[DifferentialD] x` is `Integrate[f, x]`; a long name that is whitespace is whitespace.
 - The operand of an integral reads whole, a differential such as `\[DifferentialD] x` in it a factor like any other. An integral of a product whose last factor is a differential is `Integrate` of the factors before it over its variable, an integral of a differential alone is `Integrate[1, x]`, and any other integral keeps its own head: `\[Integral]\[Integral] f \[DifferentialD] x \[DifferentialD] y` is `Integral[Integrate[f \[DifferentialD] x, y]]`, as the kernel reads it.
 - The algebra reads numbers and strings from their text itself: a real keeps the precision or accuracy its marks give, or that its digits give past a machine real's, and a string's escapes are decoded, an unknown one kept as written. The file of `<<` and `>>` keeps a `\` in it, as in `<<a\b.m`, and decodes its long names. A name is the one leaf read by the kernel's reader, under [HoldComplete](), so it is made in [$Context]() as the kernel makes it.
-- `WolframLanguageHeld` reads *code* in time linear in its length: one compiled pass over the character codes makes the tokens, compiled precedence climbing over the tokens, by the levels [WolframLanguageGrammar]() generates, makes a postfix program, and the builders of [WolframLanguageSemantic]() make the expressions from it. Source that this reader does not take, and source that is no Wolfram Language, [WolframLanguageGrammar]() reads over [WolframLanguageSemantic](), so the result and a failure are the grammar's. [WolframLanguageAST]() runs the grammar over [ASTAlgebra]().
-- Source that cannot be read gives a <code>[Failure]()["ParseError", ...]</code> whose `"Position"` is the character offset in *code* where reading stopped.
+- `WolframLanguageHeld` reads *code* in time linear in its length: one compiled pass over the character codes makes the tokens, compiled precedence climbing over the tokens, by the levels [WolframLanguageGrammar]() generates, makes a postfix program, and the builders of [WolframLanguageSemantic]() make the expressions from it. Source that this reader does not take [WolframLanguageGrammar]() reads over [WolframLanguageSemantic](), so its result is the grammar's. [WolframLanguageAST]() runs the grammar over [ASTAlgebra]().
+- Source that is no Wolfram Language gives a <code>[Failure]()["ParseError", ...]</code> at once, the grammar never built for it. Its `"Position"` is the character of *code* just past the token reading stops at, where the kernel's own reader puts the caret of its syntax message; its `"Incomplete"` is True where *code* ends before its expression does, in an open bracket, string or comment or after an operator, which is the kernel's message of incomplete input, and False otherwise.
 
 ## Basic Examples
 
@@ -104,11 +104,19 @@ WolframLanguageHeld[code] === ImportString[code, {"WL", "HeldExpressions"}]
 
 ## Possible Issues
 
-An unclosed bracket is a [Failure](); its position is that of the statement's first character the grammar could not read:
+An unclosed bracket is a [Failure](), *code* ending before its expression does:
 
 ```wl
 WolframLanguageHeld["a = 1\nb = (c"]
 ```
+
+A closer that closes nothing stops reading just past it:
+
+```wl
+WolframLanguageHeld["f[x)"]["Position"]
+```
+
+<!-- => 5 -->
 
 ## Neat Examples
 

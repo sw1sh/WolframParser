@@ -410,12 +410,78 @@ VerificationTest[
     TestID -> "wl: AST of a mixed relation chain"]
 
 (* === failures === *)
+wlStop[f_Failure] := {f["Position"], f["Incomplete"]};
 VerificationTest[FailureQ[WolframLanguageHeld["a = 1\nb = (c"]], True, TestID -> "wl: an unclosed bracket fails"]
 VerificationTest[
     WolframLanguageHeld["a = 1\nb c)\nd"]["Position"],
-    10,
-    TestID -> "wl: a failure points into the statement that cannot be read"]
+    11,
+    TestID -> "wl: a failure points just past the token reading stopped at"]
 VerificationTest[
-    WolframLanguageHeld["a +"]["Expected"],
-    "<expression>",
-    TestID -> "wl: a missing operand is named"]
+    wlStop[WolframLanguageHeld["a +"]],
+    {4, True},
+    TestID -> "wl: a source that ends before its expression does is incomplete"]
+
+(* where reading stops, and whether the source ends too early, as Wolfram 15's ToExpression
+   reports them: ToExpression::sntxi, or the caret of ToExpression::sntx, past the leading
+   whitespace its message leaves out; dev/check-failure-positions.wls checks more against the
+   kernel *)
+$wlFailures = {
+    {"f[x", {4, True}},
+    {"f[x)", {5, False}},
+    {"a + * b", {6, False}},
+    {")", {2, False}},
+    {"a b )", {6, False}},
+    {"{1, 2", {6, True}},
+    {"a +", {4, True}},
+    {"f[x]]", {6, False}},
+    {"a]", {3, False}},
+    {"x : : y", {6, False}},
+    {"a = = b", {6, False}},
+    {"a ~ b ~", {8, True}},
+    {"a \"b c", {7, True}},
+    {"a (* note", {10, True}},
+    {"a::\"b", {6, True}},
+    {"a[[1]&]", {7, False}},
+    {"a[[1, 2]", {9, True}},
+    {"(a + b", {7, True}},
+    {"f[x, ", {6, True}},
+    {"{a, b}}", {8, False}},
+    {"a + b)", {7, False}},
+    {"<|a -> 1", {9, True}},
+    {"a -> ", {6, True}},
+    {"f @", {4, True}},
+    {"a // ", {6, True}},
+    {"a := ", {6, True}},
+    {"a \\[Rle] b", {3, False}},
+    {"x + \\", {6, True}},
+    {"  a + * b", {8, False}},
+    {"f[a, b]]", {9, False}},
+    {"{a, {b, c}", {11, True}},
+    {"f[x_] := (x + 1", {16, True}},
+    {"a /. {x -> 1", {13, True}},
+    {"Module[{x}, x", {14, True}},
+    {"a @@ ", {6, True}},
+    {"\"abc\" <> ", {10, True}},
+    {"g[x] /; ", {9, True}},
+    {"f[x_ /; x > 0] := x ^", {22, True}},
+    {"a && || b", {8, False}},
+    {"a == == b", {8, False}},
+    {"#1 + &", {7, False}},
+    {"a[[1]] [[2]", {12, True}}
+};
+Scan[
+    Function[c, VerificationTest[wlStop[WolframLanguageHeld[c[[1]]]], c[[2]], TestID -> "wl failure: " <> c[[1]]]],
+    $wlFailures]
+VerificationTest[
+    wlStop[WolframLanguageHeld["a = \\\n(b"]],
+    {9, True},
+    TestID -> "wl: a failure past a line continuation points into the source as written"]
+VerificationTest[
+    {wlStop[WolframLanguageHeld["x\\"]], wlStop[WolframLanguageHeld["\"abc"]],
+     wlStop[WolframLanguageHeld["(* note"]]},
+    {{3, True}, {5, True}, {8, True}},
+    TestID -> "wl: a source ending in a line continuation, a string or a comment is incomplete"]
+VerificationTest[
+    wlStop[WolframLanguageHeld["?Plo_t*"]],
+    {8, True},
+    TestID -> "wl: a failure of the grammar tells an incomplete source too"]
