@@ -739,12 +739,12 @@ VerificationTest[
     {3, 4, 2},
     TestID -> "wl syntax: a slot's malformed name makes no slot"]
 
-(* the reader's character classes are the paclet's asset, the table Wolfram 15 computes *)
+(* the reader's character classes, read from WolframLanguageClasses.wl, are the table Wolfram 15 computes *)
 VerificationTest[
     {Wolfram`Parser`Languages`WolframLanguage`Private`$fastClasses === Wolfram`Parser`Languages`WolframLanguage`Private`fastClassesComputed[],
      Developer`PackedArrayQ[Wolfram`Parser`Languages`WolframLanguage`Private`$fastClasses]},
     {True, True},
-    TestID -> "wl: the character class asset is the table Wolfram 15 computes"]
+    TestID -> "wl: the character class file is the table Wolfram 15 computes"]
 
 (* SyntaxQ and SyntaxLength as Wolfram 15 gives them for each source *)
 $wlSyntaxCases = {

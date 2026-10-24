@@ -666,13 +666,16 @@ interpretDispatch[ParserCombinator["InterpreterSlot", type_String, _], input_, p
    LetterCharacter | "*" works correctly. Named classes
    (LetterCharacter, DigitCharacter, CharacterRange, ...) fall through
    to StringMatchQ, which is correct for them. *)
-(* The characters of the classes string patterns name, as Wolfram 15 matches them: the paclet's
-   asset CharacterClasses.wxf, class -> {{first, last}, ...} runs of code points, recorded by
-   dev/freeze-character-classes.wls; Missing where the asset or the class is not there. *)
+(* The characters of the classes string patterns name, as Wolfram 15 matches them: the file
+   CharacterClasses.wl beside this one, recorded by dev/freeze-character-classes.wls, class ->
+   {{first, last}, ...} runs of code points, or the name of the class before it with the same
+   characters; Missing where the file or the class is not there. *)
 $parserDirectory = DirectoryName[$InputFileName];
-characterClassRuns[] := characterClassRuns[] = With[{file = FileNameJoin[{ParentDirectory[$parserDirectory], "Assets", "CharacterClasses.wxf"}]},
-    If[FileExistsQ[file], Replace[BinaryDeserialize[ReadByteArray[file]], Except[_Association] -> <||>], <||>]]
-characterClassRuns[class_String] := Lookup[characterClassRuns[], class, Missing["NotRecorded", class]]
+characterClassRuns[] := characterClassRuns[] = With[{file = FileNameJoin[{$parserDirectory, "CharacterClasses.wl"}]},
+    Replace[If[FileExistsQ[file], Get[file], None], {
+        classes_Association :> Map[Replace[#, runs_List :> Developer`ToPackedArray[runs]] &, classes],
+        _ :> <||>}]]
+characterClassRuns[class_String] := Replace[Lookup[characterClassRuns[], class, Missing["NotRecorded", class]], same_String :> characterClassRuns[same]]
 
 charMatchesQ[ch_String, s_String] := ch === s
 charMatchesQ[ch_String, Verbatim[Alternatives][pats__]] :=

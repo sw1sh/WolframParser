@@ -374,15 +374,17 @@ VerificationTest[
     TestID -> "ParserCompile: a class string patterns name compiles to Wolfram 15's class, no fallback"
 ]
 
-(* the character classes the paclet records, as runs of code points, in its WXF and TSV assets alike *)
+(* the character classes the paclet records are Wolfram 15's, at a sample of code points; a class
+   with the characters of one before it is recorded by that one's name *)
 VerificationTest[
-    With[{runs = Wolfram`Parser`Private`characterClassRuns[],
-          tsv = Select[StringSplit[ReadString[FileNameJoin[{ParentDirectory[Wolfram`Parser`Private`$parserDirectory], "Assets", "CharacterClasses.tsv"}]], "\n"],
-            ! StringStartsQ[#, "#"] &]},
-        {Length[runs], Total[Length /@ runs] === Length[tsv],
-         Map[Function[r, {FromDigits[r[[2]], 16], FromDigits[r[[3]], 16]}], StringSplit[Select[tsv, StringStartsQ[#, "digit\t"] &], "\t"]] === Normal[runs["digit"]]}],
-    {24, True, True},
-    TestID -> "character classes: the WXF and TSV assets hold the same runs"
+    With[{codes = BlockRandom[SeedRandom[7]; RandomSample[Join[Range[0, 16^^D7FF], Range[16^^E000, 16^^10FFFF]], 20000]]},
+        {Length[Wolfram`Parser`Private`characterClassRuns[]], Wolfram`Parser`Private`characterClassRuns[]["regex \\d"],
+         Map[Function[pc, With[{in = Interval @@ Wolfram`Parser`Private`characterClassRuns[pc[[1]]]},
+                Map[IntervalMemberQ[in, #] &, codes] === StringMatchQ[FromCharacterCode /@ codes, pc[[2]]]]],
+            {{"letter", LetterCharacter}, {"digit", DigitCharacter}, {"whitespace", WhitespaceCharacter}, {"punctuation", PunctuationCharacter},
+             {"hexadecimal", HexadecimalCharacter}, {"regex \\w", RegularExpression["\\w"]}}]}],
+    {24, "digit", {True, True, True, True, True, True}},
+    TestID -> "character classes: the recorded classes are Wolfram 15's"
 ]
 
 VerificationTest[

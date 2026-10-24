@@ -1,9 +1,8 @@
 #!/usr/bin/env wolframscript
 (* Records the characters of the classes string patterns name, as Wolfram 15 matches them, as runs
-   of code points over every code point but the surrogates, into Parser/Assets/CharacterClasses.wxf
-   (class -> {{first, last}, ...}) and Parser/Assets/CharacterClasses.tsv (class<TAB>first<TAB>last,
-   hexadecimal, the format of the kernel's data/wl15/characterclasses.tsv, which is made from it).
-   The classes:
+   of code points over every code point but the surrogates, into Parser/Kernel/CharacterClasses.wl:
+   an Association of class -> {{first, last}, ...}, or -> the name of the class before it that has
+   the same characters. The classes:
      "letter"      LetterCharacter, which LetterQ takes as letters too
      "digit"       DigitCharacter, the decimal digits of every script
      "number"      what WordCharacter takes besides letters and digits, the other numerals
@@ -19,7 +18,6 @@
 $ProgressReporting = False;
 
 root = ParentDirectory[DirectoryName[$InputFileName]];
-assets = FileNameJoin[{root, "Parser", "Assets"}];
 codes = Join[Range[0, 16^^D7FF], Range[16^^E000, 16^^10FFFF]];
 characters = FromCharacterCode /@ codes;
 codesOf[test_] := Pick[codes, test[characters]];
@@ -38,13 +36,25 @@ classes = Join[
       "regex \\s" -> codesOf[StringMatchQ[#, RegularExpression["\\s"]] &]|>,
     Association[Map["regex [:" <> # <> ":]" -> codesOf[Function[cs, StringMatchQ[cs, RegularExpression["[[:" <> # <> ":]]"]]]] &, posix]]];
 classRuns = runs /@ classes;
+names = Keys[classRuns];
+(* a class with the characters of one before it is recorded by that one's name *)
+recorded = AssociationMap[Function[class, With[{same = SelectFirst[TakeWhile[names, # =!= class &], classRuns[#] === classRuns[class] &]},
+    If[MissingQ[same], classRuns[class], same]]], names];
 
-Export[FileNameJoin[{assets, "CharacterClasses.wxf"}], classRuns, "WXF"];
-hexadecimal[code_Integer] := IntegerString[code, 16, Max[4, IntegerLength[code, 16]]];
-text = StringRiffle[Join[
-    {"# The characters of each class as runs of code points: class<TAB>first<TAB>last, hexadecimal.",
-     "# Recorded by Wolfram/Parser's dev/freeze-character-classes.wls on " <> $Version <> "."},
-    Catenate[KeyValueMap[Function[{class, rs}, StringRiffle[{class, hexadecimal[#[[1]]], hexadecimal[#[[2]]]}, "\t"] & /@ rs], classRuns]]],
-    "\n"] <> "\n";
-With[{stream = OpenWrite[FileNameJoin[{assets, "CharacterClasses.tsv"}], CharacterEncoding -> "UTF-8"]}, WriteString[stream, text]; Close[stream]];
-Scan[Print[StringPadRight[#, 18], Length[classes[#]], " characters in ", Length[classRuns[#]], " runs"] &, Keys[classes]];
+runLines[rs_List] := StringRiffle[Map[StringRiffle[Map[ToString[#, InputForm] &, #], ", "] &, Partition[rs, UpTo[8]]], ",\n    "];
+entry[class_String -> rs_List] := ToString[class, InputForm] <> " -> {\n    " <> runLines[rs] <> "}";
+entry[class_String -> same_String] := ToString[class, InputForm] <> " -> " <> ToString[same, InputForm];
+file = FileNameJoin[{root, "Parser", "Kernel", "CharacterClasses.wl"}];
+text = StringJoin[
+    "(* The characters of the classes string patterns name, as Wolfram 15 matches them: class ->\n",
+    "   {{first, last}, ...} runs of code points over every code point but the surrogates, or -> the\n",
+    "   name of the class before it with the same characters. Recorded by\n",
+    "   dev/freeze-character-classes.wls on Wolfram ", First[StringSplit[$Version]], ". Do not edit it by hand. *)\n\n",
+    "<|\n", StringRiffle[entry /@ Normal[recorded], ",\n"], "\n|>\n"];
+With[{stream = OpenWrite[file]}, WriteString[stream, text]; Close[stream]];
+read = Get[file];
+If[AssociationMap[Function[class, Replace[read[class], same_String :> read[same]]], names] =!= classRuns,
+    Print["the file does not read back as the classes"]; Exit[1]];
+Scan[Print[StringPadRight[#, 18], Replace[recorded[#], {same_String :> "= " <> same,
+    rs_ :> ToString[Length[classes[#]]] <> " characters in " <> ToString[Length[rs]] <> " runs"}]] &, names];
+Print[FileByteCount[file], " bytes into ", file];
