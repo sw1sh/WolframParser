@@ -274,7 +274,16 @@ $wlCases = {
     {"a\[CircleTimes]b", List[HoldComplete[CircleTimes[a, b]]]},
     {"a\[Divides]b", List[HoldComplete[Divisible[b, a]]]},
     {"\[LeftCeiling]x\[RightCeiling]", List[HoldComplete[Ceiling[x]]]},
-    {"a\[InvisibleSpace]b", List[HoldComplete[Times[a, b]]]}
+    {"a\[InvisibleSpace]b", List[HoldComplete[Times[a, b]]]},
+    {"a;\\[IndentingNewLine]b", List[HoldComplete[CompoundExpression[a, Null]], HoldComplete[b]]},
+    {"a\:f3a3b", List[HoldComplete[a], HoldComplete[b]]},
+    {"f[a\\[IndentingNewLine]b]", List[HoldComplete[f[Times[a, b]]]]},
+    {"a +\\[IndentingNewLine]b", List[HoldComplete[Plus[a, b]]]},
+    {"a\\[NewLine]b", List[HoldComplete[a], HoldComplete[b]]},
+    {"a\\[LineSeparator]b", List[HoldComplete[a], HoldComplete[b]]},
+    {"a\[ParagraphSeparator]b", List[HoldComplete[a], HoldComplete[b]]},
+    {"a\rb", List[HoldComplete[a], HoldComplete[b]]},
+    {"a = 1;\r\nb = 2\r\n", List[HoldComplete[CompoundExpression[Set[a, 1], Null]], HoldComplete[Set[b, 2]]]}
 };
 
 (* === forms: precedence, flat chains, minus and quotients, patterns, spans,
@@ -412,6 +421,7 @@ VerificationTest[
 (* === failures === *)
 wlStop[f_Failure] := {f["Position"], f["Incomplete"]};
 VerificationTest[FailureQ[WolframLanguageHeld["a = 1\nb = (c"]], True, TestID -> "wl: an unclosed bracket fails"]
+VerificationTest[FailureQ[WolframLanguageHeld["a\\[DiscretionaryLineSeparator]b"]], True, TestID -> "wl: a discretionary separator is no newline, nor whitespace"]
 VerificationTest[
     WolframLanguageHeld["a = 1\nb c)\nd"]["Position"],
     11,

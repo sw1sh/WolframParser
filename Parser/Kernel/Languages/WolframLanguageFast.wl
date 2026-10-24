@@ -25,18 +25,20 @@ Begin["`Private`"]
 (* --- characters --- *)
 
 (* the class of each character code: 1 a letter, $ or ` that begins a name,
-   2 a digit, 3 a space, tab, return or form feed, or the character of a
-   long name that is whitespace, 4 a newline, 5 a character past ASCII
-   that a name holds, 0 any other *)
+   2 a digit, 3 a space, tab or form feed, or the character of a long name
+   that is whitespace, 4 a newline, a return or the character of a long
+   name that is a newline, 5 a character past ASCII that a name holds, 0
+   any other *)
 $fastClasses := $fastClasses = Module[{t = ConstantArray[0, 65536], high = Range[128, 65535]},
     t[[ToCharacterCode["ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz$`"] + 1]] = 1;
     t[[Range[48, 57] + 1]] = 2;
-    t[[{32, 9, 13, 12} + 1]] = 3;
-    t[[11]] = 4;
+    t[[{32, 9, 12} + 1]] = 3;
+    t[[{10, 13} + 1]] = 4;
     t[[high + 1]] = 5;
     t[[ToCharacterCode[StringJoin[Keys[$nonLetterCharacters]]] + 1]] = 0;
     t[[Pick[high, StringMatchQ[Characters[FromCharacterCode[high]], WhitespaceCharacter]] + 1]] = 0;
     t[[ToCharacterCode[StringJoin[Lookup[$longNameTable["Characters"], $longNameTable["Whitespace"], Nothing]]] + 1]] = 3;
+    t[[ToCharacterCode[StringJoin[Lookup[$longNameTable["Characters"], $heldNewlineNames, Nothing]]] + 1]] = 4;
     t]
 
 (* --- operators --- *)
@@ -49,16 +51,19 @@ fastOp[name_String] := $fastOperatorIds[name]
 
 (* the long names the held grammar reads that are no ASCII operator's, each
    an operator after those, read at their first use; the whitespace ones
-   one more, and the invisible comma, a comma, one after it *)
-$fastLongNames := $fastLongNames = Complement[Keys[$nonLetterNames], Keys[$asciiLongNames], $longNameTable["Whitespace"], {"InvisibleComma"}]
+   one more, the invisible comma, a comma, one after it, and the newline
+   ones one after \[Not]'s *)
+$fastLongNames := $fastLongNames = Complement[Keys[$nonLetterNames], Keys[$asciiLongNames], $longNameTable["Whitespace"], $heldNewlineNames, {"InvisibleComma"}]
 $fastLongIds := $fastLongIds = AssociationThread[$fastLongNames -> Length[$fastOperators] + Range[Length[$fastLongNames]]]
 $fastSpaceId := $fastSpaceId = Length[$fastOperators] + Length[$fastLongNames] + 1
 $fastInvisibleCommaId := $fastInvisibleCommaId = $fastSpaceId + 1
 (* \[Not] and its character, which ! is not after an operand *)
 $fastNotId := $fastNotId = $fastSpaceId + 2
+$fastNewlineId := $fastNewlineId = $fastSpaceId + 3
 fastLongOp[name_String] := Which[
     KeyExistsQ[$fastLongIds, name], $fastLongIds[name],
     MemberQ[$longNameTable["Whitespace"], name], $fastSpaceId,
+    MemberQ[$heldNewlineNames, name], $fastNewlineId,
     name === "InvisibleComma", $fastInvisibleCommaId,
     True, 0]
 
@@ -92,7 +97,7 @@ $fastLongOpTable := $fastLongOpTable = Flatten[KeyValueMap[Join[{StringLength[#1
 $fastOpenAssociation = fastOp["<|"]; $fastCloseAssociation = fastOp["|>"]
 $fastGet = fastOp["<<"]; $fastPut = fastOp[">>"]; $fastPutAppend = fastOp[">>>"]
 $fastSpecial := $fastSpecial = {$fastOpenAssociation, $fastCloseAssociation, $fastGet, $fastPut, $fastPutAppend, fastOp["=."], fastOp["="],
-    $fastSpaceId, $fastInvisibleCommaId}
+    $fastSpaceId, $fastInvisibleCommaId, $fastNewlineId}
 
 (* --- tokens --- *)
 
@@ -127,7 +132,7 @@ fastFailure[position_Integer, incomplete_] := Failure["ParseError", <|
    three zeros after them, so that no look ahead reads past them, the
    class of each code, the operators of 1, 2 and 3 characters, the long-name
    long names (-1 a letter, else its operator) and {<|, |>, <<, >>, >>>,
-   =., =, whitespace, the invisible comma} -> {status, k, then for each of the
+   =., =, whitespace, the invisible comma, a newline} -> {status, k, then for each of the
    k tokens its kind, operator, start, end (just past it) and newline mark
    (1 where a newline outside a comment comes before it)}, the last token
    the end. Status 1: the source holds a character no token has, where the
@@ -172,6 +177,7 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                         cl == 3, i++,
                         cl == 4, nl = 1; i++,
                         c == 92 && lnEnd[[i]] > 0 && lnOp[[i]] == lexSpecial[[8]], i = lnEnd[[i]],
+                        c == 92 && lnEnd[[i]] > 0 && lnOp[[i]] == lexSpecial[[10]], nl = 1; i = lnEnd[[i]],
                         c == 40 && i < n && lexCodes[[i + 1]] == 42,
                             depth = 1; j = i + 2;
                             While[ depth > 0,

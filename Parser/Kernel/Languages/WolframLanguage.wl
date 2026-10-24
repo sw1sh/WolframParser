@@ -184,12 +184,12 @@ WolframLanguageGrammar[alg_] := grammar[alg]["Program"]
    top-level expression and the whitespace after it|> *)
 grammar[alg_] := Module[{space, wsLine, wsAll, nested, top, statement},
     space = ParseChoice[
-        ParseCharacter[" " | "\t" | "\r" | "\f"],
+        ParseCharacter[" " | "\t" | "\f"],
         ParseLiteral["\\\n"], ParseLiteral["\\\r\n"],
         commentParser[],
         ParseChoice @@ (ParseLiteral /@ $longWhitespace)];
     wsLine = ParseMany[space];
-    wsAll = ParseMany[ParseChoice[ParseCharacter["\n"], space]];
+    wsAll = ParseMany[ParseChoice[ParseCharacter["\n" | "\r"], ParseChoice @@ (ParseLiteral /@ $heldNewlines), space]];
     nested = RecCell[];
     SetRec[nested, expressionParser[alg, wsAll, wsAll, nested]];
     top = expressionParser[alg, wsLine, wsAll, nested];
@@ -889,6 +889,11 @@ closerStartQ[c_String] := StringContainsQ["])}|\\", c] || KeyExistsQ[$closerLabe
 (* whitespace and newlines in long names, and their characters *)
 $longWhitespace := $longWhitespace = Catenate[longNameSpellings /@ $longNameTable["Whitespace"]]
 $longNewlines := $longNewlines = Catenate[longNameSpellings /@ $longNameTable["Newlines"]]
+(* the long names the kernel reads as newlines, written out or as their characters: those
+   CodeParser calls newlines but the two discretionary separators, which the kernel reads as
+   no token *)
+$heldNewlineNames := $heldNewlineNames = DeleteCases[$longNameTable["Newlines"], "DiscretionaryLineSeparator" | "DiscretionaryParagraphSeparator"]
+$heldNewlines := $heldNewlines = Catenate[longNameSpellings /@ $heldNewlineNames]
 $lineTriviaStarts := $lineTriviaStarts = AssociationThread[Union[{" ", "\t", "(", "\\"}, Select[$longWhitespace, StringLength[#] === 1 &]] -> True]
 $allTriviaStarts := $allTriviaStarts = Join[$lineTriviaStarts, AssociationThread[Union[{"\n", "\r"}, Select[$longNewlines, StringLength[#] === 1 &]] -> True]]
 lineTriviaStartQ[c_String] := KeyExistsQ[$lineTriviaStarts, c]
