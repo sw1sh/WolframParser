@@ -1028,6 +1028,63 @@ $fastWarnDeclaration = FunctionDeclaration[fastWarn,
 
 fastWarnFunction := fastWarnFunction = typedFunction[fastWarn, $fastWarnDeclaration]
 
+(* --- the typed statement ranges and leaves --- *)
+
+(* Each statement of a program read whole, typed code over packed integers: the program -> {how
+   many, then for each its first instruction, its last, its first token and the token after it} *)
+$fastRangesDeclaration = FunctionDeclaration[fastRanges,
+    Typed[{"PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
+    Function[{rgProg},
+        Module[{n = Min[rgProg[[2]], Quotient[Length[rgProg] - 2, 3]], count = 0, j = 1, k = 0, first = 1, out},
+            While[j <= n, If[rgProg[[3 j]] == 25, count++]; j++];
+            out = Table[0, {1 + 4 count}];
+            out[[1]] = count;
+            j = 1;
+            While[ j <= n,
+                If[ rgProg[[3 j]] == 25,
+                    out[[2 + 4 k]] = first; out[[3 + 4 k]] = j; out[[4 + 4 k]] = rgProg[[3 j + 1]]; out[[5 + 4 k]] = rgProg[[3 j + 2]];
+                    k++; first = j + 1];
+                j++];
+            out]]];
+
+fastRangesFunction := fastRangesFunction = typedFunction[fastRanges, $fastRangesDeclaration]
+
+(* The leaves of a program, its instructions of code 1, typed code over packed integers: the
+   program and the lexer's tokens -> {how many, the instructions, 1 if their tokens come in order,
+   then each one's kind, its token, its mark, 1 for a number literal, then for each instruction
+   how many leaves come before it, and last the lengths to cut the codes from the first leaf by:
+   each leaf's text and the gap after it} *)
+$fastLeafDeclaration = FunctionDeclaration[fastLeafCodes,
+    Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
+    Function[{lfProg, lfLexed},
+        Module[{n = Min[lfProg[[2]], Quotient[Length[lfProg] - 2, 3]], m = 0, j = 1, k = 0, t = 0, base = 0, ordered = 1, out},
+            While[j <= n, If[lfProg[[3 j]] == 1, m++]; j++];
+            out = Table[0, {3 + 3 m + n + 1 + Max[2 m - 1, 0]}];
+            out[[1]] = m; out[[2]] = n;
+            j = 1;
+            While[ j <= n,
+                out[[3 + 3 m + j]] = k;
+                If[ lfProg[[3 j]] == 1,
+                    k++;
+                    out[[3 + k]] = lfProg[[3 j + 1]];
+                    out[[3 + m + k]] = lfProg[[3 j + 2]];
+                    out[[3 + 2 m + k]] = If[lfProg[[3 j + 1]] == 3 || lfProg[[3 j + 1]] == 4, 1, 0]];
+                j++];
+            out[[3 + 3 m + n + 1]] = k;
+            base = 3 + 3 m + n + 1;
+            k = 1;
+            While[ k <= m,
+                t = out[[3 + m + k]];
+                out[[base + 2 k - 1]] = lfLexed[[5 t + 1]] - lfLexed[[5 t]];
+                If[ k < m,
+                    out[[base + 2 k]] = lfLexed[[5 out[[3 + m + k + 1]]]] - lfLexed[[5 t + 1]];
+                    If[out[[base + 2 k]] < 0, ordered = 0]];
+                k++];
+            out[[3]] = ordered;
+            out]]];
+
+fastLeafFunction := fastLeafFunction = typedFunction[fastLeafCodes, $fastLeafDeclaration]
+
 $fastNewlineNames := $fastNewlineNames = Developer`ToPackedArray[Flatten[Map[Join[{StringLength[#]}, ToCharacterCode[#]] &, $heldNewlineNames]]]
 
 (* --- the typed parser's tables --- *)
@@ -1096,16 +1153,18 @@ fastLeafValues[kinds_List, texts_List] := If[ Length[texts] <= 64,
 (* a leaf's value, made at its first kind and text among those seen *)
 fastLeafOnce[kind_Integer, text_String] := With[{key = {kind, text}}, If[KeyExistsQ[seen, key], seen[key], seen[key] = fastLeafValue[kind, text]]]
 
-(* the leaves of a postfix program, its instructions of code 1, in order: their kinds, their texts,
-   cut from the codes in one pass, their marks, 1 for a number literal, and how many come before
-   each instruction, so that the leaves of the instructions i to j are those from Before[[i]] + 1
-   to Before[[j + 1]] *)
-fastLeafData[{}, _List, _List, _List] := <|"Kinds" -> {}, "Texts" -> {}, "Marks" -> {}, "Before" -> {0}|>
-fastLeafData[steps_List, codes_List, starts_List, ends_List] := Block[{ops = steps[[1 ;; ;; 3]], kinds, toks},
-    toks = Pick[steps[[3 ;; ;; 3]], ops, 1];
-    kinds = Pick[steps[[2 ;; ;; 3]], ops, 1];
-    <|"Kinds" -> kinds, "Texts" -> tokenTexts[codes, starts[[toks]], ends[[toks]]], "Marks" -> 1 - Unitize[(kinds - 3) (kinds - 4)],
-      "Before" -> Prepend[Accumulate[1 - Unitize[ops - 1]], 0]|>]
+(* the leaves of a program, its instructions of code 1, in order, by fastLeafCodes: their kinds, their
+   texts, cut from the codes in one pass where their tokens come in order, their marks, 1 for a
+   number literal, and how many come before each instruction, so that the leaves of the
+   instructions i to j are those from Before[[i]] + 1 to Before[[j + 1]] *)
+fastLeafData[prog_List, codes_List, lexed_List] := With[{d = fastLeafFunction[prog, lexed]},
+    With[{m = d[[1]], n = d[[2]]},
+        <|"Kinds" -> d[[4 ;; 3 + m]],
+          "Texts" -> Which[
+            m === 0, {},
+            d[[3]] === 1, FromCharacterCode[TakeList[codes[[lexed[[5 d[[4 + m]]]] ;; lexed[[5 d[[3 + 2 m]] + 1]] - 1]], d[[5 + 3 m + n ;;]]][[1 ;; ;; 2]]],
+            True, tokenTexts[codes, lexed[[5 d[[4 + m ;; 3 + 2 m]]]], lexed[[5 d[[4 + m ;; 3 + 2 m]] + 1]]]],
+          "Marks" -> d[[4 + 2 m ;; 3 + 3 m]], "Before" -> d[[4 + 3 m ;; 4 + 3 m + n]]|>]]
 
 (* the texts of the tokens from st to en in codes, in order, in one pass where they are *)
 tokenTexts[codes_List, st_List, en_List] := Which[
@@ -1217,8 +1276,8 @@ fastHeld[s_String] := Catch[Block[{codes = ToCharacterCode[s], padded, lexed, cu
         1, Throw[stoppedFailure[lexed, prog[[2]]], $fastGiveUp],
         _, fastGiveUp[]];
     Block[{$fcodes = codes, $fs = lexed[[5 ;; ;; 5]], $fe = lexed[[6 ;; ;; 5]]},
-        With[{steps = prog[[3 ;; 3 prog[[2]] + 2]]}, With[{leaves = fastLeafData[steps, codes, $fs, $fe]},
-            fastBuild[steps, leaves["Kinds"], leaves["Texts"], leaves["Marks"]]]]]], $fastGiveUp]
+        With[{leaves = fastLeafData[prog, codes, lexed]},
+            fastBuild[prog[[3 ;; 3 prog[[2]] + 2]], leaves["Kinds"], leaves["Texts"], leaves["Marks"]]]]], $fastGiveUp]
 
 (* the typed parser over the lexer's tokens of a source, its codes padded *)
 fastParseTokens[lexed_List, padded_List] := fastParseFunction[lexed, fastLedIndices[lexed], $fastSpecTable,
@@ -1268,8 +1327,7 @@ sourceFailure[state_Association, f_Failure, from_Integer] := With[{p = sourcePos
 tokensBefore[lexed_List, k_Integer] := Developer`ToPackedArray[Join[{0, k}, lexed[[3 ;; 2 + 5 (k - 1)]], {0, 0, lexed[[5 k]], lexed[[5 k]], lexed[[5 k + 2]]}]]
 
 (* each statement of a program read whole: {its first instruction, its last, its first token, the token after it} *)
-statementRanges[prog_List] := With[{js = Flatten[Position[prog[[3 ;; 2 + 3 prog[[2]] ;; 3]], 25]]},
-    If[js === {}, {}, Transpose[{Prepend[Most[js] + 1, 1], js, prog[[3 js + 1]], prog[[3 js + 2]]}]]]
+statementRanges[prog_List] := With[{r = fastRangesFunction[prog]}, If[r[[1]] === 0, {}, Partition[r[[2 ;;]], 4]]]
 
 (* where the lexer stops, the failure: the source ends in a string or a comment not closed, or
    holds a character no token has *)
@@ -1316,7 +1374,7 @@ segmentParts[state_Association, from_Integer, pending_] := Block[
     While[first =!= None && ranges =!= {} && lexed[[5 first + 2]] === 0, first = ranges[[-1, 3]]; ranges = Most[ranges]];
     seg = Length[st["Segments"]] + 1;
     st["Segments"] = Append[st["Segments"], <|"Codes" -> codes, "Lexed" -> lexed, "Starts" -> lexed[[5 ;; ;; 5]], "Ends" -> lexed[[6 ;; ;; 5]], "Program" -> prog,
-        "Warning" -> warningTokens[codes, lexed], "Leaves" -> fastLeafData[prog[[3 ;; 3 prog[[2]] + 2]], codes, lexed[[5 ;; ;; 5]], lexed[[6 ;; ;; 5]]]|>];
+        "Warning" -> warningTokens[codes, lexed], "Leaves" -> fastLeafData[prog, codes, lexed]|>];
     (* The lines, positions of the segment: the Nulls of the gap before the first statement, each
        statement and the Nulls of the gap after it, then where reading stops or the end. The first
        line break after a statement, or after the one pending, ends its line, else the token after
