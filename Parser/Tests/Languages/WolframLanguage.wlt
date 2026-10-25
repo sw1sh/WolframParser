@@ -631,11 +631,17 @@ VerificationTest[
    where it has no program *)
 wlProgramParts[s_String] := With[{p = WolframLanguageProgram[s]},
     If[ p === None, None,
-        Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$fcodes = ToCharacterCode[s]},
-            Map[If[#[[1]] === 0, HoldComplete[Null],
-                First[Wolfram`Parser`Languages`WolframLanguage`Private`fastBuild[p["Steps"][[3 #[[1]] - 2 ;; 3 #[[2]]]],
-                    p["Kinds"][[#[[3]] ;; #[[4]]]], p["Texts"][[#[[3]] ;; #[[4]]]], p["Marks"][[#[[3]] ;; #[[4]]]]]]] &,
-                p["Statements"]]]]]
+        With[{codes = p[[1]], prog = p[[2]], d = p[[3]], m = p[[3, 2]]},
+            With[{kinds = d[[4 ;; 3 + m]], marks = d[[4 + m ;; 3 + 2 m]], texts = MapThread[FromCharacterCode[codes[[#1 ;; #2 - 1]]] &, {d[[4 + 2 m ;; 3 + 3 m]], d[[4 + 3 m ;; 3 + 4 m]]}]},
+                Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$fcodes = codes},
+                    Map[If[#[[1]] === 0, HoldComplete[Null],
+                        First[Wolfram`Parser`Languages`WolframLanguage`Private`fastBuild[prog[[3 #[[1]] ;; 3 #[[2]] + 2]], kinds[[#[[3]] ;; #[[4]]]], texts[[#[[3]] ;; #[[4]]]], marks[[#[[3]] ;; #[[4]]]]]]] &,
+                        Partition[d[[4 + 4 m ;;]], 4]]]]]]]
+
+(* the instructions the parser reads of a source, each {code, a, b} *)
+wlInstructions[s_String] := With[{sym = Symbol["Wolfram`Parser`Languages`WolframLanguage`Private`" <> #] &, padded = Join[ToCharacterCode[s], {0, 0, 0}]},
+    With[{prog = sym["fastParseTokens"][sym["fastLexFunction"] @@ Prepend[sym /@ {"$fastClasses", "$fastOp1", "$fastOp2Flat", "$fastOp3Table", "$fastLongOpTable", "$fastSpecial"}, padded], padded]},
+        Partition[prog[[3 ;; 3 prog[[2]] + 2]], 3]]]
 
 Scan[
     Function[c, VerificationTest[wlProgramParts[c[[1]]], If[StringContainsQ[c[[1]], "\\\n"], None, c[[2]]], TestID -> "wl program: " <> ToString[c[[1]], InputForm]]],
@@ -645,21 +651,25 @@ VerificationTest[
     {None},
     TestID -> "wl program: a source that does not read whole, or that gives a warning, has none"]
 VerificationTest[
-    AssociationQ /@ (WolframLanguageProgram /@ {"f[1, +2]", "(* \\[Foo] *) a", "\"\\8\""}),
+    MatchQ[#, {_List, _List, _List}] & /@ (WolframLanguageProgram /@ {"f[1, +2]", "(* \\[Foo] *) a", "\"\\8\""}),
     {True, True, True},
     TestID -> "wl program: a source that reads whole with no warning has one"]
 VerificationTest[
-    Lookup[WolframLanguageProgram["x = 1\n\ny = x + 1"], {"Kinds", "Texts", "Marks", "Statements"}],
-    {{1, 3, 1, 1, 3}, {"x", "1", "y", "x", "1"}, {0, 1, 0, 0, 1}, {{1, 4, 1, 2}, {0, 0, 0, 0}, {5, 10, 3, 5}}},
-    TestID -> "wl program: the leaves, and a row for each statement and each Null"]
+    WolframLanguageProgram["x = 1\n\ny = x + 1"][[3]],
+    {0, 5, 3, 1, 3, 1, 1, 3, 0, 1, 0, 0, 1, 1, 5, 8, 12, 16, 2, 6, 9, 13, 17, 1, 4, 1, 2, 0, 0, 0, 0, 5, 10, 3, 5},
+    TestID -> "wl program: the leaves' kinds, marks, starts and ends, and a row for each statement and each Null"]
 VerificationTest[
-    {Lookup[WolframLanguageProgram[""], {"Steps", "Statements"}], WolframLanguageProgram["{}"]["Statements"]},
-    {{{}, {{0, 0, 0, 0}}}, {{1, 2, 1, 0}}},
+    {WolframLanguageProgram[""], WolframLanguageProgram["{}"][[3]]},
+    {{{}, {0, 0}, {0, 0, 1, 0, 0, 0, 0}}, {0, 0, 1, 1, 2, 1, 0}},
     TestID -> "wl program: a source with no statement is one Null; a statement with no leaf ends its leaves before they begin"]
 VerificationTest[
-    Developer`PackedArrayQ /@ Lookup[WolframLanguageProgram["f[x_] := x^2\n\ng[1]"], {"Steps", "Kinds", "Marks", "Statements"}],
-    {True, True, True, True},
-    TestID -> "wl program: its instructions, kinds, marks and rows are packed"]
+    Developer`PackedArrayQ /@ WolframLanguageProgram["f[x_] := x^2\n\ng[1]"],
+    {True, True, True},
+    TestID -> "wl program: its codes, instructions and parts are packed"]
+VerificationTest[
+    Cases[wlInstructions[#], {11, a_, _} :> a] & /@ {"f[1,]", "{,}", "f[\\[InvisibleComma]]", "<|a -> 1,|>", "x[[1,]]", "a; b;", "f[a; , 1]"},
+    {{1}, {1, 1}, {1, 1}, {1}, {1}, {0}, {0}},
+    TestID -> "wl: the Null a comma leaves is marked, a semicolon's is not"]
 VerificationTest[
     Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$heldNextStates = {}},
         WolframLanguageProgram["wlProgramName"]; {Wolfram`Parser`Languages`WolframLanguage`Private`$heldNextStates, Names["*`wlProgramName"]}],

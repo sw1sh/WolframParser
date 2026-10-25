@@ -32,22 +32,30 @@ And these tables of the paclet, constant for a version of it:
 
 `WolframLanguageProgram[s]` gives the program of all of a plain source at once: one that reads
 whole, with no line continuation and no syntax warning. Any other source is `None`, and
-`WolframLanguageHeldNext` reads it. The program is an association:
+`WolframLanguageHeldNext` reads it. The program is `{codes, prog, parts}`, three packed arrays of
+integers:
 
-| Key | What it is |
+| Array | What it is |
 |---|---|
-| `"Steps"` | All the statements' instructions, packed: instruction `k` is `Steps[[3k - 2 ;; 3k]]`. |
-| `"Kinds"`, `"Texts"`, `"Marks"` | All their leaves, as `fastLeafData` gives them, the kinds and the marks packed. |
-| `"Statements"` | A packed matrix with a row for each part `WolframLanguageHeldNext` gives, in order. A statement's row is `{first instruction, last instruction, first leaf, last leaf}`, its last instruction its code 25, its last leaf one less than its first where it has none, as `{}` has none. A Null's row, a line with no statement, is `{0, 0, 0, 0}`. A source with no statement is one Null. |
+| `codes` | The source's character codes. |
+| `prog` | `fastParse`'s program of all the statements: `{0, n}` and then the `n` instructions, three integers each: instruction `k` is `prog[[3k ;; 3k + 2]]`. |
+| `parts` | `fastWhole`'s: `{0, m, r}`, then the `m` leaves' kinds, their marks, their starts and their ends, `m` integers each, then `r` rows of four, one for each part `WolframLanguageHeldNext` gives, in order. |
 
-An empty list is `{}`, which Wolfram 15 does not pack. A builder reads the rows in turn: a Null's
-row gives `HoldComplete[Null]`, and a statement's builds its instructions over its leaves, the
-statement's names made then, in the contexts the statements before it left. The parts are those
-`WolframLanguageHeldNext` gives, each with no warning; `dev/check-reader-program.wls` holds the two
-to each other on the reader corpus. Instruction 28 reads the source's own characters, so a builder
-keeps the source with its program. Making the program takes the lexer, the parser, the statement
-ranges, the lines, the leaves and, for a source with a comma or a backslash, the tokens that may
-give a warning, and it keeps nothing.
+A leaf's text is `codes[[start ;; end - 1]]`, the characters of its token. A statement's row is
+`{first instruction, last instruction, first leaf, last leaf}`, its last instruction its code 25,
+its last leaf one less than its first where it has none, as `{}` has none. A Null's row, a line with
+no statement, is `{0, 0, 0, 0}`, and a source with no statement is one Null. `parts[[1]]`, the
+count of the Nulls a comma leaves, is 0 in a program. An empty `codes`, for the empty source, is
+`{}`, which Wolfram 15 does not pack.
+
+A builder reads the rows in turn: a Null's row gives `HoldComplete[Null]`, and a statement's builds
+its instructions over its leaves, the statement's names made then, in the contexts the statements
+before it left. Instruction 28 reads the codes too. The parts are those `WolframLanguageHeldNext`
+gives, each with no warning; `dev/check-reader-program.wls` holds the two to each other on the
+reader corpus. A source read whole warns only of a `Null` a comma leaves, which instruction 11
+marks, and of a string's escapes. Making the program takes the lexer, the parser, the lines and
+`fastWhole`, typed code all, and, for a source with a backslash, `warningsAt` over its strings; it
+keeps nothing.
 
 ## The machine
 
@@ -91,7 +99,7 @@ where the instruction takes none.
 | 8 | n | A call, pop `n` (the arguments): `x[args...]`. |
 | 9 | head, n | A group. `Paren`: the value stays, its mark 1 where it was 1, else 0. Else pop `n`, `head[items...]`: `List`, `Association` and the long-name brackets. |
 | 10 | n | A part, pop `n` (the indices): `Part[x, indices...]`. |
-| 11 | | Push `Null`. |
+| 11 | 1 where a comma leaves it, else 0 | Push `Null`. The `Null` a comma leaves, as in `f[1,]`, gives the warning `{"com"}`; a `;`'s gives none. |
 | 12 | | Push `All`. |
 | 13 | | Push the integer `1`, mark 1: the first of a span begun with `;;`. |
 | 14 | n | A message name, pop `n` (the symbol and its tags): `MessageName[items...]`. |

@@ -26,12 +26,14 @@ heldParts[s_String] := Module[{pos = 1, r, parts = {}, plain = Symbol[private <>
         AppendTo[parts, First[r]]; If[r[[3, "Warnings"]] =!= {}, plain = False]; pos = r[[2]]];
     {parts, plain}];
 
-(* the parts of a program, each statement built alone *)
-programParts[s_String, p_Association] := With[{build = Symbol[private <> "fastBuild"]},
-    Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$fcodes = ToCharacterCode[s]},
-        Map[If[#[[1]] === 0, HoldComplete[Null],
-            First[build[p["Steps"][[3 #[[1]] - 2 ;; 3 #[[2]]]], p["Kinds"][[#[[3]] ;; #[[4]]]], p["Texts"][[#[[3]] ;; #[[4]]]], p["Marks"][[#[[3]] ;; #[[4]]]]]]] &,
-            p["Statements"]]]];
+(* the parts of a program {codes, prog, parts}, each statement built alone, its leaves' texts the
+   codes from their starts to their ends *)
+programParts[{codes_List, prog_List, d_List}] := With[{build = Symbol[private <> "fastBuild"], m = d[[2]]},
+    With[{kinds = d[[4 ;; 3 + m]], marks = d[[4 + m ;; 3 + 2 m]], texts = MapThread[FromCharacterCode[codes[[#1 ;; #2 - 1]]] &, {d[[4 + 2 m ;; 3 + 3 m]], d[[4 + 3 m ;; 3 + 4 m]]}]},
+        Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$fcodes = codes},
+            Map[If[#[[1]] === 0, HoldComplete[Null],
+                First[build[prog[[3 #[[1]] ;; 3 #[[2]] + 2]], kinds[[#[[3]] ;; #[[4]]]], texts[[#[[3]] ;; #[[4]]]], marks[[#[[3]] ;; #[[4]]]]]]] &,
+                Partition[d[[4 + 4 m ;;]], 4]]]]];
 
 packedQ[list_] := list === {} || Developer`PackedArrayQ[list, Integer];
 
@@ -40,8 +42,9 @@ wrong[s_String] := With[{p = WolframLanguageProgram[s], h = heldParts[s]},
     Which[
         p === None, If[h[[2]], {{s, "no program", None, h[[1]]}}, {}],
         ! h[[2]], {{s, "a program", None, h[[1]]}},
-        ! AllTrue[Lookup[p, {"Steps", "Kinds", "Marks", "Statements"}], packedQ], {{s, "not packed", None, h[[1]]}},
-        True, With[{parts = programParts[s, p]}, If[parts === h[[1]], {}, {{s, "parts", parts, h[[1]]}}]]]];
+        ! AllTrue[p, packedQ], {{s, "not packed", None, h[[1]]}},
+        p[[1]] =!= ToCharacterCode[s] || p[[3, 1]] =!= 0, {{s, "codes or commas' Nulls", None, h[[1]]}},
+        True, With[{parts = programParts[p]}, If[parts === h[[1]], {}, {{s, "parts", parts, h[[1]]}}]]]];
 
 report[name_String, sources_List] := With[{found = Catenate[wrong /@ sources]},
     Print[name, ": ", Length[sources], " sources, ", Count[sources, s_ /; WolframLanguageProgram[s] =!= None], " plain, ", Length[found], " wrong"];

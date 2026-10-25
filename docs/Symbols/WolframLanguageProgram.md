@@ -12,25 +12,24 @@ RelatedGuides: [ParserZoo]
 
 ## Usage
 
-<code>[WolframLanguageProgram]()[*code*]</code> gives the program the compiled reader makes of the Wolfram Language source string *code*, its instructions, its leaves and a row for each part [WolframLanguageHeldNext]() reads of it, where *code* reads whole with no line continuation and no syntax warning, and [None]() for any other *code*.
+<code>[WolframLanguageProgram]()[*code*]</code> gives the program the compiled reader makes of the Wolfram Language source string *code*, <code>{*codes*, *prog*, *parts*}</code>: its character codes, the instructions of its statements, and its leaves with a row for each part [WolframLanguageHeldNext]() reads of it, where *code* reads whole with no line continuation and no syntax warning, and [None]() for any other *code*.
 
 ## Details & Options
 
-- The program is an [Association]() with these keys:
+- The program is three packed arrays of integers:
 
-| Key | Value |
+| Array | Value |
 |---|---|
-| `"Steps"` | the instructions of all the statements of *code*, three integers each, one after another: instruction *k* is <code>*steps*[[3 *k* - 2 ;; 3 *k*]]</code> |
-| `"Kinds"` | the kind of each leaf, a token whose value an instruction pushes |
-| `"Texts"` | the text of each leaf in *code* |
-| `"Marks"` | the mark of each leaf, 1 for a number literal and 0 for any other |
-| `"Statements"` | a row for each part of *code*, in order |
+| *codes* | the character codes of *code* |
+| *prog* | `{0, n}`, then the *n* instructions of all the statements of *code*, three integers each: instruction *k* is <code>*prog*[[3 *k* ;; 3 *k* + 2]]</code> |
+| *parts* | `{0, m, r}`, then the kinds of the *m* leaves, their marks, their starts and their ends, *m* integers each, then a row of four for each of the *r* parts of *code* |
 
+- A leaf is a token whose value an instruction pushes. Its mark is 1 for a number literal and 0 for any other, and its text the characters of *code* from its start to the one before its end.
 - A statement's row is `{first, last, firstLeaf, lastLeaf}`: its instructions from *first* to *last*, the last of them the one that ends the statement, and its leaves from *firstLeaf* to *lastLeaf*. A statement with no leaf, such as `{}`, has a *lastLeaf* one less than its *firstLeaf*.
 - A row `{0, 0, 0, 0}` is a Null, a line with no statement on it, which [WolframLanguageHeldNext]() reads as <code>[HoldComplete]()[[Null]()]</code>, as [ToExpression]() gives the parts of *code*. A source with no statement is one Null.
-- Each statement built from its instructions over its leaves, as the reader's build pass builds it, is the part [WolframLanguageHeldNext]() gives, its names made in the [$Context]() and [$ContextPath]() of the moment it is built. The program makes no names: a leaf is its text.
+- Each statement built from its instructions over its leaves, as the reader's build pass builds it, is the part [WolframLanguageHeldNext]() gives, its names made in the [$Context]() and [$ContextPath]() of the moment it is built. The program makes no names: a leaf is its characters.
 - The instructions and the kinds of the leaves are those of the reader's build program, which the paclet's note `ReaderBuild.md` describes for a builder of its own, such as a kernel's.
-- `"Steps"`, `"Kinds"`, `"Marks"` and `"Statements"` are packed arrays of integers, but for an empty list, which is not packed.
+- The *codes* of the empty source are `{}`, a list Wolfram 15 does not pack.
 - A source with a line continuation, a source that does not read whole, and a source with a statement that gives a syntax warning, such as a comma that leaves a [Null]() or a string escape with no meaning, have no program; [WolframLanguageHeldNext]() reads them.
 - Each call reads *code* anew, and nothing is kept for a call after it.
 
@@ -42,12 +41,12 @@ The program of a source of two statements with a blank line between them:
 WolframLanguageProgram["x = 1\n\ny = x + 1"]
 ```
 
-<!-- => <|"Steps" -> {1, 1, 1, 1, 3, 3, 4, 61, 0, 25, 1, 4, 1, 1, 4, 1, 1, 6, 1, 3, 8, 5, 28, 2, 4, 61, 0, 25, 4, 9}, "Kinds" -> {1, 3, 1, 1, 3}, "Texts" -> {"x", "1", "y", "x", "1"}, "Marks" -> {0, 1, 0, 0, 1}, "Statements" -> {{1, 4, 1, 2}, {0, 0, 0, 0}, {5, 10, 3, 5}}|> -->
+<!-- => {{120, 32, 61, 32, 49, 10, 10, 121, 32, 61, 32, 120, 32, 43, 32, 49}, {0, 10, 1, 1, 1, 1, 3, 3, 4, 61, 0, 25, 1, 4, 1, 1, 4, 1, 1, 6, 1, 3, 8, 5, 28, 2, 4, 61, 0, 25, 4, 9}, {0, 5, 3, 1, 3, 1, 1, 3, 0, 1, 0, 0, 1, 1, 5, 8, 12, 16, 2, 6, 9, 13, 17, 1, 4, 1, 2, 0, 0, 0, 0, 5, 10, 3, 5}} -->
 
-Its rows are the statement `x = 1`, a Null for the blank line, and the statement `y = x + 1`:
+Its parts: 5 leaves and 3 parts, then the leaves' kinds, marks, starts and ends, then a row for the statement `x = 1`, the Null of the blank line and the statement `y = x + 1`:
 
 ```wl
-WolframLanguageProgram["x = 1\n\ny = x + 1"]["Statements"]
+Partition[WolframLanguageProgram["x = 1\n\ny = x + 1"][[3, 24 ;;]], 4]
 ```
 
 <!-- => {{1, 4, 1, 2}, {0, 0, 0, 0}, {5, 10, 3, 5}} -->
@@ -62,18 +61,16 @@ WolframLanguageProgram["f[1,]"]
 
 ## Scope
 
-The texts of the leaves of a statement are those its row names:
+The rows of a program, after its leaves:
 
 ```wl
-With[{p = WolframLanguageProgram["x = 1\n\ny = x + 1"]}, p["Texts"][[p["Statements"][[3, 3]] ;; p["Statements"][[3, 4]]]]]
+rows[program_] := Partition[program[[3, 4 + 4 program[[3, 2]] ;;]], 4]
 ```
-
-<!-- => {"y", "x", "1"} -->
 
 A line with only a comment on it is a Null between two definitions:
 
 ```wl
-WolframLanguageProgram["f[x_] := x^2\n(* a note *)\ng[y_] := f[y] + 1"]["Statements"]
+rows[WolframLanguageProgram["f[x_] := x^2\n(* a note *)\ng[y_] := f[y] + 1"]]
 ```
 
 <!-- => {{1, 8, 1, 4}, {0, 0, 0, 0}, {9, 18, 5, 9}} -->
@@ -81,7 +78,7 @@ WolframLanguageProgram["f[x_] := x^2\n(* a note *)\ng[y_] := f[y] + 1"]["Stateme
 A statement with no leaf ends its leaves before they begin:
 
 ```wl
-WolframLanguageProgram["{}"]["Statements"]
+rows[WolframLanguageProgram["{}"]]
 ```
 
 <!-- => {{1, 2, 1, 0}} -->
@@ -89,10 +86,18 @@ WolframLanguageProgram["{}"]["Statements"]
 A source with no statement is one Null:
 
 ```wl
-WolframLanguageProgram[""]["Statements"]
+WolframLanguageProgram[""]
 ```
 
-<!-- => {{0, 0, 0, 0}} -->
+<!-- => {{}, {0, 0}, {0, 0, 1, 0, 0, 0, 0}} -->
+
+The texts of the leaves, the characters of the source from each one's start to the one before its end:
+
+```wl
+With[{p = WolframLanguageProgram["x = 1\n\ny = x + 1"]}, MapThread[FromCharacterCode[p[[1, #1 ;; #2 - 1]]] &, {p[[3, 14 ;; 18]], p[[3, 19 ;; 23]]}]]
+```
+
+<!-- => {"x", "1", "y", "x", "1"} -->
 
 ## Properties and Relations
 
@@ -107,7 +112,7 @@ Length[ToExpression["x = 1\n\ny = x + 1", InputForm, HoldComplete]]
 The program of a source makes none of its names:
 
 ```wl
-AssociationQ[WolframLanguageProgram["programNewName"]]
+ListQ[WolframLanguageProgram["programNewName"]]
 ```
 
 <!-- => True -->

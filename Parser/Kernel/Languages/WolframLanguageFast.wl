@@ -540,7 +540,8 @@ $fastUnsetSpecIndex := $fastUnsetSpecIndex = fastSpecIndex[{9, "Unset", "Unset"}
    Instructions: 1 a leaf {kind, token}; 2 prefix {head}; 3 postfix
    {head}; 4 binary {head}; 5 a flat chain {head, n}; 6 a relation's
    operator {head}; 7 a relation chain {n}; 8 a call {n}; 9 a group {head,
-   n}; 10 a part {n}; 11 Null; 12 All; 13 the 1 of a span begun with ;;;
+   n}; 10 a part {n}; 11 Null {1 where a comma leaves it, else 0}; 12 All;
+   13 the 1 of a span begun with ;;;
    14 a message name {n}; 15 a type's parameters {n}; 16 a derivative
    {primes}; 17 a ~f~ b; 18 a span {n}; 19 a compound {n}; 20 a tag set
    {1 :=, 2 =, 3 =.}; 21 a put {head}; 22 a get; 23 a pattern; 24 an
@@ -832,11 +833,11 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                     mode == 6,
                         base = 8 (sp - 1);
                         If[pTok[[5 t - 2]] == fr[[base + 3]] && (fr[[base + 3]] != 9 || pTok[[5 t - 1]] == fr[[base + 4]]), mode = 9, mode = 7],
-                    (* an item: Null before a comma or the closer, else an expression *)
+                    (* an item: Null before a comma or the closer, the Null a comma leaves, else an expression *)
                     mode == 7,
                         base = 8 (sp - 1);
                         If[ pTok[[5 t - 2]] == 18 || (pTok[[5 t - 2]] == fr[[base + 3]] && (fr[[base + 3]] != 9 || pTok[[5 t - 1]] == fr[[base + 4]])),
-                            on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; fr[[base + 5]] = fr[[base + 5]] + 1; mode = 8,
+                            on++; out[[3 on]] = 11; out[[3 on + 1]] = 1; out[[3 on + 2]] = 0; fr[[base + 5]] = fr[[base + 5]] + 1; mode = 8,
                             pMin = 0; pRbp = 0; pPlain = 0; mode = 1],
                     (* after an item: a comma and the next, else the closer *)
                     mode == 8,
@@ -1128,6 +1129,45 @@ $fastLeafDeclaration = FunctionDeclaration[fastLeafCodes,
             out]]];
 
 fastLeafFunction := fastLeafFunction = typedFunction[fastLeafCodes, $fastLeafDeclaration]
+
+(* The parts of a program read whole, for a builder of its own, typed code over packed integers:
+   the program, the lexer's tokens and the parts fastLines gives -> {how many Nulls a comma
+   leaves, how many leaves, how many parts but the end, then each leaf's kind, each one's mark, 1
+   for a number literal, each one's first character and the character after its last, then for
+   each part {first instruction, last, first leaf, last}, a statement with no leaf's last the one
+   before its first, and {0, 0, 0, 0} for a Null} *)
+$fastWholeDeclaration = FunctionDeclaration[fastWhole,
+    Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
+    Function[{whProg, whLexed, whLines},
+        Module[{n = Min[whProg[[2]], Quotient[Length[whProg] - 2, 3]], m = 0, nulls = 0, parts = whLines[[1]] - 1, j = 1, k = 0, r = 1, t = 0, row = 0,
+                base = 0, before, out},
+            While[j <= n, If[whProg[[3 j]] == 1, m++]; j++];
+            before = Table[0, {n + 1}];
+            out = Table[0, {3 + 4 m + 4 parts}];
+            j = 1;
+            While[ j <= n,
+                before[[j]] = k;
+                Which[
+                    whProg[[3 j]] == 1,
+                        k++; t = whProg[[3 j + 2]];
+                        out[[3 + k]] = whProg[[3 j + 1]];
+                        out[[3 + m + k]] = If[whProg[[3 j + 1]] == 3 || whProg[[3 j + 1]] == 4, 1, 0];
+                        out[[3 + 2 m + k]] = whLexed[[5 t]];
+                        out[[3 + 3 m + k]] = whLexed[[5 t + 1]],
+                    whProg[[3 j]] == 11 && whProg[[3 j + 1]] == 1, nulls++];
+                j++];
+            before[[n + 1]] = k;
+            base = 3 + 4 m;
+            While[ r <= parts,
+                row = 2 + 9 (r - 1);
+                If[ whLines[[row + 1]] == 1,
+                    out[[base + 4 r - 3]] = whLines[[row + 5]]; out[[base + 4 r - 2]] = whLines[[row + 6]];
+                    out[[base + 4 r - 1]] = before[[whLines[[row + 5]]]] + 1; out[[base + 4 r]] = before[[whLines[[row + 6]] + 1]]];
+                r++];
+            out[[1]] = nulls; out[[2]] = m; out[[3]] = parts;
+            out]]];
+
+fastWholeFunction := fastWholeFunction = typedFunction[fastWhole, $fastWholeDeclaration]
 
 $fastNewlineNames := $fastNewlineNames = Developer`ToPackedArray[Flatten[Map[Join[{StringLength[#]}, ToCharacterCode[#]] &, $heldNewlineNames]]]
 
@@ -1571,31 +1611,27 @@ WolframLanguageHeldNext[s_String, pos_Integer] := Block[{j = heldNextState[s], s
         _, $heldNextStates = Delete[$heldNextStates, j]; EndOfFile]]
 
 (* The program of a source that reads whole, with no line continuation and no syntax warning, as a
-   builder of its own takes it (docs/ReaderBuild.md): the instructions of all its statements and
-   their leaves, and a row for each part WolframLanguageHeldNext gives, in order, {first
-   instruction, last, first leaf, last} for a statement, its leaves none where the last is the one
-   before the first, and {0, 0, 0, 0} for a Null. Any other source is None, for
-   WolframLanguageHeldNext to read. Nothing is kept for a call after it. *)
-WolframLanguageProgram[s_String] := Block[{codes = ToCharacterCode[s], padded, lexed, prog},
-    If[ MemberQ[codes, 92] && lineContinuations[s] =!= {}, None,
+   builder of its own takes it (docs/ReaderBuild.md): {codes, prog, parts}, the source's character
+   codes, the parser's program of all its statements, and fastWhole's leaves and parts, a row for
+   each part WolframLanguageHeldNext gives, in order. Any other source is None, for
+   WolframLanguageHeldNext to read. The parser reads the tokens alone where none is two; the
+   only warnings of a source read whole are the Nulls a comma leaves, which the program marks,
+   and a string's escapes. Nothing is kept for a call after it. *)
+WolframLanguageProgram[s_String] := Block[{codes = ToCharacterCode[s], escapes, padded, lexed, prog, parts},
+    escapes = MemberQ[codes, 92];
+    If[ escapes && lineContinuations[s] =!= {}, None,
         padded = Join[codes, {0, 0, 0}];
         lexed = fastLexFunction[padded, $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];
-        {lexed, prog} = splitParse[lexed, padded];
-        If[lexed[[1]] === 0 && prog[[1]] === 0, wholeProgram[codes, lexed, prog], None]]]
+        If[ lexed[[1]] =!= 0, None,
+            prog = fastParseTokens[lexed, padded];
+            If[prog[[1]] === 3, {lexed, prog} = splitParse[lexed, padded]];
+            If[ lexed[[1]] =!= 0 || prog[[1]] =!= 0, None,
+                parts = fastWholeFunction[prog, lexed, fastLinesFunction[codes, lexed, prog, ConstantArray[0, lexed[[2]] + 1], $fastClasses, $fastNewlineNames,
+                    $fastNoKept, Developer`ToPackedArray[{prog[[2]], Length[codes] + 1, 0, 1, 0, 0, Length[codes], 0, 0}]]];
+                If[parts[[1]] > 0 || escapes && escapeWarnedQ[codes, lexed], None, {codes, prog, parts}]]]]]
 
-(* the program of a source read whole, codes its characters, lexed the lexer's tokens and prog the
-   parser's program of them: the parts the lines give it but the end, None where a statement's
-   tokens that may give a warning give one *)
-wholeProgram[codes_List, lexed_List, prog_List] := Block[{warn, parts, leaves, before},
-    warn = If[MemberQ[codes, 44] || MemberQ[codes, 92], warningTokens[codes, lexed], {{}, ConstantArray[0, lexed[[2]] + 1]}];
-    parts = Most[Partition[Drop[fastLinesFunction[codes, lexed, prog, warn[[2]], $fastClasses, $fastNewlineNames, $fastNoKept,
-        Developer`ToPackedArray[{First[fastRangesFunction[prog]], Length[codes] + 1, 0, 1, 0, 0, Length[codes], 0, 0}]], 2], 9]];
-    If[ warn[[1]] =!= {} && AnyTrue[parts, #[[1]] === 1 && #[[9]] > 0 && rowWarnings[codes, lexed, warn, #] =!= {} &], None,
-        leaves = fastLeafData[prog, codes, lexed]; before = leaves["Before"];
-        <|"Steps" -> prog[[3 ;; 3 prog[[2]] + 2]], "Kinds" -> leaves["Kinds"], "Texts" -> leaves["Texts"], "Marks" -> leaves["Marks"],
-          "Statements" -> Developer`ToPackedArray[Table[
-            If[ parts[[i, 1]] === 1, {parts[[i, 5]], parts[[i, 6]], before[[parts[[i, 5]]]] + 1, before[[parts[[i, 6]] + 1]]}, {0, 0, 0, 0}],
-            {i, Length[parts]}]]|>]]
+(* whether a string of a lexed source read whole warns of an escape *)
+escapeWarnedQ[codes_List, lexed_List] := warningsAt[codes, lexed, 1, lexed[[2]], 0, Flatten[Position[lexed[[3 ;; 2 + 5 lexed[[2]] ;; 5]], $tkString]]] =!= {}
 
 (* --- syntax alone --- *)
 
