@@ -1515,17 +1515,25 @@ $warnClosers := $warnClosers = Join[<|"Kinds" -> {$tkCloseSquare, $tkCloseCurly,
    string closed, and
    {"sntmsng"} for a long name with no name at its end, which the statement's text completes;
    unclosed, the string goes on to its token's end. *)
-stringWarnings[s_String, unclosed_] := StringCases[If[TrueQ[unclosed], StringDrop[s, 1], StringTake[s, {2, -2}]], Join[
+stringWarnings[s_String, unclosed_] := If[ TrueQ[unclosed],
+    StringCases[StringDrop[s, 1], $unclosedStringWarningRules],
+    StringCases[StringTake[s, {2, -2}], $stringWarningRules]]
+
+(* the rules of the warnings of a string's escapes, made once, a string's and one the source ends
+   in, whose long name not closed at its end is one no character has *)
+$stringWarningRules := $stringWarningRules = stringWarningRules["sntunc"]
+$unclosedStringWarningRules := $unclosedStringWarningRules = stringWarningRules["sntufn"]
+stringWarningRules[unclosedName_String] := Join[
     Map[First[#] -> Nothing &, $escapes], {
     "\\" ~~ CharacterRange["0", "7"] -> {"sntoct1"},
     "\\." -> {"sntoct2"},
     "\\:" -> {"snthex"},
     "\\|" -> {"snthex32"},
-    "\\[" ~~ name : $nameCharacter .. ~~ EndOfString :> {If[TrueQ[unclosed], "sntufn", "sntunc"], name},
+    "\\[" ~~ name : $nameCharacter .. ~~ EndOfString :> {unclosedName, name},
     "\\[" ~~ name : $nameCharacter .. :> {"sntufn", name},
     "\\[" ~~ EndOfString -> {"sntmsng"},
     "\\" ~~ c : (CharacterRange["a", "z"] | CharacterRange["A", "Z"]) :> {"stresc", c},
-    "\\" ~~ _ -> Nothing}]]
+    "\\" ~~ _ -> Nothing}]
 
 $nameCharacter = CharacterRange["a", "z"] | CharacterRange["A", "Z"] | CharacterRange["0", "9"];
 
