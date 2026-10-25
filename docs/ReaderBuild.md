@@ -23,7 +23,7 @@ And these tables of the paclet, constant for a version of it:
 
 | Table | What it is |
 |---|---|
-| `$fastHeadNames` | The heads, a list of strings, by head code: code `k` is the head named `$fastHeadNames[[k]]`. A head of a value is the `System`` symbol of that name, as `heldSymbol` gives it. Codes 1 to 7 are `"Minus"`, `"Unset"`, `"Paren"`, `"List"`, `"Association"`, `"NotNot"` and `"Optional"`. |
+| `$fastHeadNames` | The heads, a list of strings, by head code: code `k` is the head named `$fastHeadNames[[k]]`. A head of a value is the `` System` `` symbol of that name, as `heldSymbol` gives it. Codes 1 to 7 are `"Minus"`, `"Unset"`, `"Paren"`, `"List"`, `"Association"`, `"NotNot"` and `"Optional"`. |
 | special head codes | `fastHeadCode[name]` for `"Minus"`, `"Plus"`, `"Paren"`, `"Times"`, `"At"`, `"SlashSlash"` and `"Divide"`, which instructions 2, 4, 5 and 9 read apart. `"Paren"`, `"At"`, `"SlashSlash"` and `"Divide"` name no head of a value. |
 | `$fastSpliceHeads` | 1 by head code where a flat chain of the head splices (see Marks): `Composition`, `RightComposition`, `StringJoin`, `NonCommutativeMultiply`, `Dot`, `Times`, `Plus`, `And`, `Or`, `Alternatives`, `StringExpression`; else 0. |
 | `$fastIntegralList` | The integrals by index, each `{head name, kind}`, the kind `Integrate` for the integral form of instruction 24. |
@@ -131,7 +131,7 @@ A simplified chain is:
 
 - of one vector relation `r`: `r[{operands...}]`, a `List` of its operands;
 - of one relation `r` of another kind: `r[operands...]`;
-- of several heads, the affinity so far vector: `Developer`VectorInequality[o1, r1, o2, r2, ...]`;
+- of several heads, the affinity so far vector: `` Developer`VectorInequality[o1, r1, o2, r2, ...] ``;
 - of several heads, else: `Inequality[o1, r1, o2, r2, ...]`;
 
 the heads `ri` as symbols between the operands.
@@ -150,7 +150,7 @@ pair once.
 | 6 | Slot | `#` `Slot[1]`, `#n` `Slot[n]`, `#name` `Slot["name"]` with its long names read, `#"text"` `Slot` of the string, `##` `SlotSequence[1]`, `##n` `SlotSequence[n]`. |
 | 7 | Out | `%` `Out[]`, `%%` `Out[-2]`, `%` k times `Out[-k]`, `%n` `Out[n]`. |
 | 8 | File | The name of `<<`, `>>` or `>>>`: a quoted one as a string; else its characters with `\.hh`, `\:hhhh` and `\[Name]` decoded, as a string. |
-| 20 | Boxes | Linear syntax: `\(...\)` its boxes; `\!\(...\)` `Wolfram`Parser`Languages`WolframLanguage`LinearBoxes[boxes]`, whose `MakeExpression` the kernel applies. |
+| 20 | Boxes | Linear syntax: `\(...\)` its boxes; `\!\(...\)` `` Wolfram`Parser`Languages`WolframLanguage`LinearBoxes[boxes] ``, whose `MakeExpression` the kernel applies. |
 | 100 | Tag | A message name's tag: the text as a string. |
 
 ## Failures and warnings

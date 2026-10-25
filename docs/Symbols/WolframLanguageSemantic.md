@@ -19,7 +19,7 @@ RelatedGuides: [ParserZoo]
 - It has the keys of [ASTAlgebra](), so [WolframLanguageGrammar]() runs over either. Where [ASTAlgebra]() makes a node, `WolframLanguageSemantic` makes an [Association]() whose `"Expr"` is the expression in [HoldComplete]().
 - Two more keys tell the forms a minus treats apart: `"Literal"` is [True]() for a number as written, into which a minus folds (`-2`, also `-(2)`), and `"Chain"` for a product written as one (`b c`), whose factors a minus joins (`a - b c` is `Plus[a, Times[-1, b, c]]`). Parentheses keep the first and drop the second.
 - `"Binary"` gives `a/b` as `Times[a, Power[b, -1]]`; every other operator is a call of the head it is named by.
-- `"Leaf"` reads a number and a string from its text: `1.5`20` is a real of precision 20, a real of more digits than a machine real holds keeps the accuracy they give, and `"\[Alpha]\n"` decodes its escapes. A blank `x_h` is `Pattern[x, Blank[h]]`, `#2` is `Slot[2]` and `%%` is `Out[-2]`. A name is the one leaf the kernel's reader reads, under [HoldComplete](), since nothing else makes a symbol from its name without evaluating it.
+- `"Leaf"` reads a number and a string from its text: `` 1.5`20 `` is a real of precision 20, a real of more digits than a machine real holds keeps the accuracy they give, and `"\[Alpha]\n"` decodes its escapes. A blank `x_h` is `Pattern[x, Blank[h]]`, `#2` is `Slot[2]` and `%%` is `Out[-2]`. A name is the one leaf the kernel's reader reads, under [HoldComplete](), since nothing else makes a symbol from its name without evaluating it.
 
 ## Basic Examples
 
