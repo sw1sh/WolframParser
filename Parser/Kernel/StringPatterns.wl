@@ -414,12 +414,14 @@ classCodeQ[class_String, code_Integer] := If[code < 65536,
    test of a code:
      "Any"                     every character
      {"Named", class}          a class the paclet records: "digit", "letter", "word",
-                               "whitespace", "punctuation", "hexadecimal" or "regex \w", the
-                               word characters and _, of a word boundary [WL 15.0.0]
+                               "whitespace", "punctuation", "hexadecimal", or a class of a
+                               regex, "regex \w" the word characters and _ of a word boundary
+                               among them [WL 15.0.0]
      {"Codes", {code, ...}}    these characters
      {"Range", low, high}      the codes from low to high
      {"Union", {spec, ...}}    a character of one of them
-     {"Not", spec}             a character not of it *)
+     {"Not", spec}             a character not of it
+     {"Fold", spec}            a character of it, or one a caseless regex takes for one of it *)
 codeIn["Any"][_Integer] := True
 codeIn[{"Named", "digit"}][code_Integer] := 48 <= code <= 57 || (code > 127 && classCodeQ["digit", code])
 codeIn[{"Named", "letter"}][code_Integer] := 65 <= code <= 90 || 97 <= code <= 122 || (code > 127 && classCodeQ["letter", code])
@@ -430,6 +432,14 @@ codeIn[{"Codes", codes_List}][code_Integer] := MemberQ[codes, code]
 codeIn[{"Range", low_Integer, high_Integer}][code_Integer] := low <= code <= high
 codeIn[{"Union", specs_List}][code_Integer] := AnyTrue[specs, Function[spec, codeIn[spec][code]]]
 codeIn[{"Not", spec_}][code_Integer] := ! codeIn[spec][code]
+codeIn[{"Fold", spec_}][code_Integer] := AnyTrue[caselessSet[code], codeIn[spec]]
+
+(* The sets of characters a caseless regex takes for one another, from CaseFolding.wl beside this
+   file, read by Get alone when one is first asked for; and a character's set *)
+$caseFoldingFile = FileNameJoin[{DirectoryName[$InputFileName], "CaseFolding.wl"}];
+caselessSets[] := caselessSets[] = Replace[Get[$caseFoldingFile], Except[_List] -> {}]
+caselessMap[] := caselessMap[] = Association[Catenate[Map[Function[set, Map[# -> set &, set]], caselessSets[]]]]
+caselessSet[c_Integer] := Lookup[caselessMap[], c, {c}]
 
 (* The codes below 65536 of a class, so that many characters are tested at once: the packed table,
    by code + 1, 1 or 0, made once; None for a test that is no class. *)
@@ -444,6 +454,8 @@ tableOf[{"Range", low_Integer, high_Integer}] := Module[{table = ConstantArray[0
     If[Max[low, 0] <= Min[high, 65535], table[[Max[low, 0] + 1 ;; Min[high, 65535] + 1]] = 1]; table]
 tableOf[{"Union", specs_List}] := If[specs === {}, ConstantArray[0, 65536], Unitize[Total[specTable /@ specs]]]
 tableOf[{"Not", spec_}] := 1 - specTable[spec]
+tableOf[{"Fold", spec_}] := Module[{table = ConstantArray[0, 65536]},
+    Scan[Function[run, If[run[[1]] < 65536, table[[run[[1]] + 1 ;; Min[run[[2]], 65535] + 1]] = 1]], specRuns[{"Fold", spec}]]; table]
 
 
 (* ::Section:: *)
@@ -799,6 +811,7 @@ specRuns[{"Range", low_Integer, high_Integer}] := If[Max[low, 0] <= Min[high, 11
 specRuns[{"Union", specs_List}] := mergedRuns[Catenate[specRuns /@ specs]]
 specRuns[{"Not", spec_}] := With[{runs = mergedRuns[specRuns[spec]]},
     Select[Partition[Join[{0}, Flatten[Map[{#[[1]] - 1, #[[2]] + 1} &, runs]], {1114111}], 2], #[[1]] <= #[[2]] &]]
+specRuns[{"Fold", spec_}] := mergedRuns[Join[specRuns[spec], codeRuns[Catenate[Select[caselessSets[], Function[set, AnyTrue[set, codeIn[spec]]]]]]]]
 
 codeRuns[codes_List] := Map[{First[#], Last[#]} &, Split[Union[codes], #2 == #1 + 1 &]]
 

@@ -14,7 +14,8 @@ Begin["Wolfram`Parser`StringPatterns`Private`"]
 (* The program of a regex, or a Throw of None, tagged program, for a regex that Wolfram 15 does not
    take or that has a part no program has: recursion, a conditional group, a branch reset, a verb, a
    callout, \G, \K, \C, \X, a script of \p, a caseless backreference, a backreference in the group
-   it refers to, or a lookbehind of no fixed length. Its regex matches with the options Wolfram 15 gives every RegularExpression: a newline is
+   it refers to, a possessive repeat of a part that may match nothing, whose ways Wolfram 15's
+   matcher counts as it repeats, or a lookbehind of no fixed length. Its regex matches with the options Wolfram 15 gives every RegularExpression: a newline is
    \n alone, "." no newline, ^ and $ the ends of the text, $ also before a newline that ends it, the
    classes of characters Unicode's.
 
@@ -81,7 +82,7 @@ regexPiece[] := Module[{atom = regexAtom[], q},
     While[ (q = regexQuantifier[]) =!= None,
         atom = If[MatchQ[atom, _anchor | _lookahead | _lookbehind], assertionRepeat[atom, q],
             Replace[q, {
-                {min_, max_, "Possessive"} :> atomic[repeat[atom, min, max, True]],
+                {min_, max_, "Possessive"} :> If[nullableQ[atom], regexFails[], atomic[repeat[atom, min, max, True]]],
                 {min_, max_, greedy_} :> repeat[atom, min, max, greedy]}]];
         regexSpace[]];
     atom]
@@ -201,14 +202,14 @@ fixedLength[_] := None
 (* an escape: a class, an anchor, a backreference, \Q...\E, or a character *)
 regexEscape[] := With[{c = regexNext[]},
     Switch[ c,
-        100, regexClass[{"Named", "regex \\d"}], 68, regexClass[{"Not", {"Named", "regex \\d"}}],
-        119, regexClass[{"Named", "regex \\w"}], 87, regexClass[{"Not", {"Named", "regex \\w"}}],
-        115, regexClass[{"Named", "regex \\s"}], 83, regexClass[{"Not", {"Named", "regex \\s"}}],
-        104, regexClass[{"Named", "regex \\h"}], 72, regexClass[{"Not", {"Named", "regex \\h"}}],
-        118, regexClass[{"Named", "regex \\v"}], 86, regexClass[{"Not", {"Named", "regex \\v"}}],
+        100, regexSpecClass[{"Named", "regex \\d"}], 68, regexSpecClass[{"Not", {"Named", "regex \\d"}}],
+        119, regexSpecClass[{"Named", "regex \\w"}], 87, regexSpecClass[{"Not", {"Named", "regex \\w"}}],
+        115, regexSpecClass[{"Named", "regex \\s"}], 83, regexSpecClass[{"Not", {"Named", "regex \\s"}}],
+        104, regexSpecClass[{"Named", "regex \\h"}], 72, regexSpecClass[{"Not", {"Named", "regex \\h"}}],
+        118, regexSpecClass[{"Named", "regex \\v"}], 86, regexSpecClass[{"Not", {"Named", "regex \\v"}}],
         78, characterClass[codeIn[{"Not", {"Codes", {10}}}]],
         82, atomic[alternatives[{literal[{13, 10}], characterClass[codeIn[{"Codes", {10, 11, 12, 13, 133, 8232, 8233}}]]}]],
-        112, regexClass[regexProperty[]], 80, regexClass[{"Not", regexProperty[]}],
+        112, regexSpecClass[regexProperty[]], 80, regexSpecClass[{"Not", regexProperty[]}],
         98, anchor[WordBoundary], 66, anchor["NotWordBoundary"],
         65, anchor[StartOfString], 122, anchor[EndOfString], 90, anchor["EndOrFinalNewline"],
         81, regexQuoted[],
@@ -218,7 +219,7 @@ regexEscape[] := With[{c = regexNext[]},
         _?(49 <= # <= 57 &), $at--; regexDigitEscape[],
         _, regexCharacter[regexEscapedCode[c]]]]
 
-regexClass[spec_] := characterClass[codeIn[spec]]
+regexSpecClass[spec_] := characterClass[codeIn[spec]]
 
 (* \Q...\E: the characters between, as they are *)
 regexQuoted[] := Module[{start = $at},
@@ -288,7 +289,7 @@ regexClassProgram[] := Module[{negated = regexSkip["^"], items = {}, first = Tru
             AppendTo[items, {"Range", low, high}],
             AppendTo[items, Replace[item, c_Integer :> {"Codes", {c}}]]]];
     With[{spec = unionSpec[If[$caseless, Map[Replace[#, s : {"Codes" | "Range", ___} :> {"Fold", s}] &, items], items]]},
-        regexClass[If[negated, {"Not", spec}, spec]]]]
+        regexSpecClass[If[negated, {"Not", spec}, spec]]]]
 
 (* a character of a class, its code, or a class *)
 regexClassItem[] := With[{c = regexNext[]},
@@ -314,18 +315,5 @@ regexPosix[] := Module[{negated, name},
     If[! regexSkip["]"] || ! MemberQ[{"alpha", "digit", "alnum", "upper", "lower", "space", "blank", "punct", "xdigit", "cntrl", "print", "graph", "word"}, name], regexFails[]];
     With[{spec = If[$caseless && MemberQ[{"upper", "lower"}, name], {"Union", {{"Named", "regex [:upper:]"}, {"Named", "regex [:lower:]"}}}, {"Named", "regex [:" <> name <> ":]"}]},
         If[negated, {"Not", spec}, spec]]]
-
-(* The sets of characters a caseless regex takes for one another, read when a caseless regex is
-   first met, by Get alone; and a character's set *)
-$caseFoldingFile = FileNameJoin[{DirectoryName[$InputFileName], "CaseFolding.wl"}];
-caselessSets[] := caselessSets[] = Replace[Get[$caseFoldingFile], Except[_List] -> {}]
-caselessMap[] := caselessMap[] = Association[Catenate[Map[Function[set, Map[# -> set &, set]], caselessSets[]]]]
-caselessSet[c_Integer] := Lookup[caselessMap[], c, {c}]
-
-(* {"Fold", spec}: the characters of spec and those a caseless regex takes for them *)
-specRuns[{"Fold", spec_}] := mergedRuns[Join[specRuns[spec], codeRuns[Catenate[Select[caselessSets[], Function[set, AnyTrue[set, codeIn[spec]]]]]]]]
-codeIn[{"Fold", spec_}][code_Integer] := AnyTrue[caselessSet[code], codeIn[spec]]
-tableOf[{"Fold", spec_}] := Module[{table = ConstantArray[0, 65536]},
-    Scan[Function[run, If[run[[1]] < 65536, table[[run[[1]] + 1 ;; Min[run[[2]], 65535] + 1]] = 1]], specRuns[{"Fold", spec}]]; table]
 
 End[]

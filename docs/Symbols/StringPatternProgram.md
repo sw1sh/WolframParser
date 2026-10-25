@@ -40,7 +40,7 @@ RelatedGuides: [WolframParser]
 | `"Properties"` | the properties |
 
 - A [RegularExpression]() matches as Wolfram 15 matches it: Perl's syntax, the classes of characters Unicode's, `"."` no newline and `$` the end or before a newline that ends the text, each group holding what it matched last, which a rule's `"$n"` takes.
-- A pattern has no program if it has a part that is no string pattern, a repeat of an anchor such as [StartOfString](), an [Except]() of a pattern of more than one character, or a [RegularExpression]() with recursion, a conditional group, a branch reset, a verb, a callout, `\G`, `\K`, `\C`, `\X`, a script of `\p`, a caseless backreference or a backreference in the group it refers to.
+- A pattern has no program if it has a part that is no string pattern, a repeat of an anchor such as [StartOfString](), an [Except]() of a pattern of more than one character, or a [RegularExpression]() with recursion, a conditional group, a branch reset, a verb, a callout, `\G`, `\K`, `\C`, `\X`, a script of `\p`, a caseless backreference, a backreference in the group it refers to or a possessive repeat of a part that may match nothing.
 - A kernel builds its String functions of patterns on [StringPatternProgram]() and [StringPatternMatches]().
 
 ## Basic Examples
