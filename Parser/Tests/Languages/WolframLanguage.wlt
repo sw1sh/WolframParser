@@ -809,3 +809,28 @@ VerificationTest[
     WolframLanguageSyntaxQ["aNameOnlyChecked + 1"]; Names["*`aNameOnlyChecked"],
     {},
     TestID -> "wl syntax: checking a source makes none of its names"]
+
+(* where a token is two, the reader splits it and reads on, with no grammar: the words of a query
+   that end inside an operator, a message name's tag and a blank in one token *)
+VerificationTest[
+    {WolframLanguageHeld["?a*=b"], WolframLanguageHeld["??a*=b"], WolframLanguageHeld["?a*:=b"], WolframLanguageHeld["?x`*"]},
+    {{HoldComplete[Information["a*", LongForm -> False] = b]}, {HoldComplete[Information["a*", LongForm -> True] = b]},
+     {HoldComplete[Information["a*", LongForm -> False] := b]}, {HoldComplete[Information["x`*", LongForm -> False]]}},
+    TestID -> "wl: the words of a query that end inside a token, the token split there"]
+
+VerificationTest[
+    {WolframLanguageHeld["a::b_"], WolframLanguageHeld["a::b_c"], WolframLanguageHeld["f[a::b_]"], WolframLanguageHeld["x = a::b_ + 1"]},
+    {ToExpression["a::b_", InputForm, HoldComplete], ToExpression["a::b_c", InputForm, HoldComplete], ToExpression["f[a::b_]", InputForm, HoldComplete],
+     ToExpression["x = a::b_ + 1", InputForm, HoldComplete]} /. h_HoldComplete :> {h},
+    TestID -> "wl: a message name's tag and a blank in one token, read as the kernel reads them"]
+
+VerificationTest[
+    {WolframLanguageHeld["a::_"]["Position"], WolframLanguageHeld["a::b::_"]["Position"], WolframLanguageSyntaxQ["a::b_"], WolframLanguageSyntaxQ["a::_"],
+     WolframLanguageSyntaxQ["?a*=b"]},
+    {4, 7, True, False, True},
+    TestID -> "wl: a blank where a message name's tag goes is no Wolfram Language"]
+
+VerificationTest[
+    {Take[WolframLanguageHeldNext["?a*=b\na::b_", 1], 2], Take[WolframLanguageHeldNext["?a*=b\na::b_", 7], 2]},
+    {{HoldComplete[Information["a*", LongForm -> False] = b], 7}, {HoldComplete[a::b*_], 12}},
+    TestID -> "wl: one statement at a time, the tokens that are two split too"]

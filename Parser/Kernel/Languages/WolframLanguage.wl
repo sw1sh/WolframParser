@@ -1719,11 +1719,10 @@ WolframLanguageAST[s_String] := With[{spans = lineContinuations[s]},
         With[{r = parsed[$astGrammar, StringReplacePart[s, "", spans]], kept = keptPositions[s, spans]},
             If[FailureQ[r], continuedFailure[r, kept, s], ASTAddSource[continuedOffsets[ASTContainer[r], kept], s]]]]]
 
-(* The held expressions read first by the reader of WolframLanguageFast.wl,
-   which reads the grammar's source in one pass over its tokens and fails
-   where the kernel's reader stops; where it does not take a statement, the
-   source is read one statement at a time, that statement by the grammar.
-   With $fastHeldReader False the grammar reads all of it. *)
+(* The held expressions, read by the reader of WolframLanguageFast.wl, which
+   reads the source in one pass over its tokens and fails where the
+   kernel's reader stops. With $fastHeldReader False the grammar reads it,
+   as the checks of the reader against the grammar do. *)
 $fastHeldReader = True
 
 WolframLanguageHeld[s_String] := With[{spans = lineContinuations[s]},
@@ -1732,7 +1731,6 @@ WolframLanguageHeld[s_String] := With[{spans = lineContinuations[s]},
             Which[
                 ListQ[fast], DeleteCases[fast, HoldComplete[Null]],
                 FailureQ[fast], If[spans === {}, fast, continuedFailure[fast, keptPositions[s, spans], s]],
-                fast === $fastGiveUp, heldStatements[s],
                 True, With[{r = grammarFailure[parsed[$heldGrammar, clean], StringLength[clean]]},
                     Which[! FailureQ[r], DeleteCases[expressions[r], HoldComplete[Null]], spans === {}, r, True, continuedFailure[r, keptPositions[s, spans], s]]]]]]]
 
