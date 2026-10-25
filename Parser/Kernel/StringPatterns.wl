@@ -21,9 +21,13 @@
         Get[FileNameJoin[{PacletObject["Wolfram/Parser"]["Location"], "Kernel", "StringPatterns.wl"}]]
 *)
 
-(* the characters of the classes, which the paclet's core reads too, where it has not, and the typed matcher *)
-If[DownValues[Wolfram`Parser`Private`characterClassRuns] === {}, Get[FileNameJoin[{DirectoryName[$InputFileName], "CharacterClassRuns.wl"}]]];
-Get[FileNameJoin[{DirectoryName[$InputFileName], "StringPatternsVM.wl"}]];
+(* The characters of the classes, which the paclet's core reads too, where it has not, and the typed
+   matcher. A file that Begins a context of its own is read with System` alone on the context path:
+   a symbol of a context on the caller's path, such as Global`, would stand for one of the file's of
+   the same name. *)
+Block[{$ContextPath = {"System`"}},
+    If[DownValues[Wolfram`Parser`Private`characterClassRuns] === {}, Get[FileNameJoin[{DirectoryName[$InputFileName], "CharacterClassRuns.wl"}]]];
+    Get[FileNameJoin[{DirectoryName[$InputFileName], "StringPatternsVM.wl"}]]];
 
 BeginPackage["Wolfram`Parser`StringPatterns`"]
 
@@ -60,8 +64,12 @@ Begin["`Private`"]
     excluding[test, p]                  p, after a character whose code fails the test
     builtIn[name, p]                    p, the program of Wolfram 15's pattern name, which
                                         Shortest leaves as it is
-    anchor[name]                        StartOfString, EndOfString, StartOfLine, EndOfLine or
-                                        WordBoundary
+    anchor[name]                        StartOfString, EndOfString, StartOfLine, EndOfLine,
+                                        WordBoundary, or of a regex "EndOrFinalNewline" or
+                                        "NotWordBoundary"
+    regular[p]                          p, the program of a RegularExpression, and its parts:
+                                        capture, captured, lookahead, lookbehind and atomic, as
+                                        RegularExpressions.wl makes them
 
    A match runs the program from a position with a continuation, which gets the position after
    the part and the names bound so far, and gives the match or $noMatch to make the part try its
@@ -117,6 +125,9 @@ programClass[p_] := Replace[p, {
    character class, from min times on, as many as it can, or None. *)
 programRun[p_] := Replace[p, {repeat[characterClass[test_], min_Integer, Infinity, True] :> {test, min}, _ -> None}]
 
+$regexFrontEnd = FileNameJoin[{DirectoryName[$InputFileName], "RegularExpressions.wl"}];
+regexFrontEnd[] := regexFrontEnd[] = Block[{$ContextPath = {"System`"}}, Get[$regexFrontEnd]]
+
 (* the program of a string pattern, or a Throw of None, tagged program *)
 program[s_String] := literal[ToCharacterCode[s]]
 program[Verbatim[Verbatim][s_String]] := ownPart[literal[ToCharacterCode[s]]]
@@ -156,6 +167,8 @@ program[NumberString] := builtIn[NumberString, program[StringExpression[
     Alternatives[StringExpression[DigitCharacter .., Repeated[StringExpression[".", RepeatedNull[DigitCharacter]], {0, 1}]], StringExpression[".", DigitCharacter ..]]
 ]]]
 program[anchorName : StartOfString | EndOfString | StartOfLine | EndOfLine | WordBoundary] := anchor[anchorName]
+(* a RegularExpression's program, made by the regex front end, which is read when one is first met *)
+program[RegularExpression[re_String]] := (regexFrontEnd[]; regular[regexProgram[re]])
 program[_] := Throw[None, program]
 
 (* a repeat of p, the longest first; an anchor is no pattern to repeat [WL 15.0.0] *)
@@ -205,6 +218,7 @@ shortest[named[x_, p_]] := named[x, shortest[p]]
 shortest[tested[p_, f_]] := tested[shortest[p], f]
 shortest[conditioned[p_, test_, names_]] := conditioned[shortest[p], test, names]
 shortest[excluding[test_, p_]] := excluding[test, shortest[p]]
+shortest[p_regular] := p
 shortest[p_] := p
 
 (* whether a program matches exactly one character *)
@@ -218,8 +232,10 @@ classTest[literal[{c_}]] := codeIn[{"Codes", {c}}]
 classSpec[characterClass[codeIn[spec_]]] := spec
 classSpec[literal[{c_}]] := {"Codes", {c}}
 
-(* the names of a program, each HoldComplete[x], with how many times each occurs *)
-programNames[p_] := Counts[Cases[p, named[x_, _] | backreference[x_] :> x, {0, Infinity}]]
+(* the names of a program, each HoldComplete[x], with how many times each occurs, then the groups
+   of its regexes in order, each group[n], once *)
+programNames[p_] := Join[Counts[Cases[p, named[x_, _] | backreference[x_] :> x, {0, Infinity}]],
+    AssociationThread[Map[group, Union[Cases[p, capture[n_, _] :> n, {0, Infinity}]]] -> 1]]
 
 (* A name that occurs again after it on the way a match goes, not in another alternative, matches
    there the text it matched, whatever its own pattern there [WL 15.0.0]: that occurrence is a
@@ -247,9 +263,9 @@ referenced[p_, seen_List] := {p, seen}
    shortest repeat, no name twice and no empty match. It finds a match where the program has one if
    it has no name twice, whose texts must be the same, and no empty match, which the regex search
    passes over. *)
-regexLikeQ[p_] := ! nullableQ[p] && FreeQ[p, _alternatives | repeat[_, _, _, False] | repeat[Except[_?singleCharacterQ], _, _, _] | _backreference] &&
+regexLikeQ[p_] := ! nullableQ[p] && FreeQ[p, _alternatives | repeat[_, _, _, False] | repeat[Except[_?singleCharacterQ], _, _, _] | _backreference | _regular] &&
     DuplicateFreeQ[Cases[p, named[x_, _] :> x, {0, Infinity}]]
-regexFindsQ[p_] := ! nullableQ[p] && FreeQ[p, _backreference] && DuplicateFreeQ[Cases[p, named[x_, _] :> x, {0, Infinity}]]
+regexFindsQ[p_] := ! nullableQ[p] && FreeQ[p, _backreference | _regular] && DuplicateFreeQ[Cases[p, named[x_, _] :> x, {0, Infinity}]]
 
 (* whether a program may match no characters *)
 nullableQ[literal[codes_]] := codes === {}
@@ -261,6 +277,8 @@ nullableQ[named[_, p_]] := nullableQ[p]
 nullableQ[tested[p_, _] | conditioned[p_, _, _]] := nullableQ[p]
 nullableQ[excluding[_, p_] | builtIn[_, p_]] := nullableQ[p]
 nullableQ[_anchor | _backreference] := True
+nullableQ[(regular | atomic)[p_] | capture[_, p_]] := nullableQ[p]
+nullableQ[_captured | _lookahead | _lookbehind] := True
 
 
 (* ::Section:: *)
@@ -454,6 +472,13 @@ matched[repeat[p : _characterClass | literal[{_}], min_, max_, longest_], z_subj
     If[run < min, $noMatch, firstMatch[Function[count, k[i + count, b]], If[longest, Range[run, min, -1], Range[min, run]]]]
 ]
 matched[repeat[p_, min_, max_, longest_], z_subject, i_Integer, b_, k_] := repeated[{p, min, max, longest}, z, 0, i, b, k]
+(* A repeat of a regex's backreference matches once where its group holds nothing, and where the
+   group holds none, once if it may repeat no time, else not at all [WL 15.0.0] *)
+matched[repeat[p : captured[n_], min_, max_, longest_], z_subject, i_Integer, b_, k_] := With[{span = Lookup[b, group[n]]},
+    Which[
+        ! ListQ[span], If[min === 0, k[i, b], $noMatch],
+        span[[1]] === span[[2]], k[i, b],
+        True, repeated[{p, min, max, longest}, z, 0, i, b, k]]]
 (* A name bound before, the first time round a repeat, matches the text it matched then; one that
    took no part then, None, matches no more. *)
 matched[named[x_, p_], z_subject, i_Integer, b_, k_] := If[KeyExistsQ[b, x],
@@ -473,6 +498,23 @@ matched[conditioned[p_, test_HoldComplete, names_], z_subject, i_Integer, b_, k_
     If[TrueQ[boundValue[test, z, c, names]], k[j, c], $noMatch]]]
 matched[excluding[test_, p_], z : subject[_, n_, _], i_Integer, b_, k_] := If[i < n && ! TrueQ[test[codeAt[z, i]]], matched[p, z, i, b, k], $noMatch]
 matched[anchor[name_], z_subject, i_Integer, b_, k_] := If[anchorQ[name, z, i], k[i, b], $noMatch]
+matched[regular[p_], z_subject, i_Integer, b_, k_] := matched[p, z, i, b, k]
+(* a regex's group holds what it matched last; a backreference to one that holds nothing matches
+   nothing; a lookaround's first way alone, the groups it set kept where it is positive; an atomic
+   part's first way alone *)
+matched[capture[n_, p_], z_subject, i_Integer, b_, k_] := matched[p, z, i, b, Function[{j, c}, k[j, Append[c, group[n] -> {i, j}]]]]
+matched[captured[n_], subject[codes_, len_, _], i_Integer, b_, k_] := With[{span = Lookup[b, group[n]]},
+    If[ListQ[span] && i + span[[2]] - span[[1]] <= len && Take[codes, {i + 1, i + span[[2]] - span[[1]]}] === Take[codes, {span[[1]] + 1, span[[2]]}],
+        k[i + span[[2]] - span[[1]], b],
+        $noMatch
+    ]
+]
+matched[lookahead[p_, positive_], z_subject, i_Integer, b_, k_] := With[{r = matched[p, z, i, b, Function[{j, c}, {c}]]},
+    Which[r === $noMatch, If[positive, $noMatch, k[i, b]], positive, k[i, First[r]], True, $noMatch]]
+matched[lookbehind[branches_List, positive_], z_subject, i_Integer, b_, k_] := With[
+    {r = firstMatch[Function[branch, If[i >= First[branch], matched[Last[branch], z, i - First[branch], b, Function[{j, c}, If[j === i, {c}, $noMatch]]], $noMatch]], branches]},
+    Which[r === $noMatch, If[positive, $noMatch, k[i, b]], positive, k[i, First[r]], True, $noMatch]]
+matched[atomic[p_], z_subject, i_Integer, b_, k_] := With[{r = matched[p, z, i, b, Function[{j, c}, {j, c}]]}, If[r === $noMatch, $noMatch, k[r[[1]], r[[2]]]]]
 
 (* A repeat of more than single characters, repeated[{p, min, max, longest}, z, count, i, bindings,
    k] after count of them: one more p, the longest way first, then none. A p that matches nothing
@@ -515,6 +557,9 @@ anchorQ[EndOfString, subject[_, n_, _], i_Integer] := i === n
 anchorQ[StartOfLine, z : subject[_, n_, _], i_Integer] := i === 0 || (i < n && codeAt[z, i - 1] === 10)
 anchorQ[EndOfLine, z : subject[_, n_, _], i_Integer] := i === n || codeAt[z, i] === 10
 anchorQ[WordBoundary, z : subject[_, n_, _], i_Integer] := With[{word = codeIn[{"Named", "regex \\w"}]}, (i > 0 && word[codeAt[z, i - 1]]) =!= (i < n && word[codeAt[z, i]])]
+(* a regex's $ and \Z: the end, or before a newline that ends the text; \B *)
+anchorQ["EndOrFinalNewline", z : subject[_, n_, _], i_Integer] := i === n || (i === n - 1 && codeAt[z, i] === 10)
+anchorQ["NotWordBoundary", z_subject, i_Integer] := ! anchorQ[WordBoundary, z, i]
 
 (* the value of a held test, each name bound to the text it matched, or to "" if it took no part *)
 boundValue[held_HoldComplete, z_subject, b_, names_Association] := ReleaseHold[ReplaceAll[held, bindingRules[z, b, names, "Condition"]]]
@@ -523,9 +568,8 @@ boundValue[held_HoldComplete, z_subject, b_, names_Association] := ReleaseHold[R
    no part is bound to "". On a rule's right side so is a name that occurs once; one that occurs more
    than once is bound to {} where it matched nothing or took no part [WL 15.0.0]. *)
 bindingRules[z_subject, b_Association, names_Association, use_String] := With[{bound = Select[b, ListQ]},
-    KeyValueMap[Function[{name, occurrences}, Replace[name, HoldComplete[x_] :> (HoldPattern[x] -> With[
-            {text = If[KeyExistsQ[bound, name], substring[z, bound[name]], ""]},
-            If[use === "Rule" && occurrences > 1 && text === "", {}, text]])]],
+    KeyValueMap[Function[{name, occurrences}, With[{text = If[KeyExistsQ[bound, name], substring[z, bound[name]], ""]},
+            Replace[name, {HoldComplete[x_] :> (HoldPattern[x] -> If[use === "Rule" && occurrences > 1 && text === "", {}, text]), group[n_] :> (n -> text)}]]],
         names]]
 
 
@@ -549,7 +593,7 @@ StringPatternMatches[s_String, programs : {___StringPatternProgram}, mode : "Fir
     {ps = modePrograms[programs, mode]},
     Which[
         MemberQ[ps, None], None,
-        OptionValue[Method] === "Interpreter", With[{z = textSubject[s], names = programNames /@ ps},
+        interpretedQ[ps, OptionValue[Method]], With[{z = textSubject[s], names = programNames /@ ps},
             Map[Function[m, {m[[1]], m[[2]], m[[3]], bindingRules[z, m[[4]], names[[m[[3]]]], "Rule"]}], programMatches[z, ps, mode]]],
         True, vmMatches[s, ps, mode]]]
 StringPatternMatches[s_String, program_StringPatternProgram, mode : "First" | "Each" | "Overlapping" | "All", opts : OptionsPattern[]] :=
@@ -563,13 +607,16 @@ StringPatternRecords[s_String, programs : {___StringPatternProgram}, mode : "Fir
     {ps = modePrograms[programs, mode]},
     Which[
         MemberQ[ps, None], None,
-        OptionValue[Method] === "Interpreter", With[{names = programNames /@ ps},
+        interpretedQ[ps, OptionValue[Method]], With[{names = programNames /@ ps},
             <|"Records" -> programRecords[programMatches[textSubject[s], ps, mode], names], "Sides" -> Map[nameSides, names]|>],
         True, With[{r = vmRecords[s, ps, mode]}, <|"Records" -> r[[2]], "Sides" -> r[[1]]["Sides"]|>]]]
 StringPatternRecords[s_String, program_StringPatternProgram, mode : "First" | "Each" | "Overlapping" | "All", opts : OptionsPattern[]] :=
     StringPatternRecords[s, {program}, mode, opts]
 
 textSubject[s_String] := subject[ToCharacterCode[s], StringLength[s], s]
+
+(* whether the interpreter matches the programs, by the method *)
+interpretedQ[programs_List, method_] := method === "Interpreter"
 
 (* the programs a mode matches: every way of each in the mode "All" *)
 modePrograms[programs_List, "All"] := Map[#["Ways"] &, programs]
@@ -621,7 +668,7 @@ programRecords[matches_List, names_List] := With[{most = Max[0, Length /@ names]
         matches]]]
 
 (* the left side of each name's rule, and whether the name occurs more than once *)
-nameSides[names_Association] := KeyValueMap[Function[{name, occurrences}, {Replace[name, HoldComplete[v_] :> HoldPattern[v]], occurrences > 1}], names]
+nameSides[names_Association] := KeyValueMap[Function[{name, occurrences}, {Replace[name, {HoldComplete[v_] :> HoldPattern[v], group[n_] :> n}], occurrences > 1}], names]
 
 (* the positions where one of the programs may start a match *)
 startPositions[programs_List, subject[codes_, n_, _]] := With[{sets = firstCodes /@ programs},
@@ -636,6 +683,7 @@ firstCodes[repeat[p_, min_, _, _]] := If[min === 0, All, firstCodes[p]]
 firstCodes[named[_, p_]] := firstCodes[p]
 firstCodes[tested[p_, _] | conditioned[p_, _, _]] := firstCodes[p]
 firstCodes[excluding[_, p_] | builtIn[_, p_]] := firstCodes[p]
+firstCodes[(regular | atomic)[p_] | capture[_, p_]] := firstCodes[p]
 firstCodes[_] := All
 
 
@@ -665,12 +713,13 @@ bytecodeOf[programs_List] := Block[
             AppendTo[allNames, names]],
         {k, Length[programs]}];
     With[{tableAt = vmPoolAdd[Flatten[table]]},
-        With[{bc = <|"Code" -> Developer`ToPackedArray[Flatten[Values[KeySort[$ins]]]], "Pool" -> Developer`ToPackedArray[Join[$pool, {0}]], "Specs" -> $specs,
+        With[{bc = <|"Code" -> Developer`ToPackedArray[Flatten[Values[$ins]]], "Pool" -> Developer`ToPackedArray[Join[$pool, {0}]], "Specs" -> $specs,
               "Tests" -> $tests, "Conditions" -> $conditions, "Table" -> tableAt, "MaxNames" -> maxNames, "Registers" -> registers,
               "Names" -> allNames, "Sides" -> Map[nameSides, allNames]|>},
-            If[$tests === {}, Append[bc, "Classes" -> classesOf[bc, {}]], bc]]]]
+            If[$tests === {}, Append[bc, "Classes" -> specsClasses[$specs]], bc]]]]
 
-(* the assembler, on the bytecode being made: an instruction, an operand set later, constants, a class's index *)
+(* the assembler, on the bytecode being made: an instruction, at the next position, so that the
+   instructions are in the order of their positions; an operand set later, constants, a class's index *)
 vmEmit[op_, a_ : 0, b_ : 0, c_ : 0, d_ : 0] := ($ins[$pc] = {op, a, b, c, d}; $pc++; $pc - 1)
 vmOperand[at_, slot_, v_] := ($ins[at] = ReplacePart[$ins[at], slot + 1 -> v])
 vmPoolAdd[values_List] := With[{at = Length[$pool] + 1}, $pool = Join[$pool, values]; at]
@@ -696,7 +745,10 @@ generate[alternatives[parts_List]] := Module[{jumps = {}, split},
     Scan[vmOperand[#, 1, $pc] &, jumps]]
 generate[repeat[p : _characterClass | literal[{_}], min_, max_, longest_]] :=
     vmEmit[4, vmClassIndex[classSpec[p]], min, If[max === Infinity, -1, max], Boole[longest]]
-generate[repeat[p_, min_, max_, longest_]] := Module[{e = vmPoolAdd[ConstantArray[0, 11]], r = $registers, loop, iteration, done, poison, names = Keys[programNames[p]]},
+generate[repeat[p : captured[n_], min_, max_, longest_]] := With[{check = vmEmit[25, vmNameBase[group[n]], min]},
+    repeatCode[p, min, max, longest]; vmOperand[check, 3, $pc]]
+generate[repeat[p_, min_, max_, longest_]] := repeatCode[p, min, max, longest]
+repeatCode[p_, min_, max_, longest_] := Module[{e = vmPoolAdd[ConstantArray[0, 11]], r = $registers, loop, iteration, done, poison, names = Keys[programNames[p]]},
     $registers += 2;
     poison = vmPoolAdd[Map[vmNameBase, names]];
     vmEmit[13, e]; loop = vmEmit[14, e]; iteration = vmEmit[15, e]; generate[p]; vmEmit[16, e]; done = vmEmit[17, e];
@@ -708,8 +760,23 @@ generate[tested[p_, f_]] := With[{t = $registers}, $registers += 1; AppendTo[$te
 generate[conditioned[p_, test_, names_]] := (generate[p]; AppendTo[$conditions, {test, names}]; vmEmit[21, Length[$conditions]])
 generate[excluding[codeIn[spec_], p_]] := (vmEmit[18, vmClassIndex[spec]]; generate[p])
 generate[builtIn[_, p_]] := generate[p]
-generate[anchor[name_]] := vmEmit[9, Replace[name, {StartOfString -> 1, EndOfString -> 2, StartOfLine -> 3, EndOfLine -> 4, WordBoundary -> 5}],
-    If[name === WordBoundary, vmClassIndex[{"Named", "regex \\w"}], 0]]
+generate[anchor[name_]] := vmEmit[9, Replace[name, {StartOfString -> 1, EndOfString -> 2, StartOfLine -> 3, EndOfLine -> 4, WordBoundary -> 5, "EndOrFinalNewline" -> 6, "NotWordBoundary" -> 7}],
+    If[MatchQ[name, WordBoundary | "NotWordBoundary"], vmClassIndex[{"Named", "regex \\w"}], 0]]
+generate[regular[p_]] := generate[p]
+generate[capture[n_, p_]] := With[{base = vmNameBase[group[n]]}, vmEmit[22, base]; generate[p]; vmEmit[11, base]]
+generate[captured[n_]] := vmEmit[12, vmNameBase[group[n]]]
+(* A regex's assertion or atomic part: its choices above a barrier that the matcher cuts back to
+   where the part holds, a register keeping the depth of the choices below; kinds 1 to 5 positive
+   and negative lookahead, positive and negative lookbehind of len characters, and atomic. A
+   lookbehind of branches is one of them that holds, or none of them. *)
+assertionCode[kind_Integer, p_, len_Integer : 0] := Module[{r = $registers, open},
+    $registers += 1;
+    open = vmEmit[23, kind, r, len]; generate[p]; vmEmit[24, r]; vmOperand[open, 4, $pc]]
+generate[lookahead[p_, positive_]] := assertionCode[If[positive, 1, 2], p]
+generate[lookbehind[{{len_, p_}}, positive_]] := assertionCode[If[positive, 3, 4], p, len]
+generate[lookbehind[branches_List, True]] /; Length[branches] > 1 := generate[alternatives[Map[lookbehind[{#}, True] &, branches]]]
+generate[lookbehind[branches_List, False]] /; Length[branches] > 1 := Scan[generate[lookbehind[{#}, False]] &, branches]
+generate[atomic[p_]] := assertionCode[5, p]
 
 (* the class of the characters a match of a program may begin with, or None if any *)
 firstSpec[literal[{c_, ___}]] := {"Codes", {c}}
@@ -721,6 +788,7 @@ firstSpec[alternatives[parts_List]] := With[{fs = firstSpec /@ parts}, If[parts 
 firstSpec[repeat[p_, min_, _, _]] := If[min === 0, None, firstSpec[p]]
 firstSpec[(named | builtIn)[_, p_]] := firstSpec[p]
 firstSpec[tested[p_, _] | conditioned[p_, _, _] | excluding[_, p_]] := firstSpec[p]
+firstSpec[(regular | atomic)[p_] | capture[_, p_]] := firstSpec[p]
 firstSpec[_] := None
 
 (* the runs of the codes of a class, sorted and apart, over every code point *)
@@ -748,7 +816,11 @@ asciiWords[runs_List] := Module[{table = ConstantArray[0, 128]},
 $bitValues = Developer`ToPackedArray[2^Range[0, 31]]
 
 (* the classes of a bytecode for a text: each spec's data, a test's that of the text's characters it
-   passes; with no test, the same for every text *)
+   passes; with no test, the same for every text, kept for the 1024 lists of specs met last *)
+specsClasses[specs_List] := Lookup[$specsClasses, Key[specs],
+    With[{classes = classesOf[<|"Specs" -> specs, "Tests" -> {}|>, {}]},
+        $specsClasses = Append[If[Length[$specsClasses] >= 1024, Rest[$specsClasses], $specsClasses], specs -> classes]; classes]]
+$specsClasses = <||>
 vmClasses[bc_Association, codes_List] := If[bc["Tests"] === {}, bc["Classes"], classesOf[bc, codes]]
 classesOf[bc_Association, codes_List] := With[{data = Map[
         Replace[#, {{"Test", t_} :> runsData[codeRuns[Select[Union[codes], TrueQ[bc["Tests"][[t]][FromCharacterCode[#]]] &]]], spec_ :> classData[spec]}] &,
@@ -761,13 +833,13 @@ $vmModes = <|"First" -> 1, "Each" -> 2, "Overlapping" -> 3, "All" -> 4|>
    {start, end, k, then the start and end of each name} in a packed array: each condition the
    matcher stops at evaluated here, the matcher then called again from its state. *)
 vmRecords[s_String, programs_List, mode_String] := Module[{bc = vmBytecode[programs], codes = Developer`ToPackedArray[ToCharacterCode[s]], classes, params, out, state = {}, records = {},
-        z = textSubject[s], width, rest, condition, k, spans, st, maxNames},
-    classes = vmClasses[bc, codes]; maxNames = bc["MaxNames"];
+        z, width, rest, condition, k, spans, st, maxNames},
+    z = subject[codes, Length[codes], s]; classes = vmClasses[bc, codes]; maxNames = bc["MaxNames"];
     params = Developer`ToPackedArray[{$vmModes[mode], 0, Length[programs], maxNames, bc["Registers"], bc["Table"]}];
     While[ True,
         out = vmFunction[bc["Code"], bc["Pool"], classes, codes, params, Developer`ToPackedArray[state]];
         width = out[[3]];
-        records = Join[records, Partition[out[[4 ;; 3 + out[[2]] width]], width]];
+        records = If[records === {}, Partition[out[[4 ;; 3 + out[[2]] width]], width], Join[records, Partition[out[[4 ;; 3 + out[[2]] width]], width]]];
         If[out[[1]] =!= 2, Break[]];
         rest = Drop[out, 3 + out[[2]] width];
         condition = rest[[1]]; k = rest[[2]]; spans = Partition[rest[[3 ;; 2 + 2 maxNames]], 2];

@@ -39,7 +39,8 @@ RelatedGuides: [WolframParser]
 | `"ClassCodes"` | for a pattern of one character class, its codes below 65536 as a packed table of 1 and 0 by code + 1, else [None]() |
 | `"Properties"` | the properties |
 
-- A pattern has no program if it has a [RegularExpression](), a part that is no string pattern, a repeat of an anchor such as [StartOfString](), or an [Except]() of a pattern of more than one character.
+- A [RegularExpression]() matches as Wolfram 15 matches it: Perl's syntax, the classes of characters Unicode's, `"."` no newline and `$` the end or before a newline that ends the text, each group holding what it matched last, which a rule's `"$n"` takes.
+- A pattern has no program if it has a part that is no string pattern, a repeat of an anchor such as [StartOfString](), an [Except]() of a pattern of more than one character, or a [RegularExpression]() with recursion, a conditional group, a branch reset, a verb, a callout, `\G`, `\K`, `\C`, `\X`, a script of `\p`, a caseless backreference or a backreference in the group it refers to.
 - A kernel builds its String functions of patterns on [StringPatternProgram]() and [StringPatternMatches]().
 
 ## Basic Examples
@@ -124,10 +125,18 @@ Total[StringPatternProgram[WhitespaceCharacter]["ClassCodes"]]
 
 <!-- => 44 -->
 
-A pattern with a regular expression has no program:
+A regular expression's matches, its groups bound by their numbers:
 
 ```wl
-StringPatternProgram[RegularExpression["a+"]]["Program"]
+StringPatternMatches["ab12 cd3", {StringPatternProgram[RegularExpression["([a-z]+)(\\d+)"]]}, "Each"]
+```
+
+<!-- => {{0, 4, 1, {1 -> "ab", 2 -> "12"}}, {5, 8, 1, {1 -> "cd", 2 -> "3"}}} -->
+
+A regular expression with recursion has no program:
+
+```wl
+StringPatternProgram[RegularExpression["\\((?R)?\\)"]]["Program"]
 ```
 
 <!-- => None -->

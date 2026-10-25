@@ -11,8 +11,8 @@
      "punctuation" PunctuationCharacter
      "hexadecimal" HexadecimalCharacter
      "upper", "lower"  the characters UpperCaseQ and LowerCaseQ take
-     "regex \d", "regex \w", "regex \s" and "regex [:name:]" for each POSIX class: what
-                   RegularExpression's classes match
+     "regex \d", "regex \w", "regex \s", "regex \h", "regex \v" and "regex [:name:]" for each
+                   POSIX class: what RegularExpression's classes match
    Run it with Wolfram 15:
        wl -f dev/freeze-character-classes.wls *)
 
@@ -36,7 +36,8 @@ classes = Join[
       "hexadecimal" -> codesOf[StringMatchQ[#, HexadecimalCharacter] &],
       "upper" -> codesOf[UpperCaseQ /@ # &], "lower" -> codesOf[LowerCaseQ /@ # &],
       "regex \\d" -> codesOf[StringMatchQ[#, RegularExpression["\\d"]] &], "regex \\w" -> codesOf[StringMatchQ[#, RegularExpression["\\w"]] &],
-      "regex \\s" -> codesOf[StringMatchQ[#, RegularExpression["\\s"]] &]|>,
+      "regex \\s" -> codesOf[StringMatchQ[#, RegularExpression["\\s"]] &], "regex \\h" -> codesOf[StringMatchQ[#, RegularExpression["\\h"]] &],
+      "regex \\v" -> codesOf[StringMatchQ[#, RegularExpression["\\v"]] &]|>,
     Association[Map["regex [:" <> # <> ":]" -> codesOf[Function[cs, StringMatchQ[cs, RegularExpression["[[:" <> # <> ":]]"]]]] &, posix]]];
 classRuns = runs /@ classes;
 names = Keys[classRuns];

@@ -2,7 +2,8 @@
 (* Loads the engine of string patterns alone, as a kernel does at its first string pattern, from
    Parser/Kernel/StringPatterns.wl, and checks that it loads nothing more of the paclet than the
    characters of the classes, from CharacterClassRuns.wl: no core, no reader. Then it matches a few
-   patterns, classes beyond ASCII among them, as Wolfram 15's String functions do. Run it with
+   patterns, classes beyond ASCII among them, and regular expressions, whose front end and data the
+   engine reads at the first one, as Wolfram 15's String functions do. Run it with
    Wolfram 15:
        wl -f dev/check-engine-alone.wls *)
 
@@ -19,7 +20,8 @@ texts[s_String, p_] := Map[StringTake[s, {#[[1]] + 1, #[[2]]}] &, matches[s, Fla
 cases = {
     {"a1b22", DigitCharacter ..}, {"h\[EAcute]llo w\[ODoubleDot]rld", LetterCharacter ..},
     {"1" <> FromCharacterCode[{16^^0661, 16^^0662}] <> " 2", DigitCharacter ..}, {"<a><b>", "<" ~~ Shortest[__] ~~ ">"},
-    {"ab", {"x"..., "a"}}, {"a\[NonBreakingSpace]b", WhitespaceCharacter}};
+    {"ab", {"x"..., "a"}}, {"a\[NonBreakingSpace]b", WhitespaceCharacter}, {"ab12 \[CapitalEAcute]\[EAcute]", RegularExpression["([a-z]+)\\d|\\p{Lu}"]},
+    {"\[CapitalEAcute]\[EAcute] aA", RegularExpression["(?i)\[EAcute]|a"]}};
 agree = Count[cases, {s_, p_} /; texts[s, p] === StringCases[s, p]];
 positions = Map[{#[[1]] + 1, #[[2]]} &, matches["aaa", {"a", "aa"}, "Overlapping"]] === StringPosition["aaa", {"a", "aa"}];
 

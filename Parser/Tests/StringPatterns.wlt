@@ -145,7 +145,7 @@ VerificationTest[
 ]
 
 VerificationTest[
-    {StringPatternProgram[RegularExpression["a+"]]["Program"], StringPatternProgram[f[x]]["RegexLike"], StringPatternMatches["ab", {StringPatternProgram[RegularExpression["a"]]}, "Each"]},
+    {StringPatternProgram[RegularExpression["\\((?R)?\\)"]]["Program"], StringPatternProgram[f[x]]["RegexLike"], StringPatternMatches["ab", {StringPatternProgram[RegularExpression["(a)(?(1)b|c)"]]}, "Each"]},
     {None, False, None},
     TestID -> "string patterns: a pattern with a part that no program has"
 ]
@@ -347,4 +347,30 @@ VerificationTest[
      StringCases["-", PunctuationCharacter | Shortest[PunctuationCharacter], Overlaps -> All], StringCases["ab", ((x : "a") | "b") ..., Overlaps -> All],
      StringCases["b", Shortest[((x : "a") | "b") ...], Overlaps -> All]},
     TestID -> "string patterns: every way as Wolfram 15 counts the ways of alternatives and of empty iterations"
+]
+
+(* the programs of regular expressions, matched as Wolfram 15 matches them: the texts, each match's
+   groups as "$n" takes them, and every way of each *)
+regexAnswers[s_String, re_String] := With[{p = StringPatternProgram[RegularExpression[re]]},
+    With[{e = StringPatternMatches[s, {p}, "Each"], a = StringPatternMatches[s, {p}, "All"]},
+        {Map[StringTake[s, {#[[1]] + 1, #[[2]]}] &, e], Map[Cases[#[[4]], (_Integer -> t_) :> t] &, e], Map[StringTake[s, {#[[1]] + 1, #[[2]]}] &, a]}]]
+nativeAnswers[s_String, re_String, n_Integer] := {StringCases[s, RegularExpression[re]], StringCases[s, RuleDelayed @@ {RegularExpression[re], Table["$" <> ToString[k], {k, n}]}],
+    StringCases[s, RegularExpression[re], Overlaps -> All]}
+VerificationTest[
+    Select[{{"xaabcd aab", "(\\w)+", 1}, {"ab ab", "(a)?b", 1}, {"12-345 6", "(\\d+)-(\\d+)", 2}, {"foo bar foobar", "\\bfoo\\b", 0}, {"a\nb\n", "(?m)^\\w$", 0},
+        {"a\nb", "a.b|(?s)a.b", 0}, {"\[EAcute]\[CapitalEAcute] ab", "\\p{Lu}|[[:lower:]]+", 0}, {"aAbB", "(?i)ab", 0}, {"xad xbcd", "(?<=a|bc)d", 0}, {"aab", "(?>a+)ab|a++b", 0},
+        {"abc abd", "ab(?=c)|ab(?!c)", 0}, {"aa ab", "(a)\\1", 1}, {"a.b*c", "\\Q.*\\E|\\.", 0}, {"abc", "a{,2}|\\x{62}", 0}, {"a b", "(?=a)?\\w", 0}},
+        Function[c, regexAnswers[c[[1]], c[[2]]] =!= nativeAnswers @@ c]],
+    {},
+    TestID -> "string patterns: regular expressions matched as Wolfram 15 matches them, their groups and every way"
+]
+
+(* a regex's groups in the records after its names, each named by its number; a lookaround matched
+   by the interpreter, as the typed matcher would *)
+VerificationTest[
+    {StringPatternRecords["ab12", {StringPatternProgram[RegularExpression["([a-z]+)(\\d+)?"]]}, "Each"],
+     StringPatternMatches["ab12", {StringPatternProgram[RegularExpression["([a-z]+)(\\d+)?"]]}, "Each"],
+     StringPatternMatches["xab", {StringPatternProgram[RegularExpression["(?<=a)b"]]}, "Each"] === StringPatternMatches["xab", {StringPatternProgram[RegularExpression["(?<=a)b"]]}, "Each", Method -> "Interpreter"]},
+    {<|"Records" -> {{0, 4, 1, 0, 2, 2, 4}}, "Sides" -> {{{1, False}, {2, False}}}|>, {{0, 4, 1, {1 -> "ab", 2 -> "12"}}}, True},
+    TestID -> "string patterns: a regex's groups in the records and the rules, each by its number"
 ]

@@ -20,6 +20,7 @@ RelatedGuides: [WolframParser]
 - `"Records"` is a packed array with a row <code>{*start*, *end*, *k*, *s*<sub>1</sub>, *e*<sub>1</sub>, *s*<sub>2</sub>, *e*<sub>2</sub>, ...}</code> for each match: the program *prog*<sub>*k*</sub> matched the characters after position *start* up to position *end*, and its *i*th name the characters after *s*<sub>*i*</sub> up to *e*<sub>*i*</sub>.
 - A name that took no part in a match has the span <code>{-1, -1}</code>, and one that took no part the first time round a repeat <code>{-2, -1}</code>. Every row is as long as the most names of a program make it, the rest <code>{-1, -1}</code>.
 - `"Sides"` gives, for each program, a pair <code>{*lhs*, *twice*}</code> for each of its names: *lhs* the left side of the name's rule, and *twice* whether the name occurs more than once in the pattern, so that it is bound to `{}` where it matched nothing.
+- The groups of a [RegularExpression]() come after the names, each with its number for *lhs*.
 - The records come from the matcher with no rule made for each match, for a host that binds the names itself.
 - [StringPatternRecords]() gives [None]() if one of the programs has none.
 
@@ -42,6 +43,14 @@ StringPatternRecords["ab1", StringPatternProgram /@ {x : DigitCharacter, (y : "a
 ```
 
 <!-- => <|"Records" -> {{0, 1, 2, 0, 1}, {1, 2, 2, -1, -1}, {2, 3, 1, 2, 3}}, "Sides" -> {{{HoldPattern[x], False}}, {{HoldPattern[y], False}}}|> -->
+
+The groups of a regular expression, after its names:
+
+```wl
+StringPatternRecords["ab12", {StringPatternProgram[RegularExpression["([a-z]+)(\\d+)?"]]}, "Each"]
+```
+
+<!-- => <|"Records" -> {{0, 4, 1, 0, 2, 2, 4}}, "Sides" -> {{{1, False}, {2, False}}}|> -->
 
 The records of every way a pattern matches at each start:
 
@@ -92,10 +101,10 @@ Length[StringCases[StringRepeat["ab", 500], "a" ~~ __ ~~ "b", Overlaps -> All]]
 
 ## Possible Issues
 
-A pattern with a regular expression has no program, so there are no records to give:
+A regular expression with recursion has no program, so there are no records to give:
 
 ```wl
-StringPatternRecords["ab", {StringPatternProgram[RegularExpression["a"]]}, "Each"]
+StringPatternRecords["(a)", {StringPatternProgram[RegularExpression["\\((?R)?\\)"]]}, "Each"]
 ```
 
 <!-- => None -->

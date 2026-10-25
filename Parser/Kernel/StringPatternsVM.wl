@@ -28,7 +28,8 @@ Begin["Wolfram`Parser`StringPatterns`Private`"]
      5 SPLIT a b     6 JMP a            7 FAIL            8 MATCH
      9 ANCHOR kind wordclass            10 NOPEN name skip 11 NCLOSE name     12 BREF name
      13 REPSTART e   14 LOOP e          15 ITER e         16 ITEREND e      17 DONE e
-     18 EXCL k       19 TSTART reg      20 TEND reg k     21 COND index
+     18 EXCL k       19 TSTART reg      20 TEND reg k     21 COND index     22 GOPEN group
+     23 AOPEN kind reg len past          24 ACLOSE reg      25 BREFREP group min past
    A name is three registers from its base, start, end and where it opened, -1 unbound and -2
    unbound the first time round a repeat; a repeat's entry e in the pool {count register, min,
    max, greedy, loop, iteration, done, exit, poison list, its length, 1 if its pattern has a name},
@@ -36,7 +37,14 @@ Begin["Wolfram`Parser`StringPatterns`Private`"]
    frames are six integers, {kind, pc, sp, trail, x, y}: 1 another way at pc, 2 a greedy run of
    x characters giving one back down to y, 3 a shortest run of x characters taking one more up to
    y. The trail undoes the registers set since a frame, {register, value} pairs. Each test of a class
-   is a call of vmMember. The declarations are made the first time they are asked for: their types
+   is a call of vmMember. A group of a regex is three registers as a name is, GOPEN opening it each
+   time, NCLOSE closing it, BREF its backreference; an anchor's kind 1 to 7 is StartOfString,
+   EndOfString, StartOfLine, EndOfLine, WordBoundary, the end or before a newline that ends the
+   text, and no word boundary. An assertion or atomic part pushes a barrier, a choice frame of kind 4
+   {4, past, sp, trail, kind, 0}, and keeps the depth below it in its register: ACLOSE cuts the
+   choices back to it, and the matcher's failing back to it is the part's having no way, which a
+   negative assertion takes for holding. BREFREP passes over a repeat of a backreference to a group
+   that holds nothing, or none where the repeat may be none. The declarations are made the first time they are asked for: their types
    load the compiler. *)
 (* Whether the code cc is of the class cls of the classes, 1 or 0, the typed function each test of a
    class calls: below 128 a bit of the class's four words, the bit a word's and a mask's, as Compile
@@ -146,6 +154,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                         a == 2, ok = If[sp == n, 1, 0],
                                         a == 3, ok = If[sp == 0 || (sp < n && vText[[sp]] == 10), 1, 0],
                                         a == 4, ok = If[sp == n || vText[[sp + 1]] == 10, 1, 0],
+                                        a == 6, ok = If[sp == n || (sp == n - 1 && vText[[sp + 1]] == 10), 1, 0],
                                         True,
                                             (* a word boundary: a word character on one side alone *)
                                             cls = b; before = 0; after = 0;
@@ -155,7 +164,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                             If[ sp < n,
                                                 cc = vText[[sp + 1]];
                                                 inside = vmMember[cc, cls, vClasses, masks]; after = inside];
-                                            ok = If[before != after, 1, 0]];
+                                            ok = If[before != after, 1, 0]; If[a == 7, ok = 1 - ok]];
                                     If[ok == 1, pc++, fail = 1],
                                 op == 10 || op == 12,
                                     (* a name: bound, its text again; unbound, opened here, or for a backreference none *)
@@ -244,6 +253,34 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                         If[inside == 0, ok = 0]; j++];
                                     If[ok == 1, pc++, fail = 1],
                                 op == 21, result = 2,
+                                op == 22,
+                                    If[ 2 ttop + 2 > Length[trail], grown = Table[0, {2 Length[trail]}]; Do[grown[[q]] = trail[[q]], {q, Length[trail]}]; trail = grown];
+                                    trail[[2 ttop + 1]] = a + 2; trail[[2 ttop + 2]] = regs[[a + 3]]; ttop++; regs[[a + 3]] = sp; pc++,
+                                op == 23,
+                                    (* an assertion's or atomic part's opening, a lookbehind's back by its length *)
+                                    If[ (a == 3 || a == 4) && sp < c,
+                                        If[a == 3, fail = 1, pc = d],
+                                        If[ 2 ttop + 2 > Length[trail], grown = Table[0, {2 Length[trail]}]; Do[grown[[q]] = trail[[q]], {q, Length[trail]}]; trail = grown];
+                                        trail[[2 ttop + 1]] = b; trail[[2 ttop + 2]] = regs[[b + 1]]; ttop++; regs[[b + 1]] = top;
+                                        If[ 6 top + 6 > Length[stack], grown = Table[0, {2 Length[stack]}]; Do[grown[[q]] = stack[[q]], {q, Length[stack]}]; stack = grown];
+                                        q = 6 top; stack[[q + 1]] = 4; stack[[q + 2]] = d; stack[[q + 3]] = sp; stack[[q + 4]] = ttop; stack[[q + 5]] = a; stack[[q + 6]] = 0; top++;
+                                        If[a == 3 || a == 4, sp = sp - c];
+                                        pc++],
+                                op == 24,
+                                    (* its closing: the choices since its opening dropped, at the place it opened but for an
+                                       atomic part, a lookbehind's part ending there; a negative assertion fails *)
+                                    q = 6 regs[[a + 1]]; kind = stack[[q + 5]];
+                                    If[ (kind == 3 || kind == 4) && sp != stack[[q + 3]], fail = 1,
+                                        If[kind != 5, sp = stack[[q + 3]]];
+                                        top = regs[[a + 1]];
+                                        If[kind == 2 || kind == 4, fail = 1, pc++]],
+                                op == 25,
+                                    (* a repeat of a backreference: past it where its group holds nothing, and where it holds
+                                       none, past it if it may be none, else no match *)
+                                    Which[
+                                        regs[[a + 1]] < 0, If[b == 0, pc = c, fail = 1],
+                                        regs[[a + 2]] == regs[[a + 1]], pc = c,
+                                        True, pc++],
                                 True, fail = 1]];
                         (* another way: the last choice, the registers set since it undone, until one goes on *)
                         While[ fail == 1,
@@ -259,6 +296,9 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                         If[ x > y,
                                             q = 6 top; stack[[q + 1]] = kind; stack[[q + 2]] = rpc; stack[[q + 3]] = rsp; stack[[q + 4]] = ttop; stack[[q + 5]] = x; stack[[q + 6]] = y; top++];
                                         sp = rsp + x; pc = rpc; fail = 0,
+                                    kind == 4,
+                                        (* an assertion's part with no way: a negative assertion holds, on past it *)
+                                        If[x == 2 || x == 4, pc = rpc; sp = rsp; fail = 0],
                                     True,
                                         (* a shortest run, one character more, if the run's class has it: the RUN before rpc *)
                                         q = 5 (rpc - 1); a = vCode[[q + 2]]; c = vCode[[q + 4]]; cls = a;

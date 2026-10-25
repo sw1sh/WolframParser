@@ -29,7 +29,8 @@ RelatedGuides: [WolframParser]
 
 - After a match that is not empty, `"First"` and `"Each"` go on at its end; otherwise the next match is looked for a character later.
 - [StringPatternRecords]() gives the same matches as packed records, with the left sides of the names.
-- [StringPatternMatches]() gives [None]() if one of the programs has none, as [StringPatternProgram]() gives for a pattern with a [RegularExpression]().
+- A group of a [RegularExpression]() is bound by its number, *n* `->` *text*, as a rule's `"$n"` takes it.
+- [StringPatternMatches]() gives [None]() if one of the programs has none, as [StringPatternProgram]() gives for a regular expression with recursion.
 - The option [Method]() gives the matcher:
 
 | Value | Matcher |
@@ -151,10 +152,10 @@ StringCases["abc", __, Overlaps -> All]
 
 ## Possible Issues
 
-A pattern with a regular expression has no program, so there are no matches to give:
+A regular expression with recursion has no program, so there are no matches to give:
 
 ```wl
-StringPatternMatches["ab", {StringPatternProgram[RegularExpression["a"]]}, "Each"]
+StringPatternMatches["(a)", {StringPatternProgram[RegularExpression["\\((?R)?\\)"]]}, "Each"]
 ```
 
 <!-- => None -->
