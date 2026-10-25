@@ -33,33 +33,37 @@ Begin["Wolfram`Parser`StringPatterns`Private`"]
    max, greedy, loop, iteration, done, exit, poison list, its length}, max -1 for none. Choice
    frames are six integers, {kind, pc, sp, trail, x, y}: 1 another way at pc, 2 a greedy run of
    x characters giving one back down to y, 3 a shortest run of x characters taking one more up to
-   y. The trail undoes the registers set since a frame, {register, value} pairs. The declaration is
-   made the first time it is asked for: its types load the compiler. *)
-(* Whether the code cc is of the class cls, into inside, held code each test of a class is: below 128
-   a bit of the class's four words, the bit a word's and a mask's, as Compile takes a shift by a
-   variable for a real; else a search of its runs. *)
-SetAttributes[vmCode, HoldAll]
-$vmMember = vmCode[
-    off = vClasses[[cls + 1]];
-    If[ cc < 128,
-        inside = If[BitAnd[vClasses[[off + Quotient[cc, 32]]], masks[[BitAnd[cc, 31] + 1]]] == 0, 0, 1],
-        inside = 0; rlo = 0; rhi = vClasses[[off + 4]] - 1;
-        While[ rlo <= rhi,
-            rmid = Quotient[rlo + rhi, 2];
-            Which[
-                cc < vClasses[[off + 5 + 2 rmid]], rhi = rmid - 1,
-                cc > vClasses[[off + 6 + 2 rmid]], rlo = rmid + 1,
-                True, inside = 1; rlo = rhi + 1]]]];
+   y. The trail undoes the registers set since a frame, {register, value} pairs. Each test of a class
+   is a call of vmMember. The declarations are made the first time they are asked for: their types
+   load the compiler. *)
+(* Whether the code cc is of the class cls of the classes, 1 or 0, the typed function each test of a
+   class calls: below 128 a bit of the class's four words, the bit a word's and a mask's, as Compile
+   takes a shift by a variable for a real; else a search of its runs. *)
+$vmMemberDeclaration := $vmMemberDeclaration = FunctionDeclaration[vmMember,
+    Typed[{"MachineInteger", "MachineInteger", "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} -> "MachineInteger"] @
+    Function[{cc, cls, vClasses, masks},
+        Module[{off = vClasses[[cls + 1]], inside = 0, rlo = 0, rhi = 0, rmid = 0},
+            If[ cc < 128,
+                inside = If[BitAnd[vClasses[[off + Quotient[cc, 32]]], masks[[BitAnd[cc, 31] + 1]]] == 0, 0, 1],
+                rhi = vClasses[[off + 4]] - 1;
+                While[ rlo <= rhi,
+                    rmid = Quotient[rlo + rhi, 2];
+                    Which[
+                        cc < vClasses[[off + 5 + 2 rmid]], rhi = rmid - 1,
+                        cc > vClasses[[off + 6 + 2 rmid]], rlo = rmid + 1,
+                        True, inside = 1; rlo = rhi + 1]]];
+            inside]]];
 
 $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
     Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
         "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} ->
-        "PackedArray"::["MachineInteger", 1]] @@ ReplaceAll[ReplaceAll[Hold @ Function[{vCode, vPool, vClasses, vText, vParams, vState},
+        "PackedArray"::["MachineInteger", 1]] @
+    Function[{vCode, vPool, vClasses, vText, vParams, vState},
         Module[{n = Length[vText], mode = vParams[[1]], m = vParams[[3]], maxNames = vParams[[4]], nRegs = vParams[[5]], progOff = vParams[[6]],
                 width = 3 + 2 vParams[[4]], i = vParams[[2]], k = 1, status = 0, result = 0, pending = 0, answer = 0, fail = 0,
                 pc = 0, sp = 0, start = 0, top = 0, ttop = 0, regs, stack, trail, out, outLen = 3, nRec = 0,
-                op = 0, a = 0, b = 0, c = 0, d = 0, j = 0, j2 = 0, cc = 0, off = 0, inside = 0, na = 0, ok = 0, len = 0, e = 0, r = 0,
-                cnt = 0, mn = 0, mx = 0, kind = 0, rpc = 0, rsp = 0, rtt = 0, x = 0, y = 0, cls = 0, grown, q = 0, before = 0, after = 0, rlo = 0, rhi = 0, rmid = 0,
+                op = 0, a = 0, b = 0, c = 0, d = 0, j = 0, cc = 0, inside = 0, ok = 0, len = 0, e = 0, r = 0,
+                cnt = 0, mn = 0, mx = 0, kind = 0, rpc = 0, rsp = 0, rtt = 0, x = 0, y = 0, cls = 0, grown, q = 0, before = 0, after = 0,
                 nNames = 0, entry = 0, firstClass = 0, stateLen = 0, base = 0, masks},
             (* the bit of each of 32, a class's test of a code its word's and its bit's: Compile takes a
                shift by a variable for a real *)
@@ -91,7 +95,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                         If[ firstClass > 0,
                             If[ i >= n, result = -1,
                                 cc = vText[[i + 1]]; cls = firstClass;
-                                vmMember[];
+                                inside = vmMember[cc, cls, vClasses, masks];
                                 If[inside == 0, result = -1]]],
                         result = 0];
                     While[ result == 0,
@@ -110,7 +114,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                 op == 3 || op == 18,
                                     If[ sp < n,
                                         cc = vText[[sp + 1]]; cls = a;
-                                        vmMember[];
+                                        inside = vmMember[cc, cls, vClasses, masks];
                                         Which[op == 3 && inside == 1, sp++; pc++, op == 18 && inside == 0, pc++, True, fail = 1],
                                         fail = 1],
                                 op == 4,
@@ -119,7 +123,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                     j = 0; ok = 1; cls = a;
                                     While[ ok == 1 && (c < 0 || j < c) && sp + j < n && (d == 1 || j < b),
                                         cc = vText[[sp + j + 1]];
-                                        vmMember[];
+                                        inside = vmMember[cc, cls, vClasses, masks];
                                         If[inside == 1, j++, ok = 0]];
                                     If[ j < b, fail = 1,
                                         If[ (d == 1 && j > b) || (d == 0 && (c < 0 || b < c) && sp + b < n),
@@ -145,10 +149,10 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                             cls = b; before = 0; after = 0;
                                             If[ sp > 0,
                                                 cc = vText[[sp]];
-                                                vmMember[]; before = inside];
+                                                inside = vmMember[cc, cls, vClasses, masks]; before = inside];
                                             If[ sp < n,
                                                 cc = vText[[sp + 1]];
-                                                vmMember[]; after = inside];
+                                                inside = vmMember[cc, cls, vClasses, masks]; after = inside];
                                             ok = If[before != after, 1, 0]];
                                     If[ok == 1, pc++, fail = 1],
                                 op == 10 || op == 12,
@@ -218,7 +222,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                     j = regs[[a + 1]]; ok = 1; cls = b;
                                     While[ j < sp && ok == 1,
                                         cc = vText[[j + 1]];
-                                        vmMember[];
+                                        inside = vmMember[cc, cls, vClasses, masks];
                                         If[inside == 0, ok = 0]; j++];
                                     If[ok == 1, pc++, fail = 1],
                                 op == 21, result = 2,
@@ -241,7 +245,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                         (* a shortest run, one character more, if the run's class has it: the RUN before rpc *)
                                         q = 5 (rpc - 1); a = vCode[[q + 2]]; c = vCode[[q + 4]]; cls = a;
                                         cc = vText[[rsp + x + 1]];
-                                        vmMember[];
+                                        inside = vmMember[cc, cls, vClasses, masks];
                                         If[ inside == 1,
                                             x++;
                                             If[ (c < 0 || x < c) && rsp + x < n,
@@ -274,13 +278,21 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                 out[[q]] = top; q++; Do[out[[q + j - 1]] = stack[[j]], {j, 1, 6 top}]; q = q + 6 top;
                 out[[q]] = ttop; q++; Do[out[[q + j - 1]] = trail[[j]], {j, 1, 2 ttop}]; q = q + 2 ttop;
                 outLen = q - 1];
-            Take[out, outLen]]], vmMember[] -> $vmMember], vmCode[code_] :> code]];
+            Take[out, outLen]]]];
 
-(* the matcher: the host's compiled one, where its units define vmRun; else the declaration's
-   Function compiled by Compile, every argument a packed vector of integers, as the paclet's typed
-   code is; else evaluated *)
+(* The matcher: the host's compiled one, where its units define vmRun; else the declarations'
+   Functions compiled by Compile, vmMember's first and put in vmRun's code, where Compile inlines it,
+   every argument of vmRun a packed vector of integers, as the paclet's typed code is; else
+   evaluated. *)
 vmFunction := vmFunction = If[DownValues[vmRun] =!= {} || OwnValues[vmRun] =!= {}, vmRun,
-    With[{f = $vmDeclaration[[2, 1]]},
-        Replace[Compile @@ Join[Hold[Evaluate[Map[{#, _Integer, 1} &, f[[1]]]]], Extract[f, {2}, Hold]], Except[_CompiledFunction] -> f]]]
+    With[{member = With[{f = $vmMemberDeclaration[[2, 1]]},
+            Compile @@ Join[Hold[{{cc, _Integer}, {cls, _Integer}, {vClasses, _Integer, 1}, {masks, _Integer, 1}}], Extract[f, {2}, Hold]]],
+          run = $vmDeclaration[[2, 1]]},
+        Replace[
+            If[ Head[member] === CompiledFunction,
+                Compile @@ Join[Hold[Evaluate[Map[{#, _Integer, 1} &, run[[1]]]]], Extract[run, {2}, Hold] /. vmMember -> member,
+                    Hold[CompilationOptions -> {"InlineCompiledFunctions" -> True}]],
+                $Failed],
+            Except[_CompiledFunction] -> run]]]
 
 End[]

@@ -75,7 +75,8 @@ Print["string vm: ", count, " cases, seed ", seed, ": ", same, " runs agree, ", 
 
 (* the names of the engine's own, written whole: the block is read whole, before a Begin in it *)
 If[ MemberQ[arguments, "compile"],
-    {time, compiled} = AbsoluteTiming[FunctionCompile[Wolfram`Parser`StringPatterns`Private`$vmDeclaration, Wolfram`Parser`StringPatterns`Private`vmRun]];
+    {time, compiled} = AbsoluteTiming[FunctionCompile[{Wolfram`Parser`StringPatterns`Private`$vmMemberDeclaration, Wolfram`Parser`StringPatterns`Private`$vmDeclaration},
+        Wolfram`Parser`StringPatterns`Private`vmRun]];
     text = StringJoin[Table[RandomChoice[{"item", "ab", "<x>", " ", "a1", "22", ",", "\n", "abab", "z"}], {3000}]];
     codes = Developer`ToPackedArray[ToCharacterCode[text]];
     agree = Map[Function[p, With[{bc = Wolfram`Parser`StringPatterns`Private`vmBytecode[{StringPatternProgram[p]["Program"]}]},
