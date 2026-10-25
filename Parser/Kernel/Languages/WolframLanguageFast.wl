@@ -31,9 +31,10 @@ Begin["`Private`"]
    any other. The table is read from WolframLanguageClasses.wl beside this
    file, its runs {class, length} from code 0 up as dev/freeze-classes.wls
    records them on Wolfram 15, so that every kernel lexes by Wolfram 15's own
-   WhitespaceCharacter; it is computed where the file is missing. *)
+   WhitespaceCharacter; it is computed where the file does not read as them. The file is read by
+   Get alone, which a kernel that carries it in its units answers without the disk. *)
 $fastClasses := $fastClasses = With[{file = FileNameJoin[{$languagesDirectory, "WolframLanguageClasses.wl"}]},
-    Replace[If[FileExistsQ[file], Get[file], None], {
+    Replace[Get[file], {
         runs : {{_Integer, _Integer} ..} /; Total[runs[[All, 2]]] === 65536 :> Developer`ToPackedArray[Join @@ Apply[ConstantArray, runs, {1}]],
         _ :> fastClassesComputed[]}]]
 

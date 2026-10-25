@@ -669,10 +669,11 @@ interpretDispatch[ParserCombinator["InterpreterSlot", type_String, _], input_, p
 (* The characters of the classes string patterns name, as Wolfram 15 matches them: the file
    CharacterClasses.wl beside this one, recorded by dev/freeze-character-classes.wls, class ->
    {{first, last}, ...} runs of code points, or the name of the class before it with the same
-   characters; Missing where the file or the class is not there. *)
+   characters; Missing where the file or the class is not there. The file is read by Get alone,
+   which a kernel that carries it in its units answers without the disk. *)
 $parserDirectory = DirectoryName[$InputFileName];
 characterClassRuns[] := characterClassRuns[] = With[{file = FileNameJoin[{$parserDirectory, "CharacterClasses.wl"}]},
-    Replace[If[FileExistsQ[file], Get[file], None], {
+    Replace[Get[file], {
         classes_Association :> Map[Replace[#, runs_List :> Developer`ToPackedArray[runs]] &, classes],
         _ :> <||>}]]
 characterClassRuns[class_String] := Replace[Lookup[characterClassRuns[], class, Missing["NotRecorded", class]], same_String :> characterClassRuns[same]]
