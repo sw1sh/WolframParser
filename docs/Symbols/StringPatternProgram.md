@@ -82,6 +82,14 @@ StringPatternProgram["a" | "ab"]["RegexFinds"]
 
 <!-- => True -->
 
+A repeat of more than one character can give characters to a later part, and a regex's leftmost longest match takes them, so a regex does not match as it does:
+
+```wl
+StringPatternProgram["a"... ~~ "ab"... ~~ "b"]["RegexLike"]
+```
+
+<!-- => False -->
+
 A repeat of one class, from once on, runs as far as its characters go:
 
 ```wl

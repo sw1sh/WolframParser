@@ -198,12 +198,16 @@ referenced[excluding[t_, p_], seen_List] := With[{r = referenced[p, seen]}, {exc
 referenced[builtIn[name_, p_], seen_List] := With[{r = referenced[p, seen]}, {builtIn[name, First[r]], Last[r]}]
 referenced[p_, seen_List] := {p, seen}
 
-(* A regex takes the longest of its alternatives, a pattern the first; a regex has no shortest
-   repeat, and the matches of the C library's skip empty ones. A regex matches as the program
-   does if it has no alternatives of more than a character, no shortest repeat, no name twice
-   and no empty match; it finds a match where the program has one if it has no name twice, whose
-   texts must be the same, and no empty match, which the regex search passes over. *)
-regexLikeQ[p_] := ! nullableQ[p] && FreeQ[p, _alternatives | repeat[_, _, _, False] | _backreference] && DuplicateFreeQ[Cases[p, named[x_, _] :> x, {0, Infinity}]]
+(* A regex's match is the leftmost longest, a pattern's the first by the order of its parts: the
+   first of its alternatives, its repeats the longest first and only then the parts after them. A
+   regex has no shortest repeat, and the matches of the C library's skip empty ones. A regex matches
+   as the program does if it has no alternatives of more than a character, no repeat of more than
+   one character, which may give characters to a later part and so make a longer match, no
+   shortest repeat, no name twice and no empty match. It finds a match where the program has one if
+   it has no name twice, whose texts must be the same, and no empty match, which the regex search
+   passes over. *)
+regexLikeQ[p_] := ! nullableQ[p] && FreeQ[p, _alternatives | repeat[_, _, _, False] | repeat[Except[_?singleCharacterQ], _, _, _] | _backreference] &&
+    DuplicateFreeQ[Cases[p, named[x_, _] :> x, {0, Infinity}]]
 regexFindsQ[p_] := ! nullableQ[p] && FreeQ[p, _backreference] && DuplicateFreeQ[Cases[p, named[x_, _] :> x, {0, Infinity}]]
 
 (* whether a program may match no characters *)

@@ -122,6 +122,15 @@ VerificationTest[
     TestID -> "string patterns: a repeat of a class, as a regex matches it and a run of the class"
 ]
 
+(* a repeat of more than one character may give characters to a later part, where a regex's
+   leftmost longest match takes them: "a"... ~~ "ab"... ~~ "b" matches "aab" of "aabb", a regex all *)
+VerificationTest[
+    {StringPatternProgram["a"... ~~ "ab"... ~~ "b"]["RegexLike"], engineCases["aabb", "a"... ~~ "ab"... ~~ "b"], StringPatternProgram[DigitCharacter .. ~~ "a"..]["RegexLike"],
+     StringPatternProgram["<" ~~ __ ~~ ">"]["RegexLike"]},
+    {False, StringCases["aabb", "a"... ~~ "ab"... ~~ "b"], True, True},
+    TestID -> "string patterns: a regex does not match as a repeat of more than one character does"
+]
+
 VerificationTest[
     {StringPatternProgram["a" | "ab"]["RegexLike"], StringPatternProgram["a" | "ab"]["RegexFinds"], StringPatternProgram[x__ ~~ x__]["RegexFinds"],
      StringPatternProgram[Shortest["a" ..]]["RegexLike"], StringPatternProgram["a" ...]["RegexFinds"], StringPatternProgram["a" ~~ "b"]["Class"]},
