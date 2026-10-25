@@ -155,7 +155,7 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
     Function[{lexCodes, lexClasses, lexOp1, lexOp2, lexOp3, lexLongOps, lexSpecial},
         Module[{n = Length[lexCodes] - 3, out, lnEnd, lnOp, k = 0, i = 1, j = 0, c = 0, c2 = 0, cl = 0, nl = 0, kind = 0, op = 0, file = 0,
                 status = 0, done = 0, scanning = 0, depth = 0, m = 0, count = 0, a = 0, len = 0, match = 0, q = 0, base = 0, real = 0, start = 0,
-                tick = 0},
+                tick = 0, accuracy = 0},
             out = Table[0, {5 n + 7}];
             lnEnd = Table[0, {n + 1}];
             lnOp = Table[0, {n + 1}];
@@ -269,10 +269,11 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                                     j <= n && lexCodes[[j]] == 46 && ! (j + 1 <= n && lexCodes[[j + 1]] == 46),
                                         j++; While[j <= n && 48 <= lexCodes[[j]] <= 57, j++],
                                     True, j = j]];
-                            (* a precision or an accuracy *)
+                            (* a precision or an accuracy, which has its digits: a `` before none is
+                               no number's, and reading stops at it *)
                             If[ j <= n && lexCodes[[j]] == 96,
-                                j++;
-                                If[j <= n && lexCodes[[j]] == 96, j++];
+                                j++; accuracy = 0;
+                                If[j <= n && lexCodes[[j]] == 96, j++; accuracy = 1];
                                 m = If[j <= n && (lexCodes[[j]] == 43 || lexCodes[[j]] == 45), j + 1, j];
                                 Which[
                                     m <= n && 48 <= lexCodes[[m]] <= 57,
@@ -281,6 +282,7 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                                         j = m,
                                     m + 1 <= n && lexCodes[[m]] == 46 && 48 <= lexCodes[[m + 1]] <= 57,
                                         m++; While[m <= n && 48 <= lexCodes[[m]] <= 57, m++]; j = m,
+                                    accuracy == 1, j -= 2,
                                     True, j = j]];
                             (* a power of the base *)
                             If[ j + 1 <= n && lexCodes[[j]] == 42 && lexCodes[[j + 1]] == 94,

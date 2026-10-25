@@ -532,7 +532,7 @@ decimalValue[s_String] := With[{parts = StringSplit[s, ".", All]},
         With[{exact = FromDigits[digits] / 10^places},
             If[significantDigits[digits, 10], SetAccuracy[exact, places], machineReal[exact]]]]]
 
-markedNumberValue[s_String] := Module[{base = 10, text = s, exponent = 0, mark = None, markText = "", int, frac, exact},
+markedNumberValue[s_String] := Module[{base = 10, text = s, exponent = 0, mark = None, markText = "", int, frac, point, digits, scale},
     If[ StringContainsQ[text, "^^"],
         {base, text} = {FromDigits[First[StringSplit[text, "^^"]]], Last[StringSplit[text, "^^"]]}];
     If[ StringContainsQ[text, "*^"],
@@ -544,14 +544,23 @@ markedNumberValue[s_String] := Module[{base = 10, text = s, exponent = 0, mark =
                 {"Precision", StringDrop[text, at]}];
             text = StringTake[text, at - 1]]];
     {int, frac} = If[StringContainsQ[text, "."], StringSplit[text, ".", All][[{1, 2}]], {text, ""}];
-    exact = FromDigits[int <> frac, base] * base^(exponent - StringLength[frac]);
+    point = StringContainsQ[text, "."];
+    digits = FromDigits[int <> frac, base]; scale = exponent - StringLength[frac];
     Which[
-        mark === None && ! StringContainsQ[text, "."], exact,
-        mark === "Accuracy", SetAccuracy[exact, digitsInBase[signedValue[markText], base]],
-        mark === "Precision" && markText =!= "" && exact == 0, 0.,
-        mark === "Precision" && markText =!= "", SetPrecision[exact, digitsInBase[signedValue[markText], base]],
-        mark === None && significantDigits[int <> frac, base], SetAccuracy[exact, digitsInBase[StringLength[frac] - exponent, base]],
-        True, machineReal[exact]]
+        mark === None && ! point, If[digits === 0, 0, digits * base^scale],
+        mark === "Accuracy", accurateValue[digits, base, scale, signedValue[markText]],
+        (* a zero of a precision: an integer one exact [WL 15.0.0] *)
+        mark === "Precision" && markText =!= "" && digits === 0, If[point, 0., 0],
+        mark === "Precision" && markText =!= "", With[{p = digitsInBase[signedValue[markText], base]},
+            SetPrecision[scaledValue[digits, base, scale, Max[p, 0]], p]],
+        (* the digits of an integer before a mark with no precision as one before its point, the
+           first of them its first digit, where that is a machine real other than zero; else the
+           value [WL 15.0.0] *)
+        mark === "Precision" && base === 10 && ! point,
+            With[{shifted = machineValue[digits, base, scale - Max[IntegerLength[digits] - 1, 0]]},
+                If[MachineNumberQ[shifted] && (shifted != 0 || digits === 0), shifted, machineValue[digits, base, scale]]],
+        mark === None && significantDigits[int <> frac, base, StringContainsQ[s, "*^"]], longValue[digits, base, scale, StringLength[frac] - exponent],
+        True, machineValue[digits, base, scale]]
 ]
 
 (* "-12", "3.5", ".5" -> the exact value *)
@@ -560,16 +569,56 @@ signedValue[t_String] := With[{unsigned = StringDelete[t, "+" | "-"]},
         With[{parts = StringSplit[unsigned, ".", All]}, FromDigits[parts[[1]] <> parts[[2]]] / 10^StringLength[parts[[2]]]],
         FromDigits[unsigned]]]
 
-(* a count of digits of the base, in decimal digits *)
+(* a count of digits of the base, in decimal digits, by the bits they are [WL 15.0.0] *)
 digitsInBase[n_, 10] := n
-digitsInBase[n_, base_Integer] := N[n Log10[base]]
+digitsInBase[n_, base_Integer] := N[n] Log2[N[base]] Log10[2.]
 
-(* more digits than a machine real holds: 17 decimal ones [WL 15.0.0] *)
-significantDigits[digits_String, base_Integer] := With[{count = StringLength[StringDelete[digits, StartOfString ~~ "0" ..]]},
-    If[base === 10, count > 17, N[count Log10[base]] > 18.5]]
+(* more digits than a machine real holds: of base b, Floor[53 / Log2[b]] + 2 of them, 17 decimal
+   ones, but the 53 of base 2, and with a power of the base never fewer than 17 [WL 15.0.0] *)
+significantDigits[digits_String, base_Integer, scaled_ : False] := With[{count = StringLength[StringDelete[digits, StartOfString ~~ "0" ..]]},
+    count > If[TrueQ[scaled], Max[17, machineDigits[base]], machineDigits[base]]]
+machineDigits[base_Integer] := Which[base === 10, 17, base === 2, 53, True, Floor[53 / Log2[base]] + 2]
 
-(* the machine real nearest the value; below the least one, zero *)
-machineReal[x_] := If[x != 0 && Abs[x] < $MinMachineNumber, 0., N[x]]
+(* digits times the base to the power scale at the accuracy of a digits of the base: exactly made
+   where the power is small enough to make, else at the precision Wolfram 15 counts in bits, zero
+   at the accuracy where the value is below it [WL 15.0.0] *)
+accurateValue[digits_Integer, base_Integer, scale_Integer, a_] := If[ Abs[scale] <= 10000, SetAccuracy[digits base^scale, digitsInBase[a, base]],
+    With[{p = bitsPrecision[digits, base, scale, a]}, If[p <= 0, SetAccuracy[0, digitsInBase[a, base]], SetPrecision[scaledValue[digits, base, scale, p], p]]]]
+
+(* a number of no mark with more digits than a machine real holds, digits times the base to the
+   power scale, a digits of the base after its point: at the precision Wolfram 15 counts in bits
+   [WL 15.0.0] *)
+longValue[digits_Integer, base_Integer, scale_Integer, a_] := With[{p = bitsPrecision[digits, base, scale, a]}, SetPrecision[scaledValue[digits, base, scale, p], p]]
+
+(* the precision, in decimal digits, of digits times the base to the power scale at the accuracy of
+   a digits of the base: the bits of the accuracy and of the value's magnitude [WL 15.0.0] *)
+bitsPrecision[digits_Integer, base_Integer, scale_Integer, a_] := (a Log2[N[base]] + (N[Log2[digits]] + scale Log2[N[base]])) Log10[2.]
+
+(* Digits times the base to the power scale: exact where the power is small enough to make, else
+   at a working precision, wp digits of the value kept through the power. A power past
+   $MaxNumber overflows, as the kernel's reader's does. *)
+scaledValue[digits_Integer, base_Integer, scale_Integer, wp_] := If[ Abs[scale] <= 10000, digits base^scale,
+    N[digits, wp + 10] N[base, wp + 10 + Log10[N[Abs[scale]]]]^scale]
+
+(* the decimal exponent of digits times the base to the power scale *)
+magnitude[digits_Integer, base_Integer, scale_Integer] := If[digits === 0, -Infinity, N[Log10[digits]] + scale N[Log10[base]]]
+
+(* a real with no precision of its own, digits times the base to the power scale: the machine
+   real nearest it, zero where it is too small for one, and the value at machine precision where it
+   is too large; below $MinNumber an underflow [WL 15.0.0] *)
+machineValue[0, _Integer, _Integer] := 0.
+machineValue[digits_Integer, base_Integer, scale_Integer] := If[ Abs[scale] <= 10000, machineReal[digits base^scale],
+    With[{m = magnitude[digits, base, scale]},
+        (* by its difference, as a comparison of machine reals takes ones near each other for equal *)
+        Which[m - N[Log10[$MinNumber]] < 0, Underflow[], m < -400, 0., m <= 400, machineReal[digits base^scale], True, N[scaledValue[digits, base, scale, 20]]]]]
+
+(* The machine real nearest an exact value, as the kernel's reader makes one: below the least
+   normal one the subnormal nearest it, by its multiple of the least subnormal, zero where that is
+   nearer, and past the greatest the value at machine precision [WL 15.0.0]. *)
+machineReal[x_] := Which[
+    x == 0, 0.,
+    Abs[x] >= 2^-1022, N[x],
+    True, With[{k = Round[Abs[x] 2^1074]}, If[k === 0, 0., Quiet[N[Sign[x] k / 2^1074], General::munfl]]]]
 
 (* --- strings --- *)
 

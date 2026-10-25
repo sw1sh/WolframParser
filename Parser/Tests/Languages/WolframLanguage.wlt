@@ -797,6 +797,46 @@ VerificationTest[
     {True, True},
     TestID -> "wl: the character class file is the table Wolfram 15 computes"]
 
+(* {a number's text, Wolfram 15's value of it}: the subnormal machine real nearest it, zero where
+   that is nearer, past the greatest machine real the value at machine precision, a zero of a
+   precision exact where it is an integer's, and an integer's digits before a mark with no
+   precision read as a real's, the first of them its first digit *)
+$wlNumberCases = {
+    {"1.*^-310", 1.*^-310},
+    {"5.*^-324", 5.*^-324},
+    {"3.*^-324", 5.*^-324},
+    {"2.*^-324", 0.},
+    {"2^^1.*^-1074", 5.*^-324},
+    {"2.2250738585072013*^-308", 2.2250738585072014*^-308},
+    {"1.*^-1000000", 0.},
+    {"1.*^1355718576299609", 1.`15.954589770191005*^1355718576299609},
+    {"1.7976931348623158*^308", 1.7976931348623157*^308},
+    {"0`", 0.},
+    {"0`10", 0},
+    {"0.`10", 0.},
+    {"108`", 1.08},
+    {"108`*^2", 108.},
+    {"007`", 7.},
+    {"108.`", 108.},
+    {"16^^ff`", 255.},
+    {"713`*^316", 7.13`15.954589770191005*^318},
+    {"92615557861408081889`*^-327", 9.261555786140807*^-308},
+    {"0*^279617642866175", 0},
+    {"1.*^-1355718576299610", Underflow[]},
+    {"8^^6.`14", 6.`12.64325981788721}
+};
+Scan[
+    Function[c, VerificationTest[
+        With[{v = First[First[WolframLanguageHeld[c[[1]]]]]}, {v, MachineNumberQ[v], Precision[v]}],
+        {c[[2]], MachineNumberQ[c[[2]]], Precision[c[[2]]]},
+        TestID -> "wl number: " <> c[[1]]]],
+    $wlNumberCases]
+VerificationTest[
+    MachineNumberQ[First[First[WolframLanguageHeld[#]]]] & /@ {"36^^q.au24lt7bgdl1", "36^^q.au24lt7bgdl1*^1", "16^^fffffffffffffff.", "16^^ffffffffffffffff.",
+        "8^^1234567012345670123.", "8^^12345670123456701234.", "2^^1" <> StringRepeat["0", 52] <> ".", "2^^1" <> StringRepeat["0", 53] <> "."},
+    {False, True, True, False, True, False, True, False},
+    TestID -> "wl number: a machine real holds Floor[53 / Log2[b]] + 2 digits of base b, 53 of base 2, never fewer than 17 with a power of the base"]
+
 (* SyntaxQ and SyntaxLength as Wolfram 15 gives them for each source *)
 $wlSyntaxCases = {
     {"", False, 0},
@@ -851,7 +891,14 @@ $wlSyntaxCases = {
     {"t/:a\n", False, 4},
     {"t/:", False, 5},
     {"1 + (2", False, 8},
-    {"(* c *) )", False, 8}
+    {"(* c *) )", False, 8},
+    {"0``", False, 1},
+    {"1.5``", False, 3},
+    {"f[1``]", False, 3},
+    {"1``-", False, 1},
+    {"1```", False, 1},
+    {"1``+.5", True, 6},
+    {"1``-3", True, 5}
 };
 Scan[
     Function[c, VerificationTest[{WolframLanguageSyntaxQ[c[[1]]], WolframLanguageSyntaxLength[c[[1]]]}, Rest[c], TestID -> "wl syntax: " <> ToString[c[[1]], InputForm]]],
