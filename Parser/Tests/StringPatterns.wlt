@@ -258,3 +258,19 @@ VerificationTest[
     {None, None, None, None},
     TestID -> "string patterns: no regex for a name twice, an anchor in a repeat or a shortest repeat"
 ]
+
+(* a class is data, codeIn[spec], from which the table of any class of one character is made *)
+VerificationTest[
+    With[{codes = Join[Range[0, 16^^D7FF], Range[16^^E000, 16^^FFFF]]},
+        Map[Function[p, Pick[codes, StringPatternProgram[p]["ClassCodes"][[codes + 1]], 1] === Select[codes, StringMatchQ[FromCharacterCode[#], p] &]],
+            {Except[DigitCharacter], {"a", "b", DigitCharacter}, Except[{"a", "1"}], Except[WhitespaceCharacter | "x"]}]],
+    {True, True, True, True},
+    TestID -> "string patterns: the codes of any class of one character, a union, an Except and a range"
+]
+
+VerificationTest[
+    {StringPatternProgram[{"a", "b", "c"}]["Program"], StringPatternProgram[Except[DigitCharacter | "x"]]["Program"]},
+    {Wolfram`Parser`StringPatterns`Private`characterClass[Wolfram`Parser`StringPatterns`Private`codeIn[{"Codes", {97, 98, 99}}]],
+     Wolfram`Parser`StringPatterns`Private`characterClass[Wolfram`Parser`StringPatterns`Private`codeIn[{"Not", {"Union", {{"Codes", {120}}, {"Named", "digit"}}}}]]},
+    TestID -> "string patterns: a class as data, the characters of a union one set of codes"
+]

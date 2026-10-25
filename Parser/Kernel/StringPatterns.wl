@@ -41,7 +41,7 @@ Begin["`Private`"]
 (* A pattern becomes a program first:
 
     literal[{code, ...}]                these characters
-    characterClass[test]                a character whose code passes the test
+    characterClass[codeIn[spec]]        a character of the class spec, data (see Characters)
     sequence[{p, ...}]                  each after the other
     alternatives[{p, ...}]              the first that matches
     repeat[p, min, max, longest]        p from min to max times
@@ -114,9 +114,9 @@ programRun[p_] := Replace[p, {repeat[characterClass[test_], min_Integer, Infinit
 (* the program of a string pattern, or a Throw of None, tagged program *)
 program[s_String] := literal[ToCharacterCode[s]]
 program[Verbatim[Verbatim][s_String]] := literal[ToCharacterCode[s]]
-program[Verbatim[Blank][]] := characterClass[anyCharacterQ]
-program[Verbatim[BlankSequence][]] := repeat[characterClass[anyCharacterQ], 1, Infinity, True]
-program[Verbatim[BlankNullSequence][]] := repeat[characterClass[anyCharacterQ], 0, Infinity, True]
+program[Verbatim[Blank][]] := characterClass[codeIn["Any"]]
+program[Verbatim[BlankSequence][]] := repeat[characterClass[codeIn["Any"]], 1, Infinity, True]
+program[Verbatim[BlankNullSequence][]] := repeat[characterClass[codeIn["Any"]], 0, Infinity, True]
 (* the same name in a name's own part matches nothing [WL 15.0.0] *)
 program[Verbatim[Pattern][x_Symbol, p_]] := named[HoldComplete[x], ReplaceAll[program[p], named[HoldComplete[x], _] -> alternatives[{}]]]
 program[p_StringExpression] := sequence[program /@ List @@ p]
@@ -135,17 +135,16 @@ program[Verbatim[Condition][p_, test_]] := With[{inner = program[p]}, conditione
 (* Except takes a pattern of one character: Except[c, p] is p where a character that c does not
    match comes first [WL 15.0.0] *)
 program[Verbatim[Except][c_]] := With[{inner = program[c]},
-    If[singleCharacterQ[inner], With[{test = classTest[inner]}, characterClass[Function[code, ! test[code]]]], Throw[None, program]]]
+    If[singleCharacterQ[inner], characterClass[codeIn[{"Not", classSpec[inner]}]], Throw[None, program]]]
 program[Verbatim[Except][c_, p_]] := With[{inner = program[c]}, If[singleCharacterQ[inner], excluding[classTest[inner], program[p]], Throw[None, program]]]
-program[HoldPattern[CharacterRange[a_String, b_String]]] := With[{low = First[ToCharacterCode[a]], high = First[ToCharacterCode[b]]},
-    characterClass[Function[code, low <= code <= high]]]
-program[DigitCharacter] := characterClass[digitCodeQ]
-program[LetterCharacter] := characterClass[letterCodeQ]
-program[WordCharacter] := characterClass[wordCodeQ]
-program[WhitespaceCharacter] := characterClass[whitespaceCodeQ]
-program[PunctuationCharacter] := characterClass[punctuationCodeQ]
-program[HexadecimalCharacter] := characterClass[hexadecimalCodeQ]
-program[Whitespace] := repeat[characterClass[whitespaceCodeQ], 1, Infinity, True]
+program[HoldPattern[CharacterRange[a_String, b_String]]] := characterClass[codeIn[{"Range", First[ToCharacterCode[a]], First[ToCharacterCode[b]]}]]
+program[DigitCharacter] := characterClass[codeIn[{"Named", "digit"}]]
+program[LetterCharacter] := characterClass[codeIn[{"Named", "letter"}]]
+program[WordCharacter] := characterClass[codeIn[{"Named", "word"}]]
+program[WhitespaceCharacter] := characterClass[codeIn[{"Named", "whitespace"}]]
+program[PunctuationCharacter] := characterClass[codeIn[{"Named", "punctuation"}]]
+program[HexadecimalCharacter] := characterClass[codeIn[{"Named", "hexadecimal"}]]
+program[Whitespace] := repeat[characterClass[codeIn[{"Named", "whitespace"}]], 1, Infinity, True]
 program[NumberString] := builtIn[NumberString, program[StringExpression[
     Repeated[{"+", "-"}, {0, 1}],
     Alternatives[StringExpression[DigitCharacter .., Repeated[StringExpression[".", RepeatedNull[DigitCharacter]], {0, 1}]], StringExpression[".", DigitCharacter ..]]
@@ -159,10 +158,15 @@ repeatOf[p_, min_, max_] := If[MatchQ[p, _anchor], Throw[None, program], repeat[
 (* Alternatives of single characters are one class, so that a repeat of them goes along the string
    without backtracking. *)
 alternativesProgram[{p_}] := p
-alternativesProgram[parts_List] := If[AllTrue[parts, singleCharacterQ],
-    characterClass[With[{tests = classTest /@ parts}, Function[code, AnyTrue[tests, Function[test, test[code]]]]]],
-    alternatives[parts]
-]
+alternativesProgram[parts_List] := If[AllTrue[parts, singleCharacterQ], characterClass[codeIn[unionSpec[classSpec /@ parts]]], alternatives[parts]]
+
+(* the union of classes, those of characters one *)
+unionSpec[specs_List] := With[{codes = Cases[specs, {"Codes", c_} :> c], others = DeleteCases[specs, {"Codes", _}]},
+    Which[
+        others === {}, {"Codes", Union @@ codes},
+        codes === {} && Length[others] === 1, First[others],
+        codes === {}, {"Union", others},
+        True, {"Union", Prepend[others, {"Codes", Union @@ codes}]}]]
 
 (* Every repeat in Shortest is shortest, those inside another too, but not those of a pattern of
    Wolfram 15's own, such as NumberString [WL 15.0.0]. *)
@@ -179,9 +183,11 @@ singleCharacterQ[_characterClass] := True
 singleCharacterQ[literal[{_}]] := True
 singleCharacterQ[_] := False
 
-(* the test of the code of the one character that a program matches *)
+(* the test of the code of the one character that a program matches, and its class as data *)
 classTest[characterClass[test_]] := test
-classTest[literal[{c_}]] := Function[code, code === c]
+classTest[literal[{c_}]] := codeIn[{"Codes", {c}}]
+classSpec[characterClass[codeIn[spec_]]] := spec
+classSpec[literal[{c_}]] := {"Codes", {c}}
 
 (* the names of a program, each HoldComplete[x], with how many times each occurs *)
 programNames[p_] := Counts[Cases[p, named[x_, _] | backreference[x_] :> x, {0, Infinity}]]
@@ -357,26 +363,40 @@ classCodeQ[class_String, code_Integer] := If[code < 65536,
     classTable[class][[code + 1]] === 1,
     AnyTrue[classAbove[class], Function[run, First[run] <= code <= Last[run]]]]
 
-anyCharacterQ[_Integer] := True
-digitCodeQ[code_Integer] := 48 <= code <= 57 || (code > 127 && classCodeQ["digit", code])
-letterCodeQ[code_Integer] := 65 <= code <= 90 || 97 <= code <= 122 || (code > 127 && classCodeQ["letter", code])
-wordCodeQ[code_Integer] := 48 <= code <= 57 || 65 <= code <= 90 || 97 <= code <= 122 || (code > 127 && classCodeQ["word", code])
-whitespaceCodeQ[code_Integer] := classCodeQ["whitespace", code]
-punctuationCodeQ[code_Integer] := classCodeQ["punctuation", code]
-hexadecimalCodeQ[code_Integer] := classCodeQ["hexadecimal", code]
-(* a word boundary is between a character of a regex's \w, the word characters and _, and one not [WL 15.0.0] *)
-regexWordCodeQ[code_Integer] := 48 <= code <= 57 || 65 <= code <= 90 || 97 <= code <= 122 || code === 95 || (code > 127 && classCodeQ["regex \\w", code])
+(* A class of characters is data, so that a host builds its tables from it, and codeIn[spec] the
+   test of a code:
+     "Any"                     every character
+     {"Named", class}          a class the paclet records: "digit", "letter", "word",
+                               "whitespace", "punctuation", "hexadecimal" or "regex \w", the
+                               word characters and _, of a word boundary [WL 15.0.0]
+     {"Codes", {code, ...}}    these characters
+     {"Range", low, high}      the codes from low to high
+     {"Union", {spec, ...}}    a character of one of them
+     {"Not", spec}             a character not of it *)
+codeIn["Any"][_Integer] := True
+codeIn[{"Named", "digit"}][code_Integer] := 48 <= code <= 57 || (code > 127 && classCodeQ["digit", code])
+codeIn[{"Named", "letter"}][code_Integer] := 65 <= code <= 90 || 97 <= code <= 122 || (code > 127 && classCodeQ["letter", code])
+codeIn[{"Named", "word"}][code_Integer] := 48 <= code <= 57 || 65 <= code <= 90 || 97 <= code <= 122 || (code > 127 && classCodeQ["word", code])
+codeIn[{"Named", "regex \\w"}][code_Integer] := 48 <= code <= 57 || 65 <= code <= 90 || 97 <= code <= 122 || code === 95 || (code > 127 && classCodeQ["regex \\w", code])
+codeIn[{"Named", class_String}][code_Integer] := classCodeQ[class, code]
+codeIn[{"Codes", codes_List}][code_Integer] := MemberQ[codes, code]
+codeIn[{"Range", low_Integer, high_Integer}][code_Integer] := low <= code <= high
+codeIn[{"Union", specs_List}][code_Integer] := AnyTrue[specs, Function[spec, codeIn[spec][code]]]
+codeIn[{"Not", spec_}][code_Integer] := ! codeIn[spec][code]
 
-(* A named class has a table of all its codes below 65536, so that many characters are tested at
-   once: the packed table, by code + 1, 1 or 0, or None for another test. *)
-classCodes[digitCodeQ] := classTable["digit"]
-classCodes[letterCodeQ] := classTable["letter"]
-classCodes[wordCodeQ] := classTable["word"]
-classCodes[whitespaceCodeQ] := classTable["whitespace"]
-classCodes[punctuationCodeQ] := classTable["punctuation"]
-classCodes[hexadecimalCodeQ] := classTable["hexadecimal"]
-classCodes[anyCharacterQ] := classCodes[anyCharacterQ] = ConstantArray[1, 65536]
+(* The codes below 65536 of a class, so that many characters are tested at once: the packed table,
+   by code + 1, 1 or 0, made once; None for a test that is no class. *)
+classCodes[codeIn[spec_]] := specTable[spec]
 classCodes[_] := None
+
+specTable[spec_] := specTable[spec] = Developer`ToPackedArray[tableOf[spec]]
+tableOf["Any"] := ConstantArray[1, 65536]
+tableOf[{"Named", class_String}] := classTable[class]
+tableOf[{"Codes", codes_List}] := Module[{table = ConstantArray[0, 65536]}, table[[Select[codes, 0 <= # < 65536 &] + 1]] = 1; table]
+tableOf[{"Range", low_Integer, high_Integer}] := Module[{table = ConstantArray[0, 65536]},
+    If[Max[low, 0] <= Min[high, 65535], table[[Max[low, 0] + 1 ;; Min[high, 65535] + 1]] = 1]; table]
+tableOf[{"Union", specs_List}] := If[specs === {}, ConstantArray[0, 65536], Unitize[Total[specTable /@ specs]]]
+tableOf[{"Not", spec_}] := 1 - specTable[spec]
 
 
 (* ::Section:: *)
@@ -455,7 +475,7 @@ anchorQ[EndOfString, subject[_, n_, _], i_Integer] := i === n
 (* a line starts after a newline, but not after one that ends the string, as a regex's ^ [WL 15.0.0] *)
 anchorQ[StartOfLine, z : subject[_, n_, _], i_Integer] := i === 0 || (i < n && codeAt[z, i - 1] === 10)
 anchorQ[EndOfLine, z : subject[_, n_, _], i_Integer] := i === n || codeAt[z, i] === 10
-anchorQ[WordBoundary, z : subject[_, n_, _], i_Integer] := (i > 0 && regexWordCodeQ[codeAt[z, i - 1]]) =!= (i < n && regexWordCodeQ[codeAt[z, i]])
+anchorQ[WordBoundary, z : subject[_, n_, _], i_Integer] := With[{word = codeIn[{"Named", "regex \\w"}]}, (i > 0 && word[codeAt[z, i - 1]]) =!= (i < n && word[codeAt[z, i]])]
 
 (* the value of a held test, each name bound to the text it matched, or to "" if it took no part *)
 boundValue[held_HoldComplete, z_subject, b_, names_Association] := ReleaseHold[ReplaceAll[held, bindingRules[z, b, names, "Condition"]]]
