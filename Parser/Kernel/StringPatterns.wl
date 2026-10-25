@@ -21,8 +21,9 @@
         Get[FileNameJoin[{PacletObject["Wolfram/Parser"]["Location"], "Kernel", "StringPatterns.wl"}]]
 *)
 
-(* the characters of the classes, which the paclet's core reads too, where it has not *)
+(* the characters of the classes, which the paclet's core reads too, where it has not, and the typed matcher *)
 If[DownValues[Wolfram`Parser`Private`characterClassRuns] === {}, Get[FileNameJoin[{DirectoryName[$InputFileName], "CharacterClassRuns.wl"}]]];
+Get[FileNameJoin[{DirectoryName[$InputFileName], "StringPatternsVM.wl"}]];
 
 BeginPackage["Wolfram`Parser`StringPatterns`"]
 
@@ -31,6 +32,7 @@ are \"Pattern\", \"Program\", \"Regex\", \"RegexLike\", \"RegexFinds\", \"Class\
 StringPatternMatches::usage = "StringPatternMatches[s, {prog1, prog2, ...}, mode] gives the matches of the programs progi in the \
 string s from the left, each {start, end, k, rules}: progk matched the characters after start up to end, rules binding its names to \
 their text. The mode is \"First\", \"Each\" or \"Overlapping\"."
+Options[StringPatternMatches] = {Method -> Automatic}
 
 Begin["`Private`"]
 
@@ -502,10 +504,15 @@ bindingRules[z_subject, b_Association, names_Association, use_String] := With[{b
                     StringCases and StringCount take them [WL 15.0.0];
      "Overlapping"  every program that matches there, as StringPosition takes them.
    After a match that is not empty, "First" and "Each" go on at its end; else a character later. *)
-StringPatternMatches[s_String, programs : {___StringPatternProgram}, mode : "First" | "Each" | "Overlapping"] := With[
+(* The typed matcher matches them, unless Method -> "Interpreter", the programs' interpreter, the
+   reference it is held to. *)
+StringPatternMatches[s_String, programs : {___StringPatternProgram}, mode : "First" | "Each" | "Overlapping", OptionsPattern[]] := With[
     {ps = Map[#["Program"] &, programs]},
-    If[MemberQ[ps, None], None, programMatches[s, ps, mode]]]
-StringPatternMatches[s_String, program_StringPatternProgram, mode : "First" | "Each" | "Overlapping"] := StringPatternMatches[s, {program}, mode]
+    Which[
+        MemberQ[ps, None], None,
+        OptionValue[Method] === "Interpreter", programMatches[s, ps, mode],
+        True, vmMatches[s, ps, mode]]]
+StringPatternMatches[s_String, program_StringPatternProgram, mode : "First" | "Each" | "Overlapping", opts : OptionsPattern[]] := StringPatternMatches[s, {program}, mode, opts]
 
 programMatches[s_String, programs_List, mode_String] := With[{z = subject[ToCharacterCode[s], StringLength[s], s], names = programNames /@ programs},
     Replace[
@@ -553,6 +560,151 @@ firstCodes[named[_, p_]] := firstCodes[p]
 firstCodes[tested[p_, _] | conditioned[p_, _, _]] := firstCodes[p]
 firstCodes[excluding[_, p_] | builtIn[_, p_]] := firstCodes[p]
 firstCodes[_] := All
+
+
+(* ::Section:: *)
+(*The typed matcher*)
+
+(* The bytecode of a list of programs, made once for them: the code, the pool, the classes' specs,
+   among them {"Test", t} for the passing characters of the tth PatternTest, made for each text,
+   the tests, the conditions, each {HoldComplete[test], the names of its part}, the program table's
+   start in the pool, the most names of a program, the registers, and each program's names. *)
+(* the bytecode of the programs, kept for the 256 lists of programs matched last *)
+vmBytecode[programs_List] := Lookup[$vmBytecodes, Key[programs],
+    With[{bc = bytecodeOf[programs]}, $vmBytecodes = Append[If[Length[$vmBytecodes] >= 256, Rest[$vmBytecodes], $vmBytecodes], programs -> bc]; bc]]
+$vmBytecodes = <||>
+
+bytecodeOf[programs_List] := Block[
+    {$ins = <||>, $pc = 0, $pool = {}, $specs = {}, $specIndex = <||>, $tests = {}, $conditions = {}, $registers = 0, $nameIndex = <||>,
+     table = {}, allNames = {}, maxNames = 0, registers = 1},
+    Do[
+        With[{p = programs[[k]], names = programNames[programs[[k]]]},
+            $nameIndex = AssociationThread[Keys[names] -> Range[Length[names]]];
+            $registers = 3 Length[names];
+            With[{entry = $pc},
+                generate[p]; vmEmit[8];
+                AppendTo[table, {entry, Length[names], If[nullableQ[p], 0, Replace[firstSpec[p], {None -> 0, spec_ :> vmClassIndex[spec]}]], 0}]];
+            maxNames = Max[maxNames, Length[names]]; registers = Max[registers, $registers];
+            AppendTo[allNames, names]],
+        {k, Length[programs]}];
+    With[{tableAt = vmPoolAdd[Flatten[table]]},
+        With[{bc = <|"Code" -> Developer`ToPackedArray[Flatten[Values[KeySort[$ins]]]], "Pool" -> Developer`ToPackedArray[Join[$pool, {0}]], "Specs" -> $specs,
+              "Tests" -> $tests, "Conditions" -> $conditions, "Table" -> tableAt, "MaxNames" -> maxNames, "Registers" -> registers,
+              "Names" -> allNames,
+              (* the left side of each name's rule, and the value of one that took no part *)
+              "Sides" -> Map[Function[names, KeyValueMap[Function[{name, occurrences}, {Replace[name, HoldComplete[v_] :> HoldPattern[v]], If[occurrences > 1, {}, ""]}], names]], allNames]|>},
+            If[$tests === {}, Append[bc, "Classes" -> classesOf[bc, {}]], bc]]]]
+
+(* the assembler, on the bytecode being made: an instruction, an operand set later, constants, a class's index *)
+vmEmit[op_, a_ : 0, b_ : 0, c_ : 0, d_ : 0] := ($ins[$pc] = {op, a, b, c, d}; $pc++; $pc - 1)
+vmOperand[at_, slot_, v_] := ($ins[at] = ReplacePart[$ins[at], slot + 1 -> v])
+vmPoolAdd[values_List] := With[{at = Length[$pool] + 1}, $pool = Join[$pool, values]; at]
+vmPoolSet[at_, values_List] := ($pool[[at ;; at + Length[values] - 1]] = values)
+vmClassIndex[spec_] := Lookup[$specIndex, Key[spec], ($specs = Append[$specs, spec]; $specIndex[spec] = Length[$specs])]
+vmNameBase[x_] := 3 ($nameIndex[x] - 1)
+
+(* the code of a program's part *)
+generate[literal[{}]] := Null
+generate[literal[{c_}]] := vmEmit[1, c]
+generate[literal[codes_List]] := vmEmit[2, vmPoolAdd[codes], Length[codes]]
+generate[characterClass[codeIn[spec_]]] := vmEmit[3, vmClassIndex[spec]]
+generate[sequence[parts_List]] := Scan[generate, parts]
+generate[alternatives[{}]] := vmEmit[7]
+generate[alternatives[{p_}]] := generate[p]
+generate[alternatives[parts_List]] := Module[{jumps = {}, split},
+    Do[ If[ j < Length[parts],
+            split = vmEmit[5]; vmOperand[split, 1, $pc];
+            generate[parts[[j]]]; AppendTo[jumps, vmEmit[6]];
+            vmOperand[split, 2, $pc],
+            generate[parts[[j]]]],
+        {j, Length[parts]}];
+    Scan[vmOperand[#, 1, $pc] &, jumps]]
+generate[repeat[p : _characterClass | literal[{_}], min_, max_, longest_]] :=
+    vmEmit[4, vmClassIndex[classSpec[p]], min, If[max === Infinity, -1, max], Boole[longest]]
+generate[repeat[p_, min_, max_, longest_]] := Module[{e = vmPoolAdd[ConstantArray[0, 10]], r = $registers, loop, iteration, done, poison, names = Keys[programNames[p]]},
+    $registers += 2;
+    poison = vmPoolAdd[Map[vmNameBase, names]];
+    vmEmit[13, e]; loop = vmEmit[14, e]; iteration = vmEmit[15, e]; generate[p]; vmEmit[16, e]; done = vmEmit[17, e];
+    vmPoolSet[e, {r, min, If[max === Infinity, -1, max], Boole[longest], loop, iteration, done, $pc, poison, Length[names]}]]
+generate[named[x_, p_]] := With[{base = vmNameBase[x]}, With[{open = vmEmit[10, base]}, generate[p]; vmEmit[11, base]; vmOperand[open, 2, $pc]]]
+generate[backreference[x_]] := vmEmit[12, vmNameBase[x]]
+generate[tested[p_, f_]] := With[{t = $registers}, $registers += 1; AppendTo[$tests, f];
+    vmEmit[19, t]; generate[p]; vmEmit[20, t, vmClassIndex[{"Test", Length[$tests]}]]]
+generate[conditioned[p_, test_, names_]] := (generate[p]; AppendTo[$conditions, {test, names}]; vmEmit[21, Length[$conditions]])
+generate[excluding[codeIn[spec_], p_]] := (vmEmit[18, vmClassIndex[spec]]; generate[p])
+generate[builtIn[_, p_]] := generate[p]
+generate[anchor[name_]] := vmEmit[9, Replace[name, {StartOfString -> 1, EndOfString -> 2, StartOfLine -> 3, EndOfLine -> 4, WordBoundary -> 5}],
+    If[name === WordBoundary, vmClassIndex[{"Named", "regex \\w"}], 0]]
+
+(* the class of the characters a match of a program may begin with, or None if any *)
+firstSpec[literal[{c_, ___}]] := {"Codes", {c}}
+firstSpec[characterClass[codeIn[spec_]]] := spec
+firstSpec[sequence[parts_List]] := Module[{specs = {}, done = False},
+    Do[If[! done, With[{f = firstSpec[part]}, If[f === None, Return[None, Module]]; AppendTo[specs, f]; If[! nullableQ[part], done = True]]], {part, parts}];
+    If[done, unionSpec[specs], None]]
+firstSpec[alternatives[parts_List]] := With[{fs = firstSpec /@ parts}, If[parts === {} || MemberQ[fs, None], None, unionSpec[fs]]]
+firstSpec[repeat[p_, min_, _, _]] := If[min === 0, None, firstSpec[p]]
+firstSpec[(named | builtIn)[_, p_]] := firstSpec[p]
+firstSpec[tested[p_, _] | conditioned[p_, _, _] | excluding[_, p_]] := firstSpec[p]
+firstSpec[_] := None
+
+(* the runs of a class above 65535 *)
+specAbove["Any"] := {{65536, 1114111}}
+specAbove[{"Named", class_String}] := classAbove[class]
+specAbove[{"Codes", codes_List}] := Map[{#, #} &, Select[codes, # >= 65536 &]]
+specAbove[{"Range", low_Integer, high_Integer}] := If[high >= 65536 && high >= low, {{Max[low, 65536], high}}, {}]
+specAbove[{"Union", specs_List}] := mergedRuns[Catenate[specAbove /@ specs]]
+specAbove[{"Not", spec_}] := With[{runs = mergedRuns[specAbove[spec]]},
+    Select[Partition[Join[{65536}, Flatten[Map[{#[[1]] - 1, #[[2]] + 1} &, runs]], {1114111}], 2], #[[1]] <= #[[2]] &]]
+
+mergedRuns[runs_List] := If[runs === {}, {}, Fold[Function[{acc, run}, If[run[[1]] <= acc[[-1, 2]] + 1, ReplacePart[acc, -1 -> {acc[[-1, 1]], Max[acc[[-1, 2]], run[[2]]]}], Append[acc, run]]],
+    {First[#]}, Rest[#]] &[SortBy[runs, First]]]
+
+(* a class's data in the matcher: its bitset of 2048 words of 32 bits, then {count, first, last, ...} of its runs above *)
+specBits[spec_] := specBits[spec] = Developer`ToPackedArray[Join[bitsetOf[specTable[spec]], {Length[specAbove[spec]]}, Flatten[specAbove[spec]]]]
+bitsetOf[table_List] := Partition[table, 32] . $bitValues
+$bitValues = Developer`ToPackedArray[2^Range[0, 31]]
+
+(* the classes of a bytecode for a text: each spec's data, a test's that of the text's characters it
+   passes; with no test, the same for every text *)
+vmClasses[bc_Association, codes_List] := If[bc["Tests"] === {}, bc["Classes"], classesOf[bc, codes]]
+classesOf[bc_Association, codes_List] := With[{data = Map[
+        Replace[#, {{"Test", t_} :> With[{passing = Select[Union[codes], TrueQ[bc["Tests"][[t]][FromCharacterCode[#]]] &]},
+            Developer`ToPackedArray[Join[bitsetOf[tableOf[{"Codes", passing}]], {Length[#]}, Flatten[#]]] &[Map[{#, #} &, Select[passing, # >= 65536 &]]]],
+            spec_ :> specBits[spec]}] &, bc["Specs"]]},
+    Developer`ToPackedArray[Join[{Length[data]}, Most[FoldList[Plus, Length[data] + 2, Length /@ data]], Catenate[data]]]]
+
+$vmModes = <|"First" -> 1, "Each" -> 2, "Overlapping" -> 3|>
+
+(* The matches of the programs in s, by the typed matcher, as programMatches gives them: each
+   condition the matcher stops at evaluated here, the matcher then called again from its state. *)
+vmMatches[s_String, programs_List, mode_String] := Module[{bc = vmBytecode[programs], codes = Developer`ToPackedArray[ToCharacterCode[s]], classes, params, out, state = {}, records = {},
+        z = subject[ToCharacterCode[s], StringLength[s], s], width, rest, condition, k, spans, st, maxNames},
+    classes = vmClasses[bc, codes]; maxNames = bc["MaxNames"];
+    params = Developer`ToPackedArray[{$vmModes[mode], 0, Length[programs], maxNames, bc["Registers"], bc["Table"]}];
+    While[ True,
+        out = vmFunction[bc["Code"], bc["Pool"], classes, codes, params, Developer`ToPackedArray[state]];
+        width = out[[3]];
+        records = Join[records, Partition[out[[4 ;; 3 + out[[2]] width]], width]];
+        If[out[[1]] =!= 2, Break[]];
+        rest = Drop[out, 3 + out[[2]] width];
+        condition = rest[[1]]; k = rest[[2]]; spans = Partition[rest[[3 ;; 2 + 2 maxNames]], 2];
+        st = rest[[4 + 2 maxNames ;; 3 + 2 maxNames + rest[[3 + 2 maxNames]]]];
+        state = Append[st, Boole[TrueQ[conditionValue[bc, k, condition, spans, z]]]]];
+    Map[Function[record, {record[[1]], record[[2]], record[[3]], vmRules[bc, record[[3]], Partition[record[[4 ;;]], 2], z]}], records]]
+
+(* the bindings of program k's names by their spans, a span {-2, _} None *)
+vmBindings[bc_, k_Integer, spans_List] := Association[MapThread[
+    Function[{name, span}, Which[span[[1]] >= 0, name -> span, span[[1]] === -2, name -> None, True, Nothing]],
+    {Keys[bc["Names"][[k]]], Take[spans, Length[bc["Names"][[k]]]]}]]
+
+conditionValue[bc_, k_Integer, condition_Integer, spans_List, z_subject] := With[{c = bc["Conditions"][[condition]]},
+    boundValue[c[[1]], z, vmBindings[bc, k, spans], c[[2]]]]
+
+(* the rules of a match's names, each name's text from the codes *)
+vmRules[bc_, k_Integer, spans_List, subject[codes_, _, _]] := MapThread[
+    Function[{side, span}, Rule[side[[1]], If[span[[1]] >= 0, FromCharacterCode[codes[[span[[1]] + 1 ;; span[[2]]]]], side[[2]]]]],
+    {bc["Sides"][[k]], Take[spans, Length[bc["Sides"][[k]]]]}]
 
 
 End[]

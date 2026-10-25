@@ -49,12 +49,13 @@ does, each statement's names made only when it is read and the kernel's syntax w
 `WolframLanguageSyntaxLength` give what `SyntaxQ` and `SyntaxLength` give, by the lexer and the parser alone.
 `StringPatternProgram` and `StringPatternMatches` match string patterns such as `"a" ~~ DigitCharacter ..` as Wolfram 15's
 String functions match them, over Wolfram 15's classes of characters at every code point, which the paclet records in
-[`CharacterClasses.wl`](Parser/Kernel/CharacterClasses.wl).
+[`CharacterClasses.wl`](Parser/Kernel/CharacterClasses.wl), by a typed backtracking machine over a pattern's bytecode
+([`StringPatternsVM.wl`](Parser/Kernel/StringPatternsVM.wl)), and give a pattern's POSIX regex for a host's native matcher.
 
 The kernel is dependency-free — no C library — with performance from `FunctionCompile`'s
 LLVM backend. It ships as a full paclet (`Guides` / `Symbols` / `Tutorials` documentation,
 built from `docs/` with [PacletPage](https://github.com/WolframInstitute/PacletPage)) and is
-covered by 486 core and 1200 language tests (`wl -f run-tests.wls`).
+covered by 487 core and 1200 language tests (`wl -f run-tests.wls`).
 
 [`build.wls`](build.wls) builds the documentation, [`release.wls`](release.wls) builds it,
 deploys the paclet resource and publishes the documentation site, and
@@ -67,7 +68,7 @@ deploys the paclet resource and publishes the documentation site, and
 WolframParser/
 |-- Parser/                         the paclet
 |   |-- PacletInfo.wl
-|   |-- Kernel/                     AST.wl EBNF.wl LaTeX.wl Markdown.wl Parser.wl StringPatterns.wl TPTP.wl
+|   |-- Kernel/                     AST.wl EBNF.wl LaTeX.wl Markdown.wl Parser.wl StringPatterns.wl StringPatternsVM.wl TPTP.wl
 |   |                               WolframLanguageReader.wl CharacterClasses.wl CharacterClassRuns.wl (+ Languages/)
 |   |-- Assets/                     hero.png, LaTeXMathParserCompiled.wxf
 |   |-- Tests/                      *.wlt, per subsystem

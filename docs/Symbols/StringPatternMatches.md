@@ -28,6 +28,12 @@ RelatedGuides: [WolframParser]
 
 - After a match that is not empty, `"First"` and `"Each"` go on at its end; otherwise the next match is looked for a character later.
 - [StringPatternMatches]() gives [None]() if one of the programs has none, as [StringPatternProgram]() gives for a pattern with a [RegularExpression]().
+- The option [Method]() gives the matcher:
+
+| Value | Matcher |
+|---|---|
+| [Automatic](), `"VM"` | a typed backtracking machine over the bytecode of the programs, compiled once |
+| `"Interpreter"` | the interpreter of the programs, the reference the machine is held to |
 
 ## Basic Examples
 
@@ -86,6 +92,18 @@ StringPatternMatches["aaa", StringPatternProgram /@ {"a", "aa"}, "Overlapping"]
 ```
 
 <!-- => {{0, 1, 1, {}}, {0, 2, 2, {}}, {1, 2, 1, {}}, {1, 3, 2, {}}, {2, 3, 1, {}}} -->
+
+## Options
+
+### Method
+
+The interpreter of the programs gives the same matches as the typed machine:
+
+```wl
+StringPatternMatches["a1b22", {StringPatternProgram[DigitCharacter ..]}, "Each", Method -> "Interpreter"]
+```
+
+<!-- => {{1, 2, 1, {}}, {3, 5, 1, {}}} -->
 
 ## Properties and Relations
 
