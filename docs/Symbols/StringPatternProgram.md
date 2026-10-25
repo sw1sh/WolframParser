@@ -17,7 +17,7 @@ RelatedGuides: [WolframParser]
 ## Details & Options
 
 - A program matches its pattern as Wolfram 15 does:
-  - the alternatives in the order given, the first that matches taken;
+  - the alternatives in the order given, the first that matches taken, a literal `""` after the others, and in [Shortest]() before them;
   - a repeat the longest first, and every repeat in [Shortest]() the shortest first, but not those of [NumberString]();
   - a test of [PatternTest]() on each character that its pattern matched;
   - <code>[Except]()[*c*, *p*]</code> as *p* after a character that *c*, a pattern of one character, does not match;
@@ -30,6 +30,7 @@ RelatedGuides: [WolframParser]
 |---|---|
 | `"Pattern"` | the pattern *patt* |
 | `"Program"` | the program, or [None]() if *patt* has a part that no program has |
+| `"Ways"` | the program of every way, which the mode `"All"` of [StringPatternMatches]() matches: alternatives of single characters a way each, where Wolfram 15 counts them so |
 | `"Regex"` | `{regex, names}`: a POSIX extended regular expression that means what *patt* does, for a host's C library to match, and for each group it opens the name of *patt* that holds it, <code>[HoldComplete]()[*x*]</code>, the number of a group of a [RegularExpression](), or [None](); [None]() if no regex means the same |
 | `"RegexLike"` | whether a regex's leftmost longest match finds the matches the program finds |
 | `"RegexFinds"` | whether a regex finds a match wherever the program has one |
@@ -65,7 +66,7 @@ The properties of a program:
 prog["Properties"]
 ```
 
-<!-- => {"Pattern", "Program", "Regex", "RegexLike", "RegexFinds", "Class", "Run", "ClassCodes"} -->
+<!-- => {"Pattern", "Program", "Ways", "Regex", "RegexLike", "RegexFinds", "Class", "Run", "ClassCodes"} -->
 
 A regex takes the longest of its alternatives, and a pattern the first, so a regex does not match as these alternatives do:
 

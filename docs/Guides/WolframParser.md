@@ -96,3 +96,4 @@ Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_co
 
 - [StringPatternProgram]() the program of a string pattern, matched as Wolfram 15's String functions match it
 - [StringPatternMatches]() the matches of programs in a string, in the modes of StringReplace, StringCases and StringPosition
+- [StringPatternRecords]() the matches as packed records, for a host that binds the names itself

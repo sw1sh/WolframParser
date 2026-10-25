@@ -48,14 +48,16 @@ a compiled parser over packed tokens, and `WolframLanguageHeldNext` reads a sour
 does, each statement's names made only when it is read and the kernel's syntax warnings with it. `WolframLanguageSyntaxQ` and
 `WolframLanguageSyntaxLength` give what `SyntaxQ` and `SyntaxLength` give, by the lexer and the parser alone.
 `StringPatternProgram` and `StringPatternMatches` match string patterns such as `"a" ~~ DigitCharacter ..` as Wolfram 15's
-String functions match them, over Wolfram 15's classes of characters at every code point, which the paclet records in
-[`CharacterClasses.wl`](Parser/Kernel/CharacterClasses.wl), by a typed backtracking machine over a pattern's bytecode
-([`StringPatternsVM.wl`](Parser/Kernel/StringPatternsVM.wl)), and give a pattern's POSIX regex for a host's native matcher.
+String functions match them, every way of `Overlaps -> All` included, over Wolfram 15's classes of characters at every code
+point, which the paclet records in [`CharacterClasses.wl`](Parser/Kernel/CharacterClasses.wl), by a typed backtracking
+machine over a pattern's bytecode ([`StringPatternsVM.wl`](Parser/Kernel/StringPatternsVM.wl)), and give a pattern's POSIX
+regex for a host's native matcher. `StringPatternRecords` gives the matches as packed records, for a host that binds the
+names itself.
 
 The kernel is dependency-free — no C library — with performance from `FunctionCompile`'s
 LLVM backend. It ships as a full paclet (`Guides` / `Symbols` / `Tutorials` documentation,
 built from `docs/` with [PacletPage](https://github.com/WolframInstitute/PacletPage)) and is
-covered by 488 core and 1200 language tests (`wl -f run-tests.wls`).
+covered by 493 core and 1200 language tests (`wl -f run-tests.wls`).
 
 [`build.wls`](build.wls) builds the documentation, [`release.wls`](release.wls) builds it,
 deploys the paclet resource and publishes the documentation site, and

@@ -28,11 +28,15 @@ Get[FileNameJoin[{DirectoryName[$InputFileName], "StringPatternsVM.wl"}]];
 BeginPackage["Wolfram`Parser`StringPatterns`"]
 
 StringPatternProgram::usage = "StringPatternProgram[patt] gives the program of the string pattern patt, an object whose properties \
-are \"Pattern\", \"Program\", \"Regex\", \"RegexLike\", \"RegexFinds\", \"Class\", \"Run\" and \"ClassCodes\"."
+are \"Pattern\", \"Program\", \"Ways\", \"Regex\", \"RegexLike\", \"RegexFinds\", \"Class\", \"Run\" and \"ClassCodes\"."
 StringPatternMatches::usage = "StringPatternMatches[s, {prog1, prog2, ...}, mode] gives the matches of the programs progi in the \
 string s from the left, each {start, end, k, rules}: progk matched the characters after start up to end, rules binding its names to \
-their text. The mode is \"First\", \"Each\" or \"Overlapping\"."
+their text. The mode is \"First\", \"Each\", \"Overlapping\" or \"All\"."
+StringPatternRecords::usage = "StringPatternRecords[s, {prog1, prog2, ...}, mode] gives the matches of StringPatternMatches as an \
+association: \"Records\", a packed array of rows {start, end, k, then the start and end of each name of progk}, and \"Sides\", for \
+each program the left side of each name's rule and whether the name occurs more than once."
 Options[StringPatternMatches] = {Method -> Automatic}
+Options[StringPatternRecords] = {Method -> Automatic}
 
 Begin["`Private`"]
 
@@ -72,10 +76,10 @@ StringPatternProgram[a_Association]["ClassCodes"] := Replace[a["Class"], {{test_
 StringPatternProgram[a_Association]["Properties"] := Append[Keys[a], "ClassCodes"]
 StringPatternProgram[a_Association][property_String] := Lookup[a, property, Missing["NotAvailable", property]]
 
-StringPatternProgram[pattern : Except[_Association]] := With[{p = stringProgram[pattern]},
-    StringPatternProgram[<|"Pattern" -> pattern, "Program" -> p, "Regex" -> regexOf[pattern],
+StringPatternProgram[pattern : Except[_Association]] := Block[{$merged = False}, With[{p = stringProgram[pattern]},
+    StringPatternProgram[<|"Pattern" -> pattern, "Program" -> p, "Ways" -> If[$merged, Block[{$oneClass = False}, stringProgram[pattern]], p], "Regex" -> regexOf[pattern],
         "RegexLike" -> (p =!= None && regexLikeQ[p]), "RegexFinds" -> (p =!= None && regexFindsQ[p]),
-        "Class" -> programClass[p], "Run" -> programRun[p]|>]]
+        "Class" -> programClass[p], "Run" -> programRun[p]|>]]]
 
 StringPatternProgram /: MakeBoxes[program : StringPatternProgram[a_Association], form : (StandardForm | TraditionalForm)] :=
     BoxForm`ArrangeSummaryBox[
@@ -115,14 +119,14 @@ programRun[p_] := Replace[p, {repeat[characterClass[test_], min_Integer, Infinit
 
 (* the program of a string pattern, or a Throw of None, tagged program *)
 program[s_String] := literal[ToCharacterCode[s]]
-program[Verbatim[Verbatim][s_String]] := literal[ToCharacterCode[s]]
+program[Verbatim[Verbatim][s_String]] := ownPart[literal[ToCharacterCode[s]]]
 program[Verbatim[Blank][]] := characterClass[codeIn["Any"]]
 program[Verbatim[BlankSequence][]] := repeat[characterClass[codeIn["Any"]], 1, Infinity, True]
 program[Verbatim[BlankNullSequence][]] := repeat[characterClass[codeIn["Any"]], 0, Infinity, True]
 (* the same name in a name's own part matches nothing [WL 15.0.0] *)
 program[Verbatim[Pattern][x_Symbol, p_]] := named[HoldComplete[x], ReplaceAll[program[p], named[HoldComplete[x], _] -> alternatives[{}]]]
 program[p_StringExpression] := sequence[program /@ List @@ p]
-program[p_Alternatives] := alternativesProgram[program /@ List @@ p]
+program[p_Alternatives] := alternativesProgram[program /@ alternativesParts[p]]
 program[p_List] := alternativesProgram[program /@ p]
 program[Verbatim[Repeated][p_]] := repeatOf[program[p], 1, Infinity]
 program[Verbatim[Repeated][p_, max_Integer]] := repeatOf[program[p], 1, max]
@@ -130,15 +134,15 @@ program[Verbatim[Repeated][p_, {n_Integer}]] := repeatOf[program[p], n, n]
 program[Verbatim[Repeated][p_, {min_Integer, max : _Integer | Infinity}]] := repeatOf[program[p], min, max]
 program[Verbatim[RepeatedNull][p_]] := repeatOf[program[p], 0, Infinity]
 program[Verbatim[RepeatedNull][p_, max_Integer]] := repeatOf[program[p], 0, max]
-program[Verbatim[Shortest][p_]] := shortest[program[p]]
-program[Verbatim[Longest][p_]] := program[p]
+program[Verbatim[Shortest][p_]] := ownPart[shortest[program[p]]]
+program[Verbatim[Longest][p_]] := ownPart[program[p]]
 program[Verbatim[PatternTest][p_, f_]] := tested[program[p], f]
 program[Verbatim[Condition][p_, test_]] := With[{inner = program[p]}, conditioned[inner, HoldComplete[test], programNames[inner]]]
 (* Except takes a pattern of one character: Except[c, p] is p where a character that c does not
    match comes first [WL 15.0.0] *)
-program[Verbatim[Except][c_]] := With[{inner = program[c]},
+program[Verbatim[Except][c_]] := With[{inner = Block[{$oneClass = True}, program[c]]},
     If[singleCharacterQ[inner], characterClass[codeIn[{"Not", classSpec[inner]}]], Throw[None, program]]]
-program[Verbatim[Except][c_, p_]] := With[{inner = program[c]}, If[singleCharacterQ[inner], excluding[classTest[inner], program[p]], Throw[None, program]]]
+program[Verbatim[Except][c_, p_]] := With[{inner = Block[{$oneClass = True}, program[c]]}, If[singleCharacterQ[inner], excluding[classTest[inner], program[p]], Throw[None, program]]]
 program[HoldPattern[CharacterRange[a_String, b_String]]] := characterClass[codeIn[{"Range", First[ToCharacterCode[a]], First[ToCharacterCode[b]]}]]
 program[DigitCharacter] := characterClass[codeIn[{"Named", "digit"}]]
 program[LetterCharacter] := characterClass[codeIn[{"Named", "letter"}]]
@@ -158,9 +162,31 @@ program[_] := Throw[None, program]
 repeatOf[p_, min_, max_] := If[MatchQ[p, _anchor], Throw[None, program], repeat[p, min, max, True]]
 
 (* Alternatives of single characters are one class, so that a repeat of them goes along the string
-   without backtracking. *)
+   without backtracking. In the program of every way, the "Ways" of the object, they are one class
+   only where Wolfram 15 makes them one, each a character or a class of its own but the hexadecimal
+   one, and are otherwise each a way of its own, as Overlaps -> All counts them [WL 15.0.0];
+   $merged records a class the two programs make apart. A literal "" is tried after the others, as
+   an optional part is, the longest first, wherever it is written; in Shortest before them
+   [WL 15.0.0]. *)
+$oneClass = True;
 alternativesProgram[{p_}] := p
-alternativesProgram[parts_List] := If[AllTrue[parts, singleCharacterQ], characterClass[codeIn[unionSpec[classSpec /@ parts]]], alternatives[parts]]
+alternativesProgram[parts_List] := Which[
+    $oneClass && AllTrue[parts, singleCharacterQ],
+        If[! AllTrue[parts, bracketPartQ], $merged = True]; characterClass[codeIn[unionSpec[classSpec /@ parts]]],
+    ! $oneClass && AllTrue[parts, bracketPartQ], characterClass[codeIn[unionSpec[classSpec /@ parts]]],
+    True, alternatives[Join[DeleteCases[parts, literal[{}]], Cases[parts, literal[{}]]]]]
+
+(* the parts of alternatives inside alternatives, in the order given, which Wolfram 15 takes as one
+   alternatives [WL 15.0.0] *)
+alternativesParts[p_Alternatives] := Catenate[Map[Function[part, If[Head[part] === Alternatives, alternativesParts[part], {part}]], List @@ p]]
+
+(* A part of one character that Wolfram 15 keeps apart, in Verbatim, Shortest or Longest: in the
+   program of every way, never one class with the alternatives beside it [WL 15.0.0] *)
+ownPart[q_] := If[bracketPartQ[q], If[$oneClass, $merged = True; q, alternatives[{q}]], q]
+
+bracketPartQ[literal[{_}]] := True
+bracketPartQ[characterClass[codeIn[{"Named", "digit" | "letter" | "word" | "whitespace" | "punctuation"}]]] := True
+bracketPartQ[_] := False
 
 (* the union of classes, those of characters one *)
 unionSpec[specs_List] := With[{codes = Cases[specs, {"Codes", c_} :> c], others = DeleteCases[specs, {"Codes", _}]},
@@ -173,7 +199,8 @@ unionSpec[specs_List] := With[{codes = Cases[specs, {"Codes", c_} :> c], others 
 (* Every repeat in Shortest is shortest, those inside another too, but not those of a pattern of
    Wolfram 15's own, such as NumberString [WL 15.0.0]. *)
 shortest[repeat[p_, min_, max_, _]] := repeat[shortest[p], min, max, False]
-shortest[(head : sequence | alternatives)[parts_List]] := head[shortest /@ parts]
+shortest[sequence[parts_List]] := sequence[shortest /@ parts]
+shortest[alternatives[parts_List]] := With[{inner = shortest /@ parts}, alternatives[Join[Cases[inner, literal[{}]], DeleteCases[inner, literal[{}]]]]]
 shortest[named[x_, p_]] := named[x, shortest[p]]
 shortest[tested[p_, f_]] := tested[shortest[p], f]
 shortest[conditioned[p_, test_, names_]] := conditioned[shortest[p], test, names]
@@ -448,18 +475,28 @@ matched[excluding[test_, p_], z : subject[_, n_, _], i_Integer, b_, k_] := If[i 
 matched[anchor[name_], z_subject, i_Integer, b_, k_] := If[anchorQ[name, z, i], k[i, b], $noMatch]
 
 (* A repeat of more than single characters, repeated[{p, min, max, longest}, z, count, i, bindings,
-   k] after count of them: one more p, the longest way first, then none. Once min of them are
-   there, a p that matches nothing ends the repeat. A name of p is the text it matched the first
-   time round; one that took no part then matches no more [WL 15.0.0]. *)
+   k] after count of them: one more p, the longest way first, then none. A p that matches nothing
+   may end the repeat (emptyEnds). A name of p is the text it matched the first time round; one that
+   took no part then matches no more [WL 15.0.0]. Where p has a name and the repeat no least, none
+   in place of the first is not the end: the rest go on, as after a first that took no part. *)
 repeated[spec : {p_, min_, max_, longest_}, z_subject, count_Integer, i_Integer, b_, k_] := With[
     {
-        more = Function[Null, If[count < max, matched[p, z, i, b, Function[{j, c}, If[j === i && count + 1 >= min,
+        more = Function[Null, If[count < max, matched[p, z, i, b, Function[{j, c}, If[j === i && emptyEnds[spec, count],
             k[j, c],
             repeated[spec, z, count + 1, j, If[count === 0, Join[c, AssociationThread[Complement[Keys[programNames[p]], Keys[c]] -> None]], c], k]]]], $noMatch]],
-        done = Function[Null, If[count >= min, k[i, b], $noMatch]]
+        done = Function[Null, Which[
+            count === 0 && min === 0 && ! FreeQ[p, _named], repeated[spec, z, 1, i, Join[b, AssociationThread[Complement[Keys[programNames[p]], Keys[b]] -> None]], k],
+            count >= min, k[i, b],
+            True, $noMatch]]
     },
     firstMatch[Function[way, way[]], If[longest, {more, done}, {done, more}]]
 ]
+
+(* Whether an iteration that matches nothing ends a repeat after count of them: never in a repeat
+   of at most max, each iteration of which is a part of its own; in a repeat of any number, once its
+   least are there, but where its pattern has a name, whose first iteration is a part of its own,
+   only after that one, once all but one of its least are there [WL 15.0.0]. *)
+emptyEnds[{p_, min_, max_, _}, count_Integer] := max === Infinity && If[FreeQ[p, _named], count + 1 >= min, count >= Max[1, min - 1]]
 
 (* the first f[item] that is not $noMatch, or $noMatch *)
 firstMatch[f_, items_List] := Catch[
@@ -502,49 +539,89 @@ bindingRules[z_subject, b_Association, names_Association, use_String] := With[{b
                     take them;
      "Each"         the programs in turn, the next tried there after one that matches nothing, as
                     StringCases and StringCount take them [WL 15.0.0];
-     "Overlapping"  every program that matches there, as StringPosition takes them.
+     "Overlapping"  every program that matches there, as StringPosition takes them;
+     "All"          every way each program matches there, in the order its parts try them, the
+                    same text as often as it matches, as Overlaps -> All takes them [WL 15.0.0].
    After a match that is not empty, "First" and "Each" go on at its end; else a character later. *)
 (* The typed matcher matches them, unless Method -> "Interpreter", the programs' interpreter, the
    reference it is held to. *)
-StringPatternMatches[s_String, programs : {___StringPatternProgram}, mode : "First" | "Each" | "Overlapping", OptionsPattern[]] := With[
-    {ps = Map[#["Program"] &, programs]},
+StringPatternMatches[s_String, programs : {___StringPatternProgram}, mode : "First" | "Each" | "Overlapping" | "All", OptionsPattern[]] := With[
+    {ps = modePrograms[programs, mode]},
     Which[
         MemberQ[ps, None], None,
-        OptionValue[Method] === "Interpreter", programMatches[s, ps, mode],
+        OptionValue[Method] === "Interpreter", With[{z = textSubject[s], names = programNames /@ ps},
+            Map[Function[m, {m[[1]], m[[2]], m[[3]], bindingRules[z, m[[4]], names[[m[[3]]]], "Rule"]}], programMatches[z, ps, mode]]],
         True, vmMatches[s, ps, mode]]]
-StringPatternMatches[s_String, program_StringPatternProgram, mode : "First" | "Each" | "Overlapping", opts : OptionsPattern[]] := StringPatternMatches[s, {program}, mode, opts]
+StringPatternMatches[s_String, program_StringPatternProgram, mode : "First" | "Each" | "Overlapping" | "All", opts : OptionsPattern[]] :=
+    StringPatternMatches[s, {program}, mode, opts]
 
-programMatches[s_String, programs_List, mode_String] := With[{z = subject[ToCharacterCode[s], StringLength[s], s], names = programNames /@ programs},
-    Replace[
-        Reap[Fold[Function[{next, i}, If[i < next, next, matchesAt[mode, programs, names, z, i]]], 0, startPositions[programs, z]], matchesAt],
-        {{_, {matches_List}} :> matches, _ -> {}}
-    ]
+(* The matches as records, for a host that binds the names itself: each {start, end, k, then the
+   start and end of each name of program k}, a name that took no part -1 and -1, one that took
+   none the first time round a repeat -2 and -1, -1 and -1 past the program's names; and each name's
+   left side, with whether it occurs more than once, as the rules of StringPatternMatches take them. *)
+StringPatternRecords[s_String, programs : {___StringPatternProgram}, mode : "First" | "Each" | "Overlapping" | "All", OptionsPattern[]] := With[
+    {ps = modePrograms[programs, mode]},
+    Which[
+        MemberQ[ps, None], None,
+        OptionValue[Method] === "Interpreter", With[{names = programNames /@ ps},
+            <|"Records" -> programRecords[programMatches[textSubject[s], ps, mode], names], "Sides" -> Map[nameSides, names]|>],
+        True, With[{r = vmRecords[s, ps, mode]}, <|"Records" -> r[[2]], "Sides" -> r[[1]]["Sides"]|>]]]
+StringPatternRecords[s_String, program_StringPatternProgram, mode : "First" | "Each" | "Overlapping" | "All", opts : OptionsPattern[]] :=
+    StringPatternRecords[s, {program}, mode, opts]
+
+textSubject[s_String] := subject[ToCharacterCode[s], StringLength[s], s]
+
+(* the programs a mode matches: every way of each in the mode "All" *)
+modePrograms[programs_List, "All"] := Map[#["Ways"] &, programs]
+modePrograms[programs_List, _String] := Map[#["Program"] &, programs]
+
+(* the matches of the programs by their interpreter, each {start, end, k, bindings} *)
+programMatches[z_subject, programs_List, mode_String] := Replace[
+    Reap[Fold[Function[{next, i}, If[i < next, next, matchesAt[mode, programs, z, i]]], 0, startPositions[programs, z]], matchesAt],
+    {{_, {matches_List}} :> matches, _ -> {}}
 ]
 
-(* matchesAt[mode, programs, names, z, i] sows the matches at position i, tagged matchesAt, so
-   collecting them copies none, and gives the position the next match may start at *)
-matchesAt["First", programs_List, names_List, z_subject, i_Integer] := With[
-    {result = firstMatch[Function[k, programMatch[programs, names, k, z, i]], Range[Length[programs]]]},
+(* matchesAt[mode, programs, z, i] sows the matches at position i, tagged matchesAt, so collecting
+   them copies none, and gives the position the next match may start at *)
+matchesAt["First", programs_List, z_subject, i_Integer] := With[
+    {result = firstMatch[Function[k, programMatch[programs, k, z, i]], Range[Length[programs]]]},
     If[result === $noMatch,
         i + 1,
         Sow[result, matchesAt];
         If[Extract[result, 2] === i, i + 1, Extract[result, 2]]
     ]
 ]
-matchesAt["Each", programs_List, names_List, z_subject, i_Integer] := Catch[
-    Do[With[{result = programMatch[programs, names, k, z, i]},
+matchesAt["Each", programs_List, z_subject, i_Integer] := Catch[
+    Do[With[{result = programMatch[programs, k, z, i]},
         If[result =!= $noMatch, Sow[result, matchesAt]; If[Extract[result, 2] =!= i, Throw[Extract[result, 2], matchesAt]]]], {k, Length[programs]}];
     i + 1,
     matchesAt
 ]
-matchesAt["Overlapping", programs_List, names_List, z_subject, i_Integer] := (
-    Do[With[{result = programMatch[programs, names, k, z, i]}, If[result =!= $noMatch, Sow[result, matchesAt]]], {k, Length[programs]}];
+matchesAt["Overlapping", programs_List, z_subject, i_Integer] := (
+    Do[With[{result = programMatch[programs, k, z, i]}, If[result =!= $noMatch, Sow[result, matchesAt]]], {k, Length[programs]}];
+    i + 1
+)
+(* every way: a match is sown where the program ends and taken for none there, so that its parts
+   try their next ways *)
+matchesAt["All", programs_List, z_subject, i_Integer] := (
+    Do[With[{k = k}, matched[Extract[programs, k], z, i, <||>, Function[{j, b}, Sow[{i, j, k, b}, matchesAt]; $noMatch]]], {k, Length[programs]}];
     i + 1
 )
 
-(* the match of the kth program at position i, {i, end, k, rules}, or $noMatch *)
-programMatch[programs_List, names_List, k_Integer, z_subject, i_Integer] :=
-    matched[Extract[programs, k], z, i, <||>, Function[{j, b}, {i, j, k, bindingRules[z, b, Extract[names, k], "Rule"]}]]
+(* the match of the kth program at position i, {i, end, k, bindings}, or $noMatch *)
+programMatch[programs_List, k_Integer, z_subject, i_Integer] := matched[Extract[programs, k], z, i, <||>, Function[{j, b}, {i, j, k, b}]]
+
+(* the records of the interpreter's matches, the spans of each program's names, as the typed
+   matcher gives them *)
+programRecords[matches_List, names_List] := With[{most = Max[0, Length /@ names]},
+    Developer`ToPackedArray[Map[
+        Function[m, Join[Take[m, 3], Flatten[PadRight[
+            Map[Function[x, Replace[Lookup[m[[4]], x, Missing[]], {span : {_Integer, _Integer} :> span, None -> {-2, -1}, _ -> {-1, -1}}]], Keys[names[[m[[3]]]]]],
+            most, {{-1, -1}}]]]],
+        matches]]]
+
+(* the left side of each name's rule, and whether the name occurs more than once *)
+nameSides[names_Association] := KeyValueMap[Function[{name, occurrences}, {Replace[name, HoldComplete[v_] :> HoldPattern[v]], occurrences > 1}], names]
 
 (* the positions where one of the programs may start a match *)
 startPositions[programs_List, subject[codes_, n_, _]] := With[{sets = firstCodes /@ programs},
@@ -590,9 +667,7 @@ bytecodeOf[programs_List] := Block[
     With[{tableAt = vmPoolAdd[Flatten[table]]},
         With[{bc = <|"Code" -> Developer`ToPackedArray[Flatten[Values[KeySort[$ins]]]], "Pool" -> Developer`ToPackedArray[Join[$pool, {0}]], "Specs" -> $specs,
               "Tests" -> $tests, "Conditions" -> $conditions, "Table" -> tableAt, "MaxNames" -> maxNames, "Registers" -> registers,
-              "Names" -> allNames,
-              (* the left side of each name's rule, and whether the name occurs more than once *)
-              "Sides" -> Map[Function[names, KeyValueMap[Function[{name, occurrences}, {Replace[name, HoldComplete[v_] :> HoldPattern[v]], occurrences > 1}], names]], allNames]|>},
+              "Names" -> allNames, "Sides" -> Map[nameSides, allNames]|>},
             If[$tests === {}, Append[bc, "Classes" -> classesOf[bc, {}]], bc]]]]
 
 (* the assembler, on the bytecode being made: an instruction, an operand set later, constants, a class's index *)
@@ -621,11 +696,11 @@ generate[alternatives[parts_List]] := Module[{jumps = {}, split},
     Scan[vmOperand[#, 1, $pc] &, jumps]]
 generate[repeat[p : _characterClass | literal[{_}], min_, max_, longest_]] :=
     vmEmit[4, vmClassIndex[classSpec[p]], min, If[max === Infinity, -1, max], Boole[longest]]
-generate[repeat[p_, min_, max_, longest_]] := Module[{e = vmPoolAdd[ConstantArray[0, 10]], r = $registers, loop, iteration, done, poison, names = Keys[programNames[p]]},
+generate[repeat[p_, min_, max_, longest_]] := Module[{e = vmPoolAdd[ConstantArray[0, 11]], r = $registers, loop, iteration, done, poison, names = Keys[programNames[p]]},
     $registers += 2;
     poison = vmPoolAdd[Map[vmNameBase, names]];
     vmEmit[13, e]; loop = vmEmit[14, e]; iteration = vmEmit[15, e]; generate[p]; vmEmit[16, e]; done = vmEmit[17, e];
-    vmPoolSet[e, {r, min, If[max === Infinity, -1, max], Boole[longest], loop, iteration, done, $pc, poison, Length[names]}]]
+    vmPoolSet[e, {r, min, If[max === Infinity, -1, max], Boole[longest], loop, iteration, done, $pc, poison, Length[names], Boole[! FreeQ[p, _named]]}]]
 generate[named[x_, p_]] := With[{base = vmNameBase[x]}, With[{open = vmEmit[10, base]}, generate[p]; vmEmit[11, base]; vmOperand[open, 2, $pc]]]
 generate[backreference[x_]] := vmEmit[12, vmNameBase[x]]
 generate[tested[p_, f_]] := With[{t = $registers}, $registers += 1; AppendTo[$tests, f];
@@ -680,12 +755,13 @@ classesOf[bc_Association, codes_List] := With[{data = Map[
         bc["Specs"]]},
     Developer`ToPackedArray[Join[{Length[data]}, Most[FoldList[Plus, Length[data] + 2, Length /@ data]], Catenate[data]]]]
 
-$vmModes = <|"First" -> 1, "Each" -> 2, "Overlapping" -> 3|>
+$vmModes = <|"First" -> 1, "Each" -> 2, "Overlapping" -> 3, "All" -> 4|>
 
-(* The matches of the programs in s, by the typed matcher, as programMatches gives them: each
-   condition the matcher stops at evaluated here, the matcher then called again from its state. *)
-vmMatches[s_String, programs_List, mode_String] := Module[{bc = vmBytecode[programs], codes = Developer`ToPackedArray[ToCharacterCode[s]], classes, params, out, state = {}, records = {},
-        z = subject[ToCharacterCode[s], StringLength[s], s], width, rest, condition, k, spans, st, maxNames},
+(* The matches of the programs in s by the typed matcher, {bytecode, records}, the records each
+   {start, end, k, then the start and end of each name} in a packed array: each condition the
+   matcher stops at evaluated here, the matcher then called again from its state. *)
+vmRecords[s_String, programs_List, mode_String] := Module[{bc = vmBytecode[programs], codes = Developer`ToPackedArray[ToCharacterCode[s]], classes, params, out, state = {}, records = {},
+        z = textSubject[s], width, rest, condition, k, spans, st, maxNames},
     classes = vmClasses[bc, codes]; maxNames = bc["MaxNames"];
     params = Developer`ToPackedArray[{$vmModes[mode], 0, Length[programs], maxNames, bc["Registers"], bc["Table"]}];
     While[ True,
@@ -697,7 +773,12 @@ vmMatches[s_String, programs_List, mode_String] := Module[{bc = vmBytecode[progr
         condition = rest[[1]]; k = rest[[2]]; spans = Partition[rest[[3 ;; 2 + 2 maxNames]], 2];
         st = rest[[4 + 2 maxNames ;; 3 + 2 maxNames + rest[[3 + 2 maxNames]]]];
         state = Append[st, Boole[TrueQ[conditionValue[bc, k, condition, spans, z]]]]];
-    Map[Function[record, {record[[1]], record[[2]], record[[3]], vmRules[bc, record[[3]], Partition[record[[4 ;;]], 2], z]}], records]]
+    {bc, Developer`ToPackedArray[records]}]
+
+(* the matches of the programs in s by the typed matcher, as programMatches gives them, each
+   name's rule made from its record *)
+vmMatches[s_String, programs_List, mode_String] := With[{r = vmRecords[s, programs, mode], z = textSubject[s]},
+    Map[Function[record, {record[[1]], record[[2]], record[[3]], vmRules[r[[1]], record[[3]], Partition[record[[4 ;;]], 2], z]}], r[[2]]]]
 
 (* the bindings of program k's names by their spans, a span {-2, _} None *)
 vmBindings[bc_, k_Integer, spans_List] := Association[MapThread[

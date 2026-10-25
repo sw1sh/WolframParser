@@ -282,7 +282,7 @@ VerificationTest[
             {Except[LetterCharacter, __]}, {((x : "a") | "b") ..}, {Shortest[("a"...) ..]}, {Repeated[Except[DigitCharacter, ___], {2}]},
             {w : LetterCharacter .. /; StringLength[w] > 3}, {(x : "a") | "b"}, {"ab" | "a", "b" ...}, {(y : StartOfString) | (y_)}},
           texts = {"", "a1b22 ab<a><b>", "abab hello world", "ab\ncd -1.5 2. .5", "ca\[EAcute].1 ba aab one two three \:0663\:0663.5 \|01d7d1"}},
-        Select[Tuples[{patterns, texts, {"First", "Each", "Overlapping"}}], Function[c,
+        Select[Tuples[{patterns, texts, {"First", "Each", "Overlapping", "All"}}], Function[c,
             StringPatternMatches[c[[2]], StringPatternProgram /@ c[[1]], c[[3]]] =!= StringPatternMatches[c[[2]], StringPatternProgram /@ c[[1]], c[[3]], Method -> "Interpreter"]]]],
     {},
     TestID -> "string patterns: the typed matcher matches as the programs' interpreter does"
@@ -293,4 +293,58 @@ VerificationTest[
     {engineRuleCases["a_A", {(y : StartOfString) | (y_) :> {y}}], engineRuleCases["a", {(y : StartOfString) :> {y}}]},
     {StringCases["a_A", (y : StartOfString) | (y_) :> {y}], StringCases["a", (y : StartOfString) :> {y}]},
     TestID -> "string patterns: a name twice bound to the empty text is {}"
+]
+
+(* every way each pattern matches at each start, as Overlaps -> All takes them *)
+VerificationTest[
+    Map[Function[c, Map[StringTake[c[[1]], {#[[1]] + 1, #[[2]]}] &, engineMatches[c[[1]], Flatten[{c[[2]]}], "All"]]],
+        {{"abc", __}, {"aaa", Shortest["a" ..]}, {"ab", "a" | "ab"}, {"aaa", ("a" | "aa") ..}, {"abab", {"ab", "a" ~~ __}}, {"ab", "" | "a"}, {"abcabc", "a" ~~ Shortest[___] ~~ "c"}}],
+    {StringCases["abc", __, Overlaps -> All], StringCases["aaa", Shortest["a" ..], Overlaps -> All], StringCases["ab", "a" | "ab", Overlaps -> All],
+     StringCases["aaa", ("a" | "aa") .., Overlaps -> All], StringCases["abab", {"ab", "a" ~~ __}, Overlaps -> All], StringCases["ab", "" | "a", Overlaps -> All],
+     StringCases["abcabc", "a" ~~ Shortest[___] ~~ "c", Overlaps -> All]},
+    TestID -> "string patterns: every way each pattern matches at each start, as Overlaps -> All takes them"
+]
+
+VerificationTest[
+    {Map[ruleValue[{x__ ~~ y__ :> {x, y}}, #] &, engineMatches["abc", {x__ ~~ y__}, "All"]], Map[{#[[1]] + 1, #[[2]]} &, engineMatches["abc", {__}, "All"]],
+     Length[engineMatches["aaa", {"a" ..}, "All"]]},
+    {StringCases["abc", x__ ~~ y__ :> {x, y}, Overlaps -> All], StringPosition["abc", __, Overlaps -> All], StringCount["aaa", "a" .., Overlaps -> All]},
+    TestID -> "string patterns: the names, the spans and the count of every way"
+]
+
+(* a literal "" is tried after the other alternatives, before them in Shortest *)
+VerificationTest[
+    {engineCases["ab", "" | "a"], engineCases["abc", "" | "x" | "b"], engineCases["abb", "a" ~~ ("" | "b") ~~ "b"], engineCases["ab", ("" | "a") ..],
+     engineCases["ab", Shortest["" | "a"]], engineCases["ba", ("a" ...) | "b"], engineRuleCases["ab", {x : ("" | "a") :> {x}}], engineReplace["abc", {"" | "b" -> "-"}]},
+    {StringCases["ab", "" | "a"], StringCases["abc", "" | "x" | "b"], StringCases["abb", "a" ~~ ("" | "b") ~~ "b"], StringCases["ab", ("" | "a") ..],
+     StringCases["ab", Shortest["" | "a"]], StringCases["ba", ("a" ...) | "b"], StringCases["ab", x : ("" | "a") :> {x}], StringReplace["abc", "" | "b" -> "-"]},
+    TestID -> "string patterns: a literal \"\" tried after the other alternatives, before them in Shortest"
+]
+
+(* the records of the matches, the same from the typed matcher and the interpreter *)
+VerificationTest[
+    With[{r = StringPatternRecords["a1b22", StringPatternProgram /@ {x : DigitCharacter .., (y : "a") | "b"}, "Each"]},
+        {r, Developer`PackedArrayQ[r["Records"]],
+         Select[{{x : DigitCharacter .., y_}, {(x : "a") | "b"}, {((x : "a") | "b") ..}, {x_ ~~ x_}, {"a" ~~ __}}, Function[ps,
+            StringPatternRecords["a1b22 ab", StringPatternProgram /@ ps, "All"] =!= StringPatternRecords["a1b22 ab", StringPatternProgram /@ ps, "All", Method -> "Interpreter"]]]}],
+    {<|"Records" -> {{0, 1, 2, 0, 1}, {1, 2, 1, 1, 2}, {2, 3, 2, -1, -1}, {3, 5, 1, 3, 5}}, "Sides" -> {{{HoldPattern[x], False}}, {{HoldPattern[y], False}}}|>, True, {}},
+    TestID -> "string patterns: the records of the matches, packed, the same from the typed matcher and the interpreter"
+]
+
+(* every way as Wolfram 15 counts them: alternatives one class where it makes them one, a character
+   or a class but the hexadecimal one, those inside alternatives taken with them, a part in Shortest
+   apart; an empty iteration of a repeat of at most max, or the first of one with a name, a way of
+   its own; a repeat with a name and no least going on past none in place of its first *)
+VerificationTest[
+    Map[Function[c, Map[StringTake[c[[1]], {#[[1]] + 1, #[[2]]}] &, engineMatches[c[[1]], {c[[2]]}, "All"]]],
+        {{"A", LetterCharacter | WordCharacter}, {"c", HexadecimalCharacter | LetterCharacter}, {"2", _ | WordCharacter}, {"b", ("a" | LetterCharacter) | "b"},
+         {"a", Shortest[Whitespace] | (LetterCharacter | "a")}, {"", Repeated["a" ..., {0, 2}]}, {"", (y : EndOfString) ..}, {"a", ("a" ...) ..},
+         {"-", PunctuationCharacter | Shortest[PunctuationCharacter]}, {"ab", ((x : "a") | "b") ...}, {"b", Shortest[((x : "a") | "b") ...]}}],
+    {StringCases["A", LetterCharacter | WordCharacter, Overlaps -> All], StringCases["c", HexadecimalCharacter | LetterCharacter, Overlaps -> All],
+     StringCases["2", _ | WordCharacter, Overlaps -> All], StringCases["b", ("a" | LetterCharacter) | "b", Overlaps -> All],
+     StringCases["a", Shortest[Whitespace] | (LetterCharacter | "a"), Overlaps -> All], StringCases["", Repeated["a" ..., {0, 2}], Overlaps -> All],
+     StringCases["", (y : EndOfString) .., Overlaps -> All], StringCases["a", ("a" ...) .., Overlaps -> All],
+     StringCases["-", PunctuationCharacter | Shortest[PunctuationCharacter], Overlaps -> All], StringCases["ab", ((x : "a") | "b") ..., Overlaps -> All],
+     StringCases["b", Shortest[((x : "a") | "b") ...], Overlaps -> All]},
+    TestID -> "string patterns: every way as Wolfram 15 counts the ways of alternatives and of empty iterations"
 ]

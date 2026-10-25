@@ -4,8 +4,8 @@
    its matches against StringCases, their spans one at each start against StringPosition, whether
    a whole string matches against StringMatchQ, the names it binds against a rule's right side,
    the parts between its matches against StringSplit, and, with a second pattern, which of two
-   rules matched against StringCases, StringPosition and StringReplace; and that a pattern that has
-   no program is no string pattern in Wolfram 15. Run it with Wolfram 15:
+   rules matched against StringCases, StringPosition and StringReplace; every way of each against
+   Overlaps -> All; and that a pattern that has no program is no string pattern in Wolfram 15. Run it with Wolfram 15:
        wl -f dev/check-string-patterns.wls [cases] [seed]
    It prints what disagrees, then the counts. *)
 
@@ -64,6 +64,8 @@ enginePosition[s_String, ps_List] := Map[{#[[1]] + 1, #[[2]]} &, engineMatches[s
 engineMatchQ[s_String, p_] := engineMatches[s, {StartOfString ~~ p ~~ EndOfString}, "First"] =!= {}
 engineNames[s_String, p_] := Map[{x, y} /. #[[4]] &, engineMatches[s, {p}, "Each"]]
 engineRules[s_String, p_, q_] := Map[#[[3]] &, engineMatches[s, {p, q}, "Each"]]
+engineAll[s_String, p_] := texts[s, engineMatches[s, {p}, "All"]]
+engineAllRules[s_String, p_, q_] := Map[#[[3]] &, engineMatches[s, {p, q}, "All"]]
 engineReplace[s_String, p_, q_] := With[{matches = engineMatches[s, {p, q}, "First"]}, StringJoin[Riffle[between[s, matches], Map[{"<1>", "<2>"}[[#[[3]]]] &, matches]]]]
 engineSplit[s_String, p_] := With[{parts = between[s, engineMatches[s, {p}, "First"]]},
     With[{kept = Flatten[Position[parts, Except[""], {1}, Heads -> False]]}, If[kept === {}, {}, Take[parts, {First[kept], Last[kept]}]]]]
@@ -81,7 +83,10 @@ answers[s_String, p_, q_] := <|
     "Rules" -> {engineRules[s, p, q], native[StringCases[s, {p -> 1, q -> 2}]]},
     "Positions" -> {enginePosition[s, {p, q}], native[StringPosition[s, {p, q}]]},
     "Replace" -> {engineReplace[s, p, q], native[StringReplace[s, {p -> "<1>", q -> "<2>"}]]},
-    "Split" -> {engineSplit[s, p], native[StringSplit[s, p]]}|>
+    "Split" -> {engineSplit[s, p], native[StringSplit[s, p]]},
+    "All" -> {engineAll[s, p], native[StringCases[s, p, Overlaps -> All]]},
+    "AllRules" -> {engineAllRules[s, p, q], native[StringCases[s, {p -> 1, q -> 2}, Overlaps -> All]]},
+    "AllPositions" -> {Map[{#[[1]] + 1, #[[2]]} &, engineMatches[s, {p, q}, "All"]], native[StringPosition[s, {p, q}, Overlaps -> All]]}|>
 
 (* --- the cases --- *)
 

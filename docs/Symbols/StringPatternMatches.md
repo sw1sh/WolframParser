@@ -5,8 +5,8 @@ Context: Wolfram`Parser`StringPatterns`
 ContextPath: [Wolfram`Parser`, Wolfram`Parser`StringPatterns`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/ref/StringPatternMatches
-Keywords: [string pattern, matches, StringCases, StringPosition, StringReplace, StringSplit, backtracking]
-SeeAlso: [StringPatternProgram, StringCases, StringPosition, StringReplace, StringSplit, StringCount]
+Keywords: [string pattern, matches, StringCases, StringPosition, StringReplace, StringSplit, Overlaps, backtracking]
+SeeAlso: [StringPatternProgram, StringPatternRecords, StringCases, StringPosition, StringReplace, StringSplit, StringCount]
 RelatedGuides: [WolframParser]
 ---
 
@@ -25,8 +25,10 @@ RelatedGuides: [WolframParser]
 | `"First"` | the first program that matches there | [StringReplace](), [StringSplit]() |
 | `"Each"` | the programs in turn, the next tried there after one that matches nothing | [StringCases](), [StringCount]() |
 | `"Overlapping"` | every program that matches there | [StringPosition]() |
+| `"All"` | every way each program matches there, in the order its parts try them, the same text as often as it matches | [StringCases]() and [StringPosition]() with [Overlaps]() `->` [All]() |
 
 - After a match that is not empty, `"First"` and `"Each"` go on at its end; otherwise the next match is looked for a character later.
+- [StringPatternRecords]() gives the same matches as packed records, with the left sides of the names.
 - [StringPatternMatches]() gives [None]() if one of the programs has none, as [StringPatternProgram]() gives for a pattern with a [RegularExpression]().
 - The option [Method]() gives the matcher:
 
@@ -93,6 +95,14 @@ StringPatternMatches["aaa", StringPatternProgram /@ {"a", "aa"}, "Overlapping"]
 
 <!-- => {{0, 1, 1, {}}, {0, 2, 2, {}}, {1, 2, 1, {}}, {1, 3, 2, {}}, {2, 3, 1, {}}} -->
 
+In the mode `"All"`, every way a program matches at a position gives a match there, a repeat the longest first:
+
+```wl
+StringPatternMatches["abc", {StringPatternProgram[__]}, "All"]
+```
+
+<!-- => {{0, 3, 1, {}}, {0, 2, 1, {}}, {0, 1, 1, {}}, {1, 3, 1, {}}, {1, 2, 1, {}}, {2, 3, 1, {}}} -->
+
 ## Options
 
 ### Method
@@ -130,6 +140,14 @@ StringPosition["aaa", {"a", "aa"}]
 ```
 
 <!-- => {{1, 1}, {1, 2}, {2, 2}, {2, 3}, {3, 3}} -->
+
+The mode `"All"` takes them as [StringCases]() does with [Overlaps]() `->` [All]():
+
+```wl
+StringCases["abc", __, Overlaps -> All]
+```
+
+<!-- => {"abc", "ab", "a", "bc", "b", "c"} -->
 
 ## Possible Issues
 

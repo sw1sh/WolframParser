@@ -16,8 +16,9 @@ Begin["Wolfram`Parser`StringPatterns`Private`"]
    packed vector of machine integers: the code, five integers an instruction, {op, a, b, c, d}; the
    pool of constants; the classes, {k, the start of each of the k, then each four words of 32 bits
    of its codes below 128 and its runs, {count, first, last, ...}}; the text's codes; the
-   parameters {mode, from, programs, names, registers, the program table in the pool}; and the
-   state to go on from, {} at first. It gives {status, matches, width, then each match {start, end,
+   parameters {mode, from, programs, names, registers, the program table in the pool}, the mode 1
+   the first program that matches at a position, 2 each in turn, 3 every one, 4 every way of every
+   one; and the state to go on from, {} at first. It gives {status, matches, width, then each match {start, end,
    k, the start and end of each name}}, status 0 when the scan is done, and 2 where a condition is
    to be evaluated, then {condition, k, the names, the length of the state, the state}, to call
    again with the state and the condition's value after it, 1 or 0.
@@ -30,7 +31,8 @@ Begin["Wolfram`Parser`StringPatterns`Private`"]
      18 EXCL k       19 TSTART reg      20 TEND reg k     21 COND index
    A name is three registers from its base, start, end and where it opened, -1 unbound and -2
    unbound the first time round a repeat; a repeat's entry e in the pool {count register, min,
-   max, greedy, loop, iteration, done, exit, poison list, its length}, max -1 for none. Choice
+   max, greedy, loop, iteration, done, exit, poison list, its length, 1 if its pattern has a name},
+   max -1 for none. Choice
    frames are six integers, {kind, pc, sp, trail, x, y}: 1 another way at pc, 2 a greedy run of
    x characters giving one back down to y, 3 a shortest run of x characters taking one more up to
    y. The trail undoes the registers set since a frame, {register, value} pairs. Each test of a class
@@ -190,7 +192,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                         If[ cnt >= mn,
                                             If[ 6 top + 6 > Length[stack], grown = Table[0, {2 Length[stack]}]; Do[grown[[q]] = stack[[q]], {q, Length[stack]}]; stack = grown];
                                             q = 6 top; stack[[q + 1]] = 1; stack[[q + 2]] = vPool[[a + 5]]; stack[[q + 3]] = sp; stack[[q + 4]] = ttop; stack[[q + 5]] = 0; stack[[q + 6]] = 0; top++;
-                                            pc = vPool[[a + 7]],
+                                            pc = vPool[[a + 6]],
                                             pc = vPool[[a + 5]]]],
                                 op == 15,
                                     r = vPool[[a]]; mx = vPool[[a + 2]];
@@ -199,10 +201,11 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                         trail[[2 ttop + 1]] = r + 1; trail[[2 ttop + 2]] = regs[[r + 2]]; ttop++; regs[[r + 2]] = sp;
                                         pc++],
                                 op == 16,
-                                    (* an iteration's end: one that matched nothing ends the repeat once its least are there; the
-                                       names of the first that took no part in it match no more *)
-                                    r = vPool[[a]]; mn = vPool[[a + 1]]; cnt = regs[[r + 1]];
-                                    If[ sp == regs[[r + 2]] && cnt + 1 >= mn, pc = vPool[[a + 7]],
+                                    (* an iteration's end: one that matched nothing ends a repeat of any number once its least are
+                                       there, or with names after its first, once all but one are; the names of the first that took
+                                       no part in it match no more *)
+                                    r = vPool[[a]]; mn = vPool[[a + 1]]; mx = vPool[[a + 2]]; cnt = regs[[r + 1]];
+                                    If[ sp == regs[[r + 2]] && mx < 0 && If[vPool[[a + 10]] == 0, cnt + 1 >= mn, cnt >= Max[1, mn - 1]], pc = vPool[[a + 7]],
                                         If[ cnt == 0,
                                             Do[ base = vPool[[vPool[[a + 8]] + j]];
                                                 If[ regs[[base + 1]] == -1,
@@ -212,7 +215,22 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                         If[ 2 ttop + 2 > Length[trail], grown = Table[0, {2 Length[trail]}]; Do[grown[[q]] = trail[[q]], {q, Length[trail]}]; trail = grown];
                                         trail[[2 ttop + 1]] = r; trail[[2 ttop + 2]] = cnt; ttop++; regs[[r + 1]] = cnt + 1;
                                         pc = vPool[[a + 4]]],
-                                op == 17, If[regs[[vPool[[a]] + 1]] < vPool[[a + 1]], fail = 1, pc = vPool[[a + 7]]],
+                                op == 17,
+                                    (* a repeat's end: with names and no least, none in place of the first goes on with the rest,
+                                       the names of the first that took no part matching no more *)
+                                    r = vPool[[a]]; cnt = regs[[r + 1]];
+                                    Which[
+                                        cnt == 0 && vPool[[a + 1]] == 0 && vPool[[a + 10]] == 1,
+                                            Do[ base = vPool[[vPool[[a + 8]] + j]];
+                                                If[ regs[[base + 1]] == -1,
+                                                    If[ 2 ttop + 2 > Length[trail], grown = Table[0, {2 Length[trail]}]; Do[grown[[q]] = trail[[q]], {q, Length[trail]}]; trail = grown];
+                                                    trail[[2 ttop + 1]] = base; trail[[2 ttop + 2]] = -1; ttop++; regs[[base + 1]] = -2],
+                                                {j, 0, vPool[[a + 9]] - 1}];
+                                            If[ 2 ttop + 2 > Length[trail], grown = Table[0, {2 Length[trail]}]; Do[grown[[q]] = trail[[q]], {q, Length[trail]}]; trail = grown];
+                                            trail[[2 ttop + 1]] = r; trail[[2 ttop + 2]] = 0; ttop++; regs[[r + 1]] = 1;
+                                            pc = vPool[[a + 4]],
+                                        cnt < vPool[[a + 1]], fail = 1,
+                                        True, pc = vPool[[a + 7]]],
                                 op == 19,
                                     If[ 2 ttop + 2 > Length[trail], grown = Table[0, {2 Length[trail]}]; Do[grown[[q]] = trail[[q]], {q, Length[trail]}]; trail = grown];
                                     trail[[2 ttop + 1]] = a; trail[[2 ttop + 2]] = regs[[a + 1]]; ttop++; regs[[a + 1]] = sp;
@@ -262,6 +280,8 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                             Which[
                                 mode == 1, If[sp > i, i = sp, i++]; k = 1,
                                 mode == 2, If[sp > i, i = sp; k = 1, k++],
+                                (* every way: the program's next, as after a condition that fails *)
+                                mode == 4, pending = 1; answer = 0,
                                 True, k++],
                         True, k++]]];
             out[[1]] = status; out[[2]] = nRec; out[[3]] = width;

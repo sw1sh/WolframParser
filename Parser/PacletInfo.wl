@@ -115,7 +115,8 @@ PacletObject[<|
                 "Wolfram`Parser`Languages`WolframLanguage`WolframLanguageSyntaxLength",
                 "Wolfram`Parser`Languages`WolframLanguage`WolframLanguageSyntaxQ",
                 "Wolfram`Parser`StringPatterns`StringPatternProgram",
-                "Wolfram`Parser`StringPatterns`StringPatternMatches"
+                "Wolfram`Parser`StringPatterns`StringPatternMatches",
+                "Wolfram`Parser`StringPatterns`StringPatternRecords"
             }
         },
         {
