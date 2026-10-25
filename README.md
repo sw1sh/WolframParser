@@ -68,7 +68,7 @@ WolframParser/
 |-- Parser/                         the paclet
 |   |-- PacletInfo.wl
 |   |-- Kernel/                     AST.wl EBNF.wl LaTeX.wl Markdown.wl Parser.wl StringPatterns.wl TPTP.wl
-|   |                               WolframLanguageReader.wl CharacterClasses.wl (+ Languages/)
+|   |                               WolframLanguageReader.wl CharacterClasses.wl CharacterClassRuns.wl (+ Languages/)
 |   |-- Assets/                     hero.png, LaTeXMathParserCompiled.wxf
 |   |-- Tests/                      *.wlt, per subsystem
 |   `-- Documentation/English/      ref pages / guides / tutorials, built from docs/

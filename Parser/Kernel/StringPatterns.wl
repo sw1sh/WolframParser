@@ -13,11 +13,14 @@
     as the paclet records them in CharacterClasses.wl. A kernel builds StringMatchQ, StringCases,
     StringReplace, StringSplit and the rest of the String functions of patterns on it.
 
-    It loads with the paclet, or alone after the paclet's core, as a kernel loads it at its first
-    string pattern:
+    It loads with the paclet, or alone, with no more of the paclet than CharacterClassRuns.wl, as a
+    kernel loads it at its first string pattern:
 
         Get[FileNameJoin[{PacletObject["Wolfram/Parser"]["Location"], "Kernel", "StringPatterns.wl"}]]
 *)
+
+(* the characters of the classes, which the paclet's core reads too, where it has not *)
+If[DownValues[Wolfram`Parser`Private`characterClassRuns] === {}, Get[FileNameJoin[{DirectoryName[$InputFileName], "CharacterClassRuns.wl"}]]];
 
 BeginPackage["Wolfram`Parser`StringPatterns`"]
 
