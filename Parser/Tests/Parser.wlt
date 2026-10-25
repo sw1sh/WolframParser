@@ -383,7 +383,7 @@ VerificationTest[
                 Map[IntervalMemberQ[in, #] &, codes] === StringMatchQ[FromCharacterCode /@ codes, pc[[2]]]]],
             {{"letter", LetterCharacter}, {"digit", DigitCharacter}, {"whitespace", WhitespaceCharacter}, {"punctuation", PunctuationCharacter},
              {"hexadecimal", HexadecimalCharacter}, {"regex \\w", RegularExpression["\\w"]}}]}],
-    {24, "digit", {True, True, True, True, True, True}},
+    {25, "digit", {True, True, True, True, True, True}},
     TestID -> "character classes: the recorded classes are Wolfram 15's"
 ]
 

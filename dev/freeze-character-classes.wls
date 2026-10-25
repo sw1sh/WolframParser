@@ -6,6 +6,7 @@
      "letter"      LetterCharacter, which LetterQ takes as letters too
      "digit"       DigitCharacter, the decimal digits of every script
      "number"      what WordCharacter takes besides letters and digits, the other numerals
+     "word"        WordCharacter: the letters, the digits and the other numerals
      "whitespace"  WhitespaceCharacter
      "punctuation" PunctuationCharacter
      "hexadecimal" HexadecimalCharacter
@@ -25,10 +26,12 @@ runs[cs_List] := Developer`ToPackedArray[Map[{First[#], Last[#]} &, Split[cs, #2
 
 letters = codesOf[StringMatchQ[#, LetterCharacter] &];
 digits = codesOf[StringMatchQ[#, DigitCharacter] &];
+words = codesOf[StringMatchQ[#, WordCharacter] &];
 If[Pick[codes, LetterQ /@ characters] =!= letters, Print["LetterQ and LetterCharacter differ"]; Exit[1]];
+If[! SubsetQ[words, Join[letters, digits]], Print["WordCharacter does not take every letter and digit"]; Exit[1]];
 posix = {"alpha", "digit", "alnum", "upper", "lower", "space", "blank", "punct", "xdigit", "cntrl", "print", "graph", "word"};
 classes = Join[
-    <|"letter" -> letters, "digit" -> digits, "number" -> Complement[codesOf[StringMatchQ[#, WordCharacter] &], letters, digits],
+    <|"letter" -> letters, "digit" -> digits, "number" -> Complement[words, letters, digits], "word" -> words,
       "whitespace" -> codesOf[StringMatchQ[#, WhitespaceCharacter] &], "punctuation" -> codesOf[StringMatchQ[#, PunctuationCharacter] &],
       "hexadecimal" -> codesOf[StringMatchQ[#, HexadecimalCharacter] &],
       "upper" -> codesOf[UpperCaseQ /@ # &], "lower" -> codesOf[LowerCaseQ /@ # &],

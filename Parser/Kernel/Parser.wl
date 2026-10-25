@@ -2241,6 +2241,7 @@ If[ TrueQ[Wolfram`Parser`Private`$wolframLanguageOnly],
     Get[FileNameJoin[{DirectoryName[$InputFileName], "EBNF.wl"}]];
     Get[FileNameJoin[{DirectoryName[$InputFileName], "TPTP.wl"}]];
     Get[FileNameJoin[{DirectoryName[$InputFileName], "Markdown.wl"}]];
+    Get[FileNameJoin[{DirectoryName[$InputFileName], "StringPatterns.wl"}]];
     If[! MemberQ[$Packages, "Wolfram`Parser`"], AppendTo[$Packages, "Wolfram`Parser`"]];
     Get[FileNameJoin[{DirectoryName[$InputFileName], "Languages", "init.wl"}]]
 ];

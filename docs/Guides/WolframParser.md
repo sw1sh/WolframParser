@@ -91,3 +91,8 @@ Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_co
 - [MarkdownParser]() the reusable document-parser object behind [MarkdownParse]()
 - [MarkdownInlineParse]() parse one paragraph's inline spans (emphasis, code, links, math)
 - [MarkdownInlineParser]() the reusable inline-parser object behind [MarkdownInlineParse]()
+
+### String patterns
+
+- [StringPatternProgram]() the program of a string pattern, matched as Wolfram 15's String functions match it
+- [StringPatternMatches]() the matches of programs in a string, in the modes of StringReplace, StringCases and StringPosition
