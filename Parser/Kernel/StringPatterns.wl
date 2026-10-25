@@ -591,8 +591,8 @@ bytecodeOf[programs_List] := Block[
         With[{bc = <|"Code" -> Developer`ToPackedArray[Flatten[Values[KeySort[$ins]]]], "Pool" -> Developer`ToPackedArray[Join[$pool, {0}]], "Specs" -> $specs,
               "Tests" -> $tests, "Conditions" -> $conditions, "Table" -> tableAt, "MaxNames" -> maxNames, "Registers" -> registers,
               "Names" -> allNames,
-              (* the left side of each name's rule, and the value of one that took no part *)
-              "Sides" -> Map[Function[names, KeyValueMap[Function[{name, occurrences}, {Replace[name, HoldComplete[v_] :> HoldPattern[v]], If[occurrences > 1, {}, ""]}], names]], allNames]|>},
+              (* the left side of each name's rule, and whether the name occurs more than once *)
+              "Sides" -> Map[Function[names, KeyValueMap[Function[{name, occurrences}, {Replace[name, HoldComplete[v_] :> HoldPattern[v]], occurrences > 1}], names]], allNames]|>},
             If[$tests === {}, Append[bc, "Classes" -> classesOf[bc, {}]], bc]]]]
 
 (* the assembler, on the bytecode being made: an instruction, an operand set later, constants, a class's index *)
@@ -648,30 +648,36 @@ firstSpec[(named | builtIn)[_, p_]] := firstSpec[p]
 firstSpec[tested[p_, _] | conditioned[p_, _, _] | excluding[_, p_]] := firstSpec[p]
 firstSpec[_] := None
 
-(* the runs of a class above 65535 *)
-specAbove["Any"] := {{65536, 1114111}}
-specAbove[{"Named", class_String}] := classAbove[class]
-specAbove[{"Codes", codes_List}] := Map[{#, #} &, Select[codes, # >= 65536 &]]
-specAbove[{"Range", low_Integer, high_Integer}] := If[high >= 65536 && high >= low, {{Max[low, 65536], high}}, {}]
-specAbove[{"Union", specs_List}] := mergedRuns[Catenate[specAbove /@ specs]]
-specAbove[{"Not", spec_}] := With[{runs = mergedRuns[specAbove[spec]]},
-    Select[Partition[Join[{65536}, Flatten[Map[{#[[1]] - 1, #[[2]] + 1} &, runs]], {1114111}], 2], #[[1]] <= #[[2]] &]]
+(* the runs of the codes of a class, sorted and apart, over every code point *)
+specRuns["Any"] := {{0, 1114111}}
+specRuns[{"Named", class_String}] := recordedRuns[class]
+specRuns[{"Codes", codes_List}] := codeRuns[codes]
+specRuns[{"Range", low_Integer, high_Integer}] := If[Max[low, 0] <= Min[high, 1114111], {{Max[low, 0], Min[high, 1114111]}}, {}]
+specRuns[{"Union", specs_List}] := mergedRuns[Catenate[specRuns /@ specs]]
+specRuns[{"Not", spec_}] := With[{runs = mergedRuns[specRuns[spec]]},
+    Select[Partition[Join[{0}, Flatten[Map[{#[[1]] - 1, #[[2]] + 1} &, runs]], {1114111}], 2], #[[1]] <= #[[2]] &]]
+
+codeRuns[codes_List] := Map[{First[#], Last[#]} &, Split[Union[codes], #2 == #1 + 1 &]]
 
 mergedRuns[runs_List] := If[runs === {}, {}, Fold[Function[{acc, run}, If[run[[1]] <= acc[[-1, 2]] + 1, ReplacePart[acc, -1 -> {acc[[-1, 1]], Max[acc[[-1, 2]], run[[2]]]}], Append[acc, run]]],
     {First[#]}, Rest[#]] &[SortBy[runs, First]]]
 
-(* a class's data in the matcher: its bitset of 2048 words of 32 bits, then {count, first, last, ...} of its runs above *)
-specBits[spec_] := specBits[spec] = Developer`ToPackedArray[Join[bitsetOf[specTable[spec]], {Length[specAbove[spec]]}, Flatten[specAbove[spec]]]]
-bitsetOf[table_List] := Partition[table, 32] . $bitValues
+(* A class's data in the matcher, made from its runs alone, with no table of every code: the four
+   words of 32 bits of its codes below 128, then {count, first, last, ...} of its runs, which the
+   matcher searches for a code past ASCII. *)
+classData[spec_] := classData[spec] = runsData[specRuns[spec]]
+runsData[runs_List] := Developer`ToPackedArray[Join[asciiWords[runs], {Length[runs]}, Flatten[runs]]]
+asciiWords[runs_List] := Module[{table = ConstantArray[0, 128]},
+    Scan[Function[run, If[run[[1]] <= 127, table[[run[[1]] + 1 ;; Min[run[[2]], 127] + 1]] = 1]], runs];
+    Partition[table, 32] . $bitValues]
 $bitValues = Developer`ToPackedArray[2^Range[0, 31]]
 
 (* the classes of a bytecode for a text: each spec's data, a test's that of the text's characters it
    passes; with no test, the same for every text *)
 vmClasses[bc_Association, codes_List] := If[bc["Tests"] === {}, bc["Classes"], classesOf[bc, codes]]
 classesOf[bc_Association, codes_List] := With[{data = Map[
-        Replace[#, {{"Test", t_} :> With[{passing = Select[Union[codes], TrueQ[bc["Tests"][[t]][FromCharacterCode[#]]] &]},
-            Developer`ToPackedArray[Join[bitsetOf[tableOf[{"Codes", passing}]], {Length[#]}, Flatten[#]]] &[Map[{#, #} &, Select[passing, # >= 65536 &]]]],
-            spec_ :> specBits[spec]}] &, bc["Specs"]]},
+        Replace[#, {{"Test", t_} :> runsData[codeRuns[Select[Union[codes], TrueQ[bc["Tests"][[t]][FromCharacterCode[#]]] &]]], spec_ :> classData[spec]}] &,
+        bc["Specs"]]},
     Developer`ToPackedArray[Join[{Length[data]}, Most[FoldList[Plus, Length[data] + 2, Length /@ data]], Catenate[data]]]]
 
 $vmModes = <|"First" -> 1, "Each" -> 2, "Overlapping" -> 3|>
@@ -701,9 +707,11 @@ vmBindings[bc_, k_Integer, spans_List] := Association[MapThread[
 conditionValue[bc_, k_Integer, condition_Integer, spans_List, z_subject] := With[{c = bc["Conditions"][[condition]]},
     boundValue[c[[1]], z, vmBindings[bc, k, spans], c[[2]]]]
 
-(* the rules of a match's names, each name's text from the codes *)
+(* the rules of a match's names, each name's text from the codes; one that occurs more than once
+   and matched nothing or took no part is {}, as bindingRules gives it *)
 vmRules[bc_, k_Integer, spans_List, subject[codes_, _, _]] := MapThread[
-    Function[{side, span}, Rule[side[[1]], If[span[[1]] >= 0, FromCharacterCode[codes[[span[[1]] + 1 ;; span[[2]]]]], side[[2]]]]],
+    Function[{side, span}, Rule[side[[1]], With[{text = If[span[[1]] >= 0, FromCharacterCode[codes[[span[[1]] + 1 ;; span[[2]]]]], ""]},
+        If[side[[2]] && text === "", {}, text]]]],
     {bc["Sides"][[k]], Take[spans, Length[bc["Sides"][[k]]]]}]
 
 

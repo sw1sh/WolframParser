@@ -14,9 +14,8 @@ Begin["Wolfram`Parser`StringPatterns`Private`"]
 
 (* The matches of programs compiled to bytecode, typed code over packed integers, every argument a
    packed vector of machine integers: the code, five integers an instruction, {op, a, b, c, d}; the
-   pool of constants; the classes, {k, the start of each of the k, then each a bitset of 2048 words
-   of 32 bits of its codes below 65536 and its runs above, {count, first, last, ...}}; the text's
-   codes; the
+   pool of constants; the classes, {k, the start of each of the k, then each four words of 32 bits
+   of its codes below 128 and its runs, {count, first, last, ...}}; the text's codes; the
    parameters {mode, from, programs, names, registers, the program table in the pool}; and the
    state to go on from, {} at first. It gives {status, matches, width, then each match {start, end,
    k, the start and end of each name}}, status 0 when the scan is done, and 2 where a condition is
@@ -36,16 +35,31 @@ Begin["Wolfram`Parser`StringPatterns`Private`"]
    x characters giving one back down to y, 3 a shortest run of x characters taking one more up to
    y. The trail undoes the registers set since a frame, {register, value} pairs. The declaration is
    made the first time it is asked for: its types load the compiler. *)
+(* Whether the code cc is of the class cls, into inside, held code each test of a class is: below 128
+   a bit of the class's four words, the bit a word's and a mask's, as Compile takes a shift by a
+   variable for a real; else a search of its runs. *)
+SetAttributes[vmCode, HoldAll]
+$vmMember = vmCode[
+    off = vClasses[[cls + 1]];
+    If[ cc < 128,
+        inside = If[BitAnd[vClasses[[off + Quotient[cc, 32]]], masks[[BitAnd[cc, 31] + 1]]] == 0, 0, 1],
+        inside = 0; rlo = 0; rhi = vClasses[[off + 4]] - 1;
+        While[ rlo <= rhi,
+            rmid = Quotient[rlo + rhi, 2];
+            Which[
+                cc < vClasses[[off + 5 + 2 rmid]], rhi = rmid - 1,
+                cc > vClasses[[off + 6 + 2 rmid]], rlo = rmid + 1,
+                True, inside = 1; rlo = rhi + 1]]]];
+
 $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
     Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
         "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} ->
-        "PackedArray"::["MachineInteger", 1]] @
-    Function[{vCode, vPool, vClasses, vText, vParams, vState},
+        "PackedArray"::["MachineInteger", 1]] @@ ReplaceAll[ReplaceAll[Hold @ Function[{vCode, vPool, vClasses, vText, vParams, vState},
         Module[{n = Length[vText], mode = vParams[[1]], m = vParams[[3]], maxNames = vParams[[4]], nRegs = vParams[[5]], progOff = vParams[[6]],
                 width = 3 + 2 vParams[[4]], i = vParams[[2]], k = 1, status = 0, result = 0, pending = 0, answer = 0, fail = 0,
                 pc = 0, sp = 0, start = 0, top = 0, ttop = 0, regs, stack, trail, out, outLen = 3, nRec = 0,
                 op = 0, a = 0, b = 0, c = 0, d = 0, j = 0, j2 = 0, cc = 0, off = 0, inside = 0, na = 0, ok = 0, len = 0, e = 0, r = 0,
-                cnt = 0, mn = 0, mx = 0, kind = 0, rpc = 0, rsp = 0, rtt = 0, x = 0, y = 0, cls = 0, grown, q = 0, before = 0, after = 0,
+                cnt = 0, mn = 0, mx = 0, kind = 0, rpc = 0, rsp = 0, rtt = 0, x = 0, y = 0, cls = 0, grown, q = 0, before = 0, after = 0, rlo = 0, rhi = 0, rmid = 0,
                 nNames = 0, entry = 0, firstClass = 0, stateLen = 0, base = 0, masks},
             (* the bit of each of 32, a class's test of a code its word's and its bit's: Compile takes a
                shift by a variable for a real *)
@@ -77,10 +91,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                         If[ firstClass > 0,
                             If[ i >= n, result = -1,
                                 cc = vText[[i + 1]]; cls = firstClass;
-                                off = vClasses[[cls + 1]];
-                                If[ cc < 65536, inside = If[BitAnd[vClasses[[off + Quotient[cc, 32]]], masks[[BitAnd[cc, 31] + 1]]] == 0, 0, 1],
-                                    inside = 0; na = vClasses[[off + 2048]]; j2 = 0;
-                                    While[j2 < na && inside == 0, If[vClasses[[off + 2049 + 2 j2]] <= cc && cc <= vClasses[[off + 2050 + 2 j2]], inside = 1]; j2++]];
+                                vmMember[];
                                 If[inside == 0, result = -1]]],
                         result = 0];
                     While[ result == 0,
@@ -98,21 +109,17 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                         fail = 1],
                                 op == 3 || op == 18,
                                     If[ sp < n,
-                                        cc = vText[[sp + 1]]; off = vClasses[[a + 1]];
-                                        If[ cc < 65536, inside = If[BitAnd[vClasses[[off + Quotient[cc, 32]]], masks[[BitAnd[cc, 31] + 1]]] == 0, 0, 1],
-                                            inside = 0; na = vClasses[[off + 2048]]; j2 = 0;
-                                            While[j2 < na && inside == 0, If[vClasses[[off + 2049 + 2 j2]] <= cc && cc <= vClasses[[off + 2050 + 2 j2]], inside = 1]; j2++]];
+                                        cc = vText[[sp + 1]]; cls = a;
+                                        vmMember[];
                                         Which[op == 3 && inside == 1, sp++; pc++, op == 18 && inside == 0, pc++, True, fail = 1],
                                         fail = 1],
                                 op == 4,
                                     (* a run of the class a, from b to c characters: the longest, as many as there are, then
                                        one fewer at a time; the shortest, b, then one more at a time, as the choice is taken *)
-                                    j = 0; ok = 1; off = vClasses[[a + 1]];
+                                    j = 0; ok = 1; cls = a;
                                     While[ ok == 1 && (c < 0 || j < c) && sp + j < n && (d == 1 || j < b),
                                         cc = vText[[sp + j + 1]];
-                                        If[ cc < 65536, inside = If[BitAnd[vClasses[[off + Quotient[cc, 32]]], masks[[BitAnd[cc, 31] + 1]]] == 0, 0, 1],
-                                            inside = 0; na = vClasses[[off + 2048]]; j2 = 0;
-                                            While[j2 < na && inside == 0, If[vClasses[[off + 2049 + 2 j2]] <= cc && cc <= vClasses[[off + 2050 + 2 j2]], inside = 1]; j2++]];
+                                        vmMember[];
                                         If[inside == 1, j++, ok = 0]];
                                     If[ j < b, fail = 1,
                                         If[ (d == 1 && j > b) || (d == 0 && (c < 0 || b < c) && sp + b < n),
@@ -135,17 +142,13 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                         a == 4, ok = If[sp == n || vText[[sp + 1]] == 10, 1, 0],
                                         True,
                                             (* a word boundary: a word character on one side alone *)
-                                            off = vClasses[[b + 1]]; before = 0; after = 0;
+                                            cls = b; before = 0; after = 0;
                                             If[ sp > 0,
                                                 cc = vText[[sp]];
-                                                If[ cc < 65536, before = If[BitAnd[vClasses[[off + Quotient[cc, 32]]], masks[[BitAnd[cc, 31] + 1]]] == 0, 0, 1],
-                                                    na = vClasses[[off + 2048]]; j2 = 0;
-                                                    While[j2 < na && before == 0, If[vClasses[[off + 2049 + 2 j2]] <= cc && cc <= vClasses[[off + 2050 + 2 j2]], before = 1]; j2++]]];
+                                                vmMember[]; before = inside];
                                             If[ sp < n,
                                                 cc = vText[[sp + 1]];
-                                                If[ cc < 65536, after = If[BitAnd[vClasses[[off + Quotient[cc, 32]]], masks[[BitAnd[cc, 31] + 1]]] == 0, 0, 1],
-                                                    na = vClasses[[off + 2048]]; j2 = 0;
-                                                    While[j2 < na && after == 0, If[vClasses[[off + 2049 + 2 j2]] <= cc && cc <= vClasses[[off + 2050 + 2 j2]], after = 1]; j2++]]];
+                                                vmMember[]; after = inside];
                                             ok = If[before != after, 1, 0]];
                                     If[ok == 1, pc++, fail = 1],
                                 op == 10 || op == 12,
@@ -212,12 +215,10 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                     pc++,
                                 op == 20,
                                     (* a test of each character since the register *)
-                                    j = regs[[a + 1]]; ok = 1; off = vClasses[[b + 1]];
+                                    j = regs[[a + 1]]; ok = 1; cls = b;
                                     While[ j < sp && ok == 1,
                                         cc = vText[[j + 1]];
-                                        If[ cc < 65536, inside = If[BitAnd[vClasses[[off + Quotient[cc, 32]]], masks[[BitAnd[cc, 31] + 1]]] == 0, 0, 1],
-                                            inside = 0; na = vClasses[[off + 2048]]; j2 = 0;
-                                            While[j2 < na && inside == 0, If[vClasses[[off + 2049 + 2 j2]] <= cc && cc <= vClasses[[off + 2050 + 2 j2]], inside = 1]; j2++]];
+                                        vmMember[];
                                         If[inside == 0, ok = 0]; j++];
                                     If[ok == 1, pc++, fail = 1],
                                 op == 21, result = 2,
@@ -238,11 +239,9 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                         sp = rsp + x; pc = rpc; fail = 0,
                                     True,
                                         (* a shortest run, one character more, if the run's class has it: the RUN before rpc *)
-                                        q = 5 (rpc - 1); a = vCode[[q + 2]]; c = vCode[[q + 4]]; off = vClasses[[a + 1]];
+                                        q = 5 (rpc - 1); a = vCode[[q + 2]]; c = vCode[[q + 4]]; cls = a;
                                         cc = vText[[rsp + x + 1]];
-                                        If[ cc < 65536, inside = If[BitAnd[vClasses[[off + Quotient[cc, 32]]], masks[[BitAnd[cc, 31] + 1]]] == 0, 0, 1],
-                                            inside = 0; na = vClasses[[off + 2048]]; j2 = 0;
-                                            While[j2 < na && inside == 0, If[vClasses[[off + 2049 + 2 j2]] <= cc && cc <= vClasses[[off + 2050 + 2 j2]], inside = 1]; j2++]];
+                                        vmMember[];
                                         If[ inside == 1,
                                             x++;
                                             If[ (c < 0 || x < c) && rsp + x < n,
@@ -275,7 +274,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                 out[[q]] = top; q++; Do[out[[q + j - 1]] = stack[[j]], {j, 1, 6 top}]; q = q + 6 top;
                 out[[q]] = ttop; q++; Do[out[[q + j - 1]] = trail[[j]], {j, 1, 2 ttop}]; q = q + 2 ttop;
                 outLen = q - 1];
-            Take[out, outLen]]]];
+            Take[out, outLen]]], vmMember[] -> $vmMember], vmCode[code_] :> code]];
 
 (* the matcher: the host's compiled one, where its units define vmRun; else the declaration's
    Function compiled by Compile, every argument a packed vector of integers, as the paclet's typed

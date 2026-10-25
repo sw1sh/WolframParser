@@ -73,16 +73,17 @@ Print["string vm: ", count, " cases, seed ", seed, ": ", same, " runs agree, ", 
 
 (* --- FunctionCompile --- *)
 
+(* the names of the engine's own, written whole: the block is read whole, before a Begin in it *)
 If[ MemberQ[arguments, "compile"],
-    Begin["Wolfram`Parser`StringPatterns`Private`"];
-    {time, compiled} = AbsoluteTiming[FunctionCompile[$vmDeclaration, vmRun]];
+    {time, compiled} = AbsoluteTiming[FunctionCompile[Wolfram`Parser`StringPatterns`Private`$vmDeclaration, Wolfram`Parser`StringPatterns`Private`vmRun]];
     text = StringJoin[Table[RandomChoice[{"item", "ab", "<x>", " ", "a1", "22", ",", "\n", "abab", "z"}], {3000}]];
     codes = Developer`ToPackedArray[ToCharacterCode[text]];
-    agree = Map[Function[p, With[{bc = vmBytecode[{StringPatternProgram[p]["Program"]}]},
-        With[{classes = vmClasses[bc, codes], parameters = Developer`ToPackedArray[{2, 0, 1, bc["MaxNames"], bc["Registers"], bc["Table"]}], none = Developer`ToPackedArray[{0}][[1 ;; 0]]},
-            compiled[bc["Code"], bc["Pool"], classes, codes, parameters, none] === vmFunction[bc["Code"], bc["Pool"], classes, codes, parameters, none]]]],
-        {"a" ~~ DigitCharacter .., x : LetterCharacter .., "<" ~~ Shortest[__] ~~ ">", (x : "ab") .., x_ ~~ x_, WordBoundary ~~ "item"}];
-    End[];
+    agree = Map[Function[p, With[{bc = Wolfram`Parser`StringPatterns`Private`vmBytecode[{StringPatternProgram[p]["Program"]}]},
+        With[{classes = Wolfram`Parser`StringPatterns`Private`vmClasses[bc, codes], none = Developer`ToPackedArray[{0}][[1 ;; 0]],
+                parameters = Developer`ToPackedArray[{2, 0, 1, bc["MaxNames"], bc["Registers"], bc["Table"]}]},
+            compiled[bc["Code"], bc["Pool"], classes, codes, parameters, none] ===
+                Wolfram`Parser`StringPatterns`Private`vmFunction[bc["Code"], bc["Pool"], classes, codes, parameters, none]]]],
+        {"a" ~~ DigitCharacter .., x : LetterCharacter .., "<" ~~ Shortest[__] ~~ ">", (x : "ab") .., x_ ~~ x_, WordBoundary ~~ "item", "\[Alpha]" ~~ LetterCharacter ..}];
     Print["FunctionCompile: ", Head[compiled], " in ", Round[time], " s; its matches as Compile's: ", Count[agree, True], " of ", Length[agree]];
     If[Head[compiled] =!= CompiledCodeFunction || ! And @@ agree, Exit[1]]];
 If[differ =!= {}, Exit[1]];

@@ -55,7 +55,7 @@ String functions match them, over Wolfram 15's classes of characters at every co
 The kernel is dependency-free — no C library — with performance from `FunctionCompile`'s
 LLVM backend. It ships as a full paclet (`Guides` / `Symbols` / `Tutorials` documentation,
 built from `docs/` with [PacletPage](https://github.com/WolframInstitute/PacletPage)) and is
-covered by 487 core and 1200 language tests (`wl -f run-tests.wls`).
+covered by 488 core and 1200 language tests (`wl -f run-tests.wls`).
 
 [`build.wls`](build.wls) builds the documentation, [`release.wls`](release.wls) builds it,
 deploys the paclet resource and publishes the documentation site, and

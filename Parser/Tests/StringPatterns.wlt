@@ -280,10 +280,17 @@ VerificationTest[
     With[{patterns = {{"a" ~~ DigitCharacter ..}, {x : ("a" | "b") ..}, {"<" ~~ Shortest[x__] ~~ ">"}, {"x"..., "a"}, {"a", "aa"}, {x_ ~~ y_ /; DigitQ[y]},
             {("a" ~~ __)?(# =!= "c" &)}, {x__ ~~ x__}, {WordBoundary ~~ x : LetterCharacter ~~ ___}, {StartOfLine ~~ x_}, {NumberString},
             {Except[LetterCharacter, __]}, {((x : "a") | "b") ..}, {Shortest[("a"...) ..]}, {Repeated[Except[DigitCharacter, ___], {2}]},
-            {w : LetterCharacter .. /; StringLength[w] > 3}, {(x : "a") | "b"}, {"ab" | "a", "b" ...}},
+            {w : LetterCharacter .. /; StringLength[w] > 3}, {(x : "a") | "b"}, {"ab" | "a", "b" ...}, {(y : StartOfString) | (y_)}},
           texts = {"", "a1b22 ab<a><b>", "abab hello world", "ab\ncd -1.5 2. .5", "ca\[EAcute].1 ba aab one two three \:0663\:0663.5 \|01d7d1"}},
         Select[Tuples[{patterns, texts, {"First", "Each", "Overlapping"}}], Function[c,
             StringPatternMatches[c[[2]], StringPatternProgram /@ c[[1]], c[[3]]] =!= StringPatternMatches[c[[2]], StringPatternProgram /@ c[[1]], c[[3]], Method -> "Interpreter"]]]],
     {},
     TestID -> "string patterns: the typed matcher matches as the programs' interpreter does"
+]
+
+(* a name that occurs twice, bound at an anchor to the empty text, is {} *)
+VerificationTest[
+    {engineRuleCases["a_A", {(y : StartOfString) | (y_) :> {y}}], engineRuleCases["a", {(y : StartOfString) :> {y}}]},
+    {StringCases["a_A", (y : StartOfString) | (y_) :> {y}], StringCases["a", (y : StartOfString) :> {y}]},
+    TestID -> "string patterns: a name twice bound to the empty text is {}"
 ]
