@@ -10,8 +10,10 @@
     matches taken; repeats the longest first, or the shortest in Shortest; a name that occurs
     twice matches the same text both times; a condition and a test checked when their part has
     matched, the names in them bound to what matched. The classes of characters are Wolfram 15's,
-    as the paclet records them in CharacterClasses.wl. A kernel builds StringMatchQ, StringCases,
-    StringReplace, StringSplit and the rest of the String functions of patterns on it.
+    as the paclet records them in CharacterClasses.wl. A pattern that a regular expression means also
+    gives that regex, a POSIX extended one, for a host's native matcher, the C library's regcomp and
+    regexec. A kernel builds StringMatchQ, StringCases, StringReplace, StringSplit and the rest of the
+    String functions of patterns on it.
 
     It loads with the paclet, or alone, with no more of the paclet than CharacterClassRuns.wl, as a
     kernel loads it at its first string pattern:
@@ -25,7 +27,7 @@ If[DownValues[Wolfram`Parser`Private`characterClassRuns] === {}, Get[FileNameJoi
 BeginPackage["Wolfram`Parser`StringPatterns`"]
 
 StringPatternProgram::usage = "StringPatternProgram[patt] gives the program of the string pattern patt, an object whose properties \
-are \"Pattern\", \"Program\", \"RegexLike\", \"RegexFinds\", \"Class\", \"Run\" and \"ClassCodes\"."
+are \"Pattern\", \"Program\", \"Regex\", \"RegexLike\", \"RegexFinds\", \"Class\", \"Run\" and \"ClassCodes\"."
 StringPatternMatches::usage = "StringPatternMatches[s, {prog1, prog2, ...}, mode] gives the matches of the programs progi in the \
 string s from the left, each {start, end, k, rules}: progk matched the characters after start up to end, rules binding its names to \
 their text. The mode is \"First\", \"Each\" or \"Overlapping\"."
@@ -59,9 +61,9 @@ Begin["`Private`"]
    the part and the names bound so far, and gives the match or $noMatch to make the part try its
    next way. *)
 
-(* The object holds the program, None if the pattern has parts that no program has, and what a
-   kernel asks of it to choose how to match: whether a regex matches as the program does, or
-   finds a match where it has one, and the class of a pattern of one character class. *)
+(* The object holds the program, None if the pattern has parts that no program has, its regex,
+   and what a kernel asks of it to choose how to match: whether a regex matches as the program
+   does, or finds a match where it has one, and the class of a pattern of one character class. *)
 (* The properties come before the program is made: the left side of a definition of them is
    evaluated, and a_Association, a string pattern too, would be made a program. *)
 StringPatternProgram[a_Association]["ClassCodes"] := Replace[a["Class"], {{test_, 1, 1} :> classCodes[test], _ -> None}]
@@ -69,7 +71,7 @@ StringPatternProgram[a_Association]["Properties"] := Append[Keys[a], "ClassCodes
 StringPatternProgram[a_Association][property_String] := Lookup[a, property, Missing["NotAvailable", property]]
 
 StringPatternProgram[pattern : Except[_Association]] := With[{p = stringProgram[pattern]},
-    StringPatternProgram[<|"Pattern" -> pattern, "Program" -> p,
+    StringPatternProgram[<|"Pattern" -> pattern, "Program" -> p, "Regex" -> regexOf[pattern],
         "RegexLike" -> (p =!= None && regexLikeQ[p]), "RegexFinds" -> (p =!= None && regexFindsQ[p]),
         "Class" -> programClass[p], "Run" -> programRun[p]|>]]
 
@@ -82,6 +84,7 @@ StringPatternProgram /: MakeBoxes[program : StringPatternProgram[a_Association],
         },
         {
             BoxForm`SummaryItem[{"Program: ", a["Program"]}],
+            BoxForm`SummaryItem[{"Regex: ", a["Regex"]}],
             BoxForm`SummaryItem[{"Regex like: ", a["RegexLike"]}],
             BoxForm`SummaryItem[{"Regex finds: ", a["RegexFinds"]}],
             BoxForm`SummaryItem[{"Class: ", a["Class"]}],
@@ -223,6 +226,116 @@ nullableQ[named[_, p_]] := nullableQ[p]
 nullableQ[tested[p_, _] | conditioned[p_, _, _]] := nullableQ[p]
 nullableQ[excluding[_, p_] | builtIn[_, p_]] := nullableQ[p]
 nullableQ[_anchor | _backreference] := True
+
+
+(* ::Section:: *)
+(*Regular expressions*)
+
+(* A pattern as a POSIX extended regular expression where one means the same, for a host's native
+   matcher, the C library's regcomp and regexec, run on a string's UTF-8 bytes: {regex, names}, the
+   names an entry for each group the regex opens, in order, HoldComplete[x] for the pattern's name
+   x, i for the ith group of a RegularExpression, None for a group of no name; None for a pattern
+   with no regex. *)
+regexOf[pattern_] := If[regexTakesQ[pattern], Catch[translated[pattern], regexOf], None]
+
+(* whether a regex can take the pattern: no name twice, whose texts a regex's groups do not tie
+   together as the pattern does [WL 15.0.0], and no anchor in a repeat, which the C library's
+   regexec does not find where it should *)
+regexTakesQ[pattern_] := DuplicateFreeQ[Cases[pattern, Verbatim[Pattern][x_, _] :> HoldComplete[x], {0, Infinity}]] &&
+    FreeQ[pattern, (Verbatim[Repeated] | Verbatim[RepeatedNull])[q_ /; ! FreeQ[q, StartOfString | EndOfString], ___]]
+
+translated[s_String] := If[StringContainsQ[s, FromCharacterCode[0]], Throw[None, regexOf], {escaped[s], {}}]
+translated[Verbatim[Blank][]] := {".", {}}
+translated[Verbatim[BlankSequence][]] := {".+", {}}
+translated[Verbatim[BlankNullSequence][]] := {".*", {}}
+translated[Verbatim[Pattern][x_Symbol, p_]] := With[{inner = translated[p]}, {"(" <> First[inner] <> ")", Prepend[Last[inner], HoldComplete[x]]}]
+translated[p_StringExpression] := joined[translated /@ List @@ p, ""]
+translated[p_Alternatives] := grouped[joined[translated /@ List @@ p, "|"], ""]
+translated[Verbatim[Repeated][p_]] := grouped[translated[p], "+"]
+translated[Verbatim[RepeatedNull][p_]] := grouped[translated[p], "*"]
+translated[Verbatim[Repeated][p_, {min_Integer, max_Integer}]] := grouped[translated[p], "{" <> ToString[min] <> "," <> ToString[max] <> "}"]
+translated[Verbatim[Repeated][p_, {min_Integer, Infinity}]] := grouped[translated[p], "{" <> ToString[min] <> ",}"]
+translated[Verbatim[Repeated][p_, max_Integer]] := grouped[translated[p], "{1," <> ToString[max] <> "}"]
+translated[Verbatim[Longest][p_]] := translated[p]
+translated[chars : {__String}] /; AllTrue[chars, StringLength[#] === 1 &] := {bracketed[chars, False], {}}
+translated[HoldPattern[CharacterRange[a_String, b_String]]] /; StringLength[a] === StringLength[b] === 1 && Max[ToCharacterCode[a <> b]] < 128 :=
+    {bracketed[CharacterRange[a, b], False], {}}
+translated[Verbatim[Except][chars : {__String}]] /; AllTrue[chars, StringLength[#] === 1 &] := {bracketed[chars, True], {}}
+translated[Verbatim[Except][c_String]] /; StringLength[c] === 1 := {bracketed[{c}, True], {}}
+translated[Verbatim[Except][c_Symbol]] := With[{class = regexClass[c]},
+    {"[^" <> StringTake[First[class], {2, -2}] <> "]", {}} /; MatchQ[class, {_String?(StringMatchQ[#, "[[:" ~~ __ ~~ ":]]"] &), {}}]
+]
+(* A regex of alternatives is a group of no name, so that what stands around it, StartOfString ~~
+   RegularExpression["a|b"] among them, takes all of them [WL 15.0.0]; POSIX has no group that
+   captures nothing. A backreference counts the group, so a regex with one is left as it is. *)
+translated[RegularExpression[re_String]] := With[{regex = {posixRegex[re], Range[regexGroupCount[re]]}},
+    If[StringContainsQ[re, "|"] && ! StringContainsQ[re, "\\" ~~ DigitCharacter], grouped[regex, ""], regex]
+]
+translated[c_Symbol] := Replace[regexClass[c], None :> Throw[None, regexOf]]
+translated[_] := Throw[None, regexOf]
+
+(* The classes in the C locale are of ASCII; a byte above 127, part of a character beyond ASCII,
+   counts as a letter. Digits are a class, not the range 0-9, which the system's regexes compare by
+   collation, at twice the time. *)
+$nonASCII = "[^" <> FromCharacterCode[1] <> "-" <> FromCharacterCode[127] <> "]"
+
+$classes = <|
+    DigitCharacter -> {"[[:digit:]]", {}}, LetterCharacter -> {"([[:alpha:]]|" <> $nonASCII <> ")", {None}},
+    WhitespaceCharacter -> {"[[:space:]]", {}}, WordCharacter -> {"([[:alnum:]]|" <> $nonASCII <> ")", {None}},
+    PunctuationCharacter -> {"[[:punct:]]", {}}, HexadecimalCharacter -> {"[[:xdigit:]]", {}},
+    StartOfString -> {"^", {}}, EndOfString -> {"$", {}}, Whitespace -> {"[[:space:]]+", {}},
+    NumberString -> {"[+-]?([[:digit:]]+([.][[:digit:]]*)?|[.][[:digit:]]+)", {None, None}}
+|>
+
+(* {regex, names} of a named class of characters, or None *)
+regexClass[c_Symbol] := Lookup[$classes, c, None]
+
+(* the regexes joined by the separator, with their names in order *)
+joined[parts_List, separator_String] := {StringRiffle[First /@ parts, separator], Catenate[Last /@ parts]}
+
+(* the regex in a group of no name, then the suffix *)
+grouped[{regex_String, names_List}, suffix_String] := {"(" <> regex <> ")" <> suffix, Prepend[names, None]}
+
+(* s with the characters that a regex reads specially escaped *)
+escaped[s_String] := StringReplace[s, $regexEscapes]
+$regexEscapes = Function[c, c -> "\\" <> c] /@ Characters[".[]{}()\\*+?^$|"]
+
+(* Characters in a bracket expression, as POSIX reads one, where a backslash is a character as any
+   other: ] first, - last, ^ anywhere but first, and [ before ^ and -, where no : . or = follows it;
+   a ^ alone escaped outside a bracket; [^...] for negated. *)
+bracketed[chars_List, negated_] := With[{set = DeleteDuplicates[chars]},
+    With[{middle = Join[DeleteCases[set, "]" | "-" | "^" | "["], Intersection[set, {"["}]]},
+        Which[
+            ! negated && set === {"^"}, "\\^",
+            ! negated && ! MemberQ[set, "]"] && middle === {} && MemberQ[set, "^"], "[" <> If[MemberQ[set, "-"], "-", ""] <> "^]",
+            True, StringJoin["[", If[negated, "^", ""], Intersection[set, {"]"}], middle, Intersection[set, {"^"}], Intersection[set, {"-"}], "]"]]]]
+
+(* The escapes of Perl's syntax that POSIX names otherwise; the groups of a RegularExpression, each
+   a "(" that is not escaped, not in a bracket expression, and not "(?" of PCRE, which a POSIX
+   regex does not have. *)
+posixRegex[re_String] := StringReplace[re, {"\\d" -> "[[:digit:]]", "\\s" -> "[[:space:]]", "\\w" -> "[[:alnum:]_]", "\\D" -> "[^[:digit:]]", "\\S" -> "[^[:space:]]", "\\W" -> "[^[:alnum:]_]"}]
+
+regexGroupCount[re_String] := Replace[Fold[regexScanned, {0, "Normal"}, Characters[re]], {{count_, "Open"} :> count + 1, {count_, _} :> count}]
+
+(* the groups counted and the state of the scan of a regex after a character; in a bracket
+   expression a "]" first, after "^" or not, is a character, and [:class:], [.symbol.] and
+   [=class=] end at their own "]" *)
+regexScanned[{count_, "Open"}, "?"] := {count, "Normal"}
+regexScanned[{count_, "Open"}, c_] := regexScanned[{count + 1, "Normal"}, c]
+regexScanned[{count_, "Normal"}, "\\"] := {count, "Escape"}
+regexScanned[{count_, "Normal"}, "("] := {count, "Open"}
+regexScanned[{count_, "Normal"}, "["] := {count, "BracketFirst"}
+regexScanned[{count_, "Normal" | "Escape"}, _] := {count, "Normal"}
+regexScanned[{count_, "BracketFirst"}, "^"] := {count, "BracketCaret"}
+regexScanned[{count_, "BracketFirst" | "BracketCaret"}, "]"] := {count, "Bracket"}
+regexScanned[{count_, "BracketFirst" | "BracketCaret" | "Bracket"}, "["] := {count, "BracketOpen"}
+regexScanned[{count_, "Bracket"}, "]"] := {count, "Normal"}
+regexScanned[{count_, "BracketFirst" | "BracketCaret" | "Bracket"}, _] := {count, "Bracket"}
+regexScanned[{count_, "BracketOpen"}, ":" | "." | "="] := {count, "Class"}
+regexScanned[{count_, "BracketOpen"}, c_] := regexScanned[{count, "Bracket"}, c]
+regexScanned[{count_, "Class"}, ":" | "." | "="] := {count, "ClassEnd"}
+regexScanned[{count_, "ClassEnd"}, "]"] := {count, "Bracket"}
+regexScanned[{count_, "Class" | "ClassEnd"}, _] := {count, "Class"}
 
 
 (* ::Section:: *)

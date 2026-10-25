@@ -237,3 +237,24 @@ VerificationTest[
     {None, None, None, StringCases["a\na", (StartOfLine ~~ "a") ..]},
     TestID -> "string patterns: an anchor is no pattern to repeat"
 ]
+
+VerificationTest[
+    {StringPatternProgram["a" ~~ DigitCharacter ..]["Regex"], StringPatternProgram[x : DigitCharacter ~~ "." ~~ DigitCharacter ..]["Regex"],
+     StringPatternProgram["x" ~~ RegularExpression["(a)(b)"]]["Regex"], StringPatternProgram[RegularExpression["a|b"]]["Regex"]},
+    {{"a([[:digit:]])+", {None}}, {"([[:digit:]])\\.([[:digit:]])+", {HoldComplete[x], None}}, {"x(a)(b)", {1, 2}}, {"(a|b)", {None}}},
+    TestID -> "string patterns: the regex of a pattern and a name for each of its groups"
+]
+
+(* a bracket as POSIX reads one: ] first, - last, ^ not first, a backslash a character as any other *)
+VerificationTest[
+    Map[StringPatternProgram[#]["Regex"][[1]] &, {{"]", "a"}, {"-", "a"}, {"^"}, {"^", "-"}, {"\\", "]"}, Except[{"]", "a"}], Except["^"], Except[DigitCharacter]}],
+    {"[]a]", "[a-]", "\\^", "[-^]", "[]\\]", "[^]a]", "[^^]", "[^[:digit:]]"},
+    TestID -> "string patterns: a bracket expression as POSIX reads one"
+]
+
+VerificationTest[
+    {StringPatternProgram[x_ ~~ x_]["Regex"], StringPatternProgram[x : (x : "a")]["Regex"], StringPatternProgram[(StartOfString | "a") ..]["Regex"],
+     StringPatternProgram[Shortest["a" ..]]["Regex"]},
+    {None, None, None, None},
+    TestID -> "string patterns: no regex for a name twice, an anchor in a repeat or a shortest repeat"
+]

@@ -30,6 +30,7 @@ RelatedGuides: [WolframParser]
 |---|---|
 | `"Pattern"` | the pattern *patt* |
 | `"Program"` | the program, or [None]() if *patt* has a part that no program has |
+| `"Regex"` | `{regex, names}`: a POSIX extended regular expression that means what *patt* does, for a host's C library to match, and for each group it opens the name of *patt* that holds it, <code>[HoldComplete]()[*x*]</code>, the number of a group of a [RegularExpression](), or [None](); [None]() if no regex means the same |
 | `"RegexLike"` | whether a regex's leftmost longest match finds the matches the program finds |
 | `"RegexFinds"` | whether a regex finds a match wherever the program has one |
 | `"Class"` | `{test, min, max}` for a pattern of one character class or a repeat of one, else [None]() |
@@ -64,7 +65,7 @@ The properties of a program:
 prog["Properties"]
 ```
 
-<!-- => {"Pattern", "Program", "RegexLike", "RegexFinds", "Class", "Run", "ClassCodes"} -->
+<!-- => {"Pattern", "Program", "Regex", "RegexLike", "RegexFinds", "Class", "Run", "ClassCodes"} -->
 
 A regex takes the longest of its alternatives, and a pattern the first, so a regex does not match as these alternatives do:
 
@@ -89,6 +90,22 @@ StringPatternProgram["a"... ~~ "ab"... ~~ "b"]["RegexLike"]
 ```
 
 <!-- => False -->
+
+The regex of a pattern, with the name that holds each group it opens:
+
+```wl
+StringPatternProgram[x : DigitCharacter ~~ "." ~~ DigitCharacter ..]["Regex"]
+```
+
+<!-- => {"([[:digit:]])\\.([[:digit:]])+", {HoldComplete[x], None}} -->
+
+A bracket expression as POSIX reads one, where a backslash is a character as any other, a `]` comes first and a `-` last:
+
+```wl
+StringPatternProgram[{"-", "a", "]"}]["Regex"]
+```
+
+<!-- => {"[]a-]", {}} -->
 
 A repeat of one class, from once on, runs as far as its characters go:
 
