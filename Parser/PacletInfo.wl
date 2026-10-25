@@ -111,6 +111,7 @@ PacletObject[<|
                 "Wolfram`Parser`Languages`WolframLanguage`WolframLanguageGrammar",
                 "Wolfram`Parser`Languages`WolframLanguage`WolframLanguageHeld",
                 "Wolfram`Parser`Languages`WolframLanguage`WolframLanguageHeldNext",
+                "Wolfram`Parser`Languages`WolframLanguage`WolframLanguageProgram",
                 "Wolfram`Parser`Languages`WolframLanguage`WolframLanguageSemantic",
                 "Wolfram`Parser`Languages`WolframLanguage`WolframLanguageSyntaxLength",
                 "Wolfram`Parser`Languages`WolframLanguage`WolframLanguageSyntaxQ",

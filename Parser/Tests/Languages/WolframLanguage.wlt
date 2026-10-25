@@ -625,6 +625,47 @@ VerificationTest[
     {{HoldComplete[f[1, Null]], 6, <|"Warnings" -> {{"com"}}|>}, {{"com"}}},
     TestID -> "wl next: a statement carries its warnings, a failure under its Warnings key"]
 
+(* --- a plain source's program --- *)
+
+(* the parts of a source's program, each statement built alone by the reader's build pass, None
+   where it has no program *)
+wlProgramParts[s_String] := With[{p = WolframLanguageProgram[s]},
+    If[ p === None, None,
+        Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$fcodes = ToCharacterCode[s]},
+            Map[If[#[[1]] === 0, HoldComplete[Null],
+                First[Wolfram`Parser`Languages`WolframLanguage`Private`fastBuild[p["Steps"][[3 #[[1]] - 2 ;; 3 #[[2]]]],
+                    p["Kinds"][[#[[3]] ;; #[[4]]]], p["Texts"][[#[[3]] ;; #[[4]]]], p["Marks"][[#[[3]] ;; #[[4]]]]]]] &,
+                p["Statements"]]]]]
+
+Scan[
+    Function[c, VerificationTest[wlProgramParts[c[[1]]], If[StringContainsQ[c[[1]], "\\\n"], None, c[[2]]], TestID -> "wl program: " <> ToString[c[[1]], InputForm]]],
+    $wlStatementCases]
+VerificationTest[
+    Union[WolframLanguageProgram /@ Join[$wlStatementFailures[[All, 1]], Select[$wlWarningCases, #[[2]] =!= {} &][[All, 1]]]],
+    {None},
+    TestID -> "wl program: a source that does not read whole, or that gives a warning, has none"]
+VerificationTest[
+    AssociationQ /@ (WolframLanguageProgram /@ {"f[1, +2]", "(* \\[Foo] *) a", "\"\\8\""}),
+    {True, True, True},
+    TestID -> "wl program: a source that reads whole with no warning has one"]
+VerificationTest[
+    Lookup[WolframLanguageProgram["x = 1\n\ny = x + 1"], {"Kinds", "Texts", "Marks", "Statements"}],
+    {{1, 3, 1, 1, 3}, {"x", "1", "y", "x", "1"}, {0, 1, 0, 0, 1}, {{1, 4, 1, 2}, {0, 0, 0, 0}, {5, 10, 3, 5}}},
+    TestID -> "wl program: the leaves, and a row for each statement and each Null"]
+VerificationTest[
+    {Lookup[WolframLanguageProgram[""], {"Steps", "Statements"}], WolframLanguageProgram["{}"]["Statements"]},
+    {{{}, {{0, 0, 0, 0}}}, {{1, 2, 1, 0}}},
+    TestID -> "wl program: a source with no statement is one Null; a statement with no leaf ends its leaves before they begin"]
+VerificationTest[
+    Developer`PackedArrayQ /@ Lookup[WolframLanguageProgram["f[x_] := x^2\n\ng[1]"], {"Steps", "Kinds", "Marks", "Statements"}],
+    {True, True, True, True},
+    TestID -> "wl program: its instructions, kinds, marks and rows are packed"]
+VerificationTest[
+    Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$heldNextStates = {}},
+        WolframLanguageProgram["wlProgramName"]; {Wolfram`Parser`Languages`WolframLanguage`Private`$heldNextStates, Names["*`wlProgramName"]}],
+    {{}, {}},
+    TestID -> "wl program: nothing is kept for a call after it, and no name is made"]
+
 (* --- linear syntax --- *)
 
 (* {the text of a group, the boxes Wolfram 15's ToExpression["\\(" <> text <> "\\)", InputForm, HoldComplete] gives} *)

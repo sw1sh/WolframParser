@@ -6,7 +6,7 @@ ContextPath: [Wolfram`Parser`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/ref/WolframLanguageHeldNext
 Keywords: [Wolfram Language, statement, one at a time, package, Get, HoldComplete, ToExpression, parser zoo]
-SeeAlso: [WolframLanguageHeld, WolframLanguageSyntaxQ, WolframLanguageGrammar, WolframLanguageSemantic, LinearBoxes, ToExpression, Get, EndOfFile]
+SeeAlso: [WolframLanguageHeld, WolframLanguageProgram, WolframLanguageSyntaxQ, WolframLanguageGrammar, WolframLanguageSemantic, LinearBoxes, ToExpression, Get, EndOfFile]
 RelatedGuides: [ParserZoo]
 ---
 
@@ -24,7 +24,7 @@ RelatedGuides: [ParserZoo]
 - *warnings* lists the warnings in the order the kernel's reader gives them, each `{tag}` or `{tag, argument}` of the message `Syntax::tag`: `{"com"}` for each [Null]() a comma leaves, after the opener of a bracket or before another comma, the closer or a token that begins no operand; `{"stresc", "q"}` for an escape such as `\q` that a string keeps as written; `{"sntoct1"}`, `{"sntoct2"}`, `{"snthex"}` and `{"snthex32"}` for an octal, `\.`, `\:` or `\|` code with too few digits; `{"sntufn", name}` for a long name no character has, or one not closed in code; `{"sntunc", name}` for one not closed at the end of a string, or `{"sntufn", name}` where the source ends in the string; and `{"sntmsng", text}` for a long name with no name, *text* the source from the statement on.
 - A [Failure]() carries under its `"Warnings"` key the warnings the statement that cannot be read gives before reading stops.
 - *pos* is 1 or a position an earlier call gave; from any other position the call reads the first statement whose line begins at or after it.
-- A statement the compiled reader does not take is read by [WolframLanguageGrammar]() over [WolframLanguageSemantic](), and the statements after it by the compiled reader again.
+- [WolframLanguageProgram]() gives a source that reads whole with no line continuation and no warning as one program, all its statements' instructions and leaves and a row for each part, which a builder of its own builds.
 - Linear syntax reads as [WolframLanguageHeld]() reads it: a group of boxes as its boxes, a group read as input as [LinearBoxes]() of them.
 
 ## Basic Examples

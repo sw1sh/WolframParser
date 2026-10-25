@@ -45,7 +45,8 @@ KaTeX's screenshotter corpus ([`LaTeX.wl`](Parser/Kernel/LaTeX.wl)), a Markdown 
 example front-ends (Calculator, JSON, Lisp, Lambda, Brainfuck, ABC), plus OpenQASM and the Wolfram Language itself, on the core;
 `WolframLanguageHeld` reads the 7,000 sources of a Wolfram installation as the kernel's reader does, by a compiled lexer and
 a compiled parser over packed tokens, and `WolframLanguageHeldNext` reads a source one statement at a time, as `ToExpression`
-does, each statement's names made only when it is read and the kernel's syntax warnings with it. `WolframLanguageSyntaxQ` and
+does, each statement's names made only when it is read and the kernel's syntax warnings with it; `WolframLanguageProgram`
+gives a kernel's own builder the program of a source that reads whole with no warning. `WolframLanguageSyntaxQ` and
 `WolframLanguageSyntaxLength` give what `SyntaxQ` and `SyntaxLength` give, by the lexer and the parser alone.
 `StringPatternProgram` and `StringPatternMatches` match string patterns such as `"a" ~~ DigitCharacter ..`, and regular
 expressions as Wolfram 15's regex matcher takes them, as Wolfram 15's String functions match them, every way of

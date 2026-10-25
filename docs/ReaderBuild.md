@@ -16,7 +16,7 @@ For the statements of a program, `fastBuild[steps, kinds, texts, marks]` takes:
 
 | Argument | What it is |
 |---|---|
-| `steps` | The instructions, three integers each, `{code, a, b}`, one after another, as `fastParse` gives them after its status and count. `WolframLanguageHeldNext` passes one statement's: instructions `row[[5]]` to `row[[6]]` of its segment's program, the last of them its code 25. |
+| `steps` | The instructions, three integers each, `{code, a, b}`, one after another, as `fastParse` gives them after its status and count. `WolframLanguageHeldNext` passes one statement's: instructions `row[[5]]` to `row[[6]]` of its segment's program, the last of them its code 25. `WolframLanguageProgram` gives a whole source's (see A whole source). |
 | `kinds`, `texts`, `marks` | The leaves of those instructions, the instructions of code 1, in order, as `fastLeafData` gives them: each leaf's kind, its text in the source, and its mark, 1 for a number literal and 0 else. |
 
 And these tables of the paclet, constant for a version of it:
@@ -27,6 +27,27 @@ And these tables of the paclet, constant for a version of it:
 | special head codes | `fastHeadCode[name]` for `"Minus"`, `"Plus"`, `"Paren"`, `"Times"`, `"At"`, `"SlashSlash"` and `"Divide"`, which instructions 2, 4, 5 and 9 read apart. `"Paren"`, `"At"`, `"SlashSlash"` and `"Divide"` name no head of a value. |
 | `$fastSpliceHeads` | 1 by head code where a flat chain of the head splices (see Marks): `Composition`, `RightComposition`, `StringJoin`, `NonCommutativeMultiply`, `Dot`, `Times`, `Plus`, `And`, `Or`, `Alternatives`, `StringExpression`; else 0. |
 | `$fastIntegralList` | The integrals by index, each `{head name, kind}`, the kind `Integrate` for the integral form of instruction 24. |
+
+## A whole source
+
+`WolframLanguageProgram[s]` gives the program of all of a plain source at once: one that reads
+whole, with no line continuation and no syntax warning. Any other source is `None`, and
+`WolframLanguageHeldNext` reads it. The program is an association:
+
+| Key | What it is |
+|---|---|
+| `"Steps"` | All the statements' instructions, packed: instruction `k` is `Steps[[3k - 2 ;; 3k]]`. |
+| `"Kinds"`, `"Texts"`, `"Marks"` | All their leaves, as `fastLeafData` gives them, the kinds and the marks packed. |
+| `"Statements"` | A packed matrix with a row for each part `WolframLanguageHeldNext` gives, in order. A statement's row is `{first instruction, last instruction, first leaf, last leaf}`, its last instruction its code 25, its last leaf one less than its first where it has none, as `{}` has none. A Null's row, a line with no statement, is `{0, 0, 0, 0}`. A source with no statement is one Null. |
+
+An empty list is `{}`, which Wolfram 15 does not pack. A builder reads the rows in turn: a Null's
+row gives `HoldComplete[Null]`, and a statement's builds its instructions over its leaves, the
+statement's names made then, in the contexts the statements before it left. The parts are those
+`WolframLanguageHeldNext` gives, each with no warning; `dev/check-reader-program.wls` holds the two
+to each other on the reader corpus. Instruction 28 reads the source's own characters, so a builder
+keeps the source with its program. Making the program takes the lexer, the parser, the statement
+ranges, the lines, the leaves and, for a source with a comma or a backslash, the tokens that may
+give a warning, and it keeps nothing.
 
 ## The machine
 

@@ -1542,8 +1542,12 @@ warned[f_Failure, warnings_List] := Failure[f[[1]], Append[f[[2]], "Warnings" ->
 
 (* the warnings of the statement of a row, from the tokens of its segment that may give one *)
 statementWarnings[state_Association, row_List] := With[{segment = state["Segments"][[row[[4]]]]},
-    With[{before = segment["Warning"][[2]]},
-        warningsAt[segment["Codes"], segment["Lexed"], row[[7]], row[[8]], 0, segment["Warning"][[1, before[[row[[7]]]] + 1 ;; before[[row[[8]] + 1]]]]]]]
+    rowWarnings[segment["Codes"], segment["Lexed"], segment["Warning"], row]]
+
+(* the warnings of the statement of a row of the parts of a lexed source, codes its characters and
+   warn {the tokens that may give one, how many of them come before each token} *)
+rowWarnings[codes_List, lexed_List, warn_List, row_List] :=
+    warningsAt[codes, lexed, row[[7]], row[[8]], 0, warn[[1, warn[[2, row[[7]]]] + 1 ;; warn[[2, row[[8]] + 1]]]]]
 
 (* the statement of a row, held, its names made now: its instructions, and its leaves among the
    segment's *)
@@ -1565,6 +1569,33 @@ WolframLanguageHeldNext[s_String, pos_Integer] := Block[{j = heldNextState[s], s
         2, {HoldComplete[Null], row[[3]], <|"Warnings" -> {}|>},
         3, $heldNextStates = Delete[$heldNextStates, j]; {state["Data"][i], row[[2]]},
         _, $heldNextStates = Delete[$heldNextStates, j]; EndOfFile]]
+
+(* The program of a source that reads whole, with no line continuation and no syntax warning, as a
+   builder of its own takes it (docs/ReaderBuild.md): the instructions of all its statements and
+   their leaves, and a row for each part WolframLanguageHeldNext gives, in order, {first
+   instruction, last, first leaf, last} for a statement, its leaves none where the last is the one
+   before the first, and {0, 0, 0, 0} for a Null. Any other source is None, for
+   WolframLanguageHeldNext to read. Nothing is kept for a call after it. *)
+WolframLanguageProgram[s_String] := Block[{codes = ToCharacterCode[s], padded, lexed, prog},
+    If[ MemberQ[codes, 92] && lineContinuations[s] =!= {}, None,
+        padded = Join[codes, {0, 0, 0}];
+        lexed = fastLexFunction[padded, $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];
+        {lexed, prog} = splitParse[lexed, padded];
+        If[lexed[[1]] === 0 && prog[[1]] === 0, wholeProgram[codes, lexed, prog], None]]]
+
+(* the program of a source read whole, codes its characters, lexed the lexer's tokens and prog the
+   parser's program of them: the parts the lines give it but the end, None where a statement's
+   tokens that may give a warning give one *)
+wholeProgram[codes_List, lexed_List, prog_List] := Block[{warn, parts, leaves, before},
+    warn = If[MemberQ[codes, 44] || MemberQ[codes, 92], warningTokens[codes, lexed], {{}, ConstantArray[0, lexed[[2]] + 1]}];
+    parts = Most[Partition[Drop[fastLinesFunction[codes, lexed, prog, warn[[2]], $fastClasses, $fastNewlineNames, $fastNoKept,
+        Developer`ToPackedArray[{First[fastRangesFunction[prog]], Length[codes] + 1, 0, 1, 0, 0, Length[codes], 0, 0}]], 2], 9]];
+    If[ warn[[1]] =!= {} && AnyTrue[parts, #[[1]] === 1 && #[[9]] > 0 && rowWarnings[codes, lexed, warn, #] =!= {} &], None,
+        leaves = fastLeafData[prog, codes, lexed]; before = leaves["Before"];
+        <|"Steps" -> prog[[3 ;; 3 prog[[2]] + 2]], "Kinds" -> leaves["Kinds"], "Texts" -> leaves["Texts"], "Marks" -> leaves["Marks"],
+          "Statements" -> Developer`ToPackedArray[Table[
+            If[ parts[[i, 1]] === 1, {parts[[i, 5]], parts[[i, 6]], before[[parts[[i, 5]]]] + 1, before[[parts[[i, 6]] + 1]]}, {0, 0, 0, 0}],
+            {i, Length[parts]}]]|>]]
 
 (* --- syntax alone --- *)
 
