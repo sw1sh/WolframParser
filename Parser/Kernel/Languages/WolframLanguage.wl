@@ -521,7 +521,15 @@ outExpression[s_String] := With[{count = StringCount[s, "%"], digits = StringDel
    *^e for a power of the base. A real without a mark is a machine real,
    unless its digits are more than a machine real holds; it then keeps
    the accuracy its digits give [WL 15.0.0]. *)
-numberValue[s_String] := If[DigitQ[s], FromDigits[s], markedNumberValue[s]]
+numberValue[s_String] := Which[DigitQ[s], FromDigits[s], StringFreeQ[s, "^" | "*" | "`"], decimalValue[s], True, markedNumberValue[s]]
+
+(* a real of digits and a point alone: the machine real nearest its value, or, with more digits
+   than a machine real holds, its value at the accuracy its digits give, as markedNumberValue reads
+   one with no mark *)
+decimalValue[s_String] := With[{parts = StringSplit[s, ".", All]},
+    With[{digits = parts[[1]] <> parts[[2]], places = StringLength[parts[[2]]]},
+        With[{exact = FromDigits[digits] / 10^places},
+            If[significantDigits[digits, 10], SetAccuracy[exact, places], machineReal[exact]]]]]
 
 markedNumberValue[s_String] := Module[{base = 10, text = s, exponent = 0, mark = None, markText = "", int, frac, exact},
     If[ StringContainsQ[text, "^^"],

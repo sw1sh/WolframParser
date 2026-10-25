@@ -1314,7 +1314,7 @@ fastHeld[s_String] := Catch[Block[{codes = ToCharacterCode[s], padded, lexed, pr
     If[ lexed[[1]] =!= 0,
         Throw[If[prog[[1]] === 1 && prog[[2]] < lexed[[2]], stoppedFailure[tokensBefore[lexed, lexed[[2]]], prog[[2]]], lexerFailure[lexed, Length[codes]]], fastHeld]];
     If[prog[[1]] === 1, Throw[stoppedFailure[lexed, prog[[2]]], fastHeld]];
-    Block[{$fcodes = codes, $fs = lexed[[5 ;; ;; 5]], $fe = lexed[[6 ;; ;; 5]]},
+    Block[{$fcodes = codes},
         With[{leaves = fastLeafData[prog, codes, lexed]},
             fastBuild[prog[[3 ;; 3 prog[[2]] + 2]], leaves["Kinds"], leaves["Texts"], leaves["Marks"]]]]], fastHeld]
 
@@ -1426,8 +1426,9 @@ segmentParts[state_Association, from_Integer] := Block[
         statementRanges[prog]];
     While[first =!= None && ranges =!= {} && lexed[[5 first + 2]] === 0, first = ranges[[-1, 3]]; ranges = Most[ranges]];
     seg = Length[st["Segments"]] + 1;
-    st["Segments"] = Append[st["Segments"], <|"Codes" -> codes, "Lexed" -> lexed, "Starts" -> lexed[[5 ;; ;; 5]], "Ends" -> lexed[[6 ;; ;; 5]], "Program" -> prog,
-        "Warning" -> warningTokens[codes, lexed], "Leaves" -> fastLeafData[prog, codes, lexed]|>];
+    st["Segments"] = Append[st["Segments"], <|"Codes" -> codes, "Lexed" -> lexed, "Program" -> prog,
+        "Warning" -> If[MemberQ[codes, 44] || MemberQ[codes, 92], warningTokens[codes, lexed], {{}, ConstantArray[0, lexed[[2]] + 1]}],
+        "Leaves" -> fastLeafData[prog, codes, lexed]|>];
     (* The lines, positions of the segment: the Nulls of the gap before the first statement, each
        statement and the Nulls of the gap after it, then where reading stops or the end. The first
        line break after a statement ends its line, else the token after it does; each break after
@@ -1441,7 +1442,7 @@ segmentParts[state_Association, from_Integer] := Block[
     If[stop =!= None, data[n0 + Length[made]] = warned[sourceFailure[st, stop[[2]], from], tokenWarnings[codes, lexed, first, stop[[3]], stop[[4]]]]];
     st["Parts"] = Join[st["Parts"], made];
     st["Data"] = data;
-    st["Index"] = AssociationThread[st["Parts"][[All, 2]] -> Range[Length[st["Parts"]]]];
+    st["Index"] = If[Length[st["Parts"]] > 8, AssociationThread[st["Parts"][[All, 2]] -> Range[Length[st["Parts"]]]], <||>];
     st]
 
 (* --- warnings --- *)
@@ -1538,10 +1539,10 @@ statementWarnings[state_Association, row_List] := With[{segment = state["Segment
 
 (* the statement of a row, held, its names made now: its instructions, and its leaves among the
    segment's *)
-heldNextStatement[state_Association, row_List] := Block[{$nextSegment = state["Segments"][[row[[4]]]], $nextLeaves, $nextSpan, $fcodes, $fs, $fe},
+heldNextStatement[state_Association, row_List] := Block[{$nextSegment = state["Segments"][[row[[4]]]], $nextLeaves, $nextSpan, $fcodes},
     $nextLeaves = $nextSegment["Leaves"];
     $nextSpan = $nextLeaves["Before"][[row[[5]]]] + 1 ;; $nextLeaves["Before"][[row[[6]] + 1]];
-    $fcodes = $nextSegment["Codes"]; $fs = $nextSegment["Starts"]; $fe = $nextSegment["Ends"];
+    $fcodes = $nextSegment["Codes"];
     First[fastBuild[$nextSegment["Program"][[3 row[[5]] ;; 3 row[[6]] + 2]], $nextLeaves["Kinds"][[$nextSpan]], $nextLeaves["Texts"][[$nextSpan]],
         $nextLeaves["Marks"][[$nextSpan]]]]]
 
