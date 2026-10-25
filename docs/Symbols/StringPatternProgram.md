@@ -35,6 +35,7 @@ RelatedGuides: [WolframParser]
 | `"RegexLike"` | whether a regex's leftmost longest match finds the matches the program finds |
 | `"RegexFinds"` | whether a regex finds a match wherever the program has one |
 | `"Class"` | `{test, min, max}` for a pattern of one character class or a repeat of one, else [None]() |
+| `"IgnoredRestrictions"` | the later occurrences <code>[HoldForm]()[*x* : *p*]</code> of a name on a match's way whose pattern *p*, not a blank, the matcher ignores, as Wolfram 15 warns of them with `StringExpression::cond` |
 | `"Run"` | `{test, min}` for a repeat of one character class from *min* times on, as many as there are, else [None]() |
 | `"ClassCodes"` | for a pattern of one character class, its codes below 65536 as a packed table of 1 and 0 by code + 1, else [None]() |
 | `"Properties"` | the properties |
@@ -67,7 +68,7 @@ The properties of a program:
 prog["Properties"]
 ```
 
-<!-- => {"Pattern", "Program", "Ways", "Regex", "RegexLike", "RegexFinds", "Class", "Run", "ClassCodes"} -->
+<!-- => {"Pattern", "Program", "Ways", "Regex", "RegexLike", "RegexFinds", "Class", "Run", "IgnoredRestrictions", "ClassCodes"} -->
 
 A regex takes the longest of its alternatives, and a pattern the first, so a regex does not match as these alternatives do:
 
@@ -124,6 +125,14 @@ Total[StringPatternProgram[WhitespaceCharacter]["ClassCodes"]]
 ```
 
 <!-- => 44 -->
+
+The later occurrences of a name whose patterns the matcher ignores, matching the text of the first occurrence, of which Wolfram 15 warns with `StringExpression::cond`:
+
+```wl
+StringPatternProgram[(x : LetterCharacter) ~~ (x : DigitCharacter) ~~ x_]["IgnoredRestrictions"]
+```
+
+<!-- => {HoldForm[x : DigitCharacter]} -->
 
 A regular expression's matches, its groups bound by their numbers:
 

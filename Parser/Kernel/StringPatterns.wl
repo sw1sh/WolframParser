@@ -32,7 +32,7 @@ Block[{$ContextPath = {"System`"}},
 BeginPackage["Wolfram`Parser`StringPatterns`"]
 
 StringPatternProgram::usage = "StringPatternProgram[patt] gives the program of the string pattern patt, an object whose properties \
-are \"Pattern\", \"Program\", \"Ways\", \"Regex\", \"RegexLike\", \"RegexFinds\", \"Class\", \"Run\" and \"ClassCodes\"."
+are \"Pattern\", \"Program\", \"Ways\", \"Regex\", \"RegexLike\", \"RegexFinds\", \"Class\", \"Run\", \"IgnoredRestrictions\" and \"ClassCodes\"."
 StringPatternMatches::usage = "StringPatternMatches[s, {prog1, prog2, ...}, mode] gives the matches of the programs progi in the \
 string s from the left, each {start, end, k, rules}: progk matched the characters after start up to end, rules binding its names to \
 their text. The mode is \"First\", \"Each\", \"Overlapping\" or \"All\"."
@@ -87,7 +87,7 @@ StringPatternProgram[a_Association][property_String] := Lookup[a, property, Miss
 StringPatternProgram[pattern : Except[_Association]] := Block[{$merged = False}, With[{p = stringProgram[pattern]},
     StringPatternProgram[<|"Pattern" -> pattern, "Program" -> p, "Ways" -> If[$merged, Block[{$oneClass = False}, stringProgram[pattern]], p], "Regex" -> regexOf[pattern],
         "RegexLike" -> (p =!= None && regexLikeQ[p]), "RegexFinds" -> (p =!= None && regexFindsQ[p]),
-        "Class" -> programClass[p], "Run" -> programRun[p]|>]]]
+        "Class" -> programClass[p], "Run" -> programRun[p], "IgnoredRestrictions" -> ignoredRestrictions[pattern]|>]]]
 
 StringPatternProgram /: MakeBoxes[program : StringPatternProgram[a_Association], form : (StandardForm | TraditionalForm)] :=
     BoxForm`ArrangeSummaryBox[
@@ -127,6 +127,24 @@ programRun[p_] := Replace[p, {repeat[characterClass[test_], min_Integer, Infinit
 
 $regexFrontEnd = FileNameJoin[{DirectoryName[$InputFileName], "RegularExpressions.wl"}];
 regexFrontEnd[] := regexFrontEnd[] = Block[{$ContextPath = {"System`"}}, Get[$regexFrontEnd]]
+
+(* The later occurrences x : p of a name on a match's way, p not a blank, whose p the matcher
+   ignores, matching the text of the first occurrence: each held, in the order of the pattern.
+   Wolfram 15 warns of each, StringExpression::cond, once for each pattern it compiles [WL 15.0.0].
+   An occurrence inside the name's own pattern is one of them. restrictionsSeen[p, seen] gives them
+   and the names seen once p is past, as backreferenced marks the occurrences. *)
+ignoredRestrictions[pattern_] := First[restrictionsSeen[pattern, {}]]
+restrictionsSeen[named : Verbatim[Pattern][x_Symbol, p_], seen_List] := If[MemberQ[seen, HoldComplete[x]],
+    {If[MatchQ[p, Verbatim[Blank][] | Verbatim[BlankSequence][] | Verbatim[BlankNullSequence][]], {}, {HoldForm[named]}], seen},
+    With[{r = restrictionsSeen[p, Union[seen, {HoldComplete[x]}]]}, {First[r], Union[Last[r], {HoldComplete[x]}]}]]
+restrictionsSeen[p_StringExpression, seen_List] := Fold[
+    Function[{acc, part}, With[{r = restrictionsSeen[part, Last[acc]]}, {Join[First[acc], First[r]], Last[r]}]], {{}, seen}, List @@ p]
+restrictionsSeen[p : _Alternatives | _List, seen_List] := With[{rs = Map[restrictionsSeen[#, seen] &, List @@ p]},
+    {Catenate[Map[First, rs]], Union[seen, Union @@ Map[Last, rs]]}]
+restrictionsSeen[(Verbatim[Repeated] | Verbatim[RepeatedNull] | Verbatim[Shortest] | Verbatim[Longest] | Verbatim[PatternTest] | Verbatim[Condition])[p_, ___], seen_List] :=
+    restrictionsSeen[p, seen]
+restrictionsSeen[Verbatim[Except][_, p_], seen_List] := restrictionsSeen[p, seen]
+restrictionsSeen[_, seen_List] := {{}, seen}
 
 (* the program of a string pattern, or a Throw of None, tagged program *)
 program[s_String] := literal[ToCharacterCode[s]]

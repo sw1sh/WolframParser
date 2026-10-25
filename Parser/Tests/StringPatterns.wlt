@@ -374,3 +374,15 @@ VerificationTest[
     {<|"Records" -> {{0, 4, 1, 0, 2, 2, 4}}, "Sides" -> {{{1, False}, {2, False}}}|>, {{0, 4, 1, {1 -> "ab", 2 -> "12"}}}, True},
     TestID -> "string patterns: a regex's groups in the records and the rules, each by its number"
 ]
+
+(* the later occurrences of a name whose own pattern the matcher ignores, of which Wolfram 15 warns,
+   StringExpression::cond: on a match's way, not a blank, each once, an occurrence in the name's own
+   pattern among them *)
+VerificationTest[
+    Map[StringPatternProgram[#]["IgnoredRestrictions"] &,
+        {(x : "a") ~~ (x : "a"), ((x : "a") | (x : "b")) ~~ ((x : "a") | (x : "b")), (x : "a") ~~ (x : _), (x : "a") ~~ x__, (x : "a") ~~ (x : Except["b"]),
+         (x : "a") | (x : "b"), x : (x : "a"), (x : "ab") ~~ ((x : DigitCharacter) | (x : DigitCharacter))}],
+    {{HoldForm[x : "a"]}, {HoldForm[x : "a"], HoldForm[x : "b"]}, {}, {}, {HoldForm[x : Except["b"]]}, {}, {HoldForm[x : "a"]},
+     {HoldForm[x : DigitCharacter], HoldForm[x : DigitCharacter]}},
+    TestID -> "string patterns: the restrictions the matcher ignores, of which Wolfram 15 warns"
+]
