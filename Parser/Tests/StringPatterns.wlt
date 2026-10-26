@@ -365,6 +365,25 @@ VerificationTest[
     TestID -> "string patterns: regular expressions matched as Wolfram 15 matches them, their groups and every way"
 ]
 
+(* a backreference of any case in a caseless regex, and in its own group the group's text of the
+   time round before, none the first time, the group atomic; what a program declines, by name *)
+VerificationTest[
+    Select[{{"aAaA", "(?i)(a)\\1", 1}, {"b_a", "(\\1)?[^a]|1+(?!b)", 1}, {"aba", "(a|b\\1)+", 1}, {"k\:212akK", "(?i)(k)\\1", 1}, {"abAB ABab", "(?i)(ab)\\1", 1},
+        {"aaba", "(a\\1)", 1}, {"xx", "(x\\1?)+", 1}, {"aA", "(a)(?i)\\1", 1}, {"aA", "(?i:(a))\\1", 1}, {"\:00df\:1e9e", "(?i)(\:00df)\\1", 1}, {"aAAa", "(?i)(a)\\1+", 1},
+        {"aab", "(a{1,2}|\\1)ab", 1}, {"aab", "((a{1,2})\\1?)ab", 2}, {"aab", "((a{1,2})\\2?)ab", 2}, {"\\t", "(\\t\\1?|)", 1}, {"\:00c9\:00e9B", "([[:alpha:]]{1,2}|\\1)", 1}},
+        Function[c, regexAnswers[c[[1]], c[[2]]] =!= nativeAnswers @@ c]],
+    {},
+    TestID -> "string patterns: a backreference of any case in a caseless regex, and in its own group the time round before"
+]
+VerificationTest[
+    StringPatternProgram[#]["Declined"] & /@ {RegularExpression["\\((?R)?\\)"], RegularExpression["(?(1)a|b)"], RegularExpression["(?|a)"], RegularExpression["(*FAIL)"],
+        RegularExpression["\\Ga"], RegularExpression["(?<=a+)b"], RegularExpression["(a?)++"], RegularExpression["\\p{Greek}"], RegularExpression["a{2,1}"],
+        RegularExpression["(?i)(a)\\1"], "a" ~~ DigitCharacter},
+    {"recursion", "a conditional group", "a branch reset", "a verb", "\\G", "a lookbehind of no fixed length", "a possessive repeat of a part that may match nothing",
+     "\\p{Greek}, a script or no property", "a regex Wolfram 15 does not take", None, None},
+    TestID -> "string patterns: what a program declines, by name"
+]
+
 (* a regex's groups in the records after its names, each named by its number; a lookaround matched
    by the interpreter, as the typed matcher would *)
 VerificationTest[

@@ -13,28 +13,33 @@ Begin["Wolfram`Parser`StringPatterns`Private`"]
 
 (* The program of a regex, or a Throw of None, tagged program, for a regex that Wolfram 15 does not
    take or that has a part no program has: recursion, a conditional group, a branch reset, a verb, a
-   callout, \G, \K, \C, \X, a script of \p, a caseless backreference, a backreference in the group
-   it refers to, a possessive repeat of a part that may match nothing, whose ways Wolfram 15's
-   matcher counts as it repeats, or a lookbehind of no fixed length. Its regex matches with the options Wolfram 15 gives every RegularExpression: a newline is
+   callout, \G, \K, \C, \X, a script of \p, a possessive repeat of a part that may match nothing,
+   whose ways Wolfram 15's matcher counts as it repeats, or a lookbehind of no fixed length. A
+   backreference in the group it refers to holds the group's text of the time round before, and
+   none the first time, and the group is atomic. Its regex matches with the options Wolfram 15 gives every RegularExpression: a newline is
    \n alone, "." no newline, ^ and $ the ends of the text, $ also before a newline that ends it, the
    classes of characters Unicode's.
 
    The parts it makes, beside those of a string pattern:
      capture[n, p]                 p, the nth group set to what it matched, each time it matches
      captured[n]                   the text the nth group holds; no match where it holds none
+     captured[n, True]             that text in any case: each character one of the same
+                                   caseless set as the group's
      lookahead[p, positive]        nothing, where p matches from here, or where it does not
      lookbehind[{{len, p}, ...}, positive]
                                    nothing, where one of the p, of len characters, ends here, or
                                    where none does
      atomic[p]                     p, its first way alone *)
 regexProgram[re_String] := Block[{$re = ToCharacterCode[re], $at = 1, $caseless = False, $multiline = False, $dotAll = False, $extended = False,
-        $groups = 0, $groupNames = <||>, $references = {}, $open = {}},
+        $groups = 0, $groupNames = <||>, $references = {}},
     With[{p = regexAlternation[]},
         If[$at <= Length[$re], regexFails[]];
         If[AnyTrue[$references, # > $groups &], regexFails[]];
         p]]
 
-regexFails[] := Throw[None, program]
+(* no program: a regex Wolfram 15 does not take, or a part no program has *)
+regexFails[] := declined["a regex Wolfram 15 does not take"]
+regexFails[what_String] := declined[what]
 
 (* the code here, and past it *)
 regexPeek[] := If[$at <= Length[$re], $re[[$at]], None]
@@ -82,7 +87,7 @@ regexPiece[] := Module[{atom = regexAtom[], q},
     While[ (q = regexQuantifier[]) =!= None,
         atom = If[MatchQ[atom, _anchor | _lookahead | _lookbehind], assertionRepeat[atom, q],
             Replace[q, {
-                {min_, max_, "Possessive"} :> If[nullableQ[atom], regexFails[], atomic[repeat[atom, min, max, True]]],
+                {min_, max_, "Possessive"} :> If[nullableQ[atom], regexFails["a possessive repeat of a part that may match nothing"], atomic[repeat[atom, min, max, True]]],
                 {min_, max_, greedy_} :> repeat[atom, min, max, greedy]}]];
         regexSpace[]];
     atom]
@@ -151,11 +156,12 @@ regexGroup[] := Module[{p, n, name, flags},
             n = ++$groups; $groupNames[name] = n;
             regexCapture[n],
         regexPeek[] === 63, $at++; regexOptions[],
-        regexPeek[] === 42, regexFails[],
+        regexPeek[] === 42, regexFails["a verb"],
         True, n = ++$groups; regexCapture[n]]]
 
-(* the nth group, open while its parts are read *)
-regexCapture[n_Integer] := Block[{$open = Append[$open, n]}, capture[n, regexClosed[regexAlternation[]]]]
+(* the nth group, open while its parts are read; one that holds a backreference to itself is
+   atomic, as Wolfram 15's matcher makes it, its choices given up once it matches [WL 15.0.0] *)
+regexCapture[n_Integer] := With[{p = regexClosed[regexAlternation[]]}, If[FreeQ[p, captured[n, ___]], capture[n, p], atomic[capture[n, p]]]]
 
 (* A group of an assertion alone is a group, which a repeat repeats, where the assertion's own
    repeat is how often it is tried [WL 15.0.0] *)
@@ -169,6 +175,13 @@ regexClosed[e_] := Block[{$caseless = $caseless, $multiline = $multiline, $dotAl
 
 (* (?imsx-imsx) for the rest of the group, (?imsx-imsx: ...) for its own alone *)
 regexOptions[] := Module[{on = True, c, options = {$caseless, $multiline, $dotAll, $extended}},
+    With[{c1 = regexPeek[], c2 = regexPeek[1]},
+        Which[
+            MemberQ[{82, 38}, c1] || (IntegerQ[c1] && 48 <= c1 <= 57) || (MemberQ[{43, 45}, c1] && IntegerQ[c2] && 48 <= c2 <= 57) || (c1 === 80 && c2 === 62),
+                regexFails["recursion"],
+            c1 === 40, regexFails["a conditional group"],
+            c1 === 124, regexFails["a branch reset"],
+            c1 === 67, regexFails["a callout"]]];
     While[ True,
         c = regexNext[];
         Switch[ c,
@@ -187,7 +200,7 @@ regexName[ends_List] := Module[{start = $at},
 
 (* A lookbehind's branches each of a fixed number of characters, which may differ from branch to
    branch [WL 15.0.0] *)
-regexLookbehind[p_, positive_] := lookbehind[Map[Function[branch, With[{len = fixedLength[branch]}, If[len === None, regexFails[], {len, branch}]]],
+regexLookbehind[p_, positive_] := lookbehind[Map[Function[branch, With[{len = fixedLength[branch]}, If[len === None, regexFails["a lookbehind of no fixed length"], {len, branch}]]],
     Replace[p, {alternatives[parts_] :> parts, other_ :> {other}}]], positive]
 
 fixedLength[literal[codes_]] := Length[codes]
@@ -232,7 +245,7 @@ regexDigitEscape[] := Module[{start = $at, n},
     If[n < 10 || n <= $groups, regexReference[n],
         $at = start; regexCharacter[regexOctal[3]]]]
 
-regexReference[n_Integer] := (If[$caseless || n < 1 || MemberQ[$open, n], regexFails[]]; AppendTo[$references, n]; captured[n])
+regexReference[n_Integer] := (If[n < 1, regexFails[]]; AppendTo[$references, n]; If[$caseless, captured[n, True], captured[n]])
 
 (* \g{n}, \gn, \g{-n}, \g{name} *)
 regexGroupNumber[] := Module[{braced = regexSkip["{"], negative, n, name},
@@ -255,6 +268,7 @@ regexEscapedCode[c_Integer] := Switch[ c,
     120, regexHex[],
     111, If[! regexSkip["{"], regexFails[]]; With[{v = regexDigits[8, Infinity]}, If[! regexSkip["}"], regexFails[]]; v],
     48, $at--; regexOctal[3],
+    71, regexFails["\\G"], 75, regexFails["\\K"], 67, regexFails["\\C"], 88, regexFails["\\X"],
     _?(48 <= # <= 57 || 65 <= # <= 90 || 97 <= # <= 122 &), regexFails[],
     _, c]
 
@@ -270,7 +284,7 @@ regexProperty[] := Module[{name, negated = False},
     If[ regexSkip["{"],
         negated = regexSkip["^"]; name = regexName[{125}],
         name = FromCharacterCode[{regexNext[]}]];
-    If[! MemberQ[$regexProperties, name], regexFails[]];
+    If[! MemberQ[$regexProperties, name], regexFails["\\p{" <> name <> "}, a script or no property"]];
     If[negated, {"Not", {"Named", "regex \\p{" <> name <> "}"}}, {"Named", "regex \\p{" <> name <> "}"}]]
 $regexProperties = {"L", "Lu", "Ll", "Lt", "Lm", "Lo", "L&", "M", "Mn", "Mc", "Me", "N", "Nd", "Nl", "No", "P", "Pc", "Pd", "Ps", "Pe", "Pi", "Pf", "Po",
     "S", "Sm", "Sc", "Sk", "So", "Z", "Zs", "Zl", "Zp", "C", "Cc", "Cf", "Co", "Cn"};

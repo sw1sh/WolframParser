@@ -32,7 +32,7 @@ Block[{$ContextPath = {"System`"}},
 BeginPackage["Wolfram`Parser`StringPatterns`"]
 
 StringPatternProgram::usage = "StringPatternProgram[patt] gives the program of the string pattern patt, an object whose properties \
-are \"Pattern\", \"Program\", \"Ways\", \"Regex\", \"RegexLike\", \"RegexFinds\", \"Class\", \"Run\", \"IgnoredRestrictions\" and \"ClassCodes\"."
+are \"Pattern\", \"Program\", \"Ways\", \"Regex\", \"RegexLike\", \"RegexFinds\", \"Class\", \"Run\", \"IgnoredRestrictions\", \"Declined\" and \"ClassCodes\"."
 StringPatternMatches::usage = "StringPatternMatches[s, {prog1, prog2, ...}, mode] gives the matches of the programs progi in the \
 string s from the left, each {start, end, k, rules}: progk matched the characters after start up to end, rules binding its names to \
 their text. The mode is \"First\", \"Each\", \"Overlapping\" or \"All\"."
@@ -84,10 +84,11 @@ StringPatternProgram[a_Association]["ClassCodes"] := Replace[a["Class"], {{test_
 StringPatternProgram[a_Association]["Properties"] := Append[Keys[a], "ClassCodes"]
 StringPatternProgram[a_Association][property_String] := Lookup[a, property, Missing["NotAvailable", property]]
 
-StringPatternProgram[pattern : Except[_Association]] := Block[{$merged = False}, With[{p = stringProgram[pattern]},
+StringPatternProgram[pattern : Except[_Association]] := Block[{$merged = False, $declined = None}, With[{p = stringProgram[pattern]},
     StringPatternProgram[<|"Pattern" -> pattern, "Program" -> p, "Ways" -> If[$merged, Block[{$oneClass = False}, stringProgram[pattern]], p], "Regex" -> regexOf[pattern],
         "RegexLike" -> (p =!= None && regexLikeQ[p]), "RegexFinds" -> (p =!= None && regexFindsQ[p]),
-        "Class" -> programClass[p], "Run" -> programRun[p], "IgnoredRestrictions" -> ignoredRestrictions[pattern]|>]]]
+        "Class" -> programClass[p], "Run" -> programRun[p], "IgnoredRestrictions" -> ignoredRestrictions[pattern],
+        "Declined" -> If[p === None, Replace[$declined, None -> "a form no program has"], None]|>]]]
 
 StringPatternProgram /: MakeBoxes[program : StringPatternProgram[a_Association], form : (StandardForm | TraditionalForm)] :=
     BoxForm`ArrangeSummaryBox[
@@ -170,8 +171,9 @@ program[Verbatim[Condition][p_, test_]] := With[{inner = program[p]}, conditione
 (* Except takes a pattern of one character: Except[c, p] is p where a character that c does not
    match comes first [WL 15.0.0] *)
 program[Verbatim[Except][c_]] := With[{inner = Block[{$oneClass = True}, program[c]]},
-    If[singleCharacterQ[inner], characterClass[codeIn[{"Not", classSpec[inner]}]], Throw[None, program]]]
-program[Verbatim[Except][c_, p_]] := With[{inner = Block[{$oneClass = True}, program[c]]}, If[singleCharacterQ[inner], excluding[classTest[inner], program[p]], Throw[None, program]]]
+    If[singleCharacterQ[inner], characterClass[codeIn[{"Not", classSpec[inner]}]], declined["an Except of more than one character"]]]
+program[Verbatim[Except][c_, p_]] := With[{inner = Block[{$oneClass = True}, program[c]]},
+    If[singleCharacterQ[inner], excluding[classTest[inner], program[p]], declined["an Except of more than one character"]]]
 program[HoldPattern[CharacterRange[a_String, b_String]]] := characterClass[codeIn[{"Range", First[ToCharacterCode[a]], First[ToCharacterCode[b]]}]]
 program[DigitCharacter] := characterClass[codeIn[{"Named", "digit"}]]
 program[LetterCharacter] := characterClass[codeIn[{"Named", "letter"}]]
@@ -187,10 +189,15 @@ program[NumberString] := builtIn[NumberString, program[StringExpression[
 program[anchorName : StartOfString | EndOfString | StartOfLine | EndOfLine | WordBoundary] := anchor[anchorName]
 (* a RegularExpression's program, made by the regex front end, which is read when one is first met *)
 program[RegularExpression[re_String]] := (regexFrontEnd[]; regular[regexProgram[re]])
-program[_] := Throw[None, program]
+program[p_] := declined["a " <> ToString[Head[p], InputForm] <> " in a string pattern"]
+
+(* What has no program: a Throw of None, tagged program, what it is in $declined, which
+   StringPatternProgram gives as its "Declined". *)
+declined[what_String] := ($declined = what; Throw[None, program])
+$declined = None;
 
 (* a repeat of p, the longest first; an anchor is no pattern to repeat [WL 15.0.0] *)
-repeatOf[p_, min_, max_] := If[MatchQ[p, _anchor], Throw[None, program], repeat[p, min, max, True]]
+repeatOf[p_, min_, max_] := If[MatchQ[p, _anchor], declined["a repeat of an anchor"], repeat[p, min, max, True]]
 
 (* Alternatives of single characters are one class, so that a repeat of them goes along the string
    without backtracking. In the program of every way, the "Ways" of the object, they are one class
@@ -504,7 +511,7 @@ matched[repeat[p : _characterClass | literal[{_}], min_, max_, longest_], z_subj
 matched[repeat[p_, min_, max_, longest_], z_subject, i_Integer, b_, k_] := repeated[{p, min, max, longest}, z, 0, i, b, k]
 (* A repeat of a regex's backreference matches once where its group holds nothing, and where the
    group holds none, once if it may repeat no time, else not at all [WL 15.0.0] *)
-matched[repeat[p : captured[n_], min_, max_, longest_], z_subject, i_Integer, b_, k_] := With[{span = Lookup[b, group[n]]},
+matched[repeat[p : captured[n_, ___], min_, max_, longest_], z_subject, i_Integer, b_, k_] := With[{span = Lookup[b, group[n]]},
     Which[
         ! ListQ[span], If[min === 0, k[i, b], $noMatch],
         span[[1]] === span[[2]], k[i, b],
@@ -533,12 +540,16 @@ matched[regular[p_], z_subject, i_Integer, b_, k_] := matched[p, z, i, b, k]
    nothing; a lookaround's first way alone, the groups it set kept where it is positive; an atomic
    part's first way alone *)
 matched[capture[n_, p_], z_subject, i_Integer, b_, k_] := matched[p, z, i, b, Function[{j, c}, k[j, Append[c, group[n] -> {i, j}]]]]
-matched[captured[n_], subject[codes_, len_, _], i_Integer, b_, k_] := With[{span = Lookup[b, group[n]]},
-    If[ListQ[span] && i + span[[2]] - span[[1]] <= len && Take[codes, {i + 1, i + span[[2]] - span[[1]]}] === Take[codes, {span[[1]] + 1, span[[2]]}],
+matched[captured[n_, caseless_ : False], subject[codes_, len_, _], i_Integer, b_, k_] := With[{span = Lookup[b, group[n]]},
+    If[ListQ[span] && i + span[[2]] - span[[1]] <= len && sameText[Take[codes, {i + 1, i + span[[2]] - span[[1]]}], Take[codes, {span[[1]] + 1, span[[2]]}], caseless],
         k[i + span[[2]] - span[[1]], b],
         $noMatch
     ]
 ]
+(* two texts' codes the same, or of any case each of the same caseless set *)
+sameText[x_List, y_List, False] := x === y
+sameText[x_List, y_List, True] := x === y || Map[caselessFold, x] === Map[caselessFold, y]
+caselessFold[c_Integer] := First[caselessSet[c]]
 matched[lookahead[p_, positive_], z_subject, i_Integer, b_, k_] := With[{r = matched[p, z, i, b, Function[{j, c}, {c}]]},
     Which[r === $noMatch, If[positive, $noMatch, k[i, b]], positive, k[i, First[r]], True, $noMatch]]
 matched[lookbehind[branches_List, positive_], z_subject, i_Integer, b_, k_] := With[
@@ -730,7 +741,7 @@ vmBytecode[programs_List] := Lookup[$vmBytecodes, Key[programs],
 $vmBytecodes = <||>
 
 bytecodeOf[programs_List] := Block[
-    {$ins = <||>, $pc = 0, $pool = {}, $specs = {}, $specIndex = <||>, $tests = {}, $conditions = {}, $registers = 0, $nameIndex = <||>,
+    {$ins = <||>, $pc = 0, $pool = {}, $specs = {}, $specIndex = <||>, $tests = {}, $conditions = {}, $registers = 0, $nameIndex = <||>, $foldTable = 0,
      table = {}, allNames = {}, maxNames = 0, registers = 1},
     Do[
         With[{p = programs[[k]], names = programNames[programs[[k]]]},
@@ -775,7 +786,7 @@ generate[alternatives[parts_List]] := Module[{jumps = {}, split},
     Scan[vmOperand[#, 1, $pc] &, jumps]]
 generate[repeat[p : _characterClass | literal[{_}], min_, max_, longest_]] :=
     vmEmit[4, vmClassIndex[classSpec[p]], min, If[max === Infinity, -1, max], Boole[longest]]
-generate[repeat[p : captured[n_], min_, max_, longest_]] := With[{check = vmEmit[25, vmNameBase[group[n]], min]},
+generate[repeat[p : captured[n_, ___], min_, max_, longest_]] := With[{check = vmEmit[25, vmNameBase[group[n]], min]},
     repeatCode[p, min, max, longest]; vmOperand[check, 3, $pc]]
 generate[repeat[p_, min_, max_, longest_]] := repeatCode[p, min, max, longest]
 repeatCode[p_, min_, max_, longest_] := Module[{e = vmPoolAdd[ConstantArray[0, 11]], r = $registers, loop, iteration, done, poison, names = Keys[programNames[p]]},
@@ -795,6 +806,12 @@ generate[anchor[name_]] := vmEmit[9, Replace[name, {StartOfString -> 1, EndOfStr
 generate[regular[p_]] := generate[p]
 generate[capture[n_, p_]] := With[{base = vmNameBase[group[n]]}, vmEmit[22, base]; generate[p]; vmEmit[11, base]]
 generate[captured[n_]] := vmEmit[12, vmNameBase[group[n]]]
+generate[captured[n_, True]] := vmEmit[12, vmNameBase[group[n]], 0, 1, foldTable[]]
+
+(* the caseless sets in the pool, made once for the programs, {count, then each code and the first
+   of its set}, in order of the codes; and those pairs *)
+foldTable[] := If[$foldTable === 0, $foldTable = vmPoolAdd[Prepend[Flatten[caselessFolds[]], Length[caselessFolds[]]]], $foldTable]
+caselessFolds[] := caselessFolds[] = SortBy[Catenate[Map[Function[set, Map[{#, First[set]} &, set]], caselessSets[]]], First]
 (* A regex's assertion or atomic part: its choices above a barrier that the matcher cuts back to
    where the part holds, a register keeping the depth of the choices below; kinds 1 to 5 positive
    and negative lookahead, positive and negative lookbehind of len characters, and atomic. A

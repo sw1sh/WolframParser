@@ -36,6 +36,7 @@ RelatedGuides: [WolframParser]
 | `"RegexFinds"` | whether a regex finds a match wherever the program has one |
 | `"Class"` | `{test, min, max}` for a pattern of one character class or a repeat of one, else [None]() |
 | `"IgnoredRestrictions"` | the later occurrences <code>[HoldForm]()[*x* : *p*]</code> of a name on a match's way whose pattern *p*, not a blank, the matcher ignores, as Wolfram 15 warns of them with `StringExpression::cond` |
+| `"Declined"` | [None]() where the pattern has a program, else what it has that no program has, such as `"recursion"` or `"a lookbehind of no fixed length"`, or `"a regex Wolfram 15 does not take"` |
 | `"Run"` | `{test, min}` for a repeat of one character class from *min* times on, as many as there are, else [None]() |
 | `"ClassCodes"` | for a pattern of one character class, its codes below 65536 as a packed table of 1 and 0 by code + 1, else [None]() |
 | `"Properties"` | the properties |
@@ -68,7 +69,7 @@ The properties of a program:
 prog["Properties"]
 ```
 
-<!-- => {"Pattern", "Program", "Ways", "Regex", "RegexLike", "RegexFinds", "Class", "Run", "IgnoredRestrictions", "ClassCodes"} -->
+<!-- => {"Pattern", "Program", "Ways", "Regex", "RegexLike", "RegexFinds", "Class", "Run", "IgnoredRestrictions", "Declined", "ClassCodes"} -->
 
 A regex takes the longest of its alternatives, and a pattern the first, so a regex does not match as these alternatives do:
 
@@ -149,6 +150,22 @@ StringPatternProgram[RegularExpression["\\((?R)?\\)"]]["Program"]
 ```
 
 <!-- => None -->
+
+What it declines:
+
+```wl
+StringPatternProgram[RegularExpression["\\((?R)?\\)"]]["Declined"]
+```
+
+<!-- => "recursion" -->
+
+A backreference in a caseless regex matches its group's text in any case:
+
+```wl
+StringTake["aAbB", {#[[1]] + 1, #[[2]]}] & /@ StringPatternMatches["aAbB", {StringPatternProgram[RegularExpression["(?i)(\\w)\\1"]]}, "Each"]
+```
+
+<!-- => {"aA", "bB"} -->
 
 ## Properties and Relations
 

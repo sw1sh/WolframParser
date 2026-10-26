@@ -26,7 +26,7 @@ Begin["Wolfram`Parser`StringPatterns`Private`"]
    Instructions, a to d their operands:
      1 CHAR c        2 STR off len      3 CLASS k         4 RUN k min max greedy
      5 SPLIT a b     6 JMP a            7 FAIL            8 MATCH
-     9 ANCHOR kind wordclass            10 NOPEN name skip 11 NCLOSE name     12 BREF name
+     9 ANCHOR kind wordclass            10 NOPEN name skip 11 NCLOSE name     12 BREF name 0 caseless table
      13 REPSTART e   14 LOOP e          15 ITER e         16 ITEREND e      17 DONE e
      18 EXCL k       19 TSTART reg      20 TEND reg k     21 COND index     22 GOPEN group
      23 AOPEN kind reg len past          24 ACLOSE reg      25 BREFREP group min past
@@ -38,7 +38,9 @@ Begin["Wolfram`Parser`StringPatterns`Private`"]
    x characters giving one back down to y, 3 a shortest run of x characters taking one more up to
    y. The trail undoes the registers set since a frame, {register, value} pairs. Each test of a class
    is a call of vmMember. A group of a regex is three registers as a name is, GOPEN opening it each
-   time, NCLOSE closing it, BREF its backreference; an anchor's kind 1 to 7 is StartOfString,
+   time, NCLOSE closing it, BREF its backreference, of any case where caseless is 1: two characters
+   the same where each is the first of its caseless set by the table in the pool, {count, then
+   each code and that first, in order of the codes}, a search of it; an anchor's kind 1 to 7 is StartOfString,
    EndOfString, StartOfLine, EndOfLine, WordBoundary, the end or before a newline that ends the
    text, and no word boundary. An assertion or atomic part pushes a barrier, a choice frame of kind 4
    {4, past, sp, trail, kind, 0}, and keeps the depth below it in its register: ACLOSE cuts the
@@ -74,7 +76,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                 pc = 0, sp = 0, start = 0, top = 0, ttop = 0, regs, stack, trail, out, outLen = 3, nRec = 0,
                 op = 0, a = 0, b = 0, c = 0, d = 0, j = 0, cc = 0, inside = 0, ok = 0, len = 0, e = 0, r = 0,
                 cnt = 0, mn = 0, mx = 0, kind = 0, rpc = 0, rsp = 0, rtt = 0, x = 0, y = 0, cls = 0, grown, q = 0, before = 0, after = 0,
-                nNames = 0, entry = 0, firstClass = 0, stateLen = 0, base = 0, masks},
+                nNames = 0, entry = 0, firstClass = 0, stateLen = 0, base = 0, masks, u = 0, w = 0, fold = 0, flo = 0, fhi = 0, fmid = 0},
             (* the bit of each of 32, a class's test of a code its word's and its bit's: Compile takes a
                shift by a variable for a real *)
             masks = Table[2^j, {j, 0, 31}];
@@ -176,7 +178,29 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                         True,
                                             len = regs[[a + 2]] - regs[[a + 1]];
                                             If[ sp + len <= n,
-                                                j = 0; While[j < len && vText[[sp + j + 1]] == vText[[regs[[a + 1]] + j + 1]], j++];
+                                                j = 0; ok = 1;
+                                                While[ j < len && ok == 1,
+                                                    u = vText[[sp + j + 1]]; w = vText[[regs[[a + 1]] + j + 1]];
+                                                    If[ u != w,
+                                                        If[ op == 12 && c == 1,
+                                                            (* of any case: each character the first of its caseless set, itself where it has none *)
+                                                            fold = u; flo = 1; fhi = vPool[[d]];
+                                                            While[ flo <= fhi,
+                                                                fmid = Quotient[flo + fhi, 2];
+                                                                Which[
+                                                                    vPool[[d + 2 fmid - 1]] < u, flo = fmid + 1,
+                                                                    vPool[[d + 2 fmid - 1]] > u, fhi = fmid - 1,
+                                                                    True, fold = vPool[[d + 2 fmid]]; flo = fhi + 1]];
+                                                            u = fold; fold = w; flo = 1; fhi = vPool[[d]];
+                                                            While[ flo <= fhi,
+                                                                fmid = Quotient[flo + fhi, 2];
+                                                                Which[
+                                                                    vPool[[d + 2 fmid - 1]] < w, flo = fmid + 1,
+                                                                    vPool[[d + 2 fmid - 1]] > w, fhi = fmid - 1,
+                                                                    True, fold = vPool[[d + 2 fmid]]; flo = fhi + 1]];
+                                                            If[u != fold, ok = 0],
+                                                            ok = 0]];
+                                                    If[ok == 1, j++]];
                                                 If[j == len, sp = sp + len; pc = If[op == 10, b, pc + 1], fail = 1],
                                                 fail = 1]],
                                 op == 11,
