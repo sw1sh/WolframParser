@@ -49,8 +49,9 @@ count of the Nulls a comma leaves, is 0 in a program. An empty `codes`, for the 
 `{}`, which Wolfram 15 does not pack.
 
 `fastProgram` makes the program in one typed call: the lexer, the parser, the lines and
-`fastWhole`, each once, with nothing between them. It takes the codes and the tables
-`$fastProgramTables` lists, packed arrays of integers all, and gives one packed array:
+`fastWhole`, each once, with nothing between them. It takes the codes with three zeros after
+them, as `paddedCodes` gives them, and the tables `$fastProgramTables` lists, packed arrays of
+integers all, and gives one packed array:
 
 | It gives | Where |
 |---|---|

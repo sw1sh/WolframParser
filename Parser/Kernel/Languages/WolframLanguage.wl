@@ -725,7 +725,7 @@ linearRow[pieces_List] := linearPlain[linearFoldBrackets[Catenate[Map[If[#[[1]] 
 
 (* the tokens of a row's text, {"Tok", text, kind, the whitespace before it}, by the lexer *)
 linearTextTokens[t_String] := Module[{codes = ToCharacterCode[t], lexed},
-    lexed = fastLexFunction[Join[codes, {0, 0, 0}], $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];
+    lexed = fastLexFunction[paddedCodes[codes], $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];
     If[ lexed[[1]] =!= 0,
         If[StringTrim[t] === "", {}, {{"Tok", StringTrim[t], 1, If[StringStartsQ[t, " "], " ", ""]}}],
         Table[With[{a = lexed[[5 j]], before = If[j === 1, 1, lexed[[5 (j - 1) + 1]]]},
