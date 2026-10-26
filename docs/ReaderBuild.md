@@ -59,13 +59,15 @@ integers all, and gives one packed array:
 | `{1}` | `WolframLanguageProgram` gives `None` |
 | `{2}` | the stages, called in turn, read it: a line continuation, a token that is two, as in `?a*=b`, or a long name in a string |
 
-`flatProgram` calls it where a compiler of typed code gave it a definition, as a kernel's does;
-Wolfram 15 calls the stages in turn. A kernel's builder takes the program with the fewest
-evaluation steps from `` Wolfram`Parser`Languages`WolframLanguage`Private`flatProgram[s] ``:
-`{padded, flat}`, the codes with three zeros after them and `fastProgram`'s `{0, lp, prog, parts}`,
-two packed arrays, or `None`. A leaf's text is `padded[[start ;; end - 1]]`, `prog` is
-`flat[[3 ;; 2 + lp]]` and `parts` is `flat[[3 + lp ;;]]`. `WolframLanguageProgram` gives the same
-program as its three arrays.
+`fastProgramText` takes the source string itself, makes its codes and their padding in typed code,
+calls `fastProgram`, and gives `{0, lp, prog, parts, codes}` in one packed array, or `{1}` or
+`{2}` as `fastProgram` does. `flatProgram` calls it where a compiler of typed code gave it a
+definition, as a kernel's does; Wolfram 15 calls the stages in turn. A kernel's builder takes the
+program with the fewest evaluation steps from
+`` Wolfram`Parser`Languages`WolframLanguage`Private`flatProgram[s] ``: that one array, or `None`.
+`prog` is `flat[[3 ;; 2 + lp]]`, `parts` is the `3 + 4 m + 4 r` integers after it, for its `m`
+leaves and `r` rows, and the codes are the rest: a leaf's text is the codes from its start to the
+one before its end. `WolframLanguageProgram` gives the same program as its three arrays.
 
 A builder reads the rows in turn: a Null's row gives `HoldComplete[Null]`, and a statement's builds
 its instructions over its leaves, the statement's names made then, in the contexts the statements

@@ -1343,9 +1343,38 @@ $fastProgramDeclaration = FunctionDeclaration[fastProgram,
             If[status == 0 && flat[[3 + flat[[2]]]] > 0, status = 1];
             If[status == 0, flat, out = Table[0, {1}]; out[[1]] = status; out]]]]];
 
-(* the typed program run here: the definition a compiler of typed code gave fastProgram, where one
-   did; else None, and WolframLanguageProgram reads by the stages, each compiled on its own *)
-fastProgramFunction := fastProgramFunction = If[DownValues[fastProgram] =!= {} || OwnValues[fastProgram] =!= {}, fastProgram, None]
+(* The program of a source string, typed code that reads its characters' codes, pads them with three
+   zeros and calls fastProgram: the source and the tables fastProgram takes after the codes -> {0,
+   the program's length, the program, the parts, then the n codes of the source}, all in one array,
+   or fastProgram's {1} or {2}. *)
+$fastProgramTextDeclaration = FunctionDeclaration[fastProgramText,
+    Typed[{"String", "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} ->
+        "PackedArray"::["MachineInteger", 1]] @
+    Function[{ptText, ptClasses, ptOp1, ptOp2, ptOp3, ptLongOps, ptSpecial, ptKindSpecs, ptOpSpecs, ptLedParams, ptSpecs, ptPrefix,
+            ptGroups, ptIntegrals, ptSpecialOps, ptHeads, ptKeys, ptNewlineNames},
+        Native`UncheckedBlock[Module[{codes, n = 0, padded, flat, out, m = 0, i = 1},
+            codes = ToCharacterCode[ptText];
+            n = Length[codes];
+            padded = Native`UncheckedArray[0, n + 3];
+            While[i <= n, padded[[i]] = codes[[i]]; i++];
+            padded[[n + 1]] = 0; padded[[n + 2]] = 0; padded[[n + 3]] = 0;
+            flat = fastProgram[padded, ptClasses, ptOp1, ptOp2, ptOp3, ptLongOps, ptSpecial, ptKindSpecs, ptOpSpecs, ptLedParams, ptSpecs, ptPrefix,
+                ptGroups, ptIntegrals, ptSpecialOps, ptHeads, ptKeys, ptNewlineNames];
+            If[ flat[[1]] != 0, flat,
+                m = Length[flat];
+                out = Native`UncheckedArray[0, m + n];
+                i = 1; While[i <= m, out[[i]] = flat[[i]]; i++];
+                i = 1; While[i <= n, out[[m + i]] = codes[[i]]; i++];
+                out]]]]];
+
+(* the typed program run here: the definition a compiler of typed code gave fastProgramText, where
+   one did; else None, and flatProgram reads by the stages, each compiled on its own *)
+fastProgramTextFunction := fastProgramTextFunction = If[DownValues[fastProgramText] =!= {} || OwnValues[fastProgramText] =!= {}, fastProgramText, None]
 
 (* the tables fastProgram takes after the codes, made once *)
 $fastProgramTables := $fastProgramTables = {$fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial, $fastKindSpecIndex, $fastOpSpecIndex,
@@ -1798,17 +1827,19 @@ WolframLanguageHeldNext[s_String, pos_Integer] := Block[{j = heldNextState[s], s
    WolframLanguageHeldNext to read. The parser reads the tokens alone where none is two; the
    only warnings of a source read whole are the Nulls a comma leaves, which the program marks,
    and a string's escapes. Nothing is kept for a call after it. *)
-WolframLanguageProgram[s_String] := Replace[flatProgram[s], {padded_, r_} :> {Drop[padded, -3], r[[3 ;; 2 + r[[2]]]], Drop[r, 2 + r[[2]]]}]
+WolframLanguageProgram[s_String] := Replace[flatProgram[s], r_List :> With[{lp = r[[2]]}, With[{np = 3 + 4 r[[lp + 4]] + 4 r[[lp + 5]]},
+    {r[[3 + lp + np ;;]], r[[3 ;; 2 + lp]], r[[3 + lp ;; 2 + lp + np]]}]]]
 
-(* The program of a source in two packed arrays, as a kernel's builder takes it with the fewest
-   steps: {the codes and three zeros after them, {0, the program's length, the program, then the
-   parts}}, or None. The typed program makes it in one call where a compiler of typed code gave it
-   a definition; else, and for the sources it leaves to them, the typed stages each in turn do. *)
-flatProgram[s_String] := flatOf[fastProgramFunction, s, ToCharacterCode[s <> "\.00\.00\.00"]]
-flatOf[None, s_String, _] := stagesProgram[s]
-flatOf[f_, s_String, padded_List] := typedFlat[f[padded, Sequence @@ $fastProgramTables], padded, s]
-typedFlat[r_List, padded_List, s_String] := Switch[r[[1]], 0, {padded, r}, 1, None, _, stagesProgram[s]]
-typedFlat[_, _, s_String] := stagesProgram[s]
+(* The program of a source in one packed array, as a kernel's builder takes it with the fewest
+   steps: {0, the program's length, the program, the parts, then the source's codes}, or None, the
+   parts of length 3 + 4 m + 4 r for m leaves and r rows. The typed program makes it in one call
+   where a compiler of typed code gave it a definition; else, and for the sources it leaves to them,
+   the typed stages each in turn do. *)
+flatProgram[s_String] := flatOf[fastProgramTextFunction, s]
+flatOf[None, s_String] := stagesProgram[s]
+flatOf[f_, s_String] := typedFlat[f[s, Sequence @@ $fastProgramTables], s]
+typedFlat[r_List, s_String] := Switch[r[[1]], 0, r, 1, None, _, stagesProgram[s]]
+typedFlat[_, s_String] := stagesProgram[s]
 
 (* the program of a source by the typed stages, each called in turn, as flatProgram gives it *)
 stagesProgram[s_String] := Block[{codes = ToCharacterCode[s], escapes, padded, lexed, prog, flat},
@@ -1822,7 +1853,7 @@ stagesProgram[s_String] := Block[{codes = ToCharacterCode[s], escapes, padded, l
             If[ lexed[[1]] =!= 0 || prog[[1]] =!= 0, None,
                 flat = fastWholeFunction[prog, lexed, fastLinesFunction[padded, lexed, prog, ConstantArray[0, lexed[[2]] + 1], $fastClasses, $fastNewlineNames,
                     $fastNoKept, Developer`ToPackedArray[{prog[[2]], Length[codes] + 1, 0, 1, 0, 0, Length[codes], 0, 0}]]];
-                If[flat[[3 + flat[[2]]]] > 0 || escapes && escapeWarnedQ[codes, lexed], None, {padded, flat}]]]]]
+                If[flat[[3 + flat[[2]]]] > 0 || escapes && escapeWarnedQ[codes, lexed], None, Developer`ToPackedArray[Join[flat, codes]]]]]]]
 
 (* whether a string of a lexed source read whole warns of an escape *)
 escapeWarnedQ[codes_List, lexed_List] := warningsAt[codes, lexed, 1, lexed[[2]], 0, Flatten[Position[lexed[[3 ;; 2 + 5 lexed[[2]] ;; 5]], $tkString]]] =!= {}

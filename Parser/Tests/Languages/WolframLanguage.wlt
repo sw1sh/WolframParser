@@ -665,9 +665,9 @@ VerificationTest[
 VerificationTest[
     With[{flat = Wolfram`Parser`Languages`WolframLanguage`Private`flatProgram, s = "x = 1\n\ny = x + 1"},
         With[{f = flat[s], p = WolframLanguageProgram[s]},
-            {Developer`PackedArrayQ /@ f, f[[1]] === Join[p[[1]], {0, 0, 0}], f[[2]] === Join[{0, Length[p[[2]]]}, p[[2]], p[[3]]], flat[""], flat["f[1,]"]}]],
-    {{True, True}, True, True, {{0, 0, 0}, {0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0}}, None},
-    TestID -> "wl program: flat, the padded codes and one array of the program and its parts"]
+            {Developer`PackedArrayQ[f], f === Join[{0, Length[p[[2]]]}, p[[2]], p[[3]], p[[1]]], flat[""], flat["f[1,]"]}]],
+    {True, True, {0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0}, None},
+    TestID -> "wl program: flat, the program, its parts and the source's codes in one array"]
 VerificationTest[
     Developer`PackedArrayQ /@ WolframLanguageProgram["f[x_] := x^2\n\ng[1]"],
     {True, True, True},
