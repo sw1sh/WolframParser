@@ -99,9 +99,11 @@ $fastLongNameOps := $fastLongNameOps = Join[
     <|"Not" -> $fastNotId|>]
 
 (* the tables of the lexer, packed: the 2-character operators by the codes
-   of both, {c1, c2, c3, operator} for each of 3, and for each long name
+   of both, each 4096 times 1 more where a 3-character operator begins with
+   the two, {c1, c2, c3, operator} for each of 3, and for each long name
    that is an operator its length, its codes and the operator *)
-$fastOp2Flat := $fastOp2Flat = Developer`ToPackedArray[Flatten[$fastOp2]]
+$fastOp2Flat := $fastOp2Flat = Developer`ToPackedArray[Flatten[$fastOp2 + 4096 Module[{t = ConstantArray[0, {128, 128}]},
+    Scan[(t[[#[[1]] + 1, #[[2]] + 1]] = 1) &, Keys[$fastOp3]]; t]]]
 $fastOp3Table = Developer`ToPackedArray[Flatten[KeyValueMap[Append[#1, #2] &, $fastOp3]]]
 $fastLongOpTable := $fastLongOpTable = Developer`ToPackedArray[Flatten[KeyValueMap[Join[{StringLength[#1]}, ToCharacterCode[#1], {#2}] &, $fastLongNameOps]]]
 $fastOpenAssociation = fastOp["<|"]; $fastCloseAssociation = fastOp["|>"]
@@ -147,36 +149,21 @@ fastFailure[position_Integer, incomplete_] := Failure["ParseError", <|
    last token, the one that stops there, ends; 3: the source ends in a
    string, a comment or a linear syntax's \( not closed. Whitespace and
    comments are in no token; after << and >> the file is one token, and
-   so is a \( to its \), the boxes of linear syntax, a \! before it too. *)
+   so is a \( to its \), the boxes of linear syntax, a \! before it too.
+   Its loop is kept small, which a compiler of typed code makes fast: a
+   comment, a quoted string or file, a path, a number, a slot, a blank's
+   head and linear syntax are each read by a typed function of its own,
+   and a long name by lexLongName where the loop meets it, the last kept. *)
 $fastLexDeclaration = FunctionDeclaration[fastLex,
     Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
         "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
         "PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
     Function[{lexCodes, lexClasses, lexOp1, lexOp2, lexOp3, lexLongOps, lexSpecial},
-        Module[{n = Length[lexCodes] - 3, out, lnEnd, lnOp, k = 0, i = 1, j = 0, c = 0, c2 = 0, cl = 0, nl = 0, kind = 0, op = 0, file = 0,
-                status = 0, done = 0, scanning = 0, depth = 0, m = 0, count = 0, a = 0, len = 0, match = 0, q = 0, base = 0, real = 0, start = 0,
-                tick = 0, accuracy = 0},
+        Module[{n = Length[lexCodes] - 3, out, k = 0, i = 1, j = 0, c = 0, c2 = 0, cl = 0, nl = 0, kind = 0, op = 0, file = 0,
+                status = 0, done = 0, scanning = 0, m = 0, a = 0, len = 0, base = 0, start = 0, tick = 0, r = 0, e2 = 0, lnAt = 0, lnVal = 0,
+                spOpen = lexSpecial[[1]], spClose = lexSpecial[[2]], spGet = lexSpecial[[3]], spPut = lexSpecial[[4]], spPutAppend = lexSpecial[[5]],
+                spUnset = lexSpecial[[6]], spSet = lexSpecial[[7]], spSpace = lexSpecial[[8]], spComma = lexSpecial[[9]], spNewline = lexSpecial[[10]]},
             out = Table[0, {5 n + 7}];
-            lnEnd = Table[0, {n + 1}];
-            lnOp = Table[0, {n + 1}];
-            (* each \[Name]: just past it, and the operator it is, if one *)
-            While[i < n,
-                If[ lexCodes[[i]] == 92 && lexCodes[[i + 1]] == 91,
-                    j = i + 2;
-                    While[j <= n && ((48 <= lexCodes[[j]] <= 57) || (65 <= lexCodes[[j]] <= 90) || (97 <= lexCodes[[j]] <= 122)), j++];
-                    If[ j > i + 2 && j <= n && lexCodes[[j]] == 93,
-                        lnEnd[[i]] = j + 1;
-                        a = 1; op = 0;
-                        While[op == 0 && a <= Length[lexLongOps],
-                            len = lexLongOps[[a]];
-                            If[ len == j - i - 2,
-                                match = 1; q = 1;
-                                While[match == 1 && q <= len, If[lexLongOps[[a + q]] != lexCodes[[i + 1 + q]], match = 0]; q++];
-                                If[match == 1, op = lexLongOps[[a + len + 1]]]];
-                            a += len + 2];
-                        lnOp[[i]] = op]];
-                i++];
-            i = 1;
             While[ done == 0,
                 (* whitespace, newlines and comments *)
                 nl = 0; scanning = 1;
@@ -185,51 +172,37 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                     Which[
                         cl == 3, i++,
                         cl == 4, nl = 1; i++,
-                        c == 92 && lnEnd[[i]] > 0 && lnOp[[i]] == lexSpecial[[8]], i = lnEnd[[i]],
-                        c == 92 && lnEnd[[i]] > 0 && lnOp[[i]] == lexSpecial[[10]], nl = 1; i = lnEnd[[i]],
+                        c == 92,
+                            If[lnAt != i, lnAt = i; lnVal = lexLongName[lexCodes, lexLongOps, i, n]];
+                            Which[
+                                lnVal > 0 && Mod[lnVal, 8192] - 1 == spSpace, i = Quotient[lnVal, 8192],
+                                lnVal > 0 && Mod[lnVal, 8192] - 1 == spNewline, nl = 1; i = Quotient[lnVal, 8192],
+                                True, scanning = 0],
                         c == 40 && i < n && lexCodes[[i + 1]] == 42,
-                            depth = 1; j = i + 2;
-                            While[ depth > 0,
-                                Which[
-                                    j + 1 > n, status = 3; depth = 0,
-                                    lexCodes[[j]] == 40 && lexCodes[[j + 1]] == 42, depth++; j += 2,
-                                    lexCodes[[j]] == 42 && lexCodes[[j + 1]] == 41, depth--; j += 2,
-                                    True, j++]];
-                            i = j,
+                            r = lexComment[lexCodes, i, n];
+                            If[Mod[r, 2] == 1, status = 3];
+                            i = Quotient[r, 2],
                         True, scanning = 0]];
                 k++; base = 2 + 5 (k - 1);
                 out[[base + 3]] = i; out[[base + 5]] = nl;
                 If[ status != 0 || i > n,
                     out[[base + 1]] = 0; out[[base + 4]] = i; done = 1,
                     c = lexCodes[[i]]; cl = If[c > 65535, 5, lexClasses[[c + 1]]]; op = 0; kind = 0; j = i + 1; start = i;
+                    If[c == 92 && lnAt != i, lnAt = i; lnVal = lexLongName[lexCodes, lexLongOps, i, n]];
                     Which[
                         (* the file of << or >>: a string, or the characters of a path *)
-                        file == 1 && c == 34,
-                            scanning = 1;
-                            While[ scanning == 1,
-                                If[ j > n, status = 3; scanning = 0,
-                                    c2 = lexCodes[[j]];
-                                    Which[c2 == 34, j++; scanning = 0, c2 == 92, j += 2, True, j++]]];
-                            kind = 8,
                         file == 1,
-                            j = i; scanning = 1;
-                            While[ scanning == 1 && j <= n,
-                                c2 = lexCodes[[j]]; cl = If[c2 > 65535, 5, lexClasses[[c2 + 1]]];
-                                Which[
-                                    cl == 1 || cl == 2 || c2 == 95 || c2 == 46 || c2 == 47 || c2 == 126 || c2 == 58 || c2 == 33 || c2 == 42 || c2 == 63 || c2 == 45, j++,
-                                    c2 == 92 && j + 1 <= n && lexCodes[[j + 1]] == 91, If[lnEnd[[j]] > 0, j = lnEnd[[j]], status = 1; scanning = 0],
-                                    c2 == 92, j++,
-                                    True, scanning = 0]];
-                            If[j == i, status = 1];
-                            kind = 8,
+                            r = lexFile[lexCodes, lexClasses, lexLongOps, i, n]; j = Quotient[r, 4]; status = Mod[r, 4]; kind = 8,
                         (* a name, a blank after it *)
-                        cl == 1 || cl == 5 || (c == 92 && lnEnd[[i]] > 0 && lnOp[[i]] == -1),
+                        cl == 1 || cl == 5 || (c == 92 && lnVal > 0 && Mod[lnVal, 8192] == 0),
                             j = i; scanning = 1;
                             While[ scanning == 1 && j <= n,
                                 c2 = lexCodes[[j]]; cl = If[c2 > 65535, 5, lexClasses[[c2 + 1]]];
                                 Which[
                                     cl == 1 || cl == 5 || (cl == 2 && j > start), j++,
-                                    c2 == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == -1, j = lnEnd[[j]],
+                                    c2 == 92,
+                                        If[lnAt != j, lnAt = j; lnVal = lexLongName[lexCodes, lexLongOps, j, n]];
+                                        If[lnVal > 0 && Mod[lnVal, 8192] == 0, j = Quotient[lnVal, 8192], scanning = 0],
                                     True, scanning = 0]];
                             (* a context mark that ends the name, or comes before a digit or another
                                mark, makes no name: reading stops at the name *)
@@ -244,84 +217,15 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                         c == 95, j = i; kind = 2,
                         (* a number *)
                         cl == 2 || (c == 46 && i < n && 48 <= lexCodes[[i + 1]] <= 57),
-                            If[ c == 46,
-                                j = i + 1; While[j <= n && 48 <= lexCodes[[j]] <= 57, j++],
-                                j = i; While[j <= n && 48 <= lexCodes[[j]] <= 57, j++];
-                                Which[
-                                    j + 2 <= n && lexCodes[[j]] == 94 && lexCodes[[j + 1]] == 94 &&
-                                        ((48 <= lexCodes[[j + 2]] <= 57) || (65 <= lexCodes[[j + 2]] <= 90) || (97 <= lexCodes[[j + 2]] <= 122)),
-                                        (* the base, 2 to 36, and each digit after ^^ less than it, else no number:
-                                           reading stops past it *)
-                                        a = 0; m = i;
-                                        While[m < j, If[a <= 36, a = 10 a + lexCodes[[m]] - 48]; m++];
-                                        j += 2;
-                                        While[j <= n && ((48 <= lexCodes[[j]] <= 57) || (65 <= lexCodes[[j]] <= 90) || (97 <= lexCodes[[j]] <= 122)), j++];
-                                        If[ j <= n && lexCodes[[j]] == 46,
-                                            j++; While[j <= n && ((48 <= lexCodes[[j]] <= 57) || (65 <= lexCodes[[j]] <= 90) || (97 <= lexCodes[[j]] <= 122)), j++]];
-                                        If[a < 2 || a > 36, status = 1];
-                                        m = i;
-                                        While[m < j && lexCodes[[m]] != 94, m++];
-                                        m += 2;
-                                        While[ m < j && status == 0,
-                                            c2 = lexCodes[[m]];
-                                            If[ c2 != 46 && If[c2 <= 57, c2 - 48, If[c2 <= 90, c2 - 55, c2 - 87]] >= a, status = 1];
-                                            m++],
-                                    j <= n && lexCodes[[j]] == 46 && ! (j + 1 <= n && lexCodes[[j + 1]] == 46),
-                                        j++; While[j <= n && 48 <= lexCodes[[j]] <= 57, j++],
-                                    True, j = j]];
-                            (* a precision or an accuracy, which has its digits: a `` before none is
-                               no number's, and reading stops at it *)
-                            If[ j <= n && lexCodes[[j]] == 96,
-                                j++; accuracy = 0;
-                                If[j <= n && lexCodes[[j]] == 96, j++; accuracy = 1];
-                                m = If[j <= n && (lexCodes[[j]] == 43 || lexCodes[[j]] == 45), j + 1, j];
-                                Which[
-                                    m <= n && 48 <= lexCodes[[m]] <= 57,
-                                        While[m <= n && 48 <= lexCodes[[m]] <= 57, m++];
-                                        If[m <= n && lexCodes[[m]] == 46, m++; While[m <= n && 48 <= lexCodes[[m]] <= 57, m++]];
-                                        j = m,
-                                    m + 1 <= n && lexCodes[[m]] == 46 && 48 <= lexCodes[[m + 1]] <= 57,
-                                        m++; While[m <= n && 48 <= lexCodes[[m]] <= 57, m++]; j = m,
-                                    accuracy == 1, j -= 2,
-                                    True, j = j]];
-                            (* a power of the base *)
-                            If[ j + 1 <= n && lexCodes[[j]] == 42 && lexCodes[[j + 1]] == 94,
-                                m = If[j + 2 <= n && (lexCodes[[j + 2]] == 43 || lexCodes[[j + 2]] == 45), j + 3, j + 2];
-                                If[m <= n && 48 <= lexCodes[[m]] <= 57, While[m <= n && 48 <= lexCodes[[m]] <= 57, m++]; j = m]];
-                            real = 0; m = i;
-                            While[m < j, If[lexCodes[[m]] == 46 || lexCodes[[m]] == 96, real = 1]; m++];
-                            kind = If[real == 1, 4, 3],
+                            r = lexNumber[lexCodes, i, n]; j = Quotient[r, 4]; kind = 3 + Quotient[Mod[r, 4], 2]; status = Mod[r, 2],
                         (* a string, a slot of one *)
                         c == 34 || (c == 35 && i < n && lexCodes[[i + 1]] == 34),
-                            j = If[c == 35, i + 2, i + 1]; scanning = 1;
-                            While[ scanning == 1,
-                                If[ j > n, status = 3; scanning = 0,
-                                    c2 = lexCodes[[j]];
-                                    Which[c2 == 34, j++; scanning = 0, c2 == 92, j += 2, True, j++]]];
+                            r = lexQuoted[lexCodes, If[c == 35, i + 2, i + 1], n]; j = Quotient[r, 2]; If[Mod[r, 2] == 1, status = 3];
                             kind = If[c == 35, 6, 5],
                         (* a slot: ## and its digits, or # and its digits or a name, read as a name's
                            token reads one, a name malformed making no slot *)
                         c == 35,
-                            Which[
-                                j <= n && lexCodes[[j]] == 35, j++; While[j <= n && 48 <= lexCodes[[j]] <= 57, j++],
-                                j <= n && 48 <= lexCodes[[j]] <= 57, While[j <= n && 48 <= lexCodes[[j]] <= 57, j++],
-                                j <= n && (lexCodes[[j]] > 65535 || lexClasses[[Min[lexCodes[[j]], 65535] + 1]] == 1 || lexClasses[[Min[lexCodes[[j]], 65535] + 1]] == 5 ||
-                                        (lexCodes[[j]] == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == -1)),
-                                    m = j; scanning = 1;
-                                    While[ scanning == 1 && j <= n,
-                                        c2 = lexCodes[[j]]; cl = If[c2 > 65535, 5, lexClasses[[c2 + 1]]];
-                                        Which[
-                                            cl == 1 || cl == 5 || (cl == 2 && j > m), j++,
-                                            c2 == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == -1, j = lnEnd[[j]],
-                                            True, scanning = 0]];
-                                    tick = 0;
-                                    While[ m < j && status == 0,
-                                        If[lexCodes[[m]] == 96, If[tick == 1, status = 1, tick = 1], If[tick == 1 && 48 <= lexCodes[[m]] <= 57, status = 1]; tick = 0];
-                                        m++];
-                                    If[tick == 1, status = 1];
-                                    If[status == 1, j = i],
-                                True, j = j];
-                            kind = 6,
+                            r = lexSlot[lexCodes, lexClasses, lexLongOps, i, n]; j = Quotient[r, 2]; status = Mod[r, 2]; kind = 6,
                         c == 37,
                             While[j <= n && lexCodes[[j]] == 37, j++];
                             While[j <= n && 48 <= lexCodes[[j]] <= 57, j++];
@@ -336,74 +240,261 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                         c == 44, kind = 18,
                         (* linear syntax: \( to its \), or \!\( to it *)
                         c == 92 && (lexCodes[[i + 1]] == 40 || (lexCodes[[i + 1]] == 33 && lexCodes[[i + 2]] == 92 && lexCodes[[i + 3]] == 40)),
-                            j = If[lexCodes[[i + 1]] == 40, i + 2, i + 4]; depth = 1;
-                            While[ depth > 0,
-                                Which[
-                                    j >= n, status = 3; depth = 0; j = n + 1,
-                                    lexCodes[[j]] == 92 && lexCodes[[j + 1]] == 40, depth++; j += 2,
-                                    lexCodes[[j]] == 92 && lexCodes[[j + 1]] == 41, depth--; j += 2,
-                                    lexCodes[[j]] == 92, j += 2,
-                                    True, j++]];
-                            kind = 20,
+                            r = lexBoxes[lexCodes, i, n]; j = Quotient[r, 2]; If[Mod[r, 2] == 1, status = 3]; kind = 20,
                         (* a long name, an operator's *)
                         c == 92,
-                            If[ lnEnd[[i]] > 0 && lnOp[[i]] > 0,
-                                op = lnOp[[i]]; j = lnEnd[[i]]; kind = If[op == lexSpecial[[9]], 18, 9],
+                            If[ lnVal > 0 && Mod[lnVal, 8192] - 1 > 0,
+                                op = Mod[lnVal, 8192] - 1; j = Quotient[lnVal, 8192]; kind = If[op == spComma, 18, 9],
                                 If[i == n, status = 3, status = 1; j = i]],
-                        (* an operator, the longest there *)
+                        (* an operator, the longest there: one of three characters where the
+                           first two begin one, then two, then one *)
                         True,
                             len = 0;
-                            If[ c < 128 && i + 2 <= n && lexCodes[[i + 1]] < 128 && lexCodes[[i + 2]] < 128,
-                                a = 1;
-                                While[ op == 0 && a <= Length[lexOp3],
-                                    If[lexOp3[[a]] == c && lexOp3[[a + 1]] == lexCodes[[i + 1]] && lexOp3[[a + 2]] == lexCodes[[i + 2]], op = lexOp3[[a + 3]]; len = 3];
-                                    a += 4]];
-                            If[op == 0 && c < 128 && i + 1 <= n && lexCodes[[i + 1]] < 128, op = lexOp2[[128 c + lexCodes[[i + 1]] + 1]]; len = 2];
+                            If[ c < 128 && i + 1 <= n && lexCodes[[i + 1]] < 128,
+                                e2 = lexOp2[[128 c + lexCodes[[i + 1]] + 1]];
+                                If[ e2 >= 4096 && i + 2 <= n && lexCodes[[i + 2]] < 128,
+                                    a = 1;
+                                    While[ op == 0 && a <= Length[lexOp3],
+                                        If[lexOp3[[a]] == c && lexOp3[[a + 1]] == lexCodes[[i + 1]] && lexOp3[[a + 2]] == lexCodes[[i + 2]], op = lexOp3[[a + 3]]; len = 3];
+                                        a += 4]];
+                                If[op == 0 && Mod[e2, 4096] > 0, op = Mod[e2, 4096]; len = 2]];
                             If[op == 0 && c <= 65535, op = lexOp1[[c + 1]]; len = 1];
                             (* =. before a digit: =, then a number *)
-                            If[op == lexSpecial[[6]] && i + 2 <= n && 48 <= lexCodes[[i + 2]] <= 57, op = lexSpecial[[7]]; len = 1];
+                            If[op == spUnset && i + 2 <= n && 48 <= lexCodes[[i + 2]] <= 57, op = spSet; len = 1];
                             j = i + len;
-                            Which[op == 0, status = 1; j = i, op == lexSpecial[[1]], kind = 16, op == lexSpecial[[2]], kind = 17, op == lexSpecial[[9]], kind = 18, True, kind = 9]];
+                            Which[op == 0, status = 1; j = i, op == spOpen, kind = 16, op == spClose, kind = 17, op == spComma, kind = 18, True, kind = 9]];
                     (* a blank: _, __ or ___, then a . or a name *)
                     If[ kind == 2 && status == 0,
-                        count = 0;
-                        While[j <= n && lexCodes[[j]] == 95 && count < 3, j++; count++];
-                        If[ j <= n && lexCodes[[j]] == 46,
-                            j++,
-                            If[ j <= n && (If[lexCodes[[j]] > 65535, 5, lexClasses[[lexCodes[[j]] + 1]]] == 1 ||
-                                    If[lexCodes[[j]] > 65535, 5, lexClasses[[lexCodes[[j]] + 1]]] == 5 || (lexCodes[[j]] == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == -1)),
-                                start = j; scanning = 1;
-                                While[ scanning == 1 && j <= n,
-                                    c2 = lexCodes[[j]]; cl = If[c2 > 65535, 5, lexClasses[[c2 + 1]]];
-                                    Which[
-                                        cl == 1 || cl == 5 || (cl == 2 && j > start), j++,
-                                        c2 == 92 && lnEnd[[j]] > 0 && lnOp[[j]] == -1, j = lnEnd[[j]],
-                                        True, scanning = 0]];
-                                (* the head's context marks, as a name's *)
-                                m = start; tick = 0;
-                                While[ m < j && status == 0,
-                                    If[lexCodes[[m]] == 96, If[tick == 1, status = 1, tick = 1], If[tick == 1 && 48 <= lexCodes[[m]] <= 57, status = 1]; tick = 0];
-                                    m++];
-                                If[tick == 1, status = 1];
-                                If[status == 1, j = i]]]];
-                    file = If[kind == 9 && (op == lexSpecial[[3]] || op == lexSpecial[[4]] || op == lexSpecial[[5]]), 1, 0];
+                        r = lexBlank[lexCodes, lexClasses, lexLongOps, i, j, n]; j = Quotient[r, 2]; status = Mod[r, 2]];
+                    file = If[kind == 9 && (op == spGet || op == spPut || op == spPutAppend), 1, 0];
                     out[[base + 1]] = kind; out[[base + 2]] = If[kind == 9, op, 0]; out[[base + 4]] = j;
                     If[status != 0, done = 1];
                     i = j]];
             out[[1]] = status; out[[2]] = k;
-            Take[out, 2 + 5 k]]]]
+            Take[out, 2 + 5 k]]]];
+
+(* A long name \[Name] at at, letters and digits closed by a ]: 8192 times just past it, plus 1
+   more than what the table of long names gives it, -1 a letter, an operator, or 0, as for a name
+   it has not; 0 where no long name is there. *)
+$lexLongNameDeclaration = FunctionDeclaration[lexLongName,
+    Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger"} -> "MachineInteger"] @
+    Function[{lnCodes, lnTable, lnAt, lnN},
+        Module[{j = lnAt + 2, a = 1, op = 0, len = 0, match = 0, q = 1, result = 0},
+            If[ lnAt < lnN && lnCodes[[lnAt]] == 92 && lnCodes[[lnAt + 1]] == 91,
+                While[j <= lnN && ((48 <= lnCodes[[j]] <= 57) || (65 <= lnCodes[[j]] <= 90) || (97 <= lnCodes[[j]] <= 122)), j++];
+                If[ j > lnAt + 2 && j <= lnN && lnCodes[[j]] == 93,
+                    While[ op == 0 && a <= Length[lnTable],
+                        len = lnTable[[a]];
+                        If[ len == j - lnAt - 2,
+                            match = 1; q = 1;
+                            While[match == 1 && q <= len, If[lnTable[[a + q]] != lnCodes[[lnAt + 1 + q]], match = 0]; q++];
+                            If[match == 1, op = lnTable[[a + len + 1]]]];
+                        a += len + 2];
+                    result = 8192 (j + 1) + op + 1]];
+            result]]];
+
+(* A comment from its opening paren and star at at, nested ones in it: twice just past its end,
+   plus 1 where the source ends before it does, the place reading got to then. *)
+$lexCommentDeclaration = FunctionDeclaration[lexComment,
+    Typed[{"PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger"} -> "MachineInteger"] @
+    Function[{cmCodes, cmAt, cmN},
+        Module[{depth = 1, j = cmAt + 2, unclosed = 0},
+            While[ depth > 0,
+                Which[
+                    j + 1 > cmN, unclosed = 1; depth = 0,
+                    cmCodes[[j]] == 40 && cmCodes[[j + 1]] == 42, depth++; j += 2,
+                    cmCodes[[j]] == 42 && cmCodes[[j + 1]] == 41, depth--; j += 2,
+                    True, j++]];
+            2 j + unclosed]]];
+
+(* The characters quoted from from, past the opening ": twice just past the closing ", plus 1
+   where the source ends before it, a \ taking the character after it. *)
+$lexQuotedDeclaration = FunctionDeclaration[lexQuoted,
+    Typed[{"PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger"} -> "MachineInteger"] @
+    Function[{qtCodes, qtFrom, qtN},
+        Module[{j = qtFrom, scanning = 1, unclosed = 0, c2 = 0},
+            While[ scanning == 1,
+                If[ j > qtN, unclosed = 1; scanning = 0,
+                    c2 = qtCodes[[j]];
+                    Which[c2 == 34, j++; scanning = 0, c2 == 92, j += 2, True, j++]]];
+            2 j + unclosed]]];
+
+(* The file of << or >> at at: a quoted one, or the characters of a path, its long names whole:
+   4 times just past it, plus the status, 1 where reading stops at it, 3 where the source ends in
+   its quotes. *)
+$lexFileDeclaration = FunctionDeclaration[lexFile,
+    Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger"} ->
+        "MachineInteger"] @
+    Function[{flCodes, flClasses, flTable, flAt, flN},
+        Module[{j = flAt, r = 0, status = 0, scanning = 1, c2 = 0, cl = 0, ln = 0},
+            If[ flCodes[[flAt]] == 34,
+                r = lexQuoted[flCodes, flAt + 1, flN]; j = Quotient[r, 2]; If[Mod[r, 2] == 1, status = 3],
+                While[ scanning == 1 && j <= flN,
+                    c2 = flCodes[[j]]; cl = If[c2 > 65535, 5, flClasses[[c2 + 1]]];
+                    Which[
+                        cl == 1 || cl == 2 || c2 == 95 || c2 == 46 || c2 == 47 || c2 == 126 || c2 == 58 || c2 == 33 || c2 == 42 || c2 == 63 || c2 == 45, j++,
+                        c2 == 92 && j + 1 <= flN && flCodes[[j + 1]] == 91,
+                            ln = lexLongName[flCodes, flTable, j, flN];
+                            If[ln > 0, j = Quotient[ln, 8192], status = 1; scanning = 0],
+                        c2 == 92, j++,
+                        True, scanning = 0]];
+                If[j == flAt, status = 1]];
+            4 j + status]]];
+
+(* A number at at: its digits, b^^ and the digits of base b, a precision or an accuracy, which has
+   its digits, and a power of the base: 4 times just past it, plus 2 for a real, plus 1 where
+   reading stops past it, at a base no number has or a digit its base has not. *)
+$lexNumberDeclaration = FunctionDeclaration[lexNumber,
+    Typed[{"PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger"} -> "MachineInteger"] @
+    Function[{nmCodes, nmAt, nmN},
+        Module[{j = 0, a = 0, m = 0, c2 = 0, status = 0, accuracy = 0, real = 0},
+            If[ nmCodes[[nmAt]] == 46,
+                j = nmAt + 1; While[j <= nmN && 48 <= nmCodes[[j]] <= 57, j++],
+                j = nmAt; While[j <= nmN && 48 <= nmCodes[[j]] <= 57, j++];
+                Which[
+                    j + 2 <= nmN && nmCodes[[j]] == 94 && nmCodes[[j + 1]] == 94 &&
+                        ((48 <= nmCodes[[j + 2]] <= 57) || (65 <= nmCodes[[j + 2]] <= 90) || (97 <= nmCodes[[j + 2]] <= 122)),
+                        a = 0; m = nmAt;
+                        While[m < j, If[a <= 36, a = 10 a + nmCodes[[m]] - 48]; m++];
+                        j += 2;
+                        While[j <= nmN && ((48 <= nmCodes[[j]] <= 57) || (65 <= nmCodes[[j]] <= 90) || (97 <= nmCodes[[j]] <= 122)), j++];
+                        If[ j <= nmN && nmCodes[[j]] == 46,
+                            j++; While[j <= nmN && ((48 <= nmCodes[[j]] <= 57) || (65 <= nmCodes[[j]] <= 90) || (97 <= nmCodes[[j]] <= 122)), j++]];
+                        If[a < 2 || a > 36, status = 1];
+                        m = nmAt;
+                        While[m < j && nmCodes[[m]] != 94, m++];
+                        m += 2;
+                        While[ m < j && status == 0,
+                            c2 = nmCodes[[m]];
+                            If[ c2 != 46 && If[c2 <= 57, c2 - 48, If[c2 <= 90, c2 - 55, c2 - 87]] >= a, status = 1];
+                            m++],
+                    j <= nmN && nmCodes[[j]] == 46 && ! (j + 1 <= nmN && nmCodes[[j + 1]] == 46),
+                        j++; While[j <= nmN && 48 <= nmCodes[[j]] <= 57, j++],
+                    True, j = j]];
+            If[ j <= nmN && nmCodes[[j]] == 96,
+                j++; accuracy = 0;
+                If[j <= nmN && nmCodes[[j]] == 96, j++; accuracy = 1];
+                m = If[j <= nmN && (nmCodes[[j]] == 43 || nmCodes[[j]] == 45), j + 1, j];
+                Which[
+                    m <= nmN && 48 <= nmCodes[[m]] <= 57,
+                        While[m <= nmN && 48 <= nmCodes[[m]] <= 57, m++];
+                        If[m <= nmN && nmCodes[[m]] == 46, m++; While[m <= nmN && 48 <= nmCodes[[m]] <= 57, m++]];
+                        j = m,
+                    m + 1 <= nmN && nmCodes[[m]] == 46 && 48 <= nmCodes[[m + 1]] <= 57,
+                        m++; While[m <= nmN && 48 <= nmCodes[[m]] <= 57, m++]; j = m,
+                    accuracy == 1, j -= 2,
+                    True, j = j]];
+            If[ j + 1 <= nmN && nmCodes[[j]] == 42 && nmCodes[[j + 1]] == 94,
+                m = If[j + 2 <= nmN && (nmCodes[[j + 2]] == 43 || nmCodes[[j + 2]] == 45), j + 3, j + 2];
+                If[m <= nmN && 48 <= nmCodes[[m]] <= 57, While[m <= nmN && 48 <= nmCodes[[m]] <= 57, m++]; j = m]];
+            m = nmAt;
+            While[m < j, If[nmCodes[[m]] == 46 || nmCodes[[m]] == 96, real = 1]; m++];
+            4 j + 2 real + status]]];
+
+(* A slot at at: ## and its digits, or # and its digits or a name, read as a name's token reads one:
+   twice just past it, plus 1 where a malformed name makes none and reading stops at it. *)
+$lexSlotDeclaration = FunctionDeclaration[lexSlot,
+    Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger"} ->
+        "MachineInteger"] @
+    Function[{slCodes, slClasses, slTable, slAt, slN},
+        Module[{j = slAt + 1, m = 0, scanning = 1, c2 = 0, cl = 0, tick = 0, status = 0, ln = 0, d = 0},
+            d = If[j <= slN, slCodes[[j]], 0];
+            ln = If[j <= slN && d == 92, lexLongName[slCodes, slTable, j, slN], 0];
+            Which[
+                j <= slN && d == 35, j++; While[j <= slN && 48 <= slCodes[[j]] <= 57, j++],
+                j <= slN && 48 <= d <= 57, While[j <= slN && 48 <= slCodes[[j]] <= 57, j++],
+                j <= slN && (d > 65535 || slClasses[[Min[d, 65535] + 1]] == 1 || slClasses[[Min[d, 65535] + 1]] == 5 || (d == 92 && ln > 0 && Mod[ln, 8192] == 0)),
+                    m = j; scanning = 1;
+                    While[ scanning == 1 && j <= slN,
+                        c2 = slCodes[[j]]; cl = If[c2 > 65535, 5, slClasses[[c2 + 1]]];
+                        Which[
+                            cl == 1 || cl == 5 || (cl == 2 && j > m), j++,
+                            c2 == 92, ln = lexLongName[slCodes, slTable, j, slN]; If[ln > 0 && Mod[ln, 8192] == 0, j = Quotient[ln, 8192], scanning = 0],
+                            True, scanning = 0]];
+                    tick = 0;
+                    While[ m < j && status == 0,
+                        If[slCodes[[m]] == 96, If[tick == 1, status = 1, tick = 1], If[tick == 1 && 48 <= slCodes[[m]] <= 57, status = 1]; tick = 0];
+                        m++];
+                    If[tick == 1, status = 1];
+                    If[status == 1, j = slAt],
+                True, j = j];
+            2 j + status]]];
+
+(* The blank after a name or a _ at from, of the token at at: up to three _, then a . or a head,
+   whose context marks are a name's: twice just past it, plus 1 where a malformed head makes no
+   blank and reading stops at the token. *)
+$lexBlankDeclaration = FunctionDeclaration[lexBlank,
+    Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger",
+        "MachineInteger"} -> "MachineInteger"] @
+    Function[{bkCodes, bkClasses, bkTable, bkAt, bkFrom, bkN},
+        Module[{j = bkFrom, count = 0, start = 0, scanning = 1, c2 = 0, cl = 0, m = 0, tick = 0, status = 0, ln = 0, d = 0},
+            While[j <= bkN && bkCodes[[j]] == 95 && count < 3, j++; count++];
+            If[ j <= bkN && bkCodes[[j]] == 46,
+                j++,
+                d = If[j <= bkN, bkCodes[[j]], 0];
+                ln = If[j <= bkN && d == 92, lexLongName[bkCodes, bkTable, j, bkN], 0];
+                If[ j <= bkN && (If[d > 65535, 5, bkClasses[[d + 1]]] == 1 || If[d > 65535, 5, bkClasses[[d + 1]]] == 5 || (d == 92 && ln > 0 && Mod[ln, 8192] == 0)),
+                    start = j; scanning = 1;
+                    While[ scanning == 1 && j <= bkN,
+                        c2 = bkCodes[[j]]; cl = If[c2 > 65535, 5, bkClasses[[c2 + 1]]];
+                        Which[
+                            cl == 1 || cl == 5 || (cl == 2 && j > start), j++,
+                            c2 == 92, ln = lexLongName[bkCodes, bkTable, j, bkN]; If[ln > 0 && Mod[ln, 8192] == 0, j = Quotient[ln, 8192], scanning = 0],
+                            True, scanning = 0]];
+                    (* the head's context marks, as a name's *)
+                    m = start; tick = 0;
+                    While[ m < j && status == 0,
+                        If[bkCodes[[m]] == 96, If[tick == 1, status = 1, tick = 1], If[tick == 1 && 48 <= bkCodes[[m]] <= 57, status = 1]; tick = 0];
+                        m++];
+                    If[tick == 1, status = 1];
+                    If[status == 1, j = bkAt]]];
+            2 j + status]]];
+
+(* Linear syntax at at: \( to its \), or \!\( to it, nested ones in it: twice just past its end,
+   plus 1 where the source ends before it does. *)
+$lexBoxesDeclaration = FunctionDeclaration[lexBoxes,
+    Typed[{"PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger"} -> "MachineInteger"] @
+    Function[{bxCodes, bxAt, bxN},
+        Module[{j = If[bxCodes[[bxAt + 1]] == 40, bxAt + 2, bxAt + 4], depth = 1, unclosed = 0},
+            While[ depth > 0,
+                Which[
+                    j >= bxN, unclosed = 1; depth = 0; j = bxN + 1,
+                    bxCodes[[j]] == 92 && bxCodes[[j + 1]] == 40, depth++; j += 2,
+                    bxCodes[[j]] == 92 && bxCodes[[j + 1]] == 41, depth--; j += 2,
+                    bxCodes[[j]] == 92, j += 2,
+                    True, j++]];
+            2 j + unclosed]]];
+
+(* the typed functions the lexer calls, each after those it calls *)
+$fastLexHelpers := {$lexLongNameDeclaration, $lexQuotedDeclaration, $lexCommentDeclaration, $lexFileDeclaration, $lexNumberDeclaration, $lexSlotDeclaration,
+    $lexBlankDeclaration, $lexBoxesDeclaration}
 
 (* The function of a typed declaration: the definition a compiler of typed
    code gave the declared symbol, where one did; else the declaration's
-   Function compiled by Compile, where Compile is, else evaluated. *)
+   Function compiled by Compile, the typed functions it calls compiled first
+   and put in its code, where Compile inlines them, where Compile is; else
+   evaluated, those it calls evaluated too. *)
 SetAttributes[typedFunction, HoldFirst]
-typedFunction[symbol_Symbol, declaration_] := If[ DownValues[symbol] =!= {} || OwnValues[symbol] =!= {},
+typedFunction[symbol_Symbol, declaration_] := typedFunction[symbol, declaration, {}]
+typedFunction[symbol_Symbol, declaration_, helpers_List] := If[ DownValues[symbol] =!= {} || OwnValues[symbol] =!= {},
     symbol,
-    With[{f = declaration[[2, 1]]},
-        Replace[Compile @@ Join[Hold[Evaluate[Map[{#, _Integer, 1} &, f[[1]]]]], Extract[f, {2}, Hold]], Except[_CompiledFunction] -> f]]]
+    With[{inlined = Fold[Function[{done, h}, Append[done, h[[1]] -> compiledDeclaration[h, done]]], {}, helpers]},
+        If[ AllTrue[inlined[[All, 2]], MatchQ[_CompiledFunction]],
+            Replace[compiledDeclaration[declaration, inlined], Except[_CompiledFunction] :> evaluatedDeclaration[declaration, helpers]],
+            evaluatedDeclaration[declaration, helpers]]]]
+
+(* a typed declaration's Function compiled by Compile, each argument an integer or a packed vector
+   of them as its type says, the typed functions it calls put in its code, compiled *)
+compiledDeclaration[declaration_, inlined_List] := With[{f = declaration[[2, 1]], types = declaration[[2, 0, 1, 1]]},
+    Compile @@ Join[Hold[Evaluate[MapThread[{#1, _Integer, If[#2 === "MachineInteger", 0, 1]} &, {List @@ f[[1]], types}]]],
+        Extract[f, {2}, Hold] /. inlined, Hold[CompilationOptions -> {"InlineCompiledFunctions" -> True}]]]
+
+(* a typed declaration's Function, evaluated, the typed functions it calls their Functions *)
+evaluatedDeclaration[declaration_, helpers_List] :=
+    declaration[[2, 1]] /. Fold[Function[{done, h}, Append[done, h[[1]] -> (h[[2, 1]] /. done)]], {}, helpers]
 
 (* the lexer run here, fixed at its first use *)
-fastLexFunction := fastLexFunction = typedFunction[fastLex, $fastLexDeclaration]
+fastLexFunction := fastLexFunction = typedFunction[fastLex, $fastLexDeclaration, $fastLexHelpers]
 
 (* --- the operator table --- *)
 
