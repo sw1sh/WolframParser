@@ -13,7 +13,8 @@ root = ParentDirectory[DirectoryName[$InputFileName]];
 PacletDirectoryLoad[FileNameJoin[{root, "Parser"}]];
 Needs["Wolfram`Parser`"];
 
-arguments = Rest[$ScriptCommandLine];
+(* the arguments after the script's path, by wolframscript or by WolframKernel -script *)
+arguments = If[$ScriptCommandLine =!= {}, Rest[$ScriptCommandLine], Replace[$CommandLine, {{___, "-script", _, rest___} :> {rest}, _ -> {}}]];
 count = If[Length[arguments] >= 1, Interpreter["Integer"][arguments[[1]]], 20000];
 seed = If[Length[arguments] >= 2, Interpreter["Integer"][arguments[[2]]], 1];
 SeedRandom[seed];

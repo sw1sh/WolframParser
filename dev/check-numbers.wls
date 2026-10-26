@@ -5,16 +5,18 @@
    where it is the same number, a machine one where Wolfram 15's is, at the same precision; one
    that differs only in its precision's last digits, as Wolfram 15's own arithmetic makes them for
    long digits, is counted apart; and where Wolfram 15 does not stop reading, nor may the reader.
-   Run it with Wolfram 15:
-       wl -f dev/check-numbers.wls [count] [seed]
-   It prints the counts, then what differs. *)
+   Run it with Wolfram 15.0's kernel, the reader's oracle:
+       WolframKernel -noinit -script dev/check-numbers.wls [count] [seed]
+   Wolfram 15.1 reads a decimal integer before a ` with no precision with its point after its first
+   digit, 108` as 1.08, which 15.0 does not, nor the reader. It prints the counts, then what differs. *)
 
 $ProgressReporting = False;
 
 root = ParentDirectory[DirectoryName[$InputFileName]];
 PacletDirectoryLoad[FileNameJoin[{root, "Parser"}]];
 Needs["Wolfram`Parser`"];
-arguments = Rest[$ScriptCommandLine];
+(* the arguments after the script's path, by wolframscript or by WolframKernel -script *)
+arguments = If[$ScriptCommandLine =!= {}, Rest[$ScriptCommandLine], Replace[$CommandLine, {{___, "-script", _, rest___} :> {rest}, _ -> {}}]];
 count = If[Length[arguments] >= 1, Interpreter["Integer"][arguments[[1]]], 6000];
 seed = If[Length[arguments] >= 2, Interpreter["Integer"][arguments[[2]]], 1];
 numberValue = Symbol["Wolfram`Parser`Languages`WolframLanguage`Private`numberValue"];

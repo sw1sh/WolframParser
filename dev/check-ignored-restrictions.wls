@@ -11,7 +11,8 @@ $ProgressReporting = False;
 
 root = ParentDirectory[DirectoryName[$InputFileName]];
 Get[FileNameJoin[{root, "Parser", "Kernel", "StringPatterns.wl"}]];
-arguments = Rest[$ScriptCommandLine];
+(* the arguments after the script's path, by wolframscript or by WolframKernel -script *)
+arguments = If[$ScriptCommandLine =!= {}, Rest[$ScriptCommandLine], Replace[$CommandLine, {{___, "-script", _, rest___} :> {rest}, _ -> {}}]];
 SeedRandom[If[Length[arguments] >= 1, Interpreter["Integer"][arguments[[1]]], 5]];
 
 w15[p_] := Cases[EvaluationData[StringCases["ab", p]]["MessagesExpressions"], Hold[Message[MessageName[StringExpression, "cond"], _, b_]] :> HoldForm[b]];

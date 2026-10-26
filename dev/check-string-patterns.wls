@@ -15,7 +15,8 @@ root = ParentDirectory[DirectoryName[$InputFileName]];
 PacletDirectoryLoad[FileNameJoin[{root, "Parser"}]];
 Needs["Wolfram`Parser`"];
 
-arguments = Rest[$ScriptCommandLine];
+(* the arguments after the script's path, by wolframscript or by WolframKernel -script *)
+arguments = If[$ScriptCommandLine =!= {}, Rest[$ScriptCommandLine], Replace[$CommandLine, {{___, "-script", _, rest___} :> {rest}, _ -> {}}]];
 count = If[Length[arguments] >= 1, Interpreter["Integer"][arguments[[1]]], 3000];
 seed = If[Length[arguments] >= 2, Interpreter["Integer"][arguments[[2]]], 1];
 SeedRandom[seed];
@@ -72,21 +73,26 @@ engineSplit[s_String, p_] := With[{parts = between[s, engineMatches[s, {p}, "Fir
 
 (* Wolfram 15's, $Failed where a pattern is not one there: a pattern that is no string pattern
    in Wolfram 15 messages, and is no case *)
-native[e_] := Block[{$Messages = {}}, Check[TimeConstrained[e, 5, $Aborted], $Failed]]
+native[e_] := Block[{$Messages = {}}, Check[MemoryConstrained[TimeConstrained[e, 5, $Aborted], 10^9, $Aborted], $Failed]]
 SetAttributes[native, HoldFirst];
 
+(* the engine's, $Aborted past 10 seconds or a gigabyte: every way of a repeat of repeats that may
+   match nothing is more than either reader makes in that *)
+bounded[e_] := MemoryConstrained[TimeConstrained[e, 10, $Aborted], 10^9, $Aborted]
+SetAttributes[bounded, HoldFirst];
+
 answers[s_String, p_, q_] := <|
-    "Cases" -> {engineCases[s, p], native[StringCases[s, p]]},
-    "Position" -> {enginePosition[s, {p}], native[StringPosition[s, p]]},
-    "MatchQ" -> {engineMatchQ[s, p], native[StringMatchQ[s, p]]},
-    "Names" -> {engineNames[s, p], native[StringCases[s, p :> {x, y}]]},
-    "Rules" -> {engineRules[s, p, q], native[StringCases[s, {p -> 1, q -> 2}]]},
-    "Positions" -> {enginePosition[s, {p, q}], native[StringPosition[s, {p, q}]]},
-    "Replace" -> {engineReplace[s, p, q], native[StringReplace[s, {p -> "<1>", q -> "<2>"}]]},
-    "Split" -> {engineSplit[s, p], native[StringSplit[s, p]]},
-    "All" -> {engineAll[s, p], native[StringCases[s, p, Overlaps -> All]]},
-    "AllRules" -> {engineAllRules[s, p, q], native[StringCases[s, {p -> 1, q -> 2}, Overlaps -> All]]},
-    "AllPositions" -> {Map[{#[[1]] + 1, #[[2]]} &, engineMatches[s, {p, q}, "All"]], native[StringPosition[s, {p, q}, Overlaps -> All]]}|>
+    "Cases" -> {bounded[engineCases[s, p]], native[StringCases[s, p]]},
+    "Position" -> {bounded[enginePosition[s, {p}]], native[StringPosition[s, p]]},
+    "MatchQ" -> {bounded[engineMatchQ[s, p]], native[StringMatchQ[s, p]]},
+    "Names" -> {bounded[engineNames[s, p]], native[StringCases[s, p :> {x, y}]]},
+    "Rules" -> {bounded[engineRules[s, p, q]], native[StringCases[s, {p -> 1, q -> 2}]]},
+    "Positions" -> {bounded[enginePosition[s, {p, q}]], native[StringPosition[s, {p, q}]]},
+    "Replace" -> {bounded[engineReplace[s, p, q]], native[StringReplace[s, {p -> "<1>", q -> "<2>"}]]},
+    "Split" -> {bounded[engineSplit[s, p]], native[StringSplit[s, p]]},
+    "All" -> {bounded[engineAll[s, p]], native[StringCases[s, p, Overlaps -> All]]},
+    "AllRules" -> {bounded[engineAllRules[s, p, q]], native[StringCases[s, {p -> 1, q -> 2}, Overlaps -> All]]},
+    "AllPositions" -> {bounded[Map[{#[[1]] + 1, #[[2]]} &, engineMatches[s, {p, q}, "All"]]], native[StringPosition[s, {p, q}, Overlaps -> All]]}|>
 
 (* --- the cases --- *)
 

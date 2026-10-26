@@ -12,7 +12,8 @@ root = ParentDirectory[DirectoryName[$InputFileName]];
 PacletDirectoryLoad[FileNameJoin[{root, "Parser"}]];
 Needs["Wolfram`Parser`"];
 
-arguments = Rest[$ScriptCommandLine];
+(* the arguments after the script's path, by wolframscript or by WolframKernel -script *)
+arguments = If[$ScriptCommandLine =!= {}, Rest[$ScriptCommandLine], Replace[$CommandLine, {{___, "-script", _, rest___} :> {rest}, _ -> {}}]];
 count = If[Length[arguments] >= 1, Interpreter["Integer"][arguments[[1]]], 2000];
 seed = If[Length[arguments] >= 2, Interpreter["Integer"][arguments[[2]]], 1];
 SeedRandom[seed];
@@ -53,22 +54,29 @@ pattern[depth_Integer] := RandomChoice[{6, 4, 3, 2, 2, 1, 1, 2, 1, 1, 1} -> {
 
 (* --- the cases --- *)
 
-differ = {}; same = 0; interpreterTime = 0.; vmTime = 0.;
+differ = {}; same = 0; tooLong = 0; interpreterTime = 0.; vmTime = 0.;
+
+(* a run past 10 seconds or a gigabyte, $Aborted: every way of a repeat of repeats that may match
+   nothing is more than either matcher makes in that, which both are counted for *)
+bounded[e_] := MemoryConstrained[TimeConstrained[e, 10, $Aborted], 10^9, $Aborted]
+SetAttributes[bounded, HoldFirst];
 Do[
     With[{p = pattern[RandomInteger[{0, 3}]], q = pattern[RandomInteger[{0, 2}]], s = randomString[]},
         With[{programs = StringPatternProgram /@ {p, q}},
             If[ FreeQ[Map[#["Program"] &, programs], None],
                 Do[ Module[{a, b, ta, tb},
-                        {ta, a} = AbsoluteTiming[StringPatternMatches[s, Take[programs, n], mode, Method -> "Interpreter"]];
-                        {tb, b} = AbsoluteTiming[StringPatternMatches[s, Take[programs, n], mode]];
-                        interpreterTime += ta; vmTime += tb;
-                        If[a === b, same++, AppendTo[differ, {s, Take[{p, q}, n], mode, a, b}]]],
+                        {ta, a} = AbsoluteTiming[bounded[StringPatternMatches[s, Take[programs, n], mode, Method -> "Interpreter"]]];
+                        {tb, b} = AbsoluteTiming[bounded[StringPatternMatches[s, Take[programs, n], mode]]];
+                        Which[
+                            a === $Aborted && b === $Aborted, tooLong++,
+                            a === b, interpreterTime += ta; vmTime += tb; same++,
+                            True, AppendTo[differ, {s, Take[{p, q}, n], mode, a, b}]]],
                     {n, 1, 2}, {mode, {"First", "Each", "Overlapping", "All"}}]]]],
     {count}];
 
 Scan[Print["   ", ToString[#[[1]], InputForm], "  ", ToString[#[[2]], InputForm], "  ", #[[3]], "\n      interpreter ", ToString[#[[4]], InputForm],
     "\n      vm          ", ToString[#[[5]], InputForm]] &, Take[differ, UpTo[20]]];
-Print["string vm: ", count, " cases, seed ", seed, ": ", same, " runs agree, ", Length[differ], " differ; interpreter ", Round[interpreterTime, 0.01],
+Print["string vm: ", count, " cases, seed ", seed, ": ", same, " runs agree, ", Length[differ], " differ, ", tooLong, " too long for both; interpreter ", Round[interpreterTime, 0.01],
     " s, vm ", Round[vmTime, 0.01], " s, each new pattern's bytecode made"];
 
 (* --- FunctionCompile --- *)
