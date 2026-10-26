@@ -100,12 +100,15 @@ $fastLongNameOps := $fastLongNameOps = Join[
 
 (* the tables of the lexer, packed: the 2-character operators by the codes
    of both, each 4096 times 1 more where a 3-character operator begins with
-   the two, {c1, c2, c3, operator} for each of 3, and for each long name
-   that is an operator its length, its codes and the operator *)
+   the two, {c1, c2, c3, operator} for each of 3, and the long names,
+   {how many, where each begins, then each, by length and then by codes,
+   its length, its codes and its operator, -1 for a letter} *)
 $fastOp2Flat := $fastOp2Flat = Developer`ToPackedArray[Flatten[$fastOp2 + 4096 Module[{t = ConstantArray[0, {128, 128}]},
     Scan[(t[[#[[1]] + 1, #[[2]] + 1]] = 1) &, Keys[$fastOp3]]; t]]]
 $fastOp3Table = Developer`ToPackedArray[Flatten[KeyValueMap[Append[#1, #2] &, $fastOp3]]]
-$fastLongOpTable := $fastLongOpTable = Developer`ToPackedArray[Flatten[KeyValueMap[Join[{StringLength[#1]}, ToCharacterCode[#1], {#2}] &, $fastLongNameOps]]]
+$fastLongOpTable := $fastLongOpTable = With[
+    {entries = Map[Join[{Length[#[[1]]]}, #[[1]], {#[[2]]}] &, SortBy[KeyValueMap[{ToCharacterCode[#1], #2} &, $fastLongNameOps], {Length[#[[1]]] &, First}]]},
+    Developer`ToPackedArray[Join[{Length[entries]}, 1 + Length[entries] + Most[FoldList[Plus, 1, Length /@ entries]], Flatten[entries]]]]
 $fastOpenAssociation = fastOp["<|"]; $fastCloseAssociation = fastOp["|>"]
 $fastGet = fastOp["<<"]; $fastPut = fastOp[">>"]; $fastPutAppend = fastOp[">>>"]
 $fastSpecial := $fastSpecial = Developer`ToPackedArray[{$fastOpenAssociation, $fastCloseAssociation, $fastGet, $fastPut, $fastPutAppend, fastOp["=."], fastOp["="],
@@ -275,21 +278,21 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 
 (* A long name \[Name] at at, letters and digits closed by a ]: 8192 times just past it, plus 1
    more than what the table of long names gives it, -1 a letter, an operator, or 0, as for a name
-   it has not; 0 where no long name is there. *)
+   it has not; 0 where no long name is there. The table is halved to the name, its names in
+   order by length and then by codes. *)
 $lexLongNameDeclaration = FunctionDeclaration[lexLongName,
     Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger"} -> "MachineInteger"] @
     Function[{lnCodes, lnTable, lnAt, lnN},
-        Native`UncheckedBlock[Module[{j = lnAt + 2, a = 1, op = 0, len = 0, match = 0, q = 1, result = 0},
+        Native`UncheckedBlock[Module[{j = lnAt + 2, lo = 1, hi = lnTable[[1]], mid = 0, a = 0, op = 0, len = 0, size = 0, cmp = 0, q = 1, result = 0},
             If[ lnAt < lnN && lnCodes[[lnAt]] == 92 && lnCodes[[lnAt + 1]] == 91,
                 While[j <= lnN && ((48 <= lnCodes[[j]] <= 57) || (65 <= lnCodes[[j]] <= 90) || (97 <= lnCodes[[j]] <= 122)), j++];
                 If[ j > lnAt + 2 && j <= lnN && lnCodes[[j]] == 93,
-                    While[ op == 0 && a <= Length[lnTable],
-                        len = lnTable[[a]];
-                        If[ len == j - lnAt - 2,
-                            match = 1; q = 1;
-                            While[match == 1 && q <= len, If[lnTable[[a + q]] != lnCodes[[lnAt + 1 + q]], match = 0]; q++];
-                            If[match == 1, op = lnTable[[a + len + 1]]]];
-                        a += len + 2];
+                    size = j - lnAt - 2;
+                    While[ op == 0 && lo <= hi,
+                        mid = Quotient[lo + hi, 2]; a = lnTable[[1 + mid]]; len = lnTable[[a]];
+                        cmp = len - size; q = 1;
+                        While[cmp == 0 && q <= len, cmp = lnTable[[a + q]] - lnCodes[[lnAt + 1 + q]]; q++];
+                        Which[cmp < 0, lo = mid + 1, cmp > 0, hi = mid - 1, True, op = lnTable[[a + len + 1]]]];
                     result = 8192 (j + 1) + op + 1]];
             result]]]];
 
