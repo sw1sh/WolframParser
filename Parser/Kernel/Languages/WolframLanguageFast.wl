@@ -1295,6 +1295,8 @@ $fastProgramDeclaration = FunctionDeclaration[fastProgram,
     Function[{pgCodes, pgClasses, pgOp1, pgOp2, pgOp3, pgLongOps, pgSpecial, pgKindSpecs, pgOpSpecs, pgLedParams, pgSpecs, pgPrefix,
             pgGroups, pgIntegrals, pgSpecialOps, pgHeads, pgKeys, pgNewlineNames},
         Native`UncheckedBlock[Module[{n = Length[pgCodes] - 3, lexed, prog, lines, parts, params, out, i = 1, t = 1, p = 0, e = 0, c = 0, k = 0, q = 0, h = 0, status = 0},
+            (* codes that do not end in three zeros are the stages' to read *)
+            If[n < 0, status = 2, If[pgCodes[[n + 1]] != 0 || pgCodes[[n + 2]] != 0 || pgCodes[[n + 3]] != 0, status = 2]];
             While[ i <= n,
                 If[pgCodes[[i]] == 92 && i < n && (pgCodes[[i + 1]] == 10 || pgCodes[[i + 1]] == 13), status = 2];
                 i++];
