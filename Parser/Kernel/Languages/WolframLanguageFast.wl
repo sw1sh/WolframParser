@@ -934,6 +934,83 @@ fastWholeFunction := fastWholeFunction = typedFunction[fastWhole, $fastWholeDecl
 
 $fastNewlineNames := $fastNewlineNames = Developer`ToPackedArray[Flatten[Map[Join[{StringLength[#]}, ToCharacterCode[#]] &, $heldNewlineNames]]]
 
+(* --- the typed program --- *)
+
+(* The program of a source read whole, typed code over packed integers that calls the lexer, the
+   parser, the lines and the parts each once, with nothing between them: the codes and the tables
+   the five take -> {0, the program's length, the program, then the parts}, as
+   WolframLanguageProgram gives them; {1} for a source that has none; {2} for one the stages alone
+   do not settle, a line continuation, a token that is two or a long name in a string, which
+   WolframLanguageProgram reads by its stages. *)
+$fastProgramDeclaration = FunctionDeclaration[fastProgram,
+    Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+        "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} ->
+        "PackedArray"::["MachineInteger", 1]] @
+    Function[{pgCodes, pgClasses, pgOp1, pgOp2, pgOp3, pgLongOps, pgSpecial, pgKindSpecs, pgOpSpecs, pgLedParams, pgSpecs, pgPrefix,
+            pgGroups, pgIntegrals, pgSpecialOps, pgHeads, pgKeys, pgNewlineNames},
+        Module[{n = Length[pgCodes], padded, lexed, prog, lines, parts, params, out, i = 1, t = 1, p = 0, e = 0, c = 0, k = 0, q = 0, h = 0, status = 0},
+            padded = Table[0, {n + 3}];
+            While[ i <= n,
+                padded[[i]] = pgCodes[[i]];
+                If[pgCodes[[i]] == 92 && i < n && (pgCodes[[i + 1]] == 10 || pgCodes[[i + 1]] == 13), status = 2];
+                i++];
+            lexed = If[status == 0, fastLex[padded, pgClasses, pgOp1, pgOp2, pgOp3, pgLongOps, pgSpecial], Table[0, {2}]];
+            If[status == 0 && lexed[[1]] != 0, status = 1];
+            (* each string's escapes, as stringWarnings reads them: one that warns leaves no
+               program, one of a long name is the stages' to read, and the rest are quiet:
+               \ooo, \.hh, \:hhhh and \|hhhhhh, \n, \t, \r, \b and \f, and \ before
+               any other character but a letter *)
+            While[ status == 0 && t <= lexed[[2]],
+                If[ lexed[[5 t - 2]] == 5,
+                    p = lexed[[5 t]] + 1; e = Min[lexed[[5 t + 1]], n + 1] - 1;
+                    While[ p < e && status == 0,
+                        If[ pgCodes[[p]] != 92, p++,
+                            c = If[p + 1 < e, pgCodes[[p + 1]], 0];
+                            Which[
+                                c == 0 || c == 91, status = 2,
+                                48 <= c <= 55, If[p + 3 < e && 48 <= pgCodes[[p + 2]] <= 55 && 48 <= pgCodes[[p + 3]] <= 55, p += 4, status = 1],
+                                c == 46 || c == 58 || c == 124,
+                                    k = If[c == 46, 2, If[c == 58, 4, 6]]; q = p + 2; h = 0;
+                                    While[ h < k && q < e && (48 <= pgCodes[[q]] <= 57 || 65 <= pgCodes[[q]] <= 70 || 97 <= pgCodes[[q]] <= 102), h++; q++];
+                                    If[h == k, p += 2 + k, status = 1],
+                                65 <= c <= 90 || 97 <= c <= 122, If[c == 110 || c == 116 || c == 114 || c == 98 || c == 102, p += 2, status = 1],
+                                True, p += 2]]]];
+                t++];
+            prog = If[ status == 0,
+                fastParse[lexed, fastLed[lexed, pgKindSpecs, pgOpSpecs, pgLedParams], pgSpecs, pgPrefix, pgGroups, pgIntegrals, pgSpecialOps, pgHeads, pgKeys,
+                    padded, pgClasses],
+                Table[0, {2}]];
+            If[status == 0 && prog[[1]] == 3, status = 2];
+            If[status == 0 && prog[[1]] != 0, status = 1];
+            lines = If[ status == 0,
+                params = Table[0, {9}];
+                params[[1]] = prog[[2]]; params[[2]] = n + 1; params[[4]] = 1; params[[7]] = n;
+                fastLines[pgCodes, lexed, prog, Table[0, {lexed[[2]] + 1}], pgClasses, pgNewlineNames, Table[0, {1}], params],
+                Table[0, {2}]];
+            parts = If[status == 0, fastWhole[prog, lexed, lines], Table[0, {3}]];
+            If[status == 0 && parts[[1]] > 0, status = 1];
+            If[ status != 0,
+                out = Table[0, {1}];
+                out[[1]] = status,
+                out = Table[0, {2 + Length[prog] + Length[parts]}];
+                out[[2]] = Length[prog];
+                i = 1; While[i <= Length[prog], out[[2 + i]] = prog[[i]]; i++];
+                i = 1; While[i <= Length[parts], out[[2 + Length[prog] + i]] = parts[[i]]; i++]];
+            out]]];
+
+(* the typed program run here: the definition a compiler of typed code gave fastProgram, where one
+   did; else None, and WolframLanguageProgram reads by the stages, each compiled on its own *)
+fastProgramFunction := fastProgramFunction = If[DownValues[fastProgram] =!= {} || OwnValues[fastProgram] =!= {}, fastProgram, None]
+
+(* the tables fastProgram takes after the codes, made once *)
+$fastProgramTables := $fastProgramTables = {$fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial, $fastKindSpecIndex, $fastOpSpecIndex,
+    $fastLedParams, $fastSpecTable, $fastPrefixArray, $fastGroupArray, $fastIntegralArray, $fastSpecialArray, $fastHeadCodeArray, $fastKeyCodeArray,
+    $fastNewlineNames}
+
 (* --- the typed parser's tables --- *)
 
 (* the heads, each by the position of its name; the chain keys likewise *)
@@ -1379,9 +1456,16 @@ WolframLanguageHeldNext[s_String, pos_Integer] := Block[{j = heldNextState[s], s
    each part WolframLanguageHeldNext gives, in order. Any other source is None, for
    WolframLanguageHeldNext to read. The parser reads the tokens alone where none is two; the
    only warnings of a source read whole are the Nulls a comma leaves, which the program marks,
-   and a string's escapes. Nothing is kept for a call after it. *)
-WolframLanguageProgram[s_String] := Block[{codes = ToCharacterCode[s], escapes, padded, lexed, prog, parts},
-    escapes = MemberQ[codes, 92];
+   and a string's escapes. Nothing is kept for a call after it. The typed program makes it in one
+   call where a compiler of typed code gave it a definition; else, and for the sources it leaves to
+   them, the typed stages each in turn do. *)
+WolframLanguageProgram[s_String] := With[{codes = ToCharacterCode[s]},
+    If[ fastProgramFunction === None, stagesProgram[s, codes],
+        With[{r = fastProgramFunction[codes, Sequence @@ $fastProgramTables]},
+            Which[r[[1]] === 0, {codes, r[[3 ;; 2 + r[[2]]]], r[[3 + r[[2]] ;;]]}, r[[1]] === 1, None, True, stagesProgram[s, codes]]]]]
+
+(* the program of a source by the typed stages, each called in turn *)
+stagesProgram[s_String, codes_List] := Block[{escapes = MemberQ[codes, 92], padded, lexed, prog, parts},
     If[ escapes && lineContinuations[s] =!= {}, None,
         padded = Join[codes, {0, 0, 0}];
         lexed = fastLexFunction[padded, $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];

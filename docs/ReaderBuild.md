@@ -48,6 +48,19 @@ no statement, is `{0, 0, 0, 0}`, and a source with no statement is one Null. `pa
 count of the Nulls a comma leaves, is 0 in a program. An empty `codes`, for the empty source, is
 `{}`, which Wolfram 15 does not pack.
 
+`fastProgram` makes the program in one typed call: the lexer, the parser, the lines and
+`fastWhole`, each once, with nothing between them. It takes the codes and the tables
+`$fastProgramTables` lists, packed arrays of integers all, and gives one packed array:
+
+| It gives | Where |
+|---|---|
+| `{0, lp}`, then `prog`'s `lp` integers, then `parts` | the source has a program |
+| `{1}` | `WolframLanguageProgram` gives `None` |
+| `{2}` | the stages, called in turn, read it: a line continuation, a token that is two, as in `?a*=b`, or a long name in a string |
+
+`WolframLanguageProgram` calls it where a compiler of typed code gave it a definition, as a
+kernel's does; Wolfram 15 calls the stages in turn.
+
 A builder reads the rows in turn: a Null's row gives `HoldComplete[Null]`, and a statement's builds
 its instructions over its leaves, the statement's names made then, in the contexts the statements
 before it left. Instruction 28 reads the codes too. The parts are those `WolframLanguageHeldNext`
