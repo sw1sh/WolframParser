@@ -663,6 +663,12 @@ VerificationTest[
     {{{}, {0, 0}, {0, 0, 1, 0, 0, 0, 0}}, {0, 0, 1, 1, 2, 1, 0}},
     TestID -> "wl program: a source with no statement is one Null; a statement with no leaf ends its leaves before they begin"]
 VerificationTest[
+    With[{flat = Wolfram`Parser`Languages`WolframLanguage`Private`flatProgram, s = "x = 1\n\ny = x + 1"},
+        With[{f = flat[s], p = WolframLanguageProgram[s]},
+            {Developer`PackedArrayQ /@ f, f[[1]] === Join[p[[1]], {0, 0, 0}], f[[2]] === Join[{0, Length[p[[2]]]}, p[[2]], p[[3]]], flat[""], flat["f[1,]"]}]],
+    {{True, True}, True, True, {{0, 0, 0}, {0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0}}, None},
+    TestID -> "wl program: flat, the padded codes and one array of the program and its parts"]
+VerificationTest[
     Developer`PackedArrayQ /@ WolframLanguageProgram["f[x_] := x^2\n\ng[1]"],
     {True, True, True},
     TestID -> "wl program: its codes, instructions and parts are packed"]

@@ -1796,16 +1796,22 @@ WolframLanguageHeldNext[s_String, pos_Integer] := Block[{j = heldNextState[s], s
    each part WolframLanguageHeldNext gives, in order. Any other source is None, for
    WolframLanguageHeldNext to read. The parser reads the tokens alone where none is two; the
    only warnings of a source read whole are the Nulls a comma leaves, which the program marks,
-   and a string's escapes. Nothing is kept for a call after it. The typed program makes it in one
-   call where a compiler of typed code gave it a definition; else, and for the sources it leaves to
-   them, the typed stages each in turn do. *)
-WolframLanguageProgram[s_String] := With[{codes = ToCharacterCode[s]},
-    If[ fastProgramFunction === None, stagesProgram[s, codes],
-        With[{r = fastProgramFunction[paddedCodes[codes], Sequence @@ $fastProgramTables]},
-            Which[r[[1]] === 0, {codes, r[[3 ;; 2 + r[[2]]]], r[[3 + r[[2]] ;;]]}, r[[1]] === 1, None, True, stagesProgram[s, codes]]]]]
+   and a string's escapes. Nothing is kept for a call after it. *)
+WolframLanguageProgram[s_String] := Replace[flatProgram[s], {padded_, r_} :> {Drop[padded, -3], r[[3 ;; 2 + r[[2]]]], Drop[r, 2 + r[[2]]]}]
 
-(* the program of a source by the typed stages, each called in turn *)
-stagesProgram[s_String, codes_List] := Block[{escapes = MemberQ[codes, 92], padded, lexed, prog, parts},
+(* The program of a source in two packed arrays, as a kernel's builder takes it with the fewest
+   steps: {the codes and three zeros after them, {0, the program's length, the program, then the
+   parts}}, or None. The typed program makes it in one call where a compiler of typed code gave it
+   a definition; else, and for the sources it leaves to them, the typed stages each in turn do. *)
+flatProgram[s_String] := flatOf[fastProgramFunction, s, ToCharacterCode[s <> "\.00\.00\.00"]]
+flatOf[None, s_String, _] := stagesProgram[s]
+flatOf[f_, s_String, padded_List] := typedFlat[f[padded, Sequence @@ $fastProgramTables], padded, s]
+typedFlat[r_List, padded_List, s_String] := Switch[r[[1]], 0, {padded, r}, 1, None, _, stagesProgram[s]]
+typedFlat[_, _, s_String] := stagesProgram[s]
+
+(* the program of a source by the typed stages, each called in turn, as flatProgram gives it *)
+stagesProgram[s_String] := Block[{codes = ToCharacterCode[s], escapes, padded, lexed, prog, parts},
+    escapes = MemberQ[codes, 92];
     If[ escapes && lineContinuations[s] =!= {}, None,
         padded = paddedCodes[codes];
         lexed = fastLexFunction[padded, $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];
@@ -1815,7 +1821,8 @@ stagesProgram[s_String, codes_List] := Block[{escapes = MemberQ[codes, 92], padd
             If[ lexed[[1]] =!= 0 || prog[[1]] =!= 0, None,
                 parts = fastWholeFunction[prog, lexed, fastLinesFunction[padded, lexed, prog, ConstantArray[0, lexed[[2]] + 1], $fastClasses, $fastNewlineNames,
                     $fastNoKept, Developer`ToPackedArray[{prog[[2]], Length[codes] + 1, 0, 1, 0, 0, Length[codes], 0, 0}]]];
-                If[parts[[1]] > 0 || escapes && escapeWarnedQ[codes, lexed], None, {codes, prog, parts}]]]]]
+                If[parts[[1]] > 0 || escapes && escapeWarnedQ[codes, lexed], None,
+                    {padded, Developer`ToPackedArray[Join[{0, Length[prog]}, prog, parts]]}]]]]]
 
 (* whether a string of a lexed source read whole warns of an escape *)
 escapeWarnedQ[codes_List, lexed_List] := warningsAt[codes, lexed, 1, lexed[[2]], 0, Flatten[Position[lexed[[3 ;; 2 + 5 lexed[[2]] ;; 5]], $tkString]]] =!= {}
