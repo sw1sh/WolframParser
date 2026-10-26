@@ -729,7 +729,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                             cl == 1 || cl == 2 || cl == 5 || c == 42 || c == 64, x++; we = x,
                                             (* a letter's long name, in a name's token *)
                                             c == 92,
-                                                While[pTok[[5 tt + 1]] <= x, tt++];
+                                                While[tt < pTok[[2]] && pTok[[5 tt + 1]] <= x, tt++];
                                                 If[ pTok[[5 tt - 2]] == 1 && pTok[[5 tt]] <= x && pCodes[[x + 1]] == 91,
                                                     x += 2;
                                                     While[(48 <= pCodes[[x]] && pCodes[[x]] <= 57) || (65 <= pCodes[[x]] && pCodes[[x]] <= 90) || (97 <= pCodes[[x]] && pCodes[[x]] <= 122), x++];

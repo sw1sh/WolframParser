@@ -928,6 +928,14 @@ VerificationTest[
     {4, 7, True, False, True},
     TestID -> "wl: a blank where a message name's tag goes is no Wolfram Language"]
 
+(* the words of a query that reach a backslash past the last token the lexer read end there, each
+   entry returning at once *)
+VerificationTest[
+    Map[Function[s, MatchQ[TimeConstrained[{WolframLanguageSyntaxQ[s], WolframLanguageSyntaxLength[s], WolframLanguageHeld[s]}, 5, $Aborted], {_, _, _}]],
+        {"?\\[\n??/:", "?\\[Foo]16^^ff].5", "??\t@@\\[Foo]", "?a\\["}],
+    {True, True, True, True},
+    TestID -> "wl: the words of a query end at a backslash the tokens do not reach"]
+
 VerificationTest[
     {Take[WolframLanguageHeldNext["?a*=b\na::b_", 1], 2], Take[WolframLanguageHeldNext["?a*=b\na::b_", 7], 2]},
     {{HoldComplete[Information["a*", LongForm -> False] = b], 7}, {HoldComplete[a::b*_], 12}},
