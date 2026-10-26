@@ -39,7 +39,7 @@ integers:
 |---|---|
 | `codes` | The source's character codes. |
 | `prog` | `fastParse`'s program of all the statements: `{0, n}` and then the `n` instructions, three integers each: instruction `k` is `prog[[3k ;; 3k + 2]]`. |
-| `parts` | `fastWhole`'s: `{0, m, r}`, then the `m` leaves' kinds, their marks, their starts and their ends, `m` integers each, then `r` rows of four, one for each part `WolframLanguageHeldNext` gives, in order. |
+| `parts` | `fastWhole`'s, after the program in its array: `{0, m, r}`, then the `m` leaves' kinds, their marks, their starts and their ends, `m` integers each, then `r` rows of four, one for each part `WolframLanguageHeldNext` gives, in order. |
 
 A leaf's text is `codes[[start ;; end - 1]]`, the characters of its token. A statement's row is
 `{first instruction, last instruction, first leaf, last leaf}`, its last instruction its code 25,
