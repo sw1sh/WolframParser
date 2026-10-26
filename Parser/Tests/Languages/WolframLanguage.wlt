@@ -799,8 +799,8 @@ VerificationTest[
 
 (* {a number's text, Wolfram 15's value of it}: the subnormal machine real nearest it, zero where
    that is nearer, past the greatest machine real the value at machine precision, a zero of a
-   precision exact where it is an integer's, and an integer's digits before a mark with no
-   precision read as a real's, the first of them its first digit *)
+   precision exact where it is an integer's, and an integer before a mark with no precision its
+   value as a machine real *)
 $wlNumberCases = {
     {"1.*^-310", 1.*^-310},
     {"5.*^-324", 5.*^-324},
@@ -814,8 +814,8 @@ $wlNumberCases = {
     {"0`", 0.},
     {"0`10", 0},
     {"0.`10", 0.},
-    {"108`", 1.08},
-    {"108`*^2", 108.},
+    {"108`", 108.},
+    {"108`*^2", 10800.},
     {"007`", 7.},
     {"108.`", 108.},
     {"16^^ff`", 255.},

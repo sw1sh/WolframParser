@@ -553,12 +553,6 @@ markedNumberValue[s_String] := Module[{base = 10, text = s, exponent = 0, mark =
         mark === "Precision" && markText =!= "" && digits === 0, If[point, 0., 0],
         mark === "Precision" && markText =!= "", With[{p = digitsInBase[signedValue[markText], base]},
             SetPrecision[scaledValue[digits, base, scale, Max[p, 0]], p]],
-        (* the digits of an integer before a mark with no precision as one before its point, the
-           first of them its first digit, where that is a machine real other than zero; else the
-           value [WL 15.0.0] *)
-        mark === "Precision" && base === 10 && ! point,
-            With[{shifted = machineValue[digits, base, scale - Max[IntegerLength[digits] - 1, 0]]},
-                If[MachineNumberQ[shifted] && (shifted != 0 || digits === 0), shifted, machineValue[digits, base, scale]]],
         mark === None && significantDigits[int <> frac, base, StringContainsQ[s, "*^"]], longValue[digits, base, scale, StringLength[frac] - exponent],
         True, machineValue[digits, base, scale]]
 ]
