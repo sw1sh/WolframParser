@@ -24,8 +24,7 @@ And these tables of the paclet, constant for a version of it:
 | Table | What it is |
 |---|---|
 | `$fastHeadNames` | The heads, a list of strings, by head code: code `k` is the head named `$fastHeadNames[[k]]`. A head of a value is the `` System` `` symbol of that name, as `heldSymbol` gives it. Codes 1 to 7 are `"Minus"`, `"Unset"`, `"Paren"`, `"List"`, `"Association"`, `"NotNot"` and `"Optional"`. |
-| special head codes | `fastHeadCode[name]` for `"Minus"`, `"Plus"`, `"Paren"`, `"Times"`, `"At"`, `"SlashSlash"` and `"Divide"`, which instructions 2, 4, 5 and 9 read apart. `"Paren"`, `"At"`, `"SlashSlash"` and `"Divide"` name no head of a value. |
-| `$fastSpliceHeads` | 1 by head code where a flat chain of the head splices (see Marks): `Composition`, `RightComposition`, `StringJoin`, `NonCommutativeMultiply`, `Dot`, `Times`, `Plus`, `And`, `Or`, `Alternatives`, `StringExpression`; else 0. |
+| special head codes | `fastHeadCode[name]` for `"Minus"`, `"Paren"`, `"At"`, `"SlashSlash"` and `"Divide"`, which instructions 2, 4 and 9 read apart. `"Paren"`, `"At"`, `"SlashSlash"` and `"Divide"` name no head of a value. |
 | `$fastIntegralList` | The integrals by index, each `{head name, kind}`, the kind `Integrate` for the integral form of instruction 24. |
 
 ## A whole source
@@ -84,21 +83,20 @@ keeps nothing.
 |---|---|
 | a stack of values | Held expressions, `HoldComplete[e]`, built without evaluating anything. `sp` is the top. |
 | a stack of marks | One integer by value (see Marks). |
-| `ats` | For a value of mark 3, `{head, argument}`, both held. |
 | a stack of heads | The relations' operators that instruction 6 pushes and instruction 7 takes. |
 | the leaf cursor | The next leaf, from the first; instruction 1 takes it. |
 | the statements | The values that instruction 25 takes, in order. `fastBuild` gives this list. |
 
 ### Marks
 
-A value's mark is what the kernel's reader reads differently for it:
+A value's mark is what a notebook reads differently for it:
 
 | Mark | The value | What reads it |
 |---|---|---|
-| 0 | anything else | |
-| 1 | a number literal, or one in parentheses | A minus folds into it: `-5` is the integer `-5`, `-(2.5)` the real `-2.5`. |
-| 2 | a product, the flat chain of `Times` | A minus joins its factors: `-a b` is `Times[-1, a, b]`. |
-| 3 | a call of a symbol by `@`, or a unary plus, with `ats` its head and argument | A flat chain of the same head, among the splicing heads, takes the argument for the call: `a <> StringJoin @ b` is `StringJoin[a, b]`, `a + +b` is `Plus[a, b]`. |
+| 0 | anything else, a number in parentheses and a product too | A minus is `Times[-1, x]`: `-(2)` is `Times[-1, 2]`, `a - b c` is `Plus[a, Times[-1, Times[b, c]]]`. |
+| 1 | a number literal | A minus right before it folds into it: `-5` is the integer `-5`. |
+
+No flat chain splices an operand: `a <> StringJoin @ b` is `StringJoin[a, StringJoin[b]]` and `a + +b` is `Plus[a, Plus[b]]`.
 
 Every instruction that makes a value sets its mark: 0 but where the table below says otherwise.
 
@@ -111,19 +109,19 @@ where the instruction takes none.
 | Code | Operands | Effect |
 |---|---|---|
 | 1 | kind, token | Push the next leaf's value (see Leaves), its mark the leaf's. The kind and token are the lexer's: `texts` holds the token's characters. |
-| 2 | head | Prefix. `Minus`: `x` negated: mark 1, the number negated; mark 2, `Times[-1, factors...]`; else `Times[-1, x]`. `Plus`: `Plus[x]`, mark 3, `ats` `{Plus, x}`. Else `head[x]`. |
+| 2 | head | Prefix. `Minus`: `x` negated: mark 1, the number negated; else `Times[-1, x]`. Else `head[x]`, `Plus[x]` for a unary plus. |
 | 3 | head | Postfix: `head[x]`. |
-| 4 | head | Binary, pop 1 (`y`): `At`: `x[y]`, of mark 3 with `ats` `{x, y}` where `x` is a symbol; `SlashSlash`: `y[x]`; `Divide`: `Times[x, Power[y, -1]]`; else `head[x, y]`. |
-| 5 | head, n | A flat chain of `n` operands: `head[ops...]`. Where the head splices and an operand is of mark 3 with `ats` of this head, its argument stands for it. Mark 2 where the head is `Times`. |
+| 4 | head | Binary, pop 1 (`y`): `At`: `x[y]`; `SlashSlash`: `y[x]`; `Divide`: `Times[x, Power[y, -1]]`; else `head[x, y]`. |
+| 5 | head, n | A flat chain of `n` operands: `head[ops...]`. |
 | 6 | head | Push the head on the stack of heads; the values stay. |
 | 7 | n | A chain of `n` relations' operands, with the last `n - 1` heads (taken from the stack of heads): all one head, not a vector relation: `head[ops...]`; else as below. |
 | 8 | n | A call, pop `n` (the arguments): `x[args...]`. |
-| 9 | head, n | A group. `Paren`: the value stays, its mark 1 where it was 1, else 0. Else pop `n`, `head[items...]`: `List`, `Association` and the long-name brackets. |
+| 9 | head, n | A group. `Paren`: the value stays, its mark 0. Else pop `n`, `head[items...]`: `List`, `Association` and the long-name brackets. |
 | 10 | n | A part, pop `n` (the indices): `Part[x, indices...]`. |
 | 11 | 1 where a comma leaves it, else 0 | Push `Null`. The `Null` a comma leaves, as in `f[1,]`, gives the warning `{"com"}`; a `;`'s gives none. |
 | 12 | | Push `All`. |
 | 13 | | Push the integer `1`, mark 1: the first of a span begun with `;;`. |
-| 14 | n | A message name, pop `n` (the symbol and its tags): `MessageName[items...]`. |
+| 14 | n | A message name, pop `n` (the symbol and its parts): `MessageName[items...]`. A part that is a word of one token comes as a leaf of kind 100, its text. |
 | 15 | n | A type's parameters, pop `n`: `TypeSpecifier[x][params...]`. |
 | 16 | primes | `Derivative[primes][x]`. |
 | 17 | | `a ~f~ b`: the top three are `a`, `f`, `b`; they become `f[a, b]`. |
@@ -172,7 +170,7 @@ pair once.
 | 7 | Out | `%` `Out[]`, `%%` `Out[-2]`, `%` k times `Out[-k]`, `%n` `Out[n]`. |
 | 8 | File | The name of `<<`, `>>` or `>>>`: a quoted one as a string; else its characters with `\.hh`, `\:hhhh` and `\[Name]` decoded, as a string. |
 | 20 | Boxes | Linear syntax: `\(...\)` its boxes; `\!\(...\)` `` Wolfram`Parser`Languages`WolframLanguage`LinearBoxes[boxes] ``, whose `MakeExpression` the kernel applies. |
-| 100 | Tag | A message name's tag: the text as a string. |
+| 100 | Tag | A word of one token after a `::`, or of a query that does not begin its statement: the text as a string. |
 
 ## Failures and warnings
 
