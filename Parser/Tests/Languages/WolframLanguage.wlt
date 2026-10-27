@@ -407,6 +407,31 @@ Scan[
         TestID -> "wl span, reader and grammar: " <> c[[1]]]],
     $wlSpans]
 
+(* === free-form input, by the reader and by the grammar: =[ and its text to the first ], a long
+   name in it one character, is FreeformEvaluate of the text, an operand like any other, as
+   Wolfram 15 reads it; CodeParser has no free-form input === *)
+$wlFreeform = {
+    {"=[b]", List[HoldComplete[FreeformEvaluate["b"]]]},
+    {"=[ b ]", List[HoldComplete[FreeformEvaluate[" b "]]]},
+    {"=[]", List[HoldComplete[FreeformEvaluate[""]]]},
+    {"a=[b, c]", List[HoldComplete[Times[a, FreeformEvaluate["b, c"]]]]},
+    {"a =[b] c", List[HoldComplete[Times[a, FreeformEvaluate["b"], c]]]},
+    {"x = =[b]", List[HoldComplete[Set[x, FreeformEvaluate["b"]]]]},
+    {"x=[b]=5", List[HoldComplete[Set[Times[x, FreeformEvaluate["b"]], 5]]]},
+    {"=[b]^2", List[HoldComplete[Power[FreeformEvaluate["b"], 2]]]},
+    {"f[=[b]]", List[HoldComplete[f[FreeformEvaluate["b"]]]]},
+    {"=[(* c *)]", List[HoldComplete[FreeformEvaluate["(* c *)"]]]},
+    {"=[\\[Alpha] a\\n]", List[HoldComplete[FreeformEvaluate["\[Alpha] a\\n"]]]},
+    {"=[\"a\"]", List[HoldComplete[FreeformEvaluate["\"a\""]]]},
+    {"a == b", List[HoldComplete[Equal[a, b]]]}
+};
+Scan[
+    Function[c, VerificationTest[
+        {WolframLanguageHeld[c[[1]]], Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$fastHeldReader = False}, WolframLanguageHeld[c[[1]]]]},
+        {c[[2]], c[[2]]},
+        TestID -> "wl free-form, reader and grammar: " <> c[[1]]]],
+    $wlFreeform]
+
 (* === a source: newlines end expressions outside brackets, comments are whitespace === *)
 VerificationTest[
     WolframLanguageHeld["a = 1;\n(* c *)\nb\n\nc;\nd +\n e\nf (* x *)\n(* y *)"],
@@ -519,7 +544,10 @@ $wlFailures = {
     {"a ;; !", {7, True}},
     {"a ;; b ;; ++", {13, True}},
     {"a;!", {4, True}},
-    {"a; ++", {6, True}}
+    {"a; ++", {6, True}},
+    (* free-form input to its first ]: a ] after it closes nothing *)
+    {"a + =[b", {8, True}},
+    {"=[b]]", {6, False}}
 };
 Scan[
     Function[c, VerificationTest[wlStop[WolframLanguageHeld[c[[1]]]], c[[2]], TestID -> "wl failure: " <> c[[1]]]],
@@ -888,6 +916,9 @@ VerificationTest[
 (* SyntaxQ and SyntaxLength as Wolfram 15 gives them for each source *)
 $wlSyntaxCases = {
     {"", False, 0},
+    {"a =[b] c", True, 8},
+    {"a + =[b", False, 5},
+    {"=[b", False, 3},
     {" ", True, 1},
     {"a", True, 1},
     {"a + b c", True, 7},

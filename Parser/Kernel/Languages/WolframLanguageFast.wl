@@ -119,7 +119,7 @@ $fastSpecial := $fastSpecial = Developer`ToPackedArray[{$fastOpenAssociation, $f
 (* token kinds *)
 $tkEnd = 0; $tkName = 1; $tkBlank = 2; $tkInteger = 3; $tkReal = 4; $tkString = 5; $tkSlot = 6; $tkOut = 7; $tkFile = 8;
 $tkOperator = 9; $tkOpenParen = 10; $tkCloseParen = 11; $tkOpenSquare = 12; $tkCloseSquare = 13; $tkOpenCurly = 14;
-$tkCloseCurly = 15; $tkOpenAssociation = 16; $tkCloseAssociation = 17; $tkComma = 18; $tkPrimes = 19; $tkBoxes = 20
+$tkCloseCurly = 15; $tkOpenAssociation = 16; $tkCloseAssociation = 17; $tkComma = 18; $tkPrimes = 19; $tkBoxes = 20; $tkFreeform = 21
 
 (* the source is no Wolfram Language: the character where reading stops, as
    the kernel's reader stops there, and whether the source ends before its
@@ -150,9 +150,10 @@ fastFailure[position_Integer, incomplete_] := Failure["ParseError", <|
    (1 where a newline outside a comment comes before it)}, the last token
    the end. Status 1: the source holds a character no token has, where the
    last token, the one that stops there, ends; 3: the source ends in a
-   string, a comment or a linear syntax's \( not closed. Whitespace and
-   comments are in no token; after << and >> the file is one token, and
-   so is a \( to its \), the boxes of linear syntax, a \! before it too.
+   string, a comment, a linear syntax's \( or a free-form input's =[ not
+   closed. Whitespace and comments are in no token; after << and >> the
+   file is one token, and so is a \( to its \), the boxes of linear
+   syntax, a \! before it too, and a =[ to its ], free-form input.
    Its loop is kept small, which a compiler of typed code makes fast: a
    comment, a quoted string or file, a path, a number, a slot, a blank's
    head and linear syntax are each read by a typed function of its own,
@@ -265,7 +266,21 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                             (* =. before a digit: =, then a number *)
                             If[op == spUnset && i + 2 <= n && 48 <= lexCodes[[i + 2]] <= 57, op = spSet; len = 1];
                             j = i + len;
-                            Which[op == 0, status = 1; j = i, op == spOpen, kind = 16, op == spClose, kind = 17, op == spComma, kind = 18, True, kind = 9]];
+                            Which[
+                                op == 0, status = 1; j = i,
+                                (* =[ and the free-form input after it, to the first ], a long name in it one character *)
+                                op == spSet && len == 1 && lexCodes[[i + 1]] == 91,
+                                    j = i + 2; scanning = 1;
+                                    While[ scanning == 1 && j <= n,
+                                        Which[
+                                            lexCodes[[j]] == 93, scanning = 0,
+                                            lexCodes[[j]] == 92 && lexCodes[[j + 1]] == 91,
+                                                If[lnAt != j, lnAt = j; lnVal = lexLongName[lexCodes, lexLongOps, j, n]];
+                                                If[lnVal > 0, j = Quotient[lnVal, 8192], j++],
+                                            True, j++]];
+                                    If[j > n, status = 3, j++];
+                                    kind = 21,
+                                op == spOpen, kind = 16, op == spClose, kind = 17, op == spComma, kind = 18, True, kind = 9]];
                     (* a blank: _, __ or ___, then a . or a name *)
                     If[ kind == 2 && status == 0,
                         r = lexBlank[lexCodes, lexClasses, lexLongOps, i, j, n]; j = Quotient[r, 2]; status = Mod[r, 2]];
@@ -605,10 +620,10 @@ fastSpecIndex[spec_] := First[FirstPosition[$fastSpecList, spec, {0}, {1}, Heads
 $fastOpSpecIndex := $fastOpSpecIndex = With[{n = $fastNotId + 1}, Developer`ToPackedArray[
     Table[Which[KeyExistsQ[$fastLedTable, k], fastSpecIndex[$fastLedTable[k]],
         KeyExistsQ[$fastPrefixOnly, k], fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}], True, 0], {k, 0, n}]]]
-$fastKindSpecIndex := $fastKindSpecIndex = Developer`ToPackedArray[ReplacePart[ConstantArray[0, 21], Join[
+$fastKindSpecIndex := $fastKindSpecIndex = Developer`ToPackedArray[ReplacePart[ConstantArray[0, 22], Join[
     {($tkOpenSquare + 1) -> fastSpecIndex[{176, "Call", "Call"}], ($tkPrimes + 1) -> fastSpecIndex[{154, "Derivative", "Derivative"}]},
     Map[(# + 1) -> fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}] &,
-        {$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation, $tkBoxes}]]]]
+        {$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation, $tkBoxes, $tkFreeform}]]]]
 fastLedIndices[lexed_List] := fastLedFunction[lexed, $fastKindSpecIndex, $fastOpSpecIndex, $fastLedParams]
 $fastLedParams := $fastLedParams = Developer`ToPackedArray[{$tkOperator, $fastEqual, $fastDot, $fastUnsetSpecIndex}]
 $fastUnsetSpecIndex := $fastUnsetSpecIndex = fastSpecIndex[{9, "Unset", "Unset"}]
@@ -699,7 +714,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                     sp++; base = 8 (sp - 1); fr[[base + 1]] = 7; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
                                     t++; pMin = pSpecial[[16]]; pRbp = 0; pPlain = 1; mode = 1,
                                     mode = 3],
-                            (k >= 2 && k <= 7) || k == 20,
+                            (k >= 2 && k <= 7) || k == 20 || k == 21,
                                 on++; out[[3 on]] = 1; out[[3 on + 1]] = k; out[[3 on + 2]] = t; t++; mode = 3,
                             k == 10,
                                 t++; brackets++;
@@ -1448,7 +1463,7 @@ $fastKeyCodeArray := $fastKeyCodeArray = Developer`ToPackedArray[fastKeyCode /@ 
 
 fastText[a_Integer, b_Integer] := FromCharacterCode[$fcodes[[a ;; b - 1]]]
 
-$fastLeafKinds = <|1 -> "Symbol", 2 -> "Blank", 3 -> "Integer", 4 -> "Real", 5 -> "String", 6 -> "Slot", 7 -> "Out", 8 -> "File", 20 -> "Boxes", 100 -> "Tag"|>
+$fastLeafKinds = <|1 -> "Symbol", 2 -> "Blank", 3 -> "Integer", 4 -> "Real", 5 -> "String", 6 -> "Slot", 7 -> "Out", 8 -> "File", 20 -> "Boxes", 21 -> "Freeform", 100 -> "Tag"|>
 
 (* the held values of a postfix program, its instructions {code, a, b} one after another, and the
    kinds, texts and marks of its leaves, those fastLeafData gives: the statements'. A value on the
@@ -1766,8 +1781,8 @@ $fastWarnParams := $fastWarnParams = Developer`ToPackedArray[{$tkOperator, $tkCo
 
 (* the kinds of token that open a bracket's items, and that close them, by kind + 1, and the
    operators that do, the long-name brackets, by operator + 1 *)
-$openKindFlags = Developer`ToPackedArray[ReplacePart[ConstantArray[0, 21], Thread[{12, 14, 16} + 1 -> 1]]];
-$closeKindFlags = Developer`ToPackedArray[ReplacePart[ConstantArray[0, 21], Thread[{0, 13, 15, 17, 18} + 1 -> 1]]];
+$openKindFlags = Developer`ToPackedArray[ReplacePart[ConstantArray[0, 22], Thread[{12, 14, 16} + 1 -> 1]]];
+$closeKindFlags = Developer`ToPackedArray[ReplacePart[ConstantArray[0, 22], Thread[{0, 13, 15, 17, 18} + 1 -> 1]]];
 $warnOpenOps := $warnOpenOps = Developer`ToPackedArray[ReplacePart[ConstantArray[0, $fastNotId + 2],
     Thread[(Append[Keys[$fastGroupTable], fastLongOp["LeftDoubleBracket"]] + 1) -> 1]]]
 $warnCloseOps := $warnCloseOps = Developer`ToPackedArray[ReplacePart[ConstantArray[0, $fastNotId + 2],
@@ -1918,6 +1933,7 @@ syntaxStop[s_String] := Module[{spans = lineContinuations[s], clean, kept, codes
         Which[
             prog[[1]] === 1 && prog[[2]] < k, parserStop[cut, prog[[2]], prog[[3]], source, length],
             lexed[[1]] === 3 && lexed[[5 k - 2]] === $tkBoxes, length + 2,
+            lexed[[1]] === 3 && lexed[[5 k - 2]] === $tkFreeform, With[{p = source[lexed[[5 k]]]}, If[p === 1, length, p]],
             lexed[[1]] === 3 && lexed[[5 k - 2]] === $tkString && lexed[[5 k + 2]] === 1 && prog[[1]] === 0, source[lastNewline[codes, lexed[[5 k]]]],
             lexed[[1]] === 3 && lexed[[5 k - 2]] === $tkString, With[{p = source[lexed[[5 k]]]}, If[p === 1, length, p]],
             lexed[[1]] === 3, With[{p = source[unclosedComment[codes, If[k > 1, lexed[[5 (k - 1) + 1]], 1]]]}, If[p === 1, length, p]],

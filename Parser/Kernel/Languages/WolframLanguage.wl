@@ -161,6 +161,9 @@ $informationName = text[$informationWord ~~ ParseMany[ParseRegex["[ \t]+"] ~~ $i
 
 $out = ParseAction[ParseLookahead[ParseLiteral["%"]] ~~ ParseRegex["%+[0-9]*"], #2 &]
 
+(* free-form input: =[ and its text to the first ], a \[Name] in it one character *)
+$freeform = ParseRegex["=\\[(?:\\\\\\[[A-Za-z0-9]+\\]|[^\\]])*\\]"]
+
 (* the file of << and >>: a string, or the characters of a path or a
    context, a \ among them, \[Name] one character; and one whose \[ is
    not closed *)
@@ -276,6 +279,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
         ParseAction[after[ParseLiteral["<|"], wsAll] ~~ items["|>"] ~~ after[ParseLiteral["|>"], ws],
             alg["Group"]["Association", #2] &],
         ParseAction[operator["<<"] ~~ leaf[$file, "File"], alg["Prefix"]["Get", #2] &],
+        leaf[$freeform, "Freeform"],
         spanStart, information, Sequence @@ longGroups, Sequence @@ integrals];
     plainUnit = ParseChoice[symbolLeaf, otherUnits];
     unit = ParseChoice[patternUnit, otherUnits];
@@ -318,10 +322,10 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
             ParseChoice[ParseAction[ParseLookahead[RecRef[prefixAhead]] ~~ RecRef[compoundOperand], #2 &],
                 ParseAction[ParseNotFollowedBy[RecRef[prefixAhead]] ~~ ParseOptional[RecRef[compoundOperand]], #2 &]], {#2} &]],
         Function[With[{parts = nullLeaf /@ Map[First, {##}]}, Function[a, alg["Infix"]["CompoundExpression", Prepend[parts, a]]]]]];
-    (* the = of a set, before a number its . begins too; and = then a .
-       not a number's, trivia between them, an unset *)
+    (* the = of a set, before a number its . begins too, not the = of free-form input; and = then
+       a . not a number's, trivia between them, an unset *)
     setOperator = after[ParseLiteral["="] ~~
-        ParseNotFollowedBy[ParseChoice[ParseLiteral["="], ParseLiteral["!="], ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]]]], wsAll];
+        ParseNotFollowedBy[ParseChoice[ParseLiteral["="], ParseLiteral["!="], ParseLiteral["["], ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]]]], wsAll];
     unset = after[ParseLiteral["="] ~~ ParseNotFollowedBy[ParseChoice[ParseLiteral["="], ParseLiteral["!="]]] ~~ wsAll ~~
         ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter | "."]], ws];
     tagSet = ParseAction[operator["/:"] ~~ RecRef[tagLeft] ~~ ParseChoice[
@@ -349,7 +353,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     (* a b: a product where an operand follows an operand *)
     implicit = ParseAction[ParseLookahead[ParseChoice[
             ParseCharacter[LetterCharacter | DigitCharacter | "$" | "`" | "\"" | "_" | "#" | "%" | "(" | "{"],
-            ParseLiteral["<|"],
+            ParseLiteral["<|"], ParseLiteral["=["],
             ParseLiteral["."] ~~ ParseCharacter[DigitCharacter],
             $letter,
             ParseLookahead[ParseCharacter[_?prefixOnlyStartQ]] ~~ ParseChoice @@ (ParseLiteral /@ Catenate[longNameSpellings /@ $prefixOnlyNames])]],
@@ -671,6 +675,8 @@ heldLeafValue["Out", s_String] := outExpression[s]
 heldLeafValue["Tag", s_String] := HoldComplete[s]
 heldLeafValue["File", s_String] := HoldComplete @@ {If[StringStartsQ[s, "\""], stringValue[s], fileValue[s]]}
 heldLeafValue["Boxes", s_String] := linearHeld[s]
+(* =[text] is FreeformEvaluate["text"], its long names decoded, as those of a file are *)
+heldLeafValue["Freeform", s_String] := symbolCall["FreeformEvaluate", {HoldComplete @@ {fileValue[StringTake[s, {3, -2}]]}}]
 
 heldLeaf["Integer" | "Real", s_String] := <|"Expr" -> heldLeafValue["Integer", s], "Literal" -> True, "Chain" -> False|>
 heldLeaf[kind_String, s_String] := held[heldLeafValue[kind, s]]
