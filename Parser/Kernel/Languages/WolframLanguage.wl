@@ -168,7 +168,10 @@ $freeform = ParseRegex["=\\[(?:\\\\\\[[A-Za-z0-9]+\\]|[^\\]])*\\]"]
    context, a letter past ASCII and a \ among them, \[Name] one
    character; and one whose \[ is not closed *)
 $fileCharacters = "(?:[A-Za-z0-9$`_./~:!*?-]|(?![\\x00-\\x7F])\\p{L}|\\\\\\[[A-Za-z0-9]+\\]|\\\\(?!\\[))"
-$file = ParseChoice[$string, ParseRegex[$fileCharacters <> "+"]]
+(* a bracket in a file's name to its ], brackets nested; and what may not follow the name, nor a
+   \ end the source after it *)
+$fileBracket = "(\\[(?:[^\\[\\]]|(?-1))*\\])"
+$file = ParseChoice[$string, ParseRegex["(?:" <> $fileCharacters <> "|" <> $fileBracket <> ")++(?![#%&'+<=>@^|])(?!(?<=\\\\)\\z)"]]
 $unterminatedFile = ParseRegex[$fileCharacters <> "*\\\\\\[[A-Za-z0-9]*+(?!\\])"]
 
 (* a comment, the comments nested in it too; with escapes a backslash before a star or an opening

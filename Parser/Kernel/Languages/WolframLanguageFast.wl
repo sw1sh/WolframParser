@@ -341,14 +341,16 @@ $lexQuotedDeclaration = FunctionDeclaration[lexQuoted,
             2 j + unclosed]]]];
 
 (* The file of << or >> at at: a quoted one, or the characters of a path, letters past ASCII
-   among them, its long names whole:
+   among them, its long names whole and a bracket in it to its ], brackets nested; none, as
+   Wolfram 15 reads none, where a bracket in it is not closed, the source ends in a \ after it
+   or one of # % & ' + < = > @ ^ | follows it:
    4 times just past it, plus the status, 1 where reading stops at it, 3 where the source ends in
    its quotes. *)
 $lexFileDeclaration = FunctionDeclaration[lexFile,
     Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger"} ->
         "MachineInteger"] @
     Function[{flCodes, flClasses, flTable, flAt, flN},
-        Native`UncheckedBlock[Module[{j = flAt, r = 0, status = 0, scanning = 1, c2 = 0, cl = 0, ln = 0},
+        Native`UncheckedBlock[Module[{j = flAt, r = 0, status = 0, scanning = 1, c2 = 0, cl = 0, ln = 0, depth = 0},
             If[ flCodes[[flAt]] == 34,
                 r = lexQuoted[flCodes, flAt + 1, flN]; j = Quotient[r, 2]; If[Mod[r, 2] == 1, status = 3],
                 While[ scanning == 1 && j <= flN,
@@ -359,7 +361,15 @@ $lexFileDeclaration = FunctionDeclaration[lexFile,
                             ln = lexLongName[flCodes, flTable, j, flN];
                             If[ln > 0, j = Quotient[ln, 8192], status = 1; scanning = 0],
                         c2 == 92, j++,
+                        c2 == 91,
+                            depth = 1; j++;
+                            While[depth > 0 && j <= flN, If[flCodes[[j]] == 91, depth++, If[flCodes[[j]] == 93, depth--]]; j++];
+                            If[depth > 0, status = 1; scanning = 0],
                         True, scanning = 0]];
+                If[ status == 1 || (j > flN && j > flAt && flCodes[[j - 1]] == 92) ||
+                        (j <= flN && (flCodes[[j]] == 35 || flCodes[[j]] == 37 || flCodes[[j]] == 38 || flCodes[[j]] == 39 || flCodes[[j]] == 43 ||
+                            flCodes[[j]] == 60 || flCodes[[j]] == 61 || flCodes[[j]] == 62 || flCodes[[j]] == 64 || flCodes[[j]] == 94 || flCodes[[j]] == 124)),
+                    status = 1; j = flAt];
                 If[j == flAt, status = 1]];
             4 j + status]]]];
 
@@ -1693,8 +1703,13 @@ tokensBefore[lexed_List, k_Integer] := Developer`ToPackedArray[Join[{0, k}, lexe
 statementRanges[prog_List] := With[{r = fastRangesFunction[prog]}, If[r[[1]] === 0, {}, Partition[r[[2 ;;]], 4]]]
 
 (* where the lexer stops, the failure: the source ends in a string or a comment not closed, or
-   holds a character no token has *)
-lexerFailure[lexed_List, n_Integer] := If[lexed[[1]] === 3, fastFailure[n + 1, True], fastFailure[lexed[[5 lexed[[2]] + 1]], False]]
+   holds a character no token has; a file the lexer reads none of after <<, >> or >>>, at the
+   start of the operator, where the kernel's caret is *)
+lexerFailure[lexed_List, n_Integer] := With[{k = lexed[[2]]}, Which[
+    lexed[[1]] === 3, fastFailure[n + 1, True],
+    lexed[[5 k - 2]] === $tkFile && k > 1 && lexed[[5 (k - 1) - 2]] === $tkOperator && MemberQ[{$fastGet, $fastPut, $fastPutAppend}, lexed[[5 (k - 1) - 1]]],
+        fastFailure[lexed[[5 (k - 1)]], False],
+    True, fastFailure[lexed[[5 k + 1]], False]]]
 
 (* The state, the parts of the source read from its character from on appended to its parts and
    the segment they are read from to its segments. The names are Block's: Module would rewrite the
@@ -1939,6 +1954,10 @@ syntaxStop[s_String] := Module[{clean, kept, codes, padded, lexed, prog, k, cut,
             lexed[[1]] === 3 && lexed[[5 k - 2]] === $tkString && lexed[[5 k + 2]] === 1 && prog[[1]] === 0, source[lastNewline[codes, lexed[[5 k]]]],
             lexed[[1]] === 3 && lexed[[5 k - 2]] === $tkString, With[{p = source[lexed[[5 k]]]}, If[p === 1, length, p]],
             lexed[[1]] === 3, With[{p = source[unclosedComment[codes, If[k > 1, lexed[[5 (k - 1) + 1]], 1]]]}, If[p === 1, length, p]],
+            (* a file the lexer read none of after <<, >> or >>>: before the operator *)
+            lexed[[1]] === 1 && lexed[[5 k - 2]] === $tkFile && k > 1 && lexed[[5 (k - 1) - 2]] === $tkOperator &&
+                MemberQ[{$fastGet, $fastPut, $fastPutAppend}, lexed[[5 (k - 1) - 1]]],
+                With[{p = source[lexed[[5 (k - 1)]]]}, If[p === 1, length, p - 1]],
             lexed[[5 k + 2]] === 1 && prog[[1]] === 0 && lexed[[5 k]] <= Length[codes] && (codes[[lexed[[5 k]]]] === 96 || LetterQ[FromCharacterCode[codes[[lexed[[5 k]]]]]]),
                 source[lastNewline[codes, lexed[[5 k]]]],
             True, With[{t = If[k > 1 && lexed[[5 (k - 1) - 2]] === $tkName && lexed[[5 (k - 1) + 1]] === lexed[[5 k]] && codes[[lexed[[5 k]]]] === 92 &&
