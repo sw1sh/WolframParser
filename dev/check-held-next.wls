@@ -8,7 +8,9 @@
    paclet's files cut short, with a character taken out and with one put in. The kernel reads each
    blank line, the LF of a CRLF and each line of a comment alone as a Null, which the reader does
    not [W15 bug], so the parts are held to each other with every part that is Null alone taken out
-   of both. Run it with Wolfram 15:
+   of both. It ends a span before a !, a !! or a long-name prefix operator after ;; and multiplies,
+   where the reader reads the operand [W15 bug], so the parts of a source with one are not held to
+   the kernel's. Run it with Wolfram 15:
        wl -f dev/check-held-next.wls [count]
    It prints how many agree in each set, then each that does not, up to count (by default 10). *)
 
@@ -43,15 +45,21 @@ held[s_String] := With[{r = WolframLanguageHeld[s]}, If[FailureQ[r], {r["Positio
 (* the parts but those that are Null alone *)
 noNulls[parts_List] := DeleteCases[parts, HoldComplete[Null]]
 
+(* a !, a !! or a long-name prefix operator right after ;; *)
+WolframLanguageHeld["1"];
+spanPrefix = With[{p = "Wolfram`Parser`Languages`WolframLanguage`Private`"},
+    Alternatives @@ Join[{"!" ~~ Except["="]}, Catenate[Symbol[p <> "longNameSpellings"] /@ Symbol[p <> "$longNameTable"]["Prefix"][[All, 1]]]]];
+spanPrefixQ[s_String] := StringContainsQ[s, ";;" ~~ WhitespaceCharacter ... ~~ spanPrefix];
+
 (* what differs for s: none, or the parts, the failure or the warnings *)
 problems[s_String] := Module[{o = ours[s], k = kernel[s], h, last, bad = {}},
     last = Last[o[[1]], None];
     If[ k[[1]] =!= $Failed,
-        If[noNulls[o[[1]]] =!= noNulls[k[[1]]], AppendTo[bad, "parts"]],
+        If[noNulls[o[[1]]] =!= noNulls[k[[1]]] && ! spanPrefixQ[s], AppendTo[bad, "parts"]],
         h = held[s];
         Which[
             ! MatchQ[last, {"Failure", __}] || Take[last, {2, 3}] =!= h, AppendTo[bad, "failure"],
-            last[[4]] > 1 && noNulls[Most[o[[1]]]] =!= noNulls[kernel[StringTake[s, last[[4]] - 1]][[1]]], AppendTo[bad, "parts before the failure"]]];
+            last[[4]] > 1 && ! spanPrefixQ[s] && noNulls[Most[o[[1]]]] =!= noNulls[kernel[StringTake[s, last[[4]] - 1]][[1]]], AppendTo[bad, "parts before the failure"]]];
     If[o[[2]] =!= k[[2]], AppendTo[bad, "warnings"]];
     If[bad === {}, {}, {{s, bad, o, k}}]];
 
