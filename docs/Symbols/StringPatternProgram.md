@@ -18,7 +18,7 @@ RelatedGuides: [WolframParser]
 
 - A program matches its pattern as Wolfram 15 does:
   - the alternatives in the order given, the first that matches taken, a literal `""` after the others, and in [Shortest]() before them;
-  - a repeat the longest first, and every repeat in [Shortest]() the shortest first, but not those of [NumberString]();
+  - a repeat the longest first, and every repeat in [Shortest]() the shortest first, those of [NumberString]() too, where Wolfram 15 leaves [NumberString]()'s longest [W15 bug];
   - a test of [PatternTest]() on each character that its pattern matched;
   - <code>[Except]()[*c*, *p*]</code> as *p* after a character that *c*, a pattern of one character, does not match;
   - a name that occurs again, after it on the way a match goes, as the text it matched first;

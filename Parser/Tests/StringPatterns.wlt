@@ -239,9 +239,9 @@ VerificationTest[
 ]
 
 VerificationTest[
-    {engineCases["12.5", Shortest[NumberString]], engineCases["a  b", Shortest["a" ~~ Whitespace]], engineCases["  ", Shortest[Whitespace]]},
-    {StringCases["12.5", Shortest[NumberString]], StringCases["a  b", Shortest["a" ~~ Whitespace]], StringCases["  ", Shortest[Whitespace]]},
-    TestID -> "string patterns: Shortest makes every repeat in it shortest, not those of NumberString"
+    {engineCases["12.5", Shortest[NumberString]], engineCases["x12", "x" ~~ Shortest[NumberString]], engineCases["a  b", Shortest["a" ~~ Whitespace]], engineCases["  ", Shortest[Whitespace]]},
+    {{"1", "2", ".5"}, {"x1"}, StringCases["a  b", Shortest["a" ~~ Whitespace]], StringCases["  ", Shortest[Whitespace]]},
+    TestID -> "string patterns: Shortest makes every repeat in it shortest, those of NumberString too"
 ]
 
 VerificationTest[

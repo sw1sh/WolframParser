@@ -81,18 +81,24 @@ SetAttributes[native, HoldFirst];
 bounded[e_] := MemoryConstrained[TimeConstrained[e, 10, $Aborted], 10^9, $Aborted]
 SetAttributes[bounded, HoldFirst];
 
-answers[s_String, p_, q_] := <|
-    "Cases" -> {bounded[engineCases[s, p]], native[StringCases[s, p]]},
-    "Position" -> {bounded[enginePosition[s, {p}]], native[StringPosition[s, p]]},
-    "MatchQ" -> {bounded[engineMatchQ[s, p]], native[StringMatchQ[s, p]]},
-    "Names" -> {bounded[engineNames[s, p]], native[StringCases[s, p :> {x, y}]]},
-    "Rules" -> {bounded[engineRules[s, p, q]], native[StringCases[s, {p -> 1, q -> 2}]]},
-    "Positions" -> {bounded[enginePosition[s, {p, q}]], native[StringPosition[s, {p, q}]]},
-    "Replace" -> {bounded[engineReplace[s, p, q]], native[StringReplace[s, {p -> "<1>", q -> "<2>"}]]},
-    "Split" -> {bounded[engineSplit[s, p]], native[StringSplit[s, p]]},
-    "All" -> {bounded[engineAll[s, p]], native[StringCases[s, p, Overlaps -> All]]},
-    "AllRules" -> {bounded[engineAllRules[s, p, q]], native[StringCases[s, {p -> 1, q -> 2}, Overlaps -> All]]},
-    "AllPositions" -> {bounded[Map[{#[[1]] + 1, #[[2]]} &, engineMatches[s, {p, q}, "All"]]], native[StringPosition[s, {p, q}, Overlaps -> All]]}|>
+(* Wolfram 15's answer made right where it has a bug: in Shortest, NumberString as the pattern it
+   stands for, whose repeats Shortest makes shortest, where Wolfram 15 leaves them longest [W15 bug] *)
+$numberStringPattern = Repeated[{"+", "-"}, {0, 1}] ~~ ((DigitCharacter .. ~~ Repeated["." ~~ RepeatedNull[DigitCharacter], {0, 1}]) | ("." ~~ DigitCharacter ..));
+right[p_] := p /. s_Shortest :> (s /. NumberString -> $numberStringPattern)
+
+answers[s_String, p0_, q0_] := With[{p = p0, q = q0, pr = right[p0], qr = right[q0]}, answers[s, p, q, pr, qr]]
+answers[s_String, p_, q_, pr_, qr_] := <|
+    "Cases" -> {bounded[engineCases[s, p]], native[StringCases[s, pr]]},
+    "Position" -> {bounded[enginePosition[s, {p}]], native[StringPosition[s, pr]]},
+    "MatchQ" -> {bounded[engineMatchQ[s, p]], native[StringMatchQ[s, pr]]},
+    "Names" -> {bounded[engineNames[s, p]], native[StringCases[s, pr :> {x, y}]]},
+    "Rules" -> {bounded[engineRules[s, p, q]], native[StringCases[s, {pr -> 1, qr -> 2}]]},
+    "Positions" -> {bounded[enginePosition[s, {p, q}]], native[StringPosition[s, {pr, qr}]]},
+    "Replace" -> {bounded[engineReplace[s, p, q]], native[StringReplace[s, {pr -> "<1>", qr -> "<2>"}]]},
+    "Split" -> {bounded[engineSplit[s, p]], native[StringSplit[s, pr]]},
+    "All" -> {bounded[engineAll[s, p]], native[StringCases[s, pr, Overlaps -> All]]},
+    "AllRules" -> {bounded[engineAllRules[s, p, q]], native[StringCases[s, {pr -> 1, qr -> 2}, Overlaps -> All]]},
+    "AllPositions" -> {bounded[Map[{#[[1]] + 1, #[[2]]} &, engineMatches[s, {p, q}, "All"]]], native[StringPosition[s, {pr, qr}, Overlaps -> All]]}|>
 
 (* --- the cases --- *)
 

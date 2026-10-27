@@ -234,8 +234,8 @@ unionSpec[specs_List] := With[{codes = Cases[specs, {"Codes", c_} :> c], others 
         codes === {}, {"Union", others},
         True, {"Union", Prepend[others, {"Codes", Union @@ codes}]}]]
 
-(* Every repeat in Shortest is shortest, those inside another too, but not those of a pattern of
-   Wolfram 15's own, such as NumberString [WL 15.0.0]. *)
+(* Every repeat in Shortest is shortest, those inside another too and those of NumberString, the
+   shortest match the pattern has, where Wolfram 15 leaves NumberString's longest [W15 bug]. *)
 shortest[repeat[p_, min_, max_, _]] := repeat[shortest[p], min, max, False]
 shortest[sequence[parts_List]] := sequence[shortest /@ parts]
 shortest[alternatives[parts_List]] := With[{inner = shortest /@ parts}, alternatives[Join[Cases[inner, literal[{}]], DeleteCases[inner, literal[{}]]]]]
@@ -243,6 +243,7 @@ shortest[named[x_, p_]] := named[x, shortest[p]]
 shortest[tested[p_, f_]] := tested[shortest[p], f]
 shortest[conditioned[p_, test_, names_]] := conditioned[shortest[p], test, names]
 shortest[excluding[test_, p_]] := excluding[test, shortest[p]]
+shortest[builtIn[name_, p_]] := builtIn[name, shortest[p]]
 shortest[p_regular] := p
 shortest[p_] := p
 
