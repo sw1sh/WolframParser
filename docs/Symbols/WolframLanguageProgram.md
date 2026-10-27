@@ -26,7 +26,7 @@ RelatedGuides: [ParserZoo]
 
 - A leaf is a token whose value an instruction pushes. Its mark is 1 for a number literal and 0 for any other, and its text the characters of *code* from its start to the one before its end.
 - A statement's row is `{first, last, firstLeaf, lastLeaf}`: its instructions from *first* to *last*, the last of them the one that ends the statement, and its leaves from *firstLeaf* to *lastLeaf*. A statement with no leaf, such as `{}`, has a *lastLeaf* one less than its *firstLeaf*.
-- A row `{0, 0, 0, 0}` is a Null, a line with no statement on it, which [WolframLanguageHeldNext]() reads as <code>[HoldComplete]()[[Null]()]</code>, as [ToExpression]() gives the parts of *code*. A source with no statement is one Null.
+- The rows are the statements' alone: a blank line, a return and a newline, and a line holding only a comment part statements and have no row, as [Get]() reads them, where Wolfram 15's [ToExpression]() reads each as a [Null]() [W15 bug]. A source with no statement has no rows.
 - Each statement built from its instructions over its leaves, as the reader's build pass builds it, is the part [WolframLanguageHeldNext]() gives, its names made in the [$Context]() and [$ContextPath]() of the moment it is built. The program makes no names: a leaf is its characters.
 - The instructions and the kinds of the leaves are those of the reader's build program, which the paclet's note `ReaderBuild.md` describes for a builder of its own, such as a kernel's.
 - The *codes* of the empty source are `{}`, a list Wolfram 15 does not pack.
@@ -41,15 +41,15 @@ The program of a source of two statements with a blank line between them:
 WolframLanguageProgram["x = 1\n\ny = x + 1"]
 ```
 
-<!-- => {{120, 32, 61, 32, 49, 10, 10, 121, 32, 61, 32, 120, 32, 43, 32, 49}, {0, 10, 1, 1, 1, 1, 3, 3, 4, 61, 0, 25, 1, 4, 1, 1, 4, 1, 1, 6, 1, 3, 8, 5, 28, 2, 4, 61, 0, 25, 4, 9}, {0, 5, 3, 1, 3, 1, 1, 3, 0, 1, 0, 0, 1, 1, 5, 8, 12, 16, 2, 6, 9, 13, 17, 1, 4, 1, 2, 0, 0, 0, 0, 5, 10, 3, 5}} -->
+<!-- => {{120, 32, 61, 32, 49, 10, 10, 121, 32, 61, 32, 120, 32, 43, 32, 49}, {0, 10, 1, 1, 1, 1, 3, 3, 4, 61, 0, 25, 1, 4, 1, 1, 4, 1, 1, 6, 1, 3, 8, 5, 28, 2, 4, 61, 0, 25, 4, 9}, {0, 5, 2, 1, 3, 1, 1, 3, 0, 1, 0, 0, 1, 1, 5, 8, 12, 16, 2, 6, 9, 13, 17, 1, 4, 1, 2, 5, 10, 3, 5}} -->
 
-Its parts: 5 leaves and 3 parts, then the leaves' kinds, marks, starts and ends, then a row for the statement `x = 1`, the Null of the blank line and the statement `y = x + 1`:
+Its parts: 5 leaves and 2 parts, then the leaves' kinds, marks, starts and ends, then a row for each of the statements `x = 1` and `y = x + 1`, the blank line between them no part:
 
 ```wl
 Partition[WolframLanguageProgram["x = 1\n\ny = x + 1"][[3, 24 ;;]], 4]
 ```
 
-<!-- => {{1, 4, 1, 2}, {0, 0, 0, 0}, {5, 10, 3, 5}} -->
+<!-- => {{1, 4, 1, 2}, {5, 10, 3, 5}} -->
 
 A comma that leaves a Null gives a warning, so the source has no program:
 
@@ -67,13 +67,13 @@ The rows of a program, after its leaves:
 rows[program_] := Partition[program[[3, 4 + 4 program[[3, 2]] ;;]], 4]
 ```
 
-A line with only a comment on it is a Null between two definitions:
+A line with only a comment on it parts two definitions:
 
 ```wl
 rows[WolframLanguageProgram["f[x_] := x^2\n(* a note *)\ng[y_] := f[y] + 1"]]
 ```
 
-<!-- => {{1, 8, 1, 4}, {0, 0, 0, 0}, {9, 18, 5, 9}} -->
+<!-- => {{1, 8, 1, 4}, {9, 18, 5, 9}} -->
 
 A statement with no leaf ends its leaves before they begin:
 
@@ -83,13 +83,13 @@ rows[WolframLanguageProgram["{}"]]
 
 <!-- => {{1, 2, 1, 0}} -->
 
-A source with no statement is one Null:
+A source with no statement has no parts:
 
 ```wl
 WolframLanguageProgram[""]
 ```
 
-<!-- => {{}, {0, 0}, {0, 0, 1, 0, 0, 0, 0}} -->
+<!-- => {{}, {0, 0}, {0, 0, 0}} -->
 
 The texts of the leaves, the characters of the source from each one's start to the one before its end:
 

@@ -5,7 +5,10 @@
    are the kernel's; where it does not, the parts before the failure are those the kernel gives the
    source before the failure's line, and the failure is the one WolframLanguageHeld gives. The
    sources are the paclet's own files, a sample of the system's packages, and chunks of the
-   paclet's files cut short, with a character taken out and with one put in. Run it with Wolfram 15:
+   paclet's files cut short, with a character taken out and with one put in. The kernel reads each
+   blank line, the LF of a CRLF and each line of a comment alone as a Null, which the reader does
+   not [W15 bug], so the parts are held to each other with every part that is Null alone taken out
+   of both. Run it with Wolfram 15:
        wl -f dev/check-held-next.wls [count]
    It prints how many agree in each set, then each that does not, up to count (by default 10). *)
 
@@ -37,15 +40,18 @@ kernel[s_String] := With[{d = EvaluationData[ToExpression[s, InputForm, HoldComp
 
 held[s_String] := With[{r = WolframLanguageHeld[s]}, If[FailureQ[r], {r["Position"], r["Incomplete"]}, r]];
 
+(* the parts but those that are Null alone *)
+noNulls[parts_List] := DeleteCases[parts, HoldComplete[Null]]
+
 (* what differs for s: none, or the parts, the failure or the warnings *)
 problems[s_String] := Module[{o = ours[s], k = kernel[s], h, last, bad = {}},
     last = Last[o[[1]], None];
     If[ k[[1]] =!= $Failed,
-        If[o[[1]] =!= k[[1]], AppendTo[bad, "parts"]],
+        If[noNulls[o[[1]]] =!= noNulls[k[[1]]], AppendTo[bad, "parts"]],
         h = held[s];
         Which[
             ! MatchQ[last, {"Failure", __}] || Take[last, {2, 3}] =!= h, AppendTo[bad, "failure"],
-            last[[4]] > 1 && Most[o[[1]]] =!= kernel[StringTake[s, last[[4]] - 1]][[1]], AppendTo[bad, "parts before the failure"]]];
+            last[[4]] > 1 && noNulls[Most[o[[1]]]] =!= noNulls[kernel[StringTake[s, last[[4]] - 1]][[1]]], AppendTo[bad, "parts before the failure"]]];
     If[o[[2]] =!= k[[2]], AppendTo[bad, "warnings"]];
     If[bad === {}, {}, {{s, bad, o, k}}]];
 

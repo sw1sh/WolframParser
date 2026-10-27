@@ -1,8 +1,8 @@
 #!/usr/bin/env wolframscript
 (* Holds WolframLanguageProgram to WolframLanguageHeldNext. Where a source is plain, read whole
    with no line continuation and no syntax warning, its program's statements, each built alone by
-   the reader's build pass, are the parts WolframLanguageHeldNext gives, a Null for each row of
-   zeros, its lists packed; any other source has no program. The sources are those of
+   the reader's build pass, are the parts WolframLanguageHeldNext gives, its lists packed; any other
+   source has no program. The sources are those of
    check-held-next.wls: the paclet's own files, a sample of the system's packages, and chunks of the
    paclet's files cut short, with a character taken out and with one put in. Run it with Wolfram 15:
        wl -f dev/check-reader-program.wls [count]

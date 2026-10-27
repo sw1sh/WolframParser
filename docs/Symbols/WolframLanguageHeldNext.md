@@ -16,8 +16,8 @@ RelatedGuides: [ParserZoo]
 
 ## Details & Options
 
-- Reading *code* from position 1, then from each *next* in turn, gives its statements one at a time until it gives [EndOfFile](): the parts of <code>[ToExpression]()[*code*, [InputForm](), [HoldComplete]()]</code>, in order.
-- A line ends at each newline, each return and each long name that is a newline, outside comments and strings, so a return and a newline together end two lines. Each line end after a statement's own, before the next statement or the end of *code*, gives a <code>[HoldComplete]()[[Null]()]</code>, as each line end before the first statement does. A source with no statement gives one such [Null]() for each of its line ends, or one where it has none.
+- Reading *code* from position 1, then from each *next* in turn, gives its statements one at a time until it gives [EndOfFile](): the parts of <code>[ToExpression]()[*code*, [InputForm](), [HoldComplete]()]</code>, in order, but for the [Null]()s Wolfram 15 reads blank lines and comments as.
+- A line ends at each newline, each return and each long name that is a newline, outside comments and strings. A statement's line ends at the first line end after it; the others, of blank lines, of a return and a newline and of lines holding only a comment, part statements and give nothing, as [Get]() reads them, where Wolfram 15's [ToExpression]() reads each as a [Null]() [W15 bug]. A source with no statement gives [EndOfFile]() at once.
 - The names in a statement are made when that statement is read, in the [$Context]() and [$ContextPath]() of that moment. A statement evaluated before the next is read, such as [BeginPackage]() or [Begin](), so decides where the names after it are made, as [Get]() reads a package.
 - The first call on *code* reads all of it, in one compiled pass over its characters and one over its tokens, and keeps what it finds for the calls after it, each of which builds only its own statement, until a call gives [EndOfFile]() or a [Failure](). What the last few sources read hold is kept.
 - A statement that cannot be read gives <code>{[Failure]()["ParseError", ...], *pos*}</code>, with the `"Position"` and `"Incomplete"` that [WolframLanguageHeld]() gives for *code*; the statements before it read as they are. Reading stops at the line that holds the failure: `a )` fails as a whole, as the kernel reads it, rather than giving `a` first.
@@ -71,13 +71,13 @@ statements[code_String] := Module[{pos = 1, r, out = {}},
     out]
 ```
 
-A line with only a comment on it is a Null between two definitions:
+A line with only a comment on it parts two definitions:
 
 ```wl
 statements["f[x_] := x^2\n(* a note *)\ng[y_] := f[y] + 1"]
 ```
 
-<!-- => {HoldComplete[f[x_] := x^2], HoldComplete[Null], HoldComplete[g[y_] := f[y] + 1]} -->
+<!-- => {HoldComplete[f[x_] := x^2], HoldComplete[g[y_] := f[y] + 1]} -->
 
 Inside brackets a newline is whitespace, so a statement can run over several lines:
 
@@ -113,18 +113,18 @@ code = "f[x_] := x^2\n\n(* a note *)\ng[y_] := f[y] + 1\n"
 
 <!-- => "f[x_] := x^2\n\n(* a note *)\ng[y_] := f[y] + 1\n" -->
 
-`statements`, defined under Scope, gives the parts [ToExpression]() gives the source held:
+`statements`, defined under Scope, gives the parts [ToExpression]() gives the source held, but for the [Null]()s it reads the blank line and the comment as [W15 bug]:
 
 ```wl
-statements[code] === List @@ (HoldComplete /@ ToExpression[code, InputForm, HoldComplete])
+statements[code] === DeleteCases[List @@ (HoldComplete /@ ToExpression[code, InputForm, HoldComplete]), HoldComplete[Null]]
 ```
 
 <!-- => True -->
 
-[WolframLanguageHeld]() gives the same statements, without the Nulls:
+[WolframLanguageHeld]() gives the same statements:
 
 ```wl
-DeleteCases[statements[code], HoldComplete[Null]] === WolframLanguageHeld[code]
+statements[code] === WolframLanguageHeld[code]
 ```
 
 <!-- => True -->
@@ -143,13 +143,13 @@ WolframLanguageHeldNext["a = 1\nb = (c", 1]
 WolframLanguageHeldNext["a = 1\nb = (c", 7]
 ```
 
-A return and a newline are two line ends, as [ToExpression]() counts them, so a blank line between two statements written with both gives three Nulls:
+A blank line between two statements, written with a return and a newline, gives nothing, where [ToExpression]() reads three [Null]()s, a return and a newline being two line ends to it [W15 bug]:
 
 ```wl
 statements["a\r\n\r\nb"]
 ```
 
-<!-- => {HoldComplete[a], HoldComplete[Null], HoldComplete[Null], HoldComplete[Null], HoldComplete[b]} -->
+<!-- => {HoldComplete[a], HoldComplete[b]} -->
 
 ```wl
 ToExpression["a\r\n\r\nb", InputForm, HoldComplete]

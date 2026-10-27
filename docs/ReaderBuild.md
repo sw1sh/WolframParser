@@ -43,9 +43,10 @@ integers:
 
 A leaf's text is `codes[[start ;; end - 1]]`, the characters of its token. A statement's row is
 `{first instruction, last instruction, first leaf, last leaf}`, its last instruction its code 25,
-its last leaf one less than its first where it has none, as `{}` has none. A Null's row, a line with
-no statement, is `{0, 0, 0, 0}`, and a source with no statement is one Null. `parts[[1]]`, the
-count of the Nulls a comma leaves, is 0 in a program. An empty `codes`, for the empty source, is
+its last leaf one less than its first where it has none, as `{}` has none. Blank lines, a return
+and a newline, and lines holding only a comment part statements and have no row, where Wolfram 15's
+`ToExpression` reads each as a `Null` [W15 bug]; a source with no statement has no rows.
+`parts[[1]]`, the count of the Nulls a comma leaves, is 0 in a program. An empty `codes`, for the empty source, is
 `{}`, which Wolfram 15 does not pack.
 
 `fastProgram` makes the program in one typed call: the lexer, the parser, the lines and
@@ -69,8 +70,7 @@ program with the fewest evaluation steps from
 leaves and `r` rows, and the codes are the rest: a leaf's text is the codes from its start to the
 one before its end. `WolframLanguageProgram` gives the same program as its three arrays.
 
-A builder reads the rows in turn: a Null's row gives `HoldComplete[Null]`, and a statement's builds
-its instructions over its leaves, the statement's names made then, in the contexts the statements
+A builder reads the rows in turn, each a statement's, which builds its instructions over its leaves, the statement's names made then, in the contexts the statements
 before it left. Instruction 28 reads the codes too. The parts are those `WolframLanguageHeldNext`
 gives, each with no warning; `dev/check-reader-program.wls` holds the two to each other on the
 reader corpus. A source read whole warns only of a `Null` a comma leaves, which instruction 11
@@ -200,8 +200,8 @@ one, and `warningsAt` gives them, each a list whose first element is the tag of 
 `WolframLanguageHeldNext[s, pos]` gives, for the part of `s` whose line begins at `pos`:
 
 - `{HoldComplete[statement], next, <|"Warnings" -> warnings|>}` for a statement;
-- `{HoldComplete[Null], next, <|"Warnings" -> {}|>}` for a line that holds none;
 - `{Failure["ParseError", assoc], pos}` where reading stops;
 - `EndOfFile` past the last part.
 
-`next` is where the next part's line begins, and a caller reads it as the second element.
+`next` is where the next part begins, just past the line end of the statement before it, the blank
+lines and comments before the next statement its own; a caller reads it as the second element.

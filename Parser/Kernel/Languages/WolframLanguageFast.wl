@@ -1019,8 +1019,10 @@ fastParseFunction := fastParseFunction = typedFunction[fastParse, $fastParseDecl
    row {kind, start, next, segment, first instruction, last, first token, last, warnings}}, its
    start and next the source's positions. A gap's line breaks are its newlines and newline long
    names outside comments; the first after a statement, or after the one pending, ends its line,
-   else the token after it does, and each after that one a Null's. The last row is where reading
-   stops, or the end; a source with no statement is one Null and the end. *)
+   else the token after it does. The others, as blank lines, the LF of a CRLF and a line of a
+   comment alone, only part statements, as Get reads them, where Wolfram 15's ToExpression reads
+   each as a Null [W15 bug]: a row's next is the next row's start. The last row is where reading
+   stops, or the end, a source with no statement that row alone. *)
 $fastLinesDeclaration = FunctionDeclaration[fastLines,
     Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
         "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
@@ -1030,7 +1032,7 @@ $fastLinesDeclaration = FunctionDeclaration[fastLines,
                 srcLen = lnParams[[7]], pendingStart = lnParams[[8]], keptLen = lnParams[[9]], n = Length[lnCodes] - 3,
                 js, nS = 0, j = 0, g = 0, lo = 0, hi = 0, p = 0, c = 0, depth = 0, k = 0, a = 0, len = 0, match = 0, q = 0,
                 pass = 1, total = 0, out, rows = 0, slot = 1, breaks = 0, at = 0, ti = 0, fI = 0, lI = 0, fT = 0, tA = 0, kind = 0, base = 0,
-                post = 1, lone = 0, r = 0, col = 0, v = 0},
+                post = 1, r = 0, col = 0, v = 0},
             js = Table[0, {nUse + 1}];
             j = 1;
             While[ j <= lnProg[[2]] && nS < nUse,
@@ -1039,8 +1041,6 @@ $fastLinesDeclaration = FunctionDeclaration[fastLines,
             out = Table[0, {2}];
             While[ pass <= 2,
                 If[ pass == 2,
-                    lone = If[stop == 0 && pending == 0 && total == 0, 1, 0];
-                    post = If[lone == 1, 2, 1];
                     out = Table[0, {2 + 9 (total + post)}]];
                 rows = 0; slot = 1;
                 g = 1;
@@ -1074,17 +1074,18 @@ $fastLinesDeclaration = FunctionDeclaration[fastLines,
                                 p = k,
                             lnClasses[[Min[Max[c, 0], 65535] + 1]] == 4, at = p + 1,
                             True, at = 0];
+                        (* the first break after a statement ends its row; any other makes none *)
                         If[ at > 0,
                             breaks++;
                             kind = If[breaks == 1 && (g > 1 || pending == 1), If[g == 1, 5, 1], 2];
-                            If[pass == 1, total++,
+                            If[ kind != 2, If[pass == 1, total++,
                                 rows++; base = 2 + 9 (rows - 1);
                                 out[[base + 1]] = kind; out[[base + 2]] = slot; out[[base + 3]] = at;
                                 If[ kind == 1,
                                     lI = js[[g - 1]]; fI = If[g == 2, 1, js[[g - 2]] + 1]; fT = lnProg[[3 lI + 1]]; tA = lnProg[[3 lI + 2]];
                                     out[[base + 4]] = seg; out[[base + 5]] = fI; out[[base + 6]] = lI; out[[base + 7]] = fT; out[[base + 8]] = tA - 1;
                                     out[[base + 9]] = lnWarn[[tA]] - lnWarn[[fT]]];
-                                slot = at]];
+                                slot = at]]];
                         p++];
                     (* a statement, or the one pending, whose gap holds no break: the token after it ends its line *)
                     If[ breaks == 0 && (g > 1 || pending == 1),
@@ -1099,11 +1100,8 @@ $fastLinesDeclaration = FunctionDeclaration[fastLines,
                             slot = hi]];
                     g++];
                 pass++];
-            (* where reading stops, or the end; a source with no statement one Null and the end *)
-            If[ lone == 1,
-                out[[2 + 9 rows + 1]] = 2; out[[2 + 9 rows + 2]] = 1; out[[2 + 9 rows + 3]] = n + 2;
-                out[[2 + 9 rows + 10]] = 6; out[[2 + 9 rows + 11]] = n + 2; out[[2 + 9 rows + 12]] = n + 2,
-                out[[2 + 9 rows + 1]] = If[stop == 0, 6, stop]; out[[2 + 9 rows + 2]] = slot; out[[2 + 9 rows + 3]] = slot];
+            (* where reading stops, or the end *)
+            out[[2 + 9 rows + 1]] = If[stop == 0, 6, stop]; out[[2 + 9 rows + 2]] = slot; out[[2 + 9 rows + 3]] = slot;
             (* the positions the source's *)
             r = 1;
             While[ r <= rows + post,
@@ -1115,7 +1113,6 @@ $fastLinesDeclaration = FunctionDeclaration[fastLines,
                     col++];
                 r++];
             If[pending == 1, out[[2 + 2]] = pendingStart];
-            If[lone == 1, out[[2 + 2]] = 1];
             out[[1]] = rows + post; out[[2]] = slot;
             out]]]];
 

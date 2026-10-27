@@ -512,28 +512,30 @@ wlParts[s_String] := Module[{pos = 1, r, out = {}},
         AppendTo[out, First[r]]; pos = r[[2]]];
     out]
 
-(* {source, its parts as Wolfram 15's ToExpression[source, InputForm, HoldComplete] gives them} *)
+(* {source, its parts as Wolfram 15's ToExpression[source, InputForm, HoldComplete] gives them, but for
+   the Null it reads each blank line, the LF of a CRLF and each line of a comment alone as, which
+   only part statements [W15 bug]; a statement that is Null is one *)
 $wlStatementCases = {
-    {"\n\na", {HoldComplete[Null], HoldComplete[Null], HoldComplete[a]}},
-    {"a\n\nb", {HoldComplete[a], HoldComplete[Null], HoldComplete[b]}},
+    {"\n\na", {HoldComplete[a]}},
+    {"a\n\nb", {HoldComplete[a], HoldComplete[b]}},
     {"a\n", {HoldComplete[a]}},
-    {"a\n\n", {HoldComplete[a], HoldComplete[Null]}},
-    {"", {HoldComplete[Null]}},
-    {" ", {HoldComplete[Null]}},
-    {"\n\n", {HoldComplete[Null], HoldComplete[Null]}},
-    {"(* c *)\n(* d *)", {HoldComplete[Null]}},
-    {"a\n(* c *)\n", {HoldComplete[a], HoldComplete[Null]}},
-    {"a\n(* x\ny *)\nb", {HoldComplete[a], HoldComplete[Null], HoldComplete[b]}},
-    {"a\r\n\r\nb", {HoldComplete[a], HoldComplete[Null], HoldComplete[Null], HoldComplete[Null], HoldComplete[b]}},
-    {"a\r\rb", {HoldComplete[a], HoldComplete[Null], HoldComplete[b]}},
-    {"a;\n\nb", {HoldComplete[CompoundExpression[a, Null]], HoldComplete[Null], HoldComplete[b]}},
-    {"a\nb\n\nc\n", {HoldComplete[a], HoldComplete[b], HoldComplete[Null], HoldComplete[c]}},
+    {"a\n\n", {HoldComplete[a]}},
+    {"", {}},
+    {" ", {}},
+    {"\n\n", {}},
+    {"(* c *)\n(* d *)", {}},
+    {"a\n(* c *)\n", {HoldComplete[a]}},
+    {"a\n(* x\ny *)\nb", {HoldComplete[a], HoldComplete[b]}},
+    {"a\r\n\r\nb", {HoldComplete[a], HoldComplete[b]}},
+    {"a\r\rb", {HoldComplete[a], HoldComplete[b]}},
+    {"a;\n\nb", {HoldComplete[CompoundExpression[a, Null]], HoldComplete[b]}},
+    {"a\nb\n\nc\n", {HoldComplete[a], HoldComplete[b], HoldComplete[c]}},
     {"f[\n\n1]", {HoldComplete[f[1]]}},
     {"a\\\n\nb", {HoldComplete[a], HoldComplete[b]}},
     {"a\\\nb\nc", {HoldComplete[ab], HoldComplete[c]}},
-    {"a\\[NewLine]\\[NewLine]b", {HoldComplete[a], HoldComplete[Null], HoldComplete[b]}},
+    {"a\\[NewLine]\\[NewLine]b", {HoldComplete[a], HoldComplete[b]}},
     {"Null", {HoldComplete[Null]}},
-    {"x\n\n?a*=b\n\ny\n", {HoldComplete[x], HoldComplete[Null], HoldComplete[Set[Information["a*", LongForm -> False], b]], HoldComplete[Null], HoldComplete[y]}}
+    {"x\n\n?a*=b\n\ny\n", {HoldComplete[x], HoldComplete[Set[Information["a*", LongForm -> False], b]], HoldComplete[y]}}
 };
 Scan[
     Function[c, VerificationTest[wlParts[c[[1]]], c[[2]], TestID -> "wl next: " <> ToString[c[[1]], InputForm]]],
@@ -541,7 +543,7 @@ Scan[
 
 (* {source, its parts up to the failure, which is the one WolframLanguageHeld gives} *)
 $wlStatementFailures = {
-    {"x = 1\n\n1 +", {HoldComplete[x = 1], HoldComplete[Null], {"Failure", 11, True, 8}}},
+    {"x = 1\n\n1 +", {HoldComplete[x = 1], {"Failure", 11, True, 7}}},
     {"a\n)", {HoldComplete[a], {"Failure", 4, False, 3}}},
     {"a )\nb", {{"Failure", 4, False, 1}}},
     {"a; b )\nc", {{"Failure", 7, False, 1}}},
@@ -656,17 +658,17 @@ VerificationTest[
     TestID -> "wl program: a source that reads whole with no warning has one"]
 VerificationTest[
     WolframLanguageProgram["x = 1\n\ny = x + 1"][[3]],
-    {0, 5, 3, 1, 3, 1, 1, 3, 0, 1, 0, 0, 1, 1, 5, 8, 12, 16, 2, 6, 9, 13, 17, 1, 4, 1, 2, 0, 0, 0, 0, 5, 10, 3, 5},
-    TestID -> "wl program: the leaves' kinds, marks, starts and ends, and a row for each statement and each Null"]
+    {0, 5, 2, 1, 3, 1, 1, 3, 0, 1, 0, 0, 1, 1, 5, 8, 12, 16, 2, 6, 9, 13, 17, 1, 4, 1, 2, 5, 10, 3, 5},
+    TestID -> "wl program: the leaves' kinds, marks, starts and ends, and a row for each statement"]
 VerificationTest[
     {WolframLanguageProgram[""], WolframLanguageProgram["{}"][[3]]},
-    {{{}, {0, 0}, {0, 0, 1, 0, 0, 0, 0}}, {0, 0, 1, 1, 2, 1, 0}},
-    TestID -> "wl program: a source with no statement is one Null; a statement with no leaf ends its leaves before they begin"]
+    {{{}, {0, 0}, {0, 0, 0}}, {0, 0, 1, 1, 2, 1, 0}},
+    TestID -> "wl program: a source with no statement has no parts; a statement with no leaf ends its leaves before they begin"]
 VerificationTest[
     With[{flat = Wolfram`Parser`Languages`WolframLanguage`Private`flatProgram, s = "x = 1\n\ny = x + 1"},
         With[{f = flat[s], p = WolframLanguageProgram[s]},
             {Developer`PackedArrayQ[f], f === Join[{0, Length[p[[2]]]}, p[[2]], p[[3]], p[[1]]], flat[""], flat["f[1,]"]}]],
-    {True, True, {0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0}, None},
+    {True, True, {0, 2, 0, 0, 0, 0, 0}, None},
     TestID -> "wl program: flat, the program, its parts and the source's codes in one array"]
 VerificationTest[
     Developer`PackedArrayQ /@ WolframLanguageProgram["f[x_] := x^2\n\ng[1]"],
