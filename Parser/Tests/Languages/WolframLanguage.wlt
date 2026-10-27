@@ -244,7 +244,9 @@ $wlCases = {
     {"a \\[Divides] b \\[Divides] c", List[HoldComplete[Divisible[c, b, a]]]},
     {"a \\[ImplicitPlus] b \\[ImplicitPlus] c", List[HoldComplete[Plus[Plus[a, b], c]]]},
     {"f \\[InvisibleApplication] g \\[InvisibleApplication] x", List[HoldComplete[f[g[x]]]]},
-    {"a \\[Application] b \\[Application] c", List[HoldComplete[Application[a, b, c]]]},
+    (* \[Application] nests to the left, as a notebook reads it, where Wolfram 15's kernel makes one node *)
+    {"a \\[Application] b \\[Application] c", List[HoldComplete[Application[Application[a, b], c]]]},
+    {"a + b \\[Application] c \\[Application] d", List[HoldComplete[Plus[a, Application[Application[b, c], d]]]]},
     {"a \\[Element] b \\[Element] c", List[HoldComplete[Element[a, b, c]]]},
     {"a\\[HermitianConjugate]", List[HoldComplete[ConjugateTranspose[a]]]},
     {"\\[Sqrt] a b", List[HoldComplete[Times[Sqrt[a], b]]]},
@@ -385,7 +387,21 @@ $wlSpans = {
     {"f[a ;; b ;;]", List[HoldComplete[f[Times[Span[a, b], Span[1, All]]]]]},
     {"x * a ;; b ;; c ;; d", List[HoldComplete[Times[Span[Times[x, a], b, c], Span[1, d]]]]},
     {"(a ;; b ;; c) ;; d", List[HoldComplete[Span[Span[a, b, c], d]]]},
-    {"a ;; b ;;\nc", List[HoldComplete[Times[Span[a, b], Span[1, All]]], HoldComplete[c]]},
+    (* after a ;;, as a notebook reads it, a line break is whitespace, but for one before another
+       ;; where the first has no operand before it; Wolfram 15's kernel ends the statement *)
+    {"a ;; b ;;\nc", List[HoldComplete[Span[a, b, c]]]},
+    {"a;;\nb", List[HoldComplete[Span[a, b]]]},
+    {";;\nb", List[HoldComplete[Span[1, b]]]},
+    {"a;;\n;;", List[HoldComplete[Times[Span[a, All], Span[1, All]]]]},
+    {"a;;\n;;b;;c", List[HoldComplete[Times[Span[a, All, b], Span[1, c]]]]},
+    {"a;;b;;\n;;", List[HoldComplete[Times[Span[a, b], Span[1, All], Span[1, All]]]]},
+    {"a;;\nb;;\nc", List[HoldComplete[Span[a, b, c]]]},
+    {"a;;\n\n(* c *)\nb", List[HoldComplete[Span[a, b]]]},
+    {";;\n;;b", List[HoldComplete[Span[1, All]], HoldComplete[Span[1, b]]]},
+    {"a;;;;\n;;", List[HoldComplete[Times[Span[a, All], Span[1, All]]], HoldComplete[Span[1, All]]]},
+    {"a;;b\n;;c", List[HoldComplete[Span[a, b]], HoldComplete[Span[1, c]]]},
+    {"a;;\n;\nb", List[HoldComplete[CompoundExpression[Span[a, All], Null]], HoldComplete[b]]},
+    {"a;;\n+b", List[HoldComplete[Span[a, Plus[b]]]]},
     (* a prefix operator after ;; begins the span's operand, as in any other operand and as
        CodeParser reads it; Wolfram 15 ends the span there and multiplies, (a ;; All)*(!b), but
        for -, +, ++, -- and << [W15 bug] *)
@@ -407,13 +423,27 @@ Scan[
         TestID -> "wl span, reader and grammar: " <> c[[1]]]],
     $wlSpans]
 
-(* === free-form input, by the reader and by the grammar: =[ and its text to the first ], a long
-   name in it one character, is FreeformEvaluate of the text, an operand like any other, as
-   Wolfram 15 reads it; CodeParser has no free-form input === *)
+(* === free-form input, by the reader and by the grammar, as a notebook reads it: =[ and its text
+   to the first ], the ] of a \[Name] too, is FreeformEvaluate of the text from its first character
+   that is no whitespace to the end of its line, a space where nothing is left, an operand like
+   any other; an operator that ends in =, but //= and ^:=, ends before a =[. CodeParser has no
+   free-form input === *)
 $wlFreeform = {
     {"=[b]", List[HoldComplete[FreeformEvaluate["b"]]]},
-    {"=[ b ]", List[HoldComplete[FreeformEvaluate[" b "]]]},
-    {"=[]", List[HoldComplete[FreeformEvaluate[""]]]},
+    {"=[ b ]", List[HoldComplete[FreeformEvaluate["b "]]]},
+    {"=[]", List[HoldComplete[FreeformEvaluate[" "]]]},
+    {"=[\n]", List[HoldComplete[FreeformEvaluate[" "]]]},
+    {"=[ b\n]", List[HoldComplete[FreeformEvaluate["b"]]]},
+    {"=[\tb\t]", List[HoldComplete[FreeformEvaluate["b\t"]]]},
+    {"=[\[Alpha]]", List[HoldComplete[FreeformEvaluate["\[Alpha]"]]]},
+    {"a==[b]", List[HoldComplete[Set[a, FreeformEvaluate["b"]]]]},
+    {"a===[b]", List[HoldComplete[Equal[a, FreeformEvaluate["b"]]]]},
+    {"a=!=[b]", List[HoldComplete[Set[a, Not[FreeformEvaluate["b"]]]]]},
+    {"a+=[b]", List[HoldComplete[Plus[a, FreeformEvaluate["b"]]]]},
+    {"a:=[b]", List[HoldComplete[Pattern[a, FreeformEvaluate["b"]]]]},
+    {"a!=[b]", List[HoldComplete[Times[Factorial[a], FreeformEvaluate["b"]]]]},
+    {"a<=[b]<=[c]", List[HoldComplete[Less[a, FreeformEvaluate["b"], FreeformEvaluate["c"]]]]},
+    {"a// =[b]", List[HoldComplete[FreeformEvaluate["b"][a]]]},
     {"a=[b, c]", List[HoldComplete[Times[a, FreeformEvaluate["b, c"]]]]},
     {"a =[b] c", List[HoldComplete[Times[a, FreeformEvaluate["b"], c]]]},
     {"x = =[b]", List[HoldComplete[Set[x, FreeformEvaluate["b"]]]]},
@@ -421,7 +451,6 @@ $wlFreeform = {
     {"=[b]^2", List[HoldComplete[Power[FreeformEvaluate["b"], 2]]]},
     {"f[=[b]]", List[HoldComplete[f[FreeformEvaluate["b"]]]]},
     {"=[(* c *)]", List[HoldComplete[FreeformEvaluate["(* c *)"]]]},
-    {"=[\\[Alpha] a\\n]", List[HoldComplete[FreeformEvaluate["\[Alpha] a\\n"]]]},
     {"=[\"a\"]", List[HoldComplete[FreeformEvaluate["\"a\""]]]},
     {"a == b", List[HoldComplete[Equal[a, b]]]}
 };
@@ -431,6 +460,11 @@ Scan[
         {c[[2]], c[[2]]},
         TestID -> "wl free-form, reader and grammar: " <> c[[1]]]],
     $wlFreeform]
+VerificationTest[
+    Map[{WolframLanguageSyntaxQ[#], Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$fastHeldReader = False}, WolframLanguageSyntaxQ[#]]} &,
+        {"=[\\[Alpha]]", "=[b\nc]", "a//=[b]", "a^:=[b]"}],
+    ConstantArray[{False, False}, 4],
+    TestID -> "wl free-form: no Wolfram Language where its text ends at a long name's ], goes on to a second line, or follows //= or ^:="]
 
 (* === character escapes, by the reader and by the grammar: a \:xxxx, \.xx or \|xxxxxx outside a
    string and a comment is its character, a letter of a name or a file, an operator, as Wolfram
@@ -1069,17 +1103,18 @@ VerificationTest[
     TestID -> "wl: a blank where a message name's tag goes is no Wolfram Language"]
 
 (* a . after __ or ___ is a token of its own, a Dot or the start of a number, and after a single _
-   an Optional's; right after a ., a prefix operator that is infix or postfix too begins no operand *)
+   an Optional's; right after a ., a prefix operator begins an operand, as a notebook reads it,
+   where Wolfram 15's kernel reads none for one that is infix or postfix too *)
 VerificationTest[
     With[{sources = {"__._", "x__.y", "__.1", "__..", "___.a", "_._", "x_.y", "f[x__.]"}},
         {WolframLanguageHeld /@ Most[sources], WolframLanguageSyntaxQ[Last[sources]]}],
     {List /@ (ToExpression[#, InputForm, HoldComplete] & /@ {"__._", "x__.y", "__.1", "__..", "___.a", "_._", "x_.y"}), False},
     TestID -> "wl: a . after __ or ___ is a Dot or a number, after a single _ an Optional's"]
 VerificationTest[
-    {WolframLanguageSyntaxQ /@ {"a . -b", "a.!b", "a . ++b", "a.\\[PlusMinus]b", "a . (-b)", "a . \\[Sqrt]b", "a . \\[Not]b", "a . <<b"},
-     WolframLanguageSyntaxLength["b . - c"], WolframLanguageHeld["a . \\[Sqrt]b"]},
-    {{False, False, False, False, True, True, True, True}, SyntaxLength["b . - c"], {ToExpression["a . \\[Sqrt]b", InputForm, HoldComplete]}},
-    TestID -> "wl: right after a ., a prefix operator that is infix or postfix too begins no operand"]
+    WolframLanguageHeld /@ {"a . -b", "a.!b", "a . ++b", "a.\\[PlusMinus]b", "b . - c", "a.b.!c", "a.!b.c", "a . \\[Sqrt]b"},
+    List /@ {HoldComplete[Dot[a, Times[-1, b]]], HoldComplete[Dot[a, Not[b]]], HoldComplete[Dot[a, PreIncrement[b]]], HoldComplete[Dot[a, PlusMinus[b]]],
+        HoldComplete[Dot[b, Times[-1, c]]], HoldComplete[Dot[a, b, Not[c]]], HoldComplete[Dot[a, Not[Dot[b, c]]]], HoldComplete[Dot[a, Sqrt[b]]]},
+    TestID -> "wl: right after a ., a prefix operator begins an operand"]
 
 (* the words of a query that reach a backslash past the last token the lexer read end there, each
    entry returning at once *)

@@ -100,13 +100,23 @@ $operatorLongNames  = Select[Flatten[Values[$longNameOperators]], StringStartsQ[
 $operatorCharacters = Select[Flatten[Values[$longNameOperators]], StringLength[#] === 1 &]
 
 (* one spelling of an operator, not followed by what would make it a longer
-   one of all *)
-longest[s_String] := longest[s, $operatorSpellings]
-longest[s_String, all_List] := With[{more = Select[all, StringStartsQ[#, s] && # =!= s &]},
-    If[ more === {},
+   one of all; one of those cutQ gives True for is none right before a [. The
+   held grammar's cut, as a notebook reads it, is an operator that ends in =,
+   but //= and ^:=: the = and the [ begin free-form input. CodeParser has no
+   free-form input, so the concrete grammar cuts none. *)
+longest[s_String] := longest[s, $operatorSpellings, freeformCutQ]
+longest[s_String, all_List] := longest[s, all, False &]
+longest[s_String, all_List, cutQ_] := With[{more = Select[all, StringStartsQ[#, s] && # =!= s &]},
+    If[ more === {} && ! cutQ[s],
         ParseLiteral[s],
-        ParseAction[ParseLiteral[s] ~~ ParseNotFollowedBy[ParseChoice @@ (ParseLiteral[StringDrop[#, StringLength[s]]] & /@ more)], s &]
+        ParseAction[ParseLiteral[s] ~~ ParseNotFollowedBy[ParseChoice @@ Join[
+            If[cutQ[s], {ParseLiteral["["]}, {}],
+            Map[If[ cutQ[#],
+                ParseLiteral[StringDrop[#, StringLength[s]]] ~~ ParseNotFollowedBy[ParseLiteral["["]],
+                ParseLiteral[StringDrop[#, StringLength[s]]]] &, more]]], s &]
     ]]
+
+freeformCutQ[s_String] := StringEndsQ[s, "="] && ! MemberQ[{"//=", "^:="}, s]
 
 spellings[op_String] := Prepend[Lookup[$longNameOperators, op, {}], op]
 
@@ -149,8 +159,12 @@ $string = text[ParseLiteral["\""] ~~ ParseMany[ParseChoice[
     ParseRegex["[^\"\\\\]+"],
     ParseLiteral["\\"] ~~ ParseCharacter[_]]] ~~ ParseLiteral["\""]]
 
-(* _, __, ___, then an optional . or a head *)
-$blank = text[ParseChoice[ParseLiteral["___"], ParseLiteral["__"], ParseLiteral["_"]] ~~ ParseOptional[ParseChoice[ParseLiteral["."], $name]]]
+(* _, __, ___, then an optional head, or after a single _ a .: after __ or ___ a . is a token of
+   its own, a Dot or the start of a number *)
+$blank = text[ParseChoice[
+    ParseLiteral["___"] ~~ ParseOptional[$name],
+    ParseLiteral["__"] ~~ ParseOptional[$name],
+    ParseLiteral["_"] ~~ ParseOptional[ParseChoice[ParseLiteral["."], $name]]]]
 
 $slot = ParseAction[ParseLookahead[ParseLiteral["#"]] ~~ ParseChoice[text[ParseLiteral["#"] ~~ $string], ParseRegex["##[0-9]*|#([0-9]+|[A-Za-z$`][A-Za-z0-9$`]*)?"]], #2 &]
 
@@ -161,8 +175,9 @@ $informationName = text[$informationWord ~~ ParseMany[ParseRegex["[ \t]+"] ~~ $i
 
 $out = ParseAction[ParseLookahead[ParseLiteral["%"]] ~~ ParseRegex["%+[0-9]*"], #2 &]
 
-(* free-form input: =[ and its text to the first ], a \[Name] in it one character *)
-$freeform = ParseRegex["=\\[(?:\\\\\\[[A-Za-z0-9]+\\]|[^\\]])*\\]"]
+(* free-form input, as a notebook reads it: =[ and its text to the first ], the ] of a \[Name]
+   too, the text on one line after any blank ones *)
+$freeform = ParseRegex["=\\[[ \\t\\r\\n]*[^\\]\\r\\n]*(?:[\\r\\n][ \\t\\r\\n]*)?\\]"]
 
 (* the file of << and >>: a string, or the characters of a path or a
    context, a letter past ASCII and a \ among them, \[Name] one
@@ -214,7 +229,7 @@ grammar[alg_] := Module[{space, wsLine, wsAll, nested, top, statement},
    by the whitespace ws; brackets hold expressions of nested. *)
 expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     {after, operator, postfixOperator, leaf, nullLeaf, symbolLeaf, blankLeaf, otherUnits, plainUnit, unit, patternUnit,
-     items, comma, call, part, messageName, tag, derivative, span, spans, spanStart, compound, tagSet, put,
+     items, comma, call, part, messageName, tag, derivative, span, spans, bareSpan, bareSpans, spanStart, compound, tagSet, put,
      binary, prefix, postfix, flat, plus, relation, relationOp, implicit, specs, table, information, dot, setOperator, unset,
      longOperator, longPostfixOperator, longSpecs, longGroups, longCalls, integrals, integrandOperand, divisible,
      patternRight, spanOperand, compoundOperand, tagLeft, tagRight, prefixAhead, prefixedTable, putRight},
@@ -241,7 +256,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
         ParseAction[ParseSepBy[ParseOptional[RecRef[nested]], comma], Function[nullLeaf /@ {##}]]];
 
     patternRight = RecCell[]; spanOperand = RecCell[]; compoundOperand = RecCell[]; tagLeft = RecCell[]; tagRight = RecCell[];
-    integrandOperand = RecCell[]; spans = RecCell[]; prefixAhead = RecCell[]; putRight = RecCell[];
+    integrandOperand = RecCell[]; spans = RecCell[]; bareSpans = RecCell[]; prefixAhead = RecCell[]; putRight = RecCell[];
 
     (* \[LeftFloor] x \[RightFloor] and the other brackets of long names *)
     longGroups = Map[Function[g,
@@ -263,7 +278,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     patternUnit = ParseAction[symbolLeaf ~~ ParseOptional[ParseAction[operator[":"] ~~ RecRef[patternRight], #2 &]],
         Function[{name, pattern}, If[MissingQ[pattern], name, alg["Binary"]["Pattern", name, pattern]]]];
     (* ;; b and ;; at the start: Span[1, ...] *)
-    spanStart = ParseAction[span, Function[f, f[alg["Leaf"]["Integer", "1"]]]];
+    spanStart = ParseAction[bareSpan, Function[f, f[alg["Leaf"]["Integer", "1"]]]];
     (* ?name and ??name, the query Information["name", LongForm -> ...] of
        the words after it, a tab among them a space, or of a string *)
     information = ParseAction[ParseChoice[ParseLiteral["??"], ParseLiteral["?"]] ~~ ParseRegex["[ \t]*"] ~~
@@ -309,17 +324,31 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
             alg["Call"][alg["Leaf"]["Symbol", "Derivative"], {alg["Leaf"]["Integer", ToString[StringLength[primes]]]}], {f}]]]];
     (* a ;; b ;; c: All where the operand after the first ;; is left out, but for one a prefix
        operator begins, the ;; after b only with an operand after it, and a ;; after the span the
-       beginning of a span of its own, the spans a product *)
+       beginning of a span of its own, the spans a product. After a ;;, as a notebook reads it, a
+       line break is whitespace, but for one before another ;; where the first has no operand
+       before it: spans after an operand, bareSpans after none *)
     With[{operand = ParseAction[ParseNotFollowedBy[ParseLiteral[";;"]] ~~ RecRef[spanOperand], #2 &],
-          all = alg["Leaf"]["Symbol", "All"], one = alg["Leaf"]["Integer", "1"]},
-        SetRec[spans, ParseAction[
-            postfixOperator[";;"] ~~
-                ParseChoice[ParseAction[ParseLookahead[RecRef[prefixAhead]] ~~ operand, #2 &], ParseAction[ParseNotFollowedBy[RecRef[prefixAhead]] ~~ ParseOptional[operand], #2 &]] ~~
-                ParseOptional[ParseAction[postfixOperator[";;"] ~~ operand, #2 &]] ~~
-                ParseOptional[ParseAction[ParseLookahead[ParseLiteral[";;"]] ~~ RecRef[spans], #2 &]],
-            Function[{semis, b, c, next}, Function[a, Prepend[If[MissingQ[next], {}, next[one]],
-                alg["Infix"]["Span", Join[{a, If[MissingQ[b], all, b]}, If[MissingQ[c], {}, {c}]]]]]]]];
-        span = ParseAction[RecRef[spans], Function[f, Function[a, Replace[f[a], {{s_} :> s, l_ :> alg["Infix"]["Times", l]}]]]]
+          all = alg["Leaf"]["Symbol", "All"], one = alg["Leaf"]["Integer", "1"],
+          semi = after[longest[";;"], wsAll],
+          bareSemi = after[longest[";;"], ParseChoice[ParseAction[wsAll ~~ ParseNotFollowedBy[ParseLiteral[";;"]], Null &], ws]]},
+        With[{
+                rest = ParseChoice[
+                    (* b, then ;; and c; a ;; after either begins a span of its own *)
+                    ParseAction[operand ~~ ParseOptional[ParseAction[semi ~~ operand, #2 &]] ~~
+                            ParseOptional[ParseAction[ParseLookahead[ParseLiteral[";;"]] ~~ RecRef[spans], #2 &]],
+                        Function[{b, c, next}, {b, c, next}]],
+                    (* b left out, then ;; and c, a ;; after c beginning a span of its own *)
+                    ParseAction[bareSemi ~~ operand ~~ ParseOptional[ParseAction[ParseLookahead[ParseLiteral[";;"]] ~~ RecRef[spans], #2 &]],
+                        Function[{s, c, next}, {Missing[], c, next}]],
+                    (* b left out, but where a prefix operator begins it, and a ;; after the first beginning a span of its own *)
+                    ParseAction[ParseNotFollowedBy[RecRef[prefixAhead]] ~~ ParseOptional[ParseAction[ParseLookahead[ParseLiteral[";;"]] ~~ RecRef[bareSpans], #2 &]],
+                        Function[{look, next}, {Missing[], Missing[], next}]]],
+                value = Function[{a, b, c, next}, Prepend[If[MissingQ[next], {}, next[one]],
+                    alg["Infix"]["Span", Join[{a, If[MissingQ[b], all, b]}, If[MissingQ[c], {}, {c}]]]]]},
+            SetRec[spans, ParseAction[semi ~~ rest, Function[{s, r}, Function[a, value[a, r[[1]], r[[2]], r[[3]]]]]]];
+            SetRec[bareSpans, ParseAction[bareSemi ~~ rest, Function[{s, r}, Function[a, value[a, r[[1]], r[[2]], r[[3]]]]]]]];
+        span = ParseAction[RecRef[spans], Function[f, Function[a, Replace[f[a], {{s_} :> s, l_ :> alg["Infix"]["Times", l]}]]]];
+        bareSpan = ParseAction[RecRef[bareSpans], Function[f, Function[a, Replace[f[a], {{s_} :> s, l_ :> alg["Infix"]["Times", l]}]]]]
     ];
     (* a; b; c, an operand left out Null, but for one a prefix operator begins *)
     compound = ParseAction[ParseSome[ParseAction[postfixOperator[";"] ~~
@@ -329,7 +358,8 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     (* the = of a set, before a number its . begins too, not the = of free-form input; and = then
        a . not a number's, trivia between them, an unset *)
     setOperator = after[ParseLiteral["="] ~~
-        ParseNotFollowedBy[ParseChoice[ParseLiteral["="], ParseLiteral["!="], ParseLiteral["["], ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]]]], wsAll];
+        ParseNotFollowedBy[ParseChoice[ParseLiteral["="] ~~ ParseNotFollowedBy[ParseLiteral["["]], ParseLiteral["!="] ~~ ParseNotFollowedBy[ParseLiteral["["]],
+            ParseLiteral["["], ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]]]], wsAll];
     unset = after[ParseLiteral["="] ~~ ParseNotFollowedBy[ParseChoice[ParseLiteral["="], ParseLiteral["!="]]] ~~ wsAll ~~
         ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter | "."]], ws];
     tagSet = ParseAction[operator["/:"] ~~ RecRef[tagLeft] ~~ ParseChoice[
@@ -452,8 +482,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
             name === "ImplicitPlus", {"InfixL", ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Binary"]["Plus", l, r]]]]},
             name === "Divides", {"InfixN", longOperator[name], divisible},
             name === "InvisibleApplication", {"InfixR", ParseAction[longOperator[name], Function[o, Function[{l, r}, atCall[alg, l, r]]]]},
-            (* \[Application] a chain of one node, as the kernel reads it *)
-            row[[2]] === "InfixNode" || name === "Application", {"InfixN", longOperator[name], flat[head]},
+            row[[2]] === "InfixNode", {"InfixN", longOperator[name], flat[head]},
             True, {If[row[[5]] === "Right", "InfixR", "InfixL"], ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Binary"][head, l, r]]]]}]}]],
             $heldLongInfix],
         Map[{#[[4]], {"Prefix", With[{head = heldLongHead[#]}, ParseAction[longOperator[#[[1]]], Function[o, Function[x, alg["Prefix"][head, x]]]]]}} &, $heldLongPrefix],
@@ -684,8 +713,12 @@ heldLeafValue["Out", s_String] := outExpression[s]
 heldLeafValue["Tag", s_String] := HoldComplete[s]
 heldLeafValue["File", s_String] := HoldComplete @@ {If[StringStartsQ[s, "\""], stringValue[s], fileValue[s]]}
 heldLeafValue["Boxes", s_String] := linearHeld[s]
-(* =[text] is FreeformEvaluate["text"], its long names decoded, as those of a file are *)
-heldLeafValue["Freeform", s_String] := symbolCall["FreeformEvaluate", {HoldComplete @@ {fileValue[StringTake[s, {3, -2}]]}}]
+(* =[text] is FreeformEvaluate["text"], its escapes decoded, as those of a file are, and, as a
+   notebook reads it, from its first character that is no whitespace to the end of its line, a
+   space where nothing is left *)
+heldLeafValue["Freeform", s_String] := symbolCall["FreeformEvaluate", {HoldComplete @@ {freeformText[fileValue[StringTake[s, {3, -2}]]]}}]
+
+freeformText[s_String] := Replace[StringReplace[s, {StartOfString ~~ (" " | "\t" | "\n" | "\r") .. -> "", ("\n" | "\r") ~~ ___ ~~ EndOfString -> ""}], "" -> " "]
 
 heldLeaf["Integer" | "Real", s_String] := <|"Expr" -> heldLeafValue["Integer", s], "Literal" -> True, "Chain" -> False|>
 heldLeaf[kind_String, s_String] := held[heldLeafValue[kind, s]]

@@ -277,22 +277,30 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                                         a += 4]];
                                 If[op == 0 && Mod[e2, 4096] > 0, op = Mod[e2, 4096]; len = 2]];
                             If[op == 0 && c <= 65535, op = lexOp1[[c + 1]]; len = 1];
+                            (* an operator that ends in =, but //= and ^:=, right before a [ ends before its =, as
+                               a notebook reads it: the = and the [ begin free-form input, a==[b] a = =[b] *)
+                            If[ len >= 2 && lexCodes[[i + len - 1]] == 61 && lexCodes[[i + len]] == 91 && ! (len == 3 && (c == 47 || c == 94)),
+                                e2 = If[len == 3, Mod[lexOp2[[128 c + lexCodes[[i + 1]] + 1]], 4096], 0];
+                                If[e2 > 0, op = e2; len = 2, op = lexOp1[[c + 1]]; len = 1]];
                             (* =. before a digit: =, then a number *)
                             If[op == spUnset && i + 2 <= n && 48 <= lexCodes[[i + 2]] <= 57, op = spSet; len = 1];
                             j = i + len;
                             Which[
                                 op == 0, status = 1; j = i,
-                                (* =[ and the free-form input after it, to the first ], a long name in it one character *)
+                                (* =[ and the free-form input after it, as a notebook reads it: to the first ], the ]
+                                   of a long name too, its text on one line after any blank ones; text on a line after
+                                   it is no Wolfram Language, where reading stops *)
                                 op == spSet && len == 1 && lexCodes[[i + 1]] == 91,
-                                    j = i + 2; scanning = 1;
+                                    j = i + 2; scanning = 1; a = 0;
                                     While[ scanning == 1 && j <= n,
+                                        c2 = lexCodes[[j]];
                                         Which[
-                                            lexCodes[[j]] == 93, scanning = 0,
-                                            lexCodes[[j]] == 92 && lexCodes[[j + 1]] == 91,
-                                                If[lnAt != j, lnAt = j; lnVal = lexLongName[lexCodes, lexLongOps, j, n]];
-                                                If[lnVal > 0, j = Quotient[lnVal, 8192], j++],
-                                            True, j++]];
-                                    If[j > n, status = 3, j++];
+                                            c2 == 93, scanning = 0,
+                                            c2 == 10 || c2 == 13, If[a == 1, a = 2]; j++,
+                                            c2 == 32 || c2 == 9, j++,
+                                            a == 2, status = 1; scanning = 0,
+                                            True, a = 1; j++]];
+                                    If[status == 0, If[j > n, status = 3, j++]];
                                     kind = 21,
                                 op == spOpen, kind = 16, op == spClose, kind = 17, op == spComma, kind = 18, True, kind = 9]];
                     (* a blank: _, __ or ___, then a . or a name *)
@@ -615,7 +623,7 @@ $fastLedTable := $fastLedTable = Join[$fastLed, Association[Join[
         row[[1]] === "ImplicitPlus", {p, "InfixL", "Plus"},
         row[[1]] === "Divides", {p, "InfixN", "Divisible", "Divisible"},
         row[[1]] === "InvisibleApplication", {p, "InfixR", "At"},
-        row[[2]] === "InfixNode" || row[[1]] === "Application", {p, "InfixN", head, head},
+        row[[2]] === "InfixNode", {p, "InfixN", head, head},
         True, {p, If[row[[5]] === "Right", "InfixR", "InfixL"], head}]]], $heldLongInfix],
     Map[fastLongOp[#[[1]]] -> {#[[4]], "Postfix", heldLongHead[#]} &, $longNameTable["Postfix"]],
     {fastLongOp["LeftDoubleBracket"] -> {176, "LongPart", "Part"}}]]]
@@ -703,10 +711,31 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
     Function[{pTok, pLed, pSpecs, pPrefix, pGroups, pIntegrals, pSpecial, pHeads, pKeys, pCodes, pClasses},
         Native`UncheckedBlock[Module[{n = pTok[[2]], out, fr, maxFrames, sp = 0, on = 0, t = 1, brackets = 0, status = 0, mode = 0,
                 pMin = 0, pRbp = 0, pPlain = 0, base = 0, k = 0, o = 0, i = 0, bp = 0, fx = 0, hd = 0, ky = 0, mn = 0, rb = 0, pl = 0,
-                ft = 0, cnt = 0, bt = 0, colons = 0, ok = 0, x = 0, lg = 0, e = 0, we = 0, c = 0, cl = 0, tt = 0, far = 0, stmt = 1, se = 0},
+                ft = 0, cnt = 0, bt = 0, colons = 0, ok = 0, x = 0, lg = 0, e = 0, we = 0, c = 0, cl = 0, tt = 0, far = 0, stmt = 1, se = 0,
+                nls, ps = 0, ol = 0, pe = 0, nst = 0},
             out = Native`UncheckedArray[0, 3 (8 n + 16) + 2];
             maxFrames = 4 n + 64;
             fr = Native`UncheckedArray[0, 8 maxFrames];
+            (* the line break before each token, a newline before it outside comments, but for one
+               right after a ;;, which a notebook reads as whitespace, unless another ;; comes after
+               it and the first has no operand before it: nothing, a line break outside brackets,
+               or a token that ends no operand *)
+            nls = Native`UncheckedArray[0, n + 1];
+            tt = 1;
+            While[ tt <= n,
+                k = pTok[[5 tt - 2]]; o = pTok[[5 tt - 1]];
+                nls[[tt]] = pTok[[5 tt + 2]];
+                If[ps == 1 && ! (k == 9 && o == pSpecial[[2]] && ol == 1), nls[[tt]] = 0];
+                ps = If[k == 9 && o == pSpecial[[2]], 1, 0];
+                If[ps == 1, ol = If[pe == 0 || (nls[[tt]] == 1 && nst == 0), 1, 0]];
+                pe = Which[
+                    (k >= 1 && k <= 8) || k == 11 || k == 13 || k == 15 || k == 17 || k == 19 || k == 20 || k == 21, 1,
+                    k == 9 && pLed[[tt]] > 0 && pSpecs[[4 pLed[[tt]] - 2]] == 4, If[pPrefix[[2 o + 1]] > 0, pe, 1],
+                    True, 0];
+                If[k == 10 || k == 12 || k == 14 || k == 16, nst++];
+                If[(k == 11 || k == 13 || k == 15 || k == 17) && nst > 0, nst--];
+                tt++];
+            k = 0; o = 0;
             While[ mode != 99,
                 Which[
                     (* a statement *)
@@ -723,18 +752,15 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                         k = pTok[[5 t - 2]]; o = pTok[[5 t - 1]];
                         Which[
                             (* a prefix operator, in a span's operand one of any precedence, its operand all that binds
-                               more tightly than it, as CodeParser reads it [W15 bug]; but right after a ., one that is
-                               an infix or postfix operator too, as -, ! and ++ are, its spec one that takes its token,
-                               not the juxtaposition, fixity 15, every prefix operator has: Wolfram 15 reads no operand
-                               of them there *)
-                            k == 9 && pPrefix[[2 o + 1]] > 0 && (pPrefix[[2 o + 1]] > mn || mn == pSpecial[[17]]) &&
-                                ! (t > 1 && pTok[[5 t - 7]] == 9 && pTok[[5 t - 6]] == pSpecial[[7]] && pLed[[t]] > 0 && pSpecs[[4 pLed[[t]] - 2]] != 15),
+                               more tightly than it, as CodeParser reads it [W15 bug]; right after a . too, as a
+                               notebook reads a . -b *)
+                            k == 9 && pPrefix[[2 o + 1]] > 0 && (pPrefix[[2 o + 1]] > mn || mn == pSpecial[[17]]),
                                 hd = pPrefix[[2 o + 2]]; pRbp = pPrefix[[2 o + 1]]; t++;
                                 sp++; base = 8 (sp - 1); fr[[base + 1]] = 2; fr[[base + 2]] = hd;
                                 pMin = If[mn == pSpecial[[17]], 0, mn]; pPlain = pl; mode = 1,
                             k == 1,
                                 on++; out[[3 on]] = 1; out[[3 on + 1]] = 1; out[[3 on + 2]] = t; t++;
-                                If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                                If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && nls[[t]] == 1),
                                     sp++; base = 8 (sp - 1); fr[[base + 1]] = 7; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
                                     t++; pMin = pSpecial[[16]]; pRbp = 0; pPlain = 1; mode = 1,
                                     mode = 3],
@@ -805,11 +831,11 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                         i = pLed[[t]];
                         (* a ;; right where a span ends begins a span of its own, the two a product *)
                         If[se == t && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]], i = pSpecial[[22]]];
-                        If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1) &&
+                        If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && nls[[t]] == 1) &&
                                 ((out[[3 on]] == 1 && out[[3 on + 1]] == 2 && pCodes[[pTok[[5 out[[3 on + 2]] + 1]] - 1]] != 46) || out[[3 on]] == 23),
                             t++; sp++; base = 8 (sp - 1); fr[[base + 1]] = 3; fr[[base + 2]] = pHeads[[7]];
                             pMin = mn; pRbp = pSpecial[[21]]; pPlain = 0; i = -1; mode = 1];
-                        If[brackets == 0 && pTok[[5 t + 2]] == 1 && i > 0, i = 0];
+                        If[brackets == 0 && nls[[t]] == 1 && i > 0, i = 0];
                         If[ i == 0, mode = 4,
                             If[ i > 0,
                             bp = pSpecs[[4 i - 3]]; fx = pSpecs[[4 i - 2]]; hd = pSpecs[[4 i - 1]]; ky = pSpecs[[4 i]];
@@ -864,7 +890,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                                     True, ok = 0; mode = 5];
                                                 x++;
                                                 If[ ok == 1 && x < 2,
-                                                    If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[4]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                                                    If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[4]] && ! (brackets == 0 && nls[[t]] == 1),
                                                         colons = pTok[[5 t + 1]]; t++,
                                                         x = 2]]];
                                             If[ok == 1, on++; out[[3 on]] = 14; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0]],
@@ -902,7 +928,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                     fr[[base + 5]] = fr[[base + 5]] + 1;
                                     i = pLed[[t]];
                                     If[se == t && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]], i = pSpecial[[22]]];
-                                    If[brackets == 0 && pTok[[5 t + 2]] == 1, i = 0];
+                                    If[brackets == 0 && nls[[t]] == 1, i = 0];
                                     If[ i > 0 && pSpecs[[4 i - 3]] == fr[[base + 2]] && (pSpecs[[4 i - 2]] == 3 || pSpecs[[4 i - 2]] == 15) && pSpecs[[4 i]] == fr[[base + 3]],
                                         fr[[base + 6]] = If[fr[[base + 3]] == pKeys[[1]] && pTok[[5 t - 2]] == 9 && (pTok[[5 t - 1]] == pSpecial[[11]] || pTok[[5 t - 1]] == pSpecial[[12]]), 1, 0];
                                         If[fr[[base + 3]] == pKeys[[2]], on++; out[[3 on]] = 6; out[[3 on + 1]] = pSpecs[[4 i - 1]]; out[[3 on + 2]] = 0];
@@ -934,9 +960,9 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                     If[ fr[[base + 2]] == 1,
                                         i = pLed[[t]];
                                         Which[
-                                            pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[8]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                                            pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[8]] && ! (brackets == 0 && nls[[t]] == 1),
                                                 t++; fr[[base + 2]] = 2; pMin = fr[[base + 4]]; pRbp = fr[[base + 3]]; pPlain = fr[[base + 5]]; mode = 1,
-                                            i > 0 && (pSpecs[[4 i - 2]] == 4 || pSpecs[[4 i - 2]] == 6) && pSpecs[[4 i - 1]] != pHeads[[2]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                                            i > 0 && (pSpecs[[4 i - 2]] == 4 || pSpecs[[4 i - 2]] == 6) && pSpecs[[4 i - 1]] != pHeads[[2]] && ! (brackets == 0 && nls[[t]] == 1),
                                                 on++;
                                                 If[ pSpecs[[4 i - 2]] == 4,
                                                     out[[3 on]] = 3; out[[3 on + 1]] = pSpecs[[4 i - 1]]; out[[3 on + 2]] = 0,
@@ -960,7 +986,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                 ft == 12,
                                     If[ fr[[base + 2]] == 1,
                                         Which[
-                                            (brackets == 0 && pTok[[5 t + 2]] == 1) || pTok[[5 t - 2]] != 9, mode = 5,
+                                            (brackets == 0 && nls[[t]] == 1) || pTok[[5 t - 2]] != 9, mode = 5,
                                             pTok[[5 t - 1]] == pSpecial[[5]] && t < n && pTok[[5 t + 3]] == 9 && pTok[[5 t + 4]] == pSpecial[[7]],
                                                 t += 2; on++; out[[3 on]] = 20; out[[3 on + 1]] = 3; out[[3 on + 2]] = 0; sp--; mode = 3,
                                             pTok[[5 t - 1]] == pSpecial[[10]],
@@ -1033,9 +1059,9 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                     mode == 11,
                         base = 8 (sp - 1); o = pTok[[5 t - 1]];
                         Which[
-                            pTok[[5 t - 2]] == 9 && (pPrefix[[2 o + 1]] > 0 || o == pSpecial[[9]] || pIntegrals[[o + 1]] > 0) && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                            pTok[[5 t - 2]] == 9 && (pPrefix[[2 o + 1]] > 0 || o == pSpecial[[9]] || pIntegrals[[o + 1]] > 0) && ! (brackets == 0 && nls[[t]] == 1),
                                 pMin = pSpecial[[17]]; pRbp = 0; pPlain = 0; mode = 1,
-                            ! ((pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]]) || (brackets == 0 && pTok[[5 t + 2]] == 1) || pTok[[5 t - 2]] == 0),
+                            ! ((pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]]) || (brackets == 0 && nls[[t]] == 1) || pTok[[5 t - 2]] == 0),
                                 sp++; base = 8 (sp - 1); fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
                                 pMin = pSpecial[[17]]; pRbp = 0; pPlain = 0; mode = 1,
                             fr[[base + 2]] == 2,
@@ -1045,16 +1071,16 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                     (* after a span's operand: a second ;; and its operand, else the span *)
                     mode == 12,
                         base = 8 (sp - 1); fr[[base + 3]] = fr[[base + 3]] + 1;
-                        If[ fr[[base + 2]] == 1 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                        If[ fr[[base + 2]] == 1 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]] && ! (brackets == 0 && nls[[t]] == 1),
                             t++; fr[[base + 2]] = 2; mode = 11,
                             on++; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; se = t; mode = 3],
                     (* a ; and its operand, Null where it is left out, but for one a prefix operator, a << or
                        an integral begins, else the compound *)
                     mode == 13,
-                        If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[3]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                        If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[3]] && ! (brackets == 0 && nls[[t]] == 1),
                             t++; o = pTok[[5 t - 1]];
                             Which[
-                                (brackets == 0 && pTok[[5 t + 2]] == 1) || pTok[[5 t - 2]] == 0,
+                                (brackets == 0 && nls[[t]] == 1) || pTok[[5 t - 2]] == 0,
                                     on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0;
                                     base = 8 (sp - 1); fr[[base + 2]] = fr[[base + 2]] + 1,
                                 pTok[[5 t - 2]] == 9 && (pPrefix[[2 o + 1]] > 0 || o == pSpecial[[9]] || pIntegrals[[o + 1]] > 0),
