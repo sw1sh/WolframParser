@@ -168,19 +168,18 @@ $freeform = ParseRegex["=\\[(?:\\\\\\[[A-Za-z0-9]+\\]|[^\\]])*\\]"]
    context, a letter past ASCII and a \ among them, \[Name] one
    character; and one whose \[ is not closed *)
 $fileCharacters = "(?:[A-Za-z0-9$`_./~:!*?-]|(?![\\x00-\\x7F])\\p{L}|\\\\\\[[A-Za-z0-9]+\\]|\\\\(?!\\[))"
-(* a bracket in a file's name to its ], brackets nested; and what may not follow the name, nor a
-   \ end the source after it *)
-$fileBracket = "(\\[(?:[^\\[\\]]|(?-1))*\\])"
-$file = ParseChoice[$string, ParseRegex["(?:" <> $fileCharacters <> "|" <> $fileBracket <> ")++(?![#%&'+<=>@^|])(?!(?<=\\\\)\\z)"]]
+(* a bracket in a file's name to its ], brackets nested, or to the end of the source, as a notebook
+   reads it *)
+$fileBracket = "(\\[(?:[^\\[\\]]|(?-1))*(?:\\]|\\z))"
+$file = ParseChoice[$string, ParseRegex["(?:" <> $fileCharacters <> "|" <> $fileBracket <> ")++"]]
 $unterminatedFile = ParseRegex[$fileCharacters <> "*\\\\\\[[A-Za-z0-9]*+(?!\\])"]
 
-(* a comment, the comments nested in it too; with escapes a backslash before a star or an opening
-   paren takes it, so that neither ends nor opens one, as Wolfram 15 reads it, where CodeParser's
-   comment ends at any star and closing paren *)
+(* a comment, the comments nested in it too; with escapes a backslash before an opening paren takes
+   it, so that it opens none, as a notebook reads it, where CodeParser's opens one *)
 commentParser[escapes_ : False] := With[{comment = RecCell[]},
     SetRec[comment, ParseLiteral["(*"] ~~ ParseMany[ParseChoice @@ Join[
         {RecRef[comment]},
-        If[TrueQ[escapes], {ParseRegex["[^(*\\\\]+"], ParseRegex["\\\\[*(]?"]}, {ParseRegex["[^(*]+"]}],
+        If[TrueQ[escapes], {ParseRegex["[^(*\\\\]+"], ParseRegex["\\\\\\(?"]}, {ParseRegex["[^(*]+"]}],
         {ParseLiteral["("] ~~ ParseNotFollowedBy[ParseLiteral["*"]],
          ParseLiteral["*"] ~~ ParseNotFollowedBy[ParseLiteral[")"]]}]] ~~ ParseLiteral["*)"]];
     RecRef[comment]]
@@ -1673,7 +1672,7 @@ continuationSpans[s_String] := Module[{c = ToCharacterCode[s], n, i = 1, depth =
             depth > 0, Which[
                 c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth++; i += 2,
                 c[[i]] === 42 && i < n && c[[i + 1]] === 41, depth--; i += 2,
-                c[[i]] === 92 && i < n && (c[[i + 1]] === 42 || c[[i + 1]] === 40), i += 2,
+                c[[i]] === 92 && i < n && c[[i + 1]] === 40, i += 2,
                 True, i++],
             c[[i]] === 34, inString = True; i++,
             c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth = 1; i += 2,
@@ -1707,7 +1706,7 @@ escapeSpans[s_String] := Module[{c = ToCharacterCode[s], n, i = 1, depth = 0, in
             depth > 0, Which[
                 c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth++; i += 2,
                 c[[i]] === 42 && i < n && c[[i + 1]] === 41, depth--; i += 2,
-                c[[i]] === 92 && i < n && (c[[i + 1]] === 42 || c[[i + 1]] === 40), i += 2,
+                c[[i]] === 92 && i < n && c[[i + 1]] === 40, i += 2,
                 True, i++],
             c[[i]] === 34, inString = True; i++,
             c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth = 1; i += 2,

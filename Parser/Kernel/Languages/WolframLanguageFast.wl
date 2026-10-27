@@ -311,8 +311,8 @@ $lexLongNameDeclaration = FunctionDeclaration[lexLongName,
                     result = 8192 (j + 1) + op + 1]];
             result]]]];
 
-(* A comment from its opening paren and star at at, nested ones in it, a backslash before a star
-   or an opening paren taking it, so that neither ends nor opens one, as Wolfram 15 reads it:
+(* A comment from its opening paren and star at at, nested ones in it, a backslash before an
+   opening paren taking it, so that it opens none, as a notebook reads it:
    twice just past its end, plus 1 where the source ends before it does, the place reading got to
    then. *)
 $lexCommentDeclaration = FunctionDeclaration[lexComment,
@@ -324,7 +324,7 @@ $lexCommentDeclaration = FunctionDeclaration[lexComment,
                     j + 1 > cmN, unclosed = 1; depth = 0,
                     cmCodes[[j]] == 40 && cmCodes[[j + 1]] == 42, depth++; j += 2,
                     cmCodes[[j]] == 42 && cmCodes[[j + 1]] == 41, depth--; j += 2,
-                    cmCodes[[j]] == 92 && (cmCodes[[j + 1]] == 42 || cmCodes[[j + 1]] == 40), j += 2,
+                    cmCodes[[j]] == 92 && cmCodes[[j + 1]] == 40, j += 2,
                     True, j++]];
             2 j + unclosed]]]];
 
@@ -341,9 +341,8 @@ $lexQuotedDeclaration = FunctionDeclaration[lexQuoted,
             2 j + unclosed]]]];
 
 (* The file of << or >> at at: a quoted one, or the characters of a path, letters past ASCII
-   among them, its long names whole and a bracket in it to its ], brackets nested; none, as
-   Wolfram 15 reads none, where a bracket in it is not closed, the source ends in a \ after it
-   or one of # % & ' + < = > @ ^ | follows it:
+   among them, its long names whole and a bracket in it to its ], brackets nested, or to the end
+   of the source, as a notebook reads it:
    4 times just past it, plus the status, 1 where reading stops at it, 3 where the source ends in
    its quotes. *)
 $lexFileDeclaration = FunctionDeclaration[lexFile,
@@ -363,13 +362,8 @@ $lexFileDeclaration = FunctionDeclaration[lexFile,
                         c2 == 92, j++,
                         c2 == 91,
                             depth = 1; j++;
-                            While[depth > 0 && j <= flN, If[flCodes[[j]] == 91, depth++, If[flCodes[[j]] == 93, depth--]]; j++];
-                            If[depth > 0, status = 1; scanning = 0],
+                            While[depth > 0 && j <= flN, If[flCodes[[j]] == 91, depth++, If[flCodes[[j]] == 93, depth--]]; j++],
                         True, scanning = 0]];
-                If[ status == 1 || (j > flN && j > flAt && flCodes[[j - 1]] == 92) ||
-                        (j <= flN && (flCodes[[j]] == 35 || flCodes[[j]] == 37 || flCodes[[j]] == 38 || flCodes[[j]] == 39 || flCodes[[j]] == 43 ||
-                            flCodes[[j]] == 60 || flCodes[[j]] == 61 || flCodes[[j]] == 62 || flCodes[[j]] == 64 || flCodes[[j]] == 94 || flCodes[[j]] == 124)),
-                    status = 1; j = flAt];
                 If[j == flAt, status = 1]];
             4 j + status]]]];
 
@@ -1974,7 +1968,7 @@ unclosedComment[codes_List, a_Integer] := Block[{i = a, depth = 0, open = a, n =
         Which[
             codes[[i]] === 40 && i < n && codes[[i + 1]] === 42, If[depth === 0, open = i]; depth++; i += 2,
             codes[[i]] === 42 && i < n && codes[[i + 1]] === 41 && depth > 0, depth--; i += 2,
-            codes[[i]] === 92 && depth > 0 && i < n && (codes[[i + 1]] === 42 || codes[[i + 1]] === 40), i += 2,
+            codes[[i]] === 92 && depth > 0 && i < n && codes[[i + 1]] === 40, i += 2,
             True, i++]];
     open]
 

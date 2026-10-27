@@ -446,18 +446,29 @@ $wlEscapes = {
     {"=[\\|0003b1]", List[HoldComplete[FreeformEvaluate["\[Alpha]"]]]},
     {"<<a\\|0003b1b", List[HoldComplete[Get["a\[Alpha]b"]]]},
     {"<<a\[Alpha]b", List[HoldComplete[Get["a\[Alpha]b"]]]},
-    (* in a comment a backslash before a star or an opening paren takes it, so that neither ends
-       nor opens one, as Wolfram 15 reads it; CodeParser's comment ends at any star and paren *)
-    {"(* a \\*) b *)", List[]},
+    (* in a comment a backslash before an opening paren takes it, so that it opens none, and a star
+       after a backslash ends it, as a notebook reads it *)
+    {"(* ::Package:: \\*)", List[]},
+    {"(* a \\\\*) b", List[HoldComplete[b]]},
     {"(* a \\ *) b", List[HoldComplete[b]]},
     {"(* C:\\temp\\ *) 1", List[HoldComplete[1]]},
     {"(* \\(* *) x", List[HoldComplete[x]]},
-    (* a bracket after a file's name is part of it, to its ], brackets nested *)
+    (* a file's name holds a bracket to its ], brackets nested, or to the end of the source, and an
+       operator's character ends it, as a notebook reads it *)
     {"<<b[c]", List[HoldComplete[Get["b[c]"]]]},
     {"<<b[[c]]d", List[HoldComplete[Get["b[[c]]d"]]]},
+    {"<<b[c", List[HoldComplete[Get["b[c"]]]},
+    {"<<a\\", List[HoldComplete[Get["a\\"]]]},
     {"<<a\\ b", List[HoldComplete[Times[Get["a\\"], b]]]},
+    {"<<a+b", List[HoldComplete[Plus[Get["a"], b]]]},
+    {"<<a@b", List[HoldComplete[Get["a"][b]]]},
+    {"f[<<a+b]", List[HoldComplete[f[Plus[Get["a"], b]]]]},
     {"f[<<a, x >> b]", List[HoldComplete[f[Get["a"], Put[x, "b"]]]]}
 };
+VerificationTest[
+    FailureQ[WolframLanguageHeld["(* a \\*) b *)"]],
+    True,
+    TestID -> "wl: a star after a backslash ends a comment, as a notebook reads it, so a *) after it closes none"]
 Scan[
     Function[c, VerificationTest[
         {WolframLanguageHeld[c[[1]]], Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$fastHeldReader = False}, WolframLanguageHeld[c[[1]]]]},
@@ -582,13 +593,7 @@ $wlFailures = {
     {"a + =[b", {8, True}},
     {"=[b]]", {6, False}},
     (* a failure after a character escape is placed in the source as written *)
-    {"a\\:03b1 +", {10, True}},
-    (* no file where one of # % & ' + < = > @ ^ | follows the name, a bracket in it is not closed or
-       the source ends in a \ after it: at the start of the operator, where the kernel's caret is *)
-    {"x >> a+b", {3, False}},
-    {"f[<<a+b]", {3, False}},
-    {"<<b[c", {1, False}},
-    {"<<a\\", {1, False}}
+    {"a\\:03b1 +", {10, True}}
 };
 Scan[
     Function[c, VerificationTest[wlStop[WolframLanguageHeld[c[[1]]]], c[[2]], TestID -> "wl failure: " <> c[[1]]]],
@@ -958,8 +963,7 @@ VerificationTest[
 $wlSyntaxCases = {
     {"", False, 0},
     {"a =[b] c", True, 8},
-    {"x >> a+b", False, 2},
-    {"<<a|b", False, 5},
+    {"<<a|b", True, 5},
     {"f[<<]", False, 2},
     {"a + =[b", False, 5},
     {"=[b", False, 3},
