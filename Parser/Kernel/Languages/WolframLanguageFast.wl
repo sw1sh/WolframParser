@@ -311,8 +311,10 @@ $lexLongNameDeclaration = FunctionDeclaration[lexLongName,
                     result = 8192 (j + 1) + op + 1]];
             result]]]];
 
-(* A comment from its opening paren and star at at, nested ones in it: twice just past its end,
-   plus 1 where the source ends before it does, the place reading got to then. *)
+(* A comment from its opening paren and star at at, nested ones in it, a backslash before a star
+   or an opening paren taking it, so that neither ends nor opens one, as Wolfram 15 reads it:
+   twice just past its end, plus 1 where the source ends before it does, the place reading got to
+   then. *)
 $lexCommentDeclaration = FunctionDeclaration[lexComment,
     Typed[{"PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger"} -> "MachineInteger"] @
     Function[{cmCodes, cmAt, cmN},
@@ -322,6 +324,7 @@ $lexCommentDeclaration = FunctionDeclaration[lexComment,
                     j + 1 > cmN, unclosed = 1; depth = 0,
                     cmCodes[[j]] == 40 && cmCodes[[j + 1]] == 42, depth++; j += 2,
                     cmCodes[[j]] == 42 && cmCodes[[j + 1]] == 41, depth--; j += 2,
+                    cmCodes[[j]] == 92 && (cmCodes[[j + 1]] == 42 || cmCodes[[j + 1]] == 40), j += 2,
                     True, j++]];
             2 j + unclosed]]]];
 
@@ -1952,6 +1955,7 @@ unclosedComment[codes_List, a_Integer] := Block[{i = a, depth = 0, open = a, n =
         Which[
             codes[[i]] === 40 && i < n && codes[[i + 1]] === 42, If[depth === 0, open = i]; depth++; i += 2,
             codes[[i]] === 42 && i < n && codes[[i + 1]] === 41 && depth > 0, depth--; i += 2,
+            codes[[i]] === 92 && depth > 0 && i < n && (codes[[i + 1]] === 42 || codes[[i + 1]] === 40), i += 2,
             True, i++]];
     open]
 

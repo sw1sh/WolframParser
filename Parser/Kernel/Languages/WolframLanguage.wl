@@ -171,13 +171,15 @@ $fileCharacters = "(?:[A-Za-z0-9$`_./~:!*?-]|(?![\\x00-\\x7F])\\p{L}|\\\\\\[[A-Z
 $file = ParseChoice[$string, ParseRegex[$fileCharacters <> "+"]]
 $unterminatedFile = ParseRegex[$fileCharacters <> "*\\\\\\[[A-Za-z0-9]*+(?!\\])"]
 
-(* a comment, the comments nested in it too *)
-commentParser[] := With[{comment = RecCell[]},
-    SetRec[comment, ParseLiteral["(*"] ~~ ParseMany[ParseChoice[
-        RecRef[comment],
-        ParseRegex["[^(*]+"],
-        ParseLiteral["("] ~~ ParseNotFollowedBy[ParseLiteral["*"]],
-        ParseLiteral["*"] ~~ ParseNotFollowedBy[ParseLiteral[")"]]]] ~~ ParseLiteral["*)"]];
+(* a comment, the comments nested in it too; with escapes a backslash before a star or an opening
+   paren takes it, so that neither ends nor opens one, as Wolfram 15 reads it, where CodeParser's
+   comment ends at any star and closing paren *)
+commentParser[escapes_ : False] := With[{comment = RecCell[]},
+    SetRec[comment, ParseLiteral["(*"] ~~ ParseMany[ParseChoice @@ Join[
+        {RecRef[comment]},
+        If[TrueQ[escapes], {ParseRegex["[^(*\\\\]+"], ParseRegex["\\\\[*(]?"]}, {ParseRegex["[^(*]+"]}],
+        {ParseLiteral["("] ~~ ParseNotFollowedBy[ParseLiteral["*"]],
+         ParseLiteral["*"] ~~ ParseNotFollowedBy[ParseLiteral[")"]]}]] ~~ ParseLiteral["*)"]];
     RecRef[comment]]
 
 (* --- the grammar, parameterised over an algebra --- *)
@@ -195,7 +197,7 @@ grammar[alg_] := Module[{space, wsLine, wsAll, nested, top, statement},
     space = ParseChoice[
         ParseCharacter[" " | "\t" | "\f"],
         ParseLiteral["\\\n"], ParseLiteral["\\\r\n"],
-        commentParser[],
+        commentParser[True],
         ParseChoice @@ (ParseLiteral /@ $longWhitespace)];
     wsLine = ParseMany[space];
     wsAll = ParseMany[ParseChoice[ParseCharacter["\n" | "\r"], ParseChoice @@ (ParseLiteral /@ $heldNewlines), space]];
@@ -1668,6 +1670,7 @@ continuationSpans[s_String] := Module[{c = ToCharacterCode[s], n, i = 1, depth =
             depth > 0, Which[
                 c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth++; i += 2,
                 c[[i]] === 42 && i < n && c[[i + 1]] === 41, depth--; i += 2,
+                c[[i]] === 92 && i < n && (c[[i + 1]] === 42 || c[[i + 1]] === 40), i += 2,
                 True, i++],
             c[[i]] === 34, inString = True; i++,
             c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth = 1; i += 2,
@@ -1701,6 +1704,7 @@ escapeSpans[s_String] := Module[{c = ToCharacterCode[s], n, i = 1, depth = 0, in
             depth > 0, Which[
                 c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth++; i += 2,
                 c[[i]] === 42 && i < n && c[[i + 1]] === 41, depth--; i += 2,
+                c[[i]] === 92 && i < n && (c[[i + 1]] === 42 || c[[i + 1]] === 40), i += 2,
                 True, i++],
             c[[i]] === 34, inString = True; i++,
             c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth = 1; i += 2,

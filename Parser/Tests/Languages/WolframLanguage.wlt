@@ -445,7 +445,13 @@ $wlEscapes = {
     {"(* \\:03b1 *) a", List[HoldComplete[a]]},
     {"=[\\|0003b1]", List[HoldComplete[FreeformEvaluate["\[Alpha]"]]]},
     {"<<a\\|0003b1b", List[HoldComplete[Get["a\[Alpha]b"]]]},
-    {"<<a\[Alpha]b", List[HoldComplete[Get["a\[Alpha]b"]]]}
+    {"<<a\[Alpha]b", List[HoldComplete[Get["a\[Alpha]b"]]]},
+    (* in a comment a backslash before a star or an opening paren takes it, so that neither ends
+       nor opens one, as Wolfram 15 reads it; CodeParser's comment ends at any star and paren *)
+    {"(* a \\*) b *)", List[]},
+    {"(* a \\ *) b", List[HoldComplete[b]]},
+    {"(* C:\\temp\\ *) 1", List[HoldComplete[1]]},
+    {"(* \\(* *) x", List[HoldComplete[x]]}
 };
 Scan[
     Function[c, VerificationTest[
