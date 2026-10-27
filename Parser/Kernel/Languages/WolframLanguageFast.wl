@@ -690,7 +690,7 @@ $fastUnsetSpecIndex := $fastUnsetSpecIndex = fastSpecIndex[{9, "Unset", "Unset"}
    parameters; 7 a pattern and 8 an operand left out, {token, length,
    brackets}; 9 a span {state, count}; 10 a compound {count};
    11 a ternary {state, precedence, min, plain}; 12 a tag set {state}; 13
-   an integral {integral}; 14 a message name {count, first token, instructions}; 15 a query
+   an integral {integral, signs}; 14 a message name {count, first token, instructions}; 15 a query
    that does not begin its statement {??, first token, instructions}.
 
    Instructions: 1 a leaf {kind, token}; 2 prefix {head}; 3 postfix
@@ -701,7 +701,7 @@ $fastUnsetSpecIndex := $fastUnsetSpecIndex = fastSpecIndex[{9, "Unset", "Unset"}
    14 a message name {n}; 15 a type's parameters {n}; 16 a derivative
    {primes}; 17 a ~f~ b; 18 a span {n}; 19 a compound {n}; 20 a tag set
    {1 :=, 2 =, 3 =.}; 21 a put {head}; 22 a get; 23 a pattern; 24 an
-   integral {integral}; 25 the end of a statement {its first token, the
+   integral {integral, signs}; 25 the end of a statement {its first token, the
    token after it};
    26 a divisibility chain {n}; 27 !!; 28 the words of a query {start,
    end}; 29 a query {??}. *)
@@ -715,7 +715,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
         Native`UncheckedBlock[Module[{n = pTok[[2]], out, fr, maxFrames, sp = 0, on = 0, t = 1, brackets = 0, status = 0, mode = 0,
                 pMin = 0, pRbp = 0, pPlain = 0, base = 0, k = 0, o = 0, i = 0, bp = 0, fx = 0, hd = 0, ky = 0, mn = 0, rb = 0, pl = 0,
                 ft = 0, cnt = 0, bt = 0, colons = 0, ok = 0, x = 0, lg = 0, e = 0, we = 0, c = 0, cl = 0, tt = 0, far = 0, stmt = 1, se = 0,
-                nls, ps = 0, ol = 0, pe = 0, nst = 0},
+                nls, ps = 0, ol = 0, pe = 0, nst = 0, q = 0, nf = 0, kk = 0, trail = 0, need = 0},
             out = Native`UncheckedArray[0, 3 (8 n + 16) + 2];
             maxFrames = 4 n + 64;
             fr = Native`UncheckedArray[0, 8 maxFrames];
@@ -831,9 +831,12 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                         If[ pTok[[5 t - 4]] != we, status = 3; far = we; mode = 99,
                                             on++; out[[3 on]] = 28; out[[3 on + 1]] = e; out[[3 on + 2]] = we;
                                             on++; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; mode = 3]]],
+                            (* an integral, the same signs right after it one integral of as many differentials, as a
+                               notebook reads \[Integral]\[Integral] f \[DifferentialD]x \[DifferentialD]y *)
                             k == 9 && pIntegrals[[o + 1]] > 0,
-                                x = pIntegrals[[o + 1]]; t++;
-                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 13; fr[[base + 2]] = x;
+                                x = pIntegrals[[o + 1]]; t++; cnt = 1;
+                                While[pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == o, t++; cnt++];
+                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 13; fr[[base + 2]] = x; fr[[base + 3]] = cnt;
                                 pMin = pSpecial[[15]]; pRbp = 0; pPlain = 0; mode = 1,
                             True, mode = 5],
                     (* after an operand: an Optional's : after a blank or a pattern, else the operator that
@@ -985,8 +988,41 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                                 t++; on++; out[[3 on]] = 20; out[[3 on + 1]] = 3; out[[3 on + 2]] = 0; sp--; mode = 3,
                                             True, mode = 5],
                                         on++; out[[3 on]] = 20; out[[3 on + 1]] = If[fr[[base + 2]] == 2, 1, 2]; out[[3 on + 2]] = 0; sp--; mode = 3],
+                                (* an integral's operand, as a notebook reads it: its factors, a parenthesis round them
+                                   all as none, end in as many differentials as the integral has signs, and no other
+                                   factor is one, a differential in parentheses none; else no Wolfram Language. Each
+                                   factor is stepped over by the values its instructions take and give *)
                                 ft == 13,
-                                    on++; out[[3 on]] = 24; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3,
+                                    q = on; ok = 0;
+                                    While[out[[3 q]] == 9 && out[[3 q + 1]] == pHeads[[3]], q--];
+                                    Which[
+                                        out[[3 q]] == 2 && (out[[3 q + 1]] == pHeads[[9]] || out[[3 q + 1]] == pHeads[[10]]),
+                                            ok = If[fr[[base + 3]] == 1, 1, 0],
+                                        out[[3 q]] == 5 && out[[3 q + 1]] == pHeads[[8]],
+                                            nf = out[[3 q + 2]]; q--; kk = 0; trail = 1; ok = 1;
+                                            While[ nf > 0 && ok == 1,
+                                                If[ out[[3 q]] == 2 && (out[[3 q + 1]] == pHeads[[9]] || out[[3 q + 1]] == pHeads[[10]]),
+                                                    If[trail == 1, kk++, ok = 0],
+                                                    trail = 0];
+                                                need = 1;
+                                                While[ need > 0,
+                                                    c = out[[3 q]];
+                                                    need += Which[
+                                                        c == 1 || c == 6 || c == 11 || c == 12 || c == 13 || c == 28, 0,
+                                                        c == 4 || c == 21 || c == 23, 2,
+                                                        c == 5, out[[3 q + 2]],
+                                                        c == 7 || c == 14 || c == 18 || c == 19 || c == 26, out[[3 q + 1]],
+                                                        c == 8 || c == 10 || c == 15, out[[3 q + 1]] + 1,
+                                                        c == 9, If[out[[3 q + 1]] == pHeads[[3]], 1, out[[3 q + 2]]],
+                                                        c == 17, 3,
+                                                        c == 20, If[out[[3 q + 1]] == 3, 2, 3],
+                                                        True, 1] - If[c == 6, 0, 1];
+                                                    q--];
+                                                nf--];
+                                            If[kk != fr[[base + 3]], ok = 0],
+                                        True, ok = 0];
+                                    If[ ok == 0, If[t > far, far = t]; mode = 5,
+                                        on++; out[[3 on]] = 24; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = fr[[base + 3]]; sp--; mode = 3],
                                 (* a query's expression: a word of one token its text, and after ?? nothing else *)
                                 ft == 15,
                                     x = If[on == fr[[base + 4]] + 1 && t == fr[[base + 3]] + 1 && out[[3 on]] == 1, 1, 0];
@@ -1514,7 +1550,8 @@ $fastSpecialArray := $fastSpecialArray = Developer`ToPackedArray[Join[
      $fastMinus, $fastLongMinus, $fastRightDoubleBracket, $fastQuestion},
     {$integralPrecedence, $fastPatternColon, $fastSpanOperand, $fastCompoundOperand, $fastTagLeft, $fastTagRight, $fastOptionalColon},
     {fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}]}]]
-$fastHeadCodeArray := $fastHeadCodeArray = Developer`ToPackedArray[fastHeadCode /@ {"Minus", "Unset", "Paren", "List", "Association", "NotNot", "Optional"}]
+$fastHeadCodeArray := $fastHeadCodeArray = Developer`ToPackedArray[fastHeadCode /@ {"Minus", "Unset", "Paren", "List", "Association", "NotNot", "Optional",
+    "Times", "DifferentialD", "CapitalDifferentialD"}]
 $fastKeyCodeArray := $fastKeyCodeArray = Developer`ToPackedArray[fastKeyCode /@ {"Plus", "Relation", "Divisible"}]
 
 (* --- the build pass --- *)
@@ -1608,8 +1645,7 @@ fastStep[20, 3, _] := (sp--; vals[sp] = symbolCall["TagUnset", {vals[sp], vals[s
 fastStep[20, a_, _] := (sp -= 2; vals[sp] = symbolCall[If[a === 1, "TagSetDelayed", "TagSet"], {vals[sp], vals[sp + 1], vals[sp + 2]}]; mk[[sp]] = 0)
 fastStep[21, a_, _] := (sp--; vals[sp] = binaryHeld[$fastHeadNames[[a]], vals[sp], vals[sp + 1]]; mk[[sp]] = 0)
 fastStep[22, _, _] := (vals[sp] = symbolCall["Get", {vals[sp]}]; mk[[sp]] = 0)
-fastStep[24, a_, _] := (spec = $fastIntegralList[[a]];
-    vals[sp] = If[spec[[2]] === Integrate, integralHeld[spec[[1]], vals[sp]], symbolCall[spec[[1]], {vals[sp]}]]; mk[[sp]] = 0)
+fastStep[24, a_, b_] := (vals[sp] = integralHeld[SymbolName[$fastIntegralList[[a, 2]]], vals[sp], b]; mk[[sp]] = 0)
 fastStep[26, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = symbolCall["Divisible", Reverse[xs]]; mk[[sp]] = 0)
 fastStep[27, _, _] := (vals[sp] = symbolCall["Not", {symbolCall["Not", {vals[sp]}]}]; mk[[sp]] = 0)
 fastStep[28, a_, b_] := (sp++; vals[sp] = heldLeafValue["String", "\"" <> StringReplace[fastText[a, b], "\t" -> " "] <> "\""]; mk[[sp]] = 0)

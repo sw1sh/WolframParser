@@ -25,7 +25,7 @@ And these tables of the paclet, constant for a version of it:
 |---|---|
 | `$fastHeadNames` | The heads, a list of strings, by head code: code `k` is the head named `$fastHeadNames[[k]]`. A head of a value is the `` System` `` symbol of that name, as `heldSymbol` gives it. Codes 1 to 7 are `"Minus"`, `"Unset"`, `"Paren"`, `"List"`, `"Association"`, `"NotNot"` and `"Optional"`. |
 | special head codes | `fastHeadCode[name]` for `"Minus"`, `"Paren"`, `"At"`, `"SlashSlash"` and `"Divide"`, which instructions 2, 4 and 9 read apart. `"Paren"`, `"At"`, `"SlashSlash"` and `"Divide"` name no head of a value. |
-| `$fastIntegralList` | The integrals by index, each `{head name, kind}`, the kind `Integrate` for the integral form of instruction 24. |
+| `$fastIntegralList` | The integrals by index, each `{sign name, head}`: the head of instruction 24's value, `Integrate` for `\[Integral]` and a contour integral's own. |
 
 ## A whole source
 
@@ -131,7 +131,7 @@ where the instruction takes none.
 | 21 | head | A put, pop 1 (`y`): `head[x, y]`, the head `Put` or `PutAppend`. |
 | 22 | | `Get[x]`. |
 | 23 | | A pattern, pop 1 (`y`): `Pattern[x, y]`. |
-| 24 | integral | `{name, kind}` = `$fastIntegralList[[integral]]`. The kind `Integrate`: `x` of the form `d[v]`, `d` `DifferentialD` or `CapitalDifferentialD`, is `Integrate[1, v]`; of the form `Times[g..., d[v]]`, `Integrate[g, v]` with one factor, `Integrate[Times[g...], v]` with more; else `name[x]`. Another kind: `name[x]`. |
+| 24 | integral, signs | `head` = `$fastIntegralList[[integral, 2]]`, the integral `signs` signs of one kind, as `\[Integral]\[Integral]`. `x` is a differential `d[v]`, `d` `DifferentialD` or `CapitalDifferentialD`, or `Times[g..., d1[v1], ..., dk[vk]]`, `k` the signs: `head[1, v]` of the one, `head[g, vk, ..., v1]` of the other, `g` the factor where there is one, `Times[g...]` where there are more, and `1` where there is none. The parser makes the instruction of no other `x`, which a notebook reads as no Wolfram Language. |
 | 25 | first token, token after | The end of a statement: pop the value into the statements. |
 | 26 | n | A chain of `∣`, pop `n`: `Divisible` of the operands in reverse order. |
 | 27 | | `!!`: `Not[Not[x]]`. |

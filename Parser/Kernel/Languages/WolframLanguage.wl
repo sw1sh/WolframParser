@@ -276,8 +276,11 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
        in it a factor like any other; \[Integral]'s Integrate of a product that
        ends in one, by integralOf, and an integral round a contour its head of
        the operand *)
-    integrals = Map[Function[row, ParseAction[longOperator[row[[1]]] ~~ RecRef[integrandOperand],
-            Function[{o, f}, If[row[[3]] === Integrate, integralOf[alg, SymbolName[row[[2]]], f], alg["Prefix"][SymbolName[row[[2]]], f]]]]],
+    integrals = Map[Function[row, ParseAction[
+            ParseCondition[
+                ParseAction[ParseSome[longOperator[row[[1]]]] ~~ RecRef[integrandOperand], Function[With[{parts = {##}}, integrand[Length[Flatten[{Most[parts]}]], Last[parts]]]]],
+                integrandQ[#[[1]], #[[2]]] &],
+            Function[r, integralOf[alg, SymbolName[row[[3]]], r[[2]], r[[1]]]]]],
         $longNameTable["Integrals"]];
 
     (* a name, or n:patt: the name binds its pattern wherever it stands;
@@ -962,22 +965,31 @@ heldLongHead[row_List] := Which[
 $relationHeads = <|"NotEqual" -> "Unequal", "LessSlantEqual" -> "LessEqual", "GreaterSlantEqual" -> "GreaterEqual",
     "Equal" -> "Equal", "LongEqual" -> "Equal"|>
 
-(* \[Integral] f as the kernel reads it: of a product whose last factor is a
-   differential, \[DifferentialD] x or \[CapitalDifferentialD] x, Integrate of
-   the factors before it over x; of a differential alone, Integrate[1, x]; of
-   anything else, head[f]. Held, from the expression; as nodes, from a Times
-   node whose last operand is a differential's, which the call keeps. *)
-integralOf[alg_, head_String, f_Association] := held[integralHeld[head, f["Expr"]]]
-integralHeld[head_String, e_HoldComplete] := Replace[e, {
-    HoldComplete[d_[x_]] /; differentialHeadQ[d] :> symbolCall["Integrate", {HoldComplete[1], HoldComplete[x]}],
-    HoldComplete[t_[g___, d_[x_]]] /; MatchQ[Unevaluated[t], Times] && differentialHeadQ[d] :>
-        symbolCall["Integrate", {If[Length[HoldComplete[g]] === 1, HoldComplete[g], HoldComplete[Times[g]]], HoldComplete[x]}],
-    _ :> symbolCall[head, {e}]}]
-integralOf[alg_, head_String, f_] := Replace[f, {
+(* An integral as a notebook reads it: k signs of one kind, as \[Integral]\[Integral], and an operand
+   whose factors end in k differentials, \[DifferentialD] x or \[CapitalDifferentialD] x, no other
+   factor one and none in parentheses: head of the factors before them, 1 where there are none, and
+   the k variables, the last first, so \[Integral]\[Integral] f \[DifferentialD]x \[DifferentialD]y
+   is Integrate[f, y, x] and \[ContourIntegral] f \[DifferentialD]x ContourIntegral[f, x]; any other
+   operand is no Wolfram Language. Held, from the expression, a product's differentials marked; as
+   nodes, the standard tree's, of each sign in turn, of a Times node whose last operand is a
+   differential's, which the call keeps. *)
+integrandQ[k_Integer, f_Association] := Which[
+    MatchQ[f["Expr"], HoldComplete[_?differentialHeadQ[_]]], k === 1,
+    KeyExistsQ[f, "Differentials"], With[{d = f["Differentials"]}, With[{n = LengthWhile[Reverse[d], TrueQ]}, n === k && FreeQ[Drop[d, -n], True]]],
+    True, False]
+integrandQ[_Integer, _] := True
+integralOf[alg_, head_String, f_Association, k_Integer] := held[integralHeld[head, f["Expr"], k]]
+integralOf[alg_, head_String, f_, k_Integer] := Nest[integralNode[alg, head, #] &, f, k]
+integralHeld[head_String, e_HoldComplete, k_Integer] := With[{factors = Replace[e, {
+        HoldComplete[t_[fs___]] /; MatchQ[Unevaluated[t], Times] :> List @@ (HoldComplete /@ HoldComplete[fs]),
+        _ :> {e}}]},
+    With[{rest = Drop[factors, -k], vars = Replace[Take[factors, -k], HoldComplete[_[x_]] :> HoldComplete[x], {1}]},
+        symbolCall[head, Join[{Switch[Length[rest], 0, HoldComplete[1], 1, First[rest], _, symbolCall["Times", rest]]}, Reverse[vars]]]]]
+integralNode[alg_, head_String, f_] := Replace[f, {
     PrefixNode["DifferentialD" | "CapitalDifferentialD", _, _] :> alg["Call"][alg["Leaf"]["Symbol", "Integrate"], {alg["Leaf"]["Integer", "1"], f}],
     InfixNode["Times", {g__, d : PrefixNode["DifferentialD" | "CapitalDifferentialD", _, _]}, _] :>
         alg["Call"][alg["Leaf"]["Symbol", "Integrate"], {Replace[{g}, {{one_} :> one, factors_ :> alg["Infix"]["Times", factors]}], d}],
-    _ :> alg["Prefix"][head, f]}]
+    _ :> alg["Prefix"][If[head === "Integrate", "Integral", head], f]}]
 
 SetAttributes[differentialHeadQ, HoldFirst]
 differentialHeadQ[d_] := MatchQ[Unevaluated[d], DifferentialD | CapitalDifferentialD]
@@ -1020,13 +1032,16 @@ WolframLanguageSemantic = <|
     "Prefix"  -> Function[{op, x}, If[op === "Minus", held[negated[x]], held[symbolCall[op, {x["Expr"]}]]]],
     "Postfix" -> Function[{x, op}, held[symbolCall[op, {x["Expr"]}]]],
     "Binary"  -> Function[{op, l, r}, held[binaryHeld[op, l["Expr"], r["Expr"]]]],
-    "Infix"   -> Function[{op, xs}, held[symbolCall[op, expressions[xs]]]],
+    (* a product marks which of its factors are differentials, none in parentheses, for an integral *)
+    "Infix"   -> Function[{op, xs}, If[op === "Times",
+        Append[held[symbolCall[op, expressions[xs]]], "Differentials" -> Map[! TrueQ[#["Paren"]] && MatchQ[#["Expr"], HoldComplete[_?differentialHeadQ[_]]] &, xs]],
+        held[symbolCall[op, expressions[xs]]]]],
     "Ternary" -> Function[{op, a, b, c}, held[symbolCall[op, expressions[{a, b, c}]]]],
     "Call"    -> Function[{h, args}, held[heldCall[h["Expr"], expressions[args]]]],
     (* parentheses make a number literal no longer one, so that -(2) is Times[-1, 2], as a notebook
        reads it *)
     "Group"   -> Function[{kind, xs}, If[kind === "Paren",
-        Append[First[xs], "Literal" -> False],
+        Append[First[xs], {"Literal" -> False, "Paren" -> True}],
         held[symbolCall[kind, expressions[xs]]]]]
 |>
 
