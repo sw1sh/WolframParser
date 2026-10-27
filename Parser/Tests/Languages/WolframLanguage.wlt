@@ -432,6 +432,28 @@ Scan[
         TestID -> "wl free-form, reader and grammar: " <> c[[1]]]],
     $wlFreeform]
 
+(* === character escapes, by the reader and by the grammar: a \:xxxx, \.xx or \|xxxxxx outside a
+   string and a comment is its character, a letter of a name or a file, an operator, as Wolfram
+   15 reads it; a file's name holds letters past ASCII === *)
+$wlEscapes = {
+    {"a\\:03b1b", List[HoldComplete[a\[Alpha]b]]},
+    {"a\\.41b", List[HoldComplete[aAb]]},
+    {"a \\:2192 b", List[HoldComplete[RightArrow[a, b]]]},
+    {"a\\|00002Bb", List[HoldComplete[Plus[a, b]]]},
+    {"\\:0028a\\:0029", List[HoldComplete[a]]},
+    {"\"x\\:0022y\"", List[HoldComplete["x\"y"]]},
+    {"(* \\:03b1 *) a", List[HoldComplete[a]]},
+    {"=[\\|0003b1]", List[HoldComplete[FreeformEvaluate["\[Alpha]"]]]},
+    {"<<a\\|0003b1b", List[HoldComplete[Get["a\[Alpha]b"]]]},
+    {"<<a\[Alpha]b", List[HoldComplete[Get["a\[Alpha]b"]]]}
+};
+Scan[
+    Function[c, VerificationTest[
+        {WolframLanguageHeld[c[[1]]], Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$fastHeldReader = False}, WolframLanguageHeld[c[[1]]]]},
+        {c[[2]], c[[2]]},
+        TestID -> "wl escape, reader and grammar: " <> c[[1]]]],
+    $wlEscapes]
+
 (* === a source: newlines end expressions outside brackets, comments are whitespace === *)
 VerificationTest[
     WolframLanguageHeld["a = 1;\n(* c *)\nb\n\nc;\nd +\n e\nf (* x *)\n(* y *)"],
@@ -547,7 +569,9 @@ $wlFailures = {
     {"a; ++", {6, True}},
     (* free-form input to its first ]: a ] after it closes nothing *)
     {"a + =[b", {8, True}},
-    {"=[b]]", {6, False}}
+    {"=[b]]", {6, False}},
+    (* a failure after a character escape is placed in the source as written *)
+    {"a\\:03b1 +", {10, True}}
 };
 Scan[
     Function[c, VerificationTest[wlStop[WolframLanguageHeld[c[[1]]]], c[[2]], TestID -> "wl failure: " <> c[[1]]]],

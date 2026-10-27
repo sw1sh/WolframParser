@@ -337,7 +337,8 @@ $lexQuotedDeclaration = FunctionDeclaration[lexQuoted,
                     Which[c2 == 34, j++; scanning = 0, c2 == 92, j += 2, True, j++]]];
             2 j + unclosed]]]];
 
-(* The file of << or >> at at: a quoted one, or the characters of a path, its long names whole:
+(* The file of << or >> at at: a quoted one, or the characters of a path, letters past ASCII
+   among them, its long names whole:
    4 times just past it, plus the status, 1 where reading stops at it, 3 where the source ends in
    its quotes. *)
 $lexFileDeclaration = FunctionDeclaration[lexFile,
@@ -350,7 +351,7 @@ $lexFileDeclaration = FunctionDeclaration[lexFile,
                 While[ scanning == 1 && j <= flN,
                     c2 = flCodes[[j]]; cl = If[c2 > 65535, 5, flClasses[[c2 + 1]]];
                     Which[
-                        cl == 1 || cl == 2 || c2 == 95 || c2 == 46 || c2 == 47 || c2 == 126 || c2 == 58 || c2 == 33 || c2 == 42 || c2 == 63 || c2 == 45, j++,
+                        cl == 1 || cl == 2 || cl == 5 || c2 == 95 || c2 == 46 || c2 == 47 || c2 == 126 || c2 == 58 || c2 == 33 || c2 == 42 || c2 == 63 || c2 == 45, j++,
                         c2 == 92 && j + 1 <= flN && flCodes[[j + 1]] == 91,
                             ln = lexLongName[flCodes, flTable, j, flN];
                             If[ln > 0, j = Quotient[ln, 8192], status = 1; scanning = 0],
@@ -1667,10 +1668,9 @@ heldNextState[s_String] := Block[{i = 1},
     If[ i <= Length[$heldNextStates], i,
         $heldNextStates = Take[Prepend[$heldNextStates, makeHeldNextState[s]], UpTo[4]]; 1]]
 
-makeHeldNextState[s_String] := With[{spans = lineContinuations[s]},
-    With[{clean = If[spans === {}, s, StringReplacePart[s, "", spans]]},
-        segmentParts[<|"Source" -> s, "Clean" -> clean, "Kept" -> If[spans === {}, None, keptPositions[s, spans]],
-            "Codes" -> ToCharacterCode[clean], "Segments" -> {}, "Parts" -> {}, "Data" -> <||>, "Index" -> <||>|>, 1]]]
+makeHeldNextState[s_String] := With[{read = readSource[s]},
+    segmentParts[<|"Source" -> s, "Clean" -> read[[1]], "Kept" -> read[[2]],
+        "Codes" -> ToCharacterCode[read[[1]]], "Segments" -> {}, "Parts" -> {}, "Data" -> <||>, "Index" -> <||>|>, 1]]
 
 (* a position in the source read without its line continuations, in the source, and those of a list *)
 sourcePosition[state_Association, c_Integer] := With[{kept = state["Kept"]},
@@ -1916,9 +1916,8 @@ escapeWarnedQ[codes_List, lexed_List] := warningsAt[codes, lexed, 1, lexed[[2]],
      after the first line at the newline before it;
    - before a long name no character has, or a malformed name, from the name it is in;
    and at the end of the source where a comment, a string or a name of these is its first token. *)
-syntaxStop[s_String] := Module[{spans = lineContinuations[s], clean, kept, codes, padded, lexed, prog, k, cut, source, length = StringLength[s]},
-    clean = If[spans === {}, s, StringReplacePart[s, "", spans]];
-    kept = If[spans === {}, None, keptPositions[s, spans]];
+syntaxStop[s_String] := Module[{clean, kept, codes, padded, lexed, prog, k, cut, source, length = StringLength[s]},
+    {clean, kept} = readSource[s];
     codes = ToCharacterCode[clean]; padded = paddedCodes[codes];
     (* a token's place in the source, the line continuations before it its own *)
     source = Function[c, Which[

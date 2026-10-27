@@ -165,9 +165,9 @@ $out = ParseAction[ParseLookahead[ParseLiteral["%"]] ~~ ParseRegex["%+[0-9]*"], 
 $freeform = ParseRegex["=\\[(?:\\\\\\[[A-Za-z0-9]+\\]|[^\\]])*\\]"]
 
 (* the file of << and >>: a string, or the characters of a path or a
-   context, a \ among them, \[Name] one character; and one whose \[ is
-   not closed *)
-$fileCharacters = "(?:[A-Za-z0-9$`_./~:!*?-]|\\\\\\[[A-Za-z0-9]+\\]|\\\\(?!\\[))"
+   context, a letter past ASCII and a \ among them, \[Name] one
+   character; and one whose \[ is not closed *)
+$fileCharacters = "(?:[A-Za-z0-9$`_./~:!*?-]|(?![\\x00-\\x7F])\\p{L}|\\\\\\[[A-Za-z0-9]+\\]|\\\\(?!\\[))"
 $file = ParseChoice[$string, ParseRegex[$fileCharacters <> "+"]]
 $unterminatedFile = ParseRegex[$fileCharacters <> "*\\\\\\[[A-Za-z0-9]*+(?!\\])"]
 
@@ -1650,7 +1650,7 @@ tokenMarks[_, _String] := {}
    Their text is in the token they fall in, else in the token after them,
    and at the end of the source in none, there a string's too. The spans
    {first, last} of them in s, those that follow one another one. *)
-continuationSpans[s_String] := Module[{c = ToCharacterCode[s], n, i = 1, depth = 0, inString = False, spans = {}, runEnd, fileEnd},
+continuationSpans[s_String] := Module[{c = ToCharacterCode[s], n, i = 1, depth = 0, inString = False, spans = {}, runEnd},
     n = Length[c];
     (* the last character of the continuations from j on, j - 1 if none begins there *)
     runEnd[j_Integer] := Module[{k = j},
@@ -1658,14 +1658,6 @@ continuationSpans[s_String] := Module[{c = ToCharacterCode[s], n, i = 1, depth =
             k += If[c[[k + 1]] === 13 && k + 2 <= n && c[[k + 2]] === 10, 3, 2];
             While[k <= n && MemberQ[{32, 9, 11, 12}, c[[k]]], k++]];
         k - 1];
-    (* the last character of the spaces and the file name from j on *)
-    fileEnd[j0_Integer] := Module[{j = j0},
-        While[j <= n && (c[[j]] === 32 || c[[j]] === 9), j++];
-        While[j <= n && (KeyExistsQ[$fileCharacterCodes, c[[j]]] || c[[j]] === 92),
-            If[ c[[j]] === 92 && j < n && c[[j + 1]] === 91,
-                j += 2; While[j <= n && KeyExistsQ[$alphanumericCodes, c[[j]]], j++]; If[j <= n && c[[j]] === 93, j++, Break[]],
-                j++]];
-        j - 1];
     While[i <= n,
         Which[
             inString, Which[
@@ -1679,8 +1671,8 @@ continuationSpans[s_String] := Module[{c = ToCharacterCode[s], n, i = 1, depth =
                 True, i++],
             c[[i]] === 34, inString = True; i++,
             c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth = 1; i += 2,
-            c[[i]] === 60 && i < n && c[[i + 1]] === 60, i = fileEnd[i + 2] + 1,
-            c[[i]] === 62 && i < n && c[[i + 1]] === 62, i = fileEnd[If[i + 2 <= n && c[[i + 2]] === 62, i + 3, i + 2]] + 1,
+            c[[i]] === 60 && i < n && c[[i + 1]] === 60, i = fileNameEnd[c, i + 2] + 1,
+            c[[i]] === 62 && i < n && c[[i + 1]] === 62, i = fileNameEnd[c, If[i + 2 <= n && c[[i + 2]] === 62, i + 3, i + 2]] + 1,
             c[[i]] === 92 && runEnd[i] >= i, AppendTo[spans, {i, runEnd[i]}]; i = spans[[-1, 2]] + 1,
             (* a \ and the character it escapes *)
             c[[i]] === 92, i += 2,
@@ -1695,6 +1687,53 @@ lineContinuations[s_String] := If[StringContainsQ[s, "\\\n" | "\\\r"], continuat
 
 (* the positions in s of the characters read without its line continuations *)
 keptPositions[s_String, spans_List] := Complement[Range[StringLength[s]], Catenate[Range @@@ spans]]
+
+(* --- character escapes --- *)
+
+(* A \:xxxx, \.xx or \|xxxxxx outside a string and a comment is the character its hexadecimal
+   digits name, as Wolfram 15's reader reads it before it reads tokens: a letter of a name or of a
+   file, an operator, a bracket. The spans {first, last} of them in s, each with its character. *)
+escapeSpans[s_String] := Module[{c = ToCharacterCode[s], n, i = 1, depth = 0, inString = False, escapes = {}, width = 0, code = 0},
+    n = Length[c];
+    While[i <= n,
+        Which[
+            inString, Which[c[[i]] === 92, i += 2, c[[i]] === 34, inString = False; i++, True, i++],
+            depth > 0, Which[
+                c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth++; i += 2,
+                c[[i]] === 42 && i < n && c[[i + 1]] === 41, depth--; i += 2,
+                True, i++],
+            c[[i]] === 34, inString = True; i++,
+            c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth = 1; i += 2,
+            c[[i]] === 92 && i < n && (width = Switch[c[[i + 1]], 58, 4, 46, 2, 124, 6, _, 0]) > 0 && i + 1 + width <= n &&
+                AllTrue[c[[i + 2 ;; i + 1 + width]], KeyExistsQ[$hexadecimalCodes, #] &] &&
+                (code = FromDigits[FromCharacterCode[c[[i + 2 ;; i + 1 + width]]], 16]) <= 1114111,
+                AppendTo[escapes, {{i, i + 1 + width}, FromCharacterCode[code]}]; i += 2 + width,
+            (* a \ and the character it escapes *)
+            c[[i]] === 92, i += 2,
+            True, i++]];
+    escapes]
+
+$hexadecimalCodes = AssociationThread[Join[Range[48, 57], Range[65, 70], Range[97, 102]] -> True]
+
+(* the last character of the spaces and the file name of << or >> from j0 on in the codes c, a
+   letter past ASCII one of its characters *)
+fileNameEnd[c_List, j0_Integer] := Module[{j = j0, n = Length[c]},
+    While[j <= n && (c[[j]] === 32 || c[[j]] === 9), j++];
+    While[j <= n && (KeyExistsQ[$fileCharacterCodes, c[[j]]] || c[[j]] === 92 || (c[[j]] > 127 && LetterQ[FromCharacterCode[c[[j]]]])),
+        If[ c[[j]] === 92 && j < n && c[[j + 1]] === 91,
+            j += 2; While[j <= n && KeyExistsQ[$alphanumericCodes, c[[j]]], j++]; If[j <= n && c[[j]] === 93, j++, Break[]],
+            j++]];
+    j - 1]
+
+characterEscapes[s_String] := If[StringContainsQ[s, "\\:" | "\\." | "\\|"], escapeSpans[s], {}]
+
+(* s as the readers read it, without its line continuations and with each character escape its
+   character, and the positions in s of its characters, None where they are all of s's *)
+readSource[s_String] := With[{spans = lineContinuations[s], escapes = characterEscapes[s]},
+    If[ spans === {} && escapes === {}, {s, None},
+        With[{edits = SortBy[Join[Thread[{spans, ""}], escapes], #[[1, 1]] &]},
+            {StringReplacePart[s, edits[[All, 2]], edits[[All, 1]]],
+             Complement[Range[StringLength[s]], Catenate[Range @@@ Join[spans, Map[{#[[1]] + 1, #[[2]]} &, escapes[[All, 1]]]]]]}]]]
 
 (* offsets into the source read without its line continuations made
    offsets into the source: a node begins where the continuations before
@@ -1803,13 +1842,14 @@ concreteGrammar[] := Module[{comment, spaces, newline, lineTrivia, allTrivia, ne
 $astGrammar := $astGrammar = grammar[ASTAlgebra]
 $heldGrammar := $heldGrammar = grammar[WolframLanguageSemantic]
 
-(* Each reads a source with line continuations without them: the held
-   expressions need nothing more, the nodes are given their places in the
-   source, and so is a failure. *)
-WolframLanguageAST[s_String] := With[{spans = lineContinuations[s]},
-    If[ spans === {},
+(* Each reads a source with line continuations without them and with its
+   character escapes their characters: the held expressions need nothing
+   more, the nodes are given their places in the source, and so is a
+   failure. *)
+WolframLanguageAST[s_String] := With[{read = readSource[s]},
+    If[ read[[2]] === None,
         With[{r = parsed[$astGrammar, s]}, If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]],
-        With[{r = parsed[$astGrammar, StringReplacePart[s, "", spans]], kept = keptPositions[s, spans]},
+        With[{r = parsed[$astGrammar, read[[1]]], kept = read[[2]]},
             If[FailureQ[r], continuedFailure[r, kept, s], ASTAddSource[continuedOffsets[ASTContainer[r], kept], s]]]]]
 
 (* The held expressions, read by the reader of WolframLanguageFast.wl, which
@@ -1818,14 +1858,14 @@ WolframLanguageAST[s_String] := With[{spans = lineContinuations[s]},
    as the checks of the reader against the grammar do. *)
 $fastHeldReader = True
 
-WolframLanguageHeld[s_String] := With[{spans = lineContinuations[s]},
-    With[{clean = If[spans === {}, s, StringReplacePart[s, "", spans]]},
+WolframLanguageHeld[s_String] := With[{read = readSource[s]},
+    With[{clean = read[[1]], kept = read[[2]]},
         With[{fast = If[TrueQ[$fastHeldReader], fastHeld[clean], None]},
             Which[
                 ListQ[fast], DeleteCases[fast, HoldComplete[Null]],
-                FailureQ[fast], If[spans === {}, fast, continuedFailure[fast, keptPositions[s, spans], s]],
+                FailureQ[fast], If[kept === None, fast, continuedFailure[fast, kept, s]],
                 True, With[{r = grammarFailure[parsed[$heldGrammar, clean], StringLength[clean]]},
-                    Which[! FailureQ[r], DeleteCases[expressions[r], HoldComplete[Null]], spans === {}, r, True, continuedFailure[r, keptPositions[s, spans], s]]]]]]]
+                    Which[! FailureQ[r], DeleteCases[expressions[r], HoldComplete[Null]], kept === None, r, True, continuedFailure[r, kept, s]]]]]]]
 
 (* a failure of the grammar, which reads only the source the fast reader does not take: the
    source ending too early where it stops past its end *)
