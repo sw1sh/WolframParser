@@ -207,10 +207,10 @@ grammar[alg_] := Module[{space, wsLine, wsAll, nested, top, statement},
    by the whitespace ws; brackets hold expressions of nested. *)
 expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     {after, operator, postfixOperator, leaf, nullLeaf, symbolLeaf, blankLeaf, otherUnits, plainUnit, unit, patternUnit,
-     items, comma, call, part, messageName, tag, derivative, span, spanStart, compound, tagSet, put,
+     items, comma, call, part, messageName, tag, derivative, span, spans, spanStart, compound, tagSet, put,
      binary, prefix, postfix, flat, plus, relation, relationOp, implicit, specs, table, information, dot, setOperator, unset,
      longOperator, longPostfixOperator, longSpecs, longGroups, longCalls, integrals, integrandOperand, divisible,
-     patternRight, spanOperand, compoundOperand, tagLeft, tagRight},
+     patternRight, spanOperand, compoundOperand, tagLeft, tagRight, prefixAhead, prefixedTable},
 
     after[p_, w_] := ParseAction[p ~~ w, #1 &];
     operator[op_String] := after[ParseChoice @@ (longest /@ spellings[op]), wsAll];
@@ -234,7 +234,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
         ParseAction[ParseSepBy[ParseOptional[RecRef[nested]], comma], Function[nullLeaf /@ {##}]]];
 
     patternRight = RecCell[]; spanOperand = RecCell[]; compoundOperand = RecCell[]; tagLeft = RecCell[]; tagRight = RecCell[];
-    integrandOperand = RecCell[];
+    integrandOperand = RecCell[]; spans = RecCell[]; prefixAhead = RecCell[];
 
     (* \[LeftFloor] x \[RightFloor] and the other brackets of long names *)
     longGroups = Map[Function[g,
@@ -299,12 +299,19 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     derivative = ParseAction[ParseLookahead[ParseLiteral["'"]] ~~ ParseRegex["'+"] ~~ ws,
         Function[{look, primes, w}, Function[f, alg["Call"][
             alg["Call"][alg["Leaf"]["Symbol", "Derivative"], {alg["Leaf"]["Integer", ToString[StringLength[primes]]]}], {f}]]]];
-    (* a ;; b ;; c, each operand optional: All where it is left out *)
-    With[{operand = ParseOptional[ParseAction[ParseNotFollowedBy[ParseLiteral[";;"]] ~~ RecRef[spanOperand], #2 &]],
-          all = alg["Leaf"]["Symbol", "All"]},
-        span = ParseAction[postfixOperator[";;"] ~~ operand ~~ ParseOptional[ParseAction[postfixOperator[";;"] ~~ operand, {#2} &]],
-            Function[{semis, b, c}, Function[a, alg["Infix"]["Span",
-                Join[{a, If[MissingQ[b], all, b]}, If[MissingQ[c], {}, {If[MissingQ[First[c]], all, First[c]]}]]]]]]
+    (* a ;; b ;; c: All where the operand after the first ;; is left out, but for one a prefix
+       operator begins, the ;; after b only with an operand after it, and a ;; after the span the
+       beginning of a span of its own, the spans a product *)
+    With[{operand = ParseAction[ParseNotFollowedBy[ParseLiteral[";;"]] ~~ RecRef[spanOperand], #2 &],
+          all = alg["Leaf"]["Symbol", "All"], one = alg["Leaf"]["Integer", "1"]},
+        SetRec[spans, ParseAction[
+            postfixOperator[";;"] ~~
+                ParseChoice[ParseAction[ParseLookahead[RecRef[prefixAhead]] ~~ operand, #2 &], ParseAction[ParseNotFollowedBy[RecRef[prefixAhead]] ~~ ParseOptional[operand], #2 &]] ~~
+                ParseOptional[ParseAction[postfixOperator[";;"] ~~ operand, #2 &]] ~~
+                ParseOptional[ParseAction[ParseLookahead[ParseLiteral[";;"]] ~~ RecRef[spans], #2 &]],
+            Function[{semis, b, c, next}, Function[a, Prepend[If[MissingQ[next], {}, next[one]],
+                alg["Infix"]["Span", Join[{a, If[MissingQ[b], all, b]}, If[MissingQ[c], {}, {c}]]]]]]]];
+        span = ParseAction[RecRef[spans], Function[f, Function[a, Replace[f[a], {{s_} :> s, l_ :> alg["Infix"]["Times", l]}]]]]
     ];
     compound = ParseAction[ParseSome[ParseAction[postfixOperator[";"] ~~ ParseOptional[RecRef[compoundOperand]], {#2} &]],
         Function[With[{parts = nullLeaf /@ Map[First, {##}]}, Function[a, alg["Infix"]["CompoundExpression", Prepend[parts, a]]]]]];
@@ -441,9 +448,19 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     specs = Join[specs, longSpecs];
 
     table[u_, min_Integer] := ParseOperatorTable[u, levelsAbove[specs, min]];
+    (* the operators that bind more tightly than min, and the prefix ones of any precedence *)
+    prefixedTable[u_, min_Integer] := ParseOperatorTable[u, levelsAbove[Select[specs, #[[2, 1]] === "Prefix" || precedenceValue[First[#]] > min &], -1]];
+    (* what begins an operand with an operator: a prefix operator, a << or an integral *)
+    SetRec[prefixAhead, ParseChoice @@ Join[Cases[specs, {_, {"Prefix", p_}} :> p], {operator["<<"]}, longOperator /@ $longNameTable["Integrals"][[All, 1]]]];
     SetRec[integrandOperand, table[unit, $integralPrecedence]];
     SetRec[patternRight, table[plainUnit, $codeParserPrecedence["Fake`PatternColon"]]];
-    SetRec[spanOperand, table[unit, $codeParserPrecedence["SemiSemi"]]];
+    (* a span's operand: what binds more tightly than ;;, and a prefix operator of any precedence,
+       as in any other operand, its operand all that binds more tightly than it, as CodeParser reads
+       it [W15 bug] *)
+    With[{lows = Select[specs, #[[2, 1]] === "Prefix" && precedenceValue[First[#]] <= $codeParserPrecedence["SemiSemi"] &]},
+        SetRec[spanOperand, table[ParseChoice[
+                Sequence @@ Map[Function[s, ParseAction[s[[2, 2]] ~~ prefixedTable[unit, precedenceValue[First[s]]], #1[#2] &]], lows], unit],
+            $codeParserPrecedence["SemiSemi"]]]];
     SetRec[compoundOperand, table[unit, $codeParserPrecedence["Semi"]]];
     SetRec[tagLeft, table[unit, $codeParserPrecedence["Equal"]]];
     SetRec[tagRight, table[unit, $codeParserPrecedence["Equal"] - 1]];
@@ -1209,15 +1226,16 @@ trailingTriviaCount[all_List] := Module[{n = 0}, While[n < Length[all] && trivia
 triviaLeafQ[CodeParser`LeafNode[Whitespace | Token`Newline | Token`Comment, _, _]] := True
 triviaLeafQ[_] := False
 
-(* a ;; b ;; c: a middle left out is Token`Fake`ImplicitAll *)
-spanItem[a_item, semis_item, spanRest[middle_, third_]] := With[{
-        steps = {step[{}, kids[semis], If[MissingQ[middle], implicitItem[Token`Fake`ImplicitAll], middle]]}},
-    Which[
-        MissingQ[third], stepsItem[CodeParser`BinaryNode, Span, a, steps],
-        MatchQ[third, _step], stepsItem[CodeParser`TernaryNode, Span, a, Append[steps, third]],
-        (* a ;; b ;; with nothing after: a span, then one beginning at the second ;; *)
-        True, stepsItem[CodeParser`InfixNode, Times, stepsItem[CodeParser`BinaryNode, Span, a, steps],
-            {step[{}, {concreteLeaf[Token`Fake`ImplicitTimes, ""]}, third]}]]]
+(* a ;; b ;; c: a middle left out is Token`Fake`ImplicitAll; a span the ;; after it begins makes
+   the two a product, one InfixNode of Times for all the spans *)
+spanItem[a_item, semis_item, middle_, third_, next_] := With[{
+        span = stepsItem[If[MissingQ[third], CodeParser`BinaryNode, CodeParser`TernaryNode], Span, a,
+            Join[{step[{}, kids[semis], If[MissingQ[middle], implicitItem[Token`Fake`ImplicitAll], middle]]}, If[MissingQ[third], {}, {third}]]]},
+    If[MissingQ[next], span, spanProduct[span, next]]]
+
+spanProduct[first_item, item[CodeParser`InfixNode[Times, children_List, _], trivia_List]] :=
+    concreteNode[CodeParser`InfixNode, Times, Join[kids[first], {concreteLeaf[Token`Fake`ImplicitTimes, ""]}, Most[children]], item[Last[children], trivia]]
+spanProduct[first_item, next_item] := stepsItem[CodeParser`InfixNode, Times, first, {step[{}, {concreteLeaf[Token`Fake`ImplicitTimes, ""]}, next]}]
 
 (* The concrete expression parser: operands and postfix operators are
    followed by the trivia ws, other operators by wsAll; brackets hold
@@ -1231,15 +1249,15 @@ concreteParser[ws_, wsAll_, nested_] := Module[
     {operatorItem, op, postOp, symbolItem, blankItem, numberItem, stringItem, slotItem, outItem, fileItem, getItem,
      letterlikeItem, unterminatedStringItem, unterminatedCommentItem, unsupportedItem, unhandledItem, strayItem, expectedOperand,
      errorToken, leafAhead, operandAhead, scopedCloser, strayCloser, children, groupEnd, group, commaStep, commaExpression,
-     call, typeSpecifier, tag, colons, messageName, tilde, spanOperandItem, spanThird, spanTail, spanStart,
+     call, typeSpecifier, tag, colons, messageName, tilde, spanOperandItem, spanTail, spanStart,
      semiStep, compound, equalDot, unset, tagSet, put, patternUnit, otherUnits, plainUnit, unit, errorUnits,
      binary, prefix, postfix, optionalColon, chain, flat, dotOperator, implicitTimes, inequality, plus, times, specs, table,
      expression, gap, patternRight, spanOperand, compoundOperand, tagLeft, tagRight, tildeOperand, spanStartCell,
      longOp, longPrefix, longPostfix, longBinary, longSpecs, longGroups, longCalls, groupOf, callOf, commaOperator, commaAhead,
-     closerAhead, differentialAhead, integralItem, integrandOperand, implicitTimesFirst},
+     closerAhead, differentialAhead, integralItem, integrandOperand, implicitTimesFirst, prefixAhead, prefixedTable},
 
     patternRight = RecCell[]; spanOperand = RecCell[]; compoundOperand = RecCell[]; tagLeft = RecCell[]; tagRight = RecCell[];
-    tildeOperand = RecCell[]; spanStartCell = RecCell[]; integrandOperand = RecCell[];
+    tildeOperand = RecCell[]; spanStartCell = RecCell[]; integrandOperand = RecCell[]; prefixAhead = RecCell[];
     (* the trivia before a chain's later operator that its operand's own
        does not cover: none where an operand takes all trivia after it *)
     gap = If[ws === wsAll, ParseSucceed[{}], wsAll];
@@ -1367,15 +1385,17 @@ concreteParser[ws_, wsAll_, nested_] := Module[
         Function[{o1, m, second}, Function[l, If[MissingQ[second],
             concreteNode[CodeParser`SyntaxErrorNode, SyntaxError`ExpectedTilde, Join[kids[l], kids[o1]], m],
             stepsItem[CodeParser`TernaryNode, CodeParser`TernaryTilde, l, {step[{}, kids[o1], m], second}]]]]];
-    (* a ;; b ;; c: the ;; after b only with an operand after it *)
-    spanOperandItem = ParseAction[ParseNotFollowedBy[ParseLiteral[";;"]] ~~ operandAhead ~~ RecRef[spanOperand], #3 &];
-    spanThird = ParseChoice[
-        ParseAction[postOp[";;"] ~~ spanOperandItem, step[{}, kids[#1], #2] &],
-        ParseAction[ParseLookahead[ParseLiteral[";;"]] ~~ RecRef[spanStartCell], #2 &]];
-    spanTail = ParseAction[postOp[";;"] ~~ ParseChoice[
-            ParseAction[spanOperandItem ~~ ParseOptional[spanThird], spanRest[#1, #2] &],
-            ParseAction[ParseOptional[spanThird], spanRest[Missing[], #] &]],
-        Function[{semis, rest}, Function[a, spanItem[a, semis, rest]]]];
+    (* a ;; b ;; c: the operand after the first ;; left out but for one a prefix operator begins,
+       a -, + or ! beginning one only as that operator, not as ->, != or +=; the ;; after b only
+       with an operand after it, and a ;; after the span the beginning of a span of its own *)
+    spanOperandItem = ParseAction[ParseNotFollowedBy[ParseLiteral[";;"]] ~~
+            ParseChoice[ParseLookahead[RecRef[prefixAhead]], ParseNotFollowedBy[ParseCharacter["-" | "+" | "!"]] ~~ operandAhead] ~~ RecRef[spanOperand], #3 &];
+    spanTail = ParseAction[postOp[";;"] ~~
+            ParseChoice[ParseAction[ParseLookahead[RecRef[prefixAhead]] ~~ spanOperandItem, #2 &],
+                ParseAction[ParseNotFollowedBy[RecRef[prefixAhead]] ~~ ParseOptional[spanOperandItem], #2 &]] ~~
+            ParseOptional[ParseAction[postOp[";;"] ~~ spanOperandItem, step[{}, kids[#1], #2] &]] ~~
+            ParseOptional[ParseAction[ParseLookahead[ParseLiteral[";;"]] ~~ RecRef[spanStartCell], #2 &]],
+        Function[{semis, middle, third, next}, Function[a, spanItem[a, semis, middle, third, next]]]];
     (* a; b; c: an operand left out is Token`Fake`ImplicitNull *)
     semiStep = ParseAction[postOp[";"] ~~ ParseOptional[ParseAction[operandAhead ~~ RecRef[compoundOperand], #2 &]],
         step[{}, kids[#1], If[MissingQ[#2], implicitItem[Token`Fake`ImplicitNull], #2]] &];
@@ -1537,8 +1557,19 @@ concreteParser[ws_, wsAll_, nested_] := Module[
     specs = Join[specs, longSpecs];
 
     table[u_, min_Integer] := ParseOperatorTable[u, levelsAbove[specs, min], "FinalOperand" -> finalOperandQ];
+    (* the operators that bind more tightly than min, and the prefix ones of any precedence *)
+    prefixedTable[u_, min_Integer] := ParseOperatorTable[u,
+        levelsAbove[Select[specs, #[[2, 1]] === "Prefix" || precedenceValue[First[#]] > min &], -1], "FinalOperand" -> finalOperandQ];
+    (* what begins an operand with an operator: a prefix operator, a << or an integral *)
+    SetRec[prefixAhead, ParseChoice @@ Join[Cases[specs, {_, {"Prefix", p_}} :> p], {op["<<"]}, longOp[#, wsAll] & /@ $longNameTable["Integrals"][[All, 1]]]];
     SetRec[patternRight, table[plainUnit, $codeParserPrecedence["Fake`PatternColon"]]];
-    SetRec[spanOperand, table[unit, $codeParserPrecedence["SemiSemi"]]];
+    (* a span's operand: what binds more tightly than ;;, and a prefix operator of any precedence,
+       as in any other operand, its operand all that binds more tightly than it, as CodeParser reads
+       it [W15 bug] *)
+    With[{lows = Select[specs, #[[2, 1]] === "Prefix" && precedenceValue[First[#]] <= $codeParserPrecedence["SemiSemi"] &]},
+        SetRec[spanOperand, table[ParseChoice[
+                Sequence @@ Map[Function[s, ParseAction[s[[2, 2]] ~~ prefixedTable[unit, precedenceValue[First[s]]], #1[#2] &]], lows], unit],
+            $codeParserPrecedence["SemiSemi"]]]];
     SetRec[compoundOperand, table[unit, $codeParserPrecedence["Semi"]]];
     SetRec[tagLeft, table[unit, $codeParserPrecedence["Equal"]]];
     SetRec[tagRight, table[unit, $codeParserPrecedence["Equal"] - 1]];

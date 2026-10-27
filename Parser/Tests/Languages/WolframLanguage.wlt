@@ -372,6 +372,41 @@ Scan[
             TestID -> "wl integral, reader and grammar: " <> s]]],
     $wlIntegrals]
 
+(* === spans, by the reader and by the grammar: the ;; after the second operand takes a third
+   only where one begins after it; there, and after a span of three, a ;; begins a span of its
+   own, the spans a product, as Wolfram 15 and CodeParser read them === *)
+$wlSpans = {
+    {"a ;; b ;;", List[HoldComplete[Times[Span[a, b], Span[1, All]]]]},
+    {"a ;; ;;", List[HoldComplete[Times[Span[a, All], Span[1, All]]]]},
+    {";; ;;", List[HoldComplete[Times[Span[1, All], Span[1, All]]]]},
+    {"a ;; b ;; c ;; d", List[HoldComplete[Times[Span[a, b, c], Span[1, d]]]]},
+    {"a ;; b ;; ;; c", List[HoldComplete[Times[Span[a, b], Span[1, All, c]]]]},
+    {"a ;; b ;; c ;; d ;; e ;; f", List[HoldComplete[Times[Span[a, b, c], Span[1, d, e], Span[1, f]]]]},
+    {"f[a ;; b ;;]", List[HoldComplete[f[Times[Span[a, b], Span[1, All]]]]]},
+    {"x * a ;; b ;; c ;; d", List[HoldComplete[Times[Span[Times[x, a], b, c], Span[1, d]]]]},
+    {"(a ;; b ;; c) ;; d", List[HoldComplete[Span[Span[a, b, c], d]]]},
+    {"a ;; b ;;\nc", List[HoldComplete[Times[Span[a, b], Span[1, All]]], HoldComplete[c]]},
+    (* a prefix operator after ;; begins the span's operand, as in any other operand and as
+       CodeParser reads it; Wolfram 15 ends the span there and multiplies, (a ;; All)*(!b), but
+       for -, +, ++, -- and << [W15 bug] *)
+    {"a ;; !b", List[HoldComplete[Span[a, Not[b]]]]},
+    {"a ;; !!b", List[HoldComplete[Span[a, Not[Not[b]]]]]},
+    {"a ;; \\[Not]b", List[HoldComplete[Span[a, Not[b]]]]},
+    {"a ;; \\[Minus]b", List[HoldComplete[Span[a, Times[-1, b]]]]},
+    {"a ;; \\[Sum]b", List[HoldComplete[Span[a, Sum[b]]]]},
+    {"a ;; b ;; !c", List[HoldComplete[Span[a, b, Not[c]]]]},
+    {"a ;; !b ;; c", List[HoldComplete[Span[a, Not[Span[b, c]]]]]},
+    {"a ;; !b && c", List[HoldComplete[And[Span[a, Not[b]], c]]]},
+    {"a ;; b * !c ;; d", List[HoldComplete[Span[a, Times[b, Not[Span[c, d]]]]]]},
+    {"a ;; -> b", List[HoldComplete[Rule[Span[a, All], b]]]}
+};
+Scan[
+    Function[c, VerificationTest[
+        {WolframLanguageHeld[c[[1]]], Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$fastHeldReader = False}, WolframLanguageHeld[c[[1]]]]},
+        {c[[2]], c[[2]]},
+        TestID -> "wl span, reader and grammar: " <> c[[1]]]],
+    $wlSpans]
+
 (* === a source: newlines end expressions outside brackets, comments are whitespace === *)
 VerificationTest[
     WolframLanguageHeld["a = 1;\n(* c *)\nb\n\nc;\nd +\n e\nf (* x *)\n(* y *)"],
@@ -479,7 +514,10 @@ $wlFailures = {
     {"a && || b", {8, False}},
     {"a == == b", {8, False}},
     {"#1 + &", {7, False}},
-    {"a[[1]] [[2]", {12, True}}
+    {"a[[1]] [[2]", {12, True}},
+    (* a prefix operator after ;; begins an operand that is not left out *)
+    {"a ;; !", {7, True}},
+    {"a ;; b ;; ++", {13, True}}
 };
 Scan[
     Function[c, VerificationTest[wlStop[WolframLanguageHeld[c[[1]]]], c[[2]], TestID -> "wl failure: " <> c[[1]]]],

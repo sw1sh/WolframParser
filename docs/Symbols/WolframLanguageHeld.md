@@ -16,11 +16,12 @@ RelatedGuides: [ParserZoo]
 
 ## Details & Options
 
-- The result is what <code>[ImportString]()[*code*, {"WL", "HeldExpressions"}]</code> gives: the expressions as the kernel reads them, before any of them evaluates. A statement that is `Null` alone is left out, as the kernel leaves it out.
+- The result is what <code>[ImportString]()[*code*, {"WL", "HeldExpressions"}]</code> gives: the expressions as the kernel reads them, before any of them evaluates, but for what Wolfram 15 reads wrongly, marked [W15 bug] below. A statement that is `Null` alone is left out, as the kernel leaves it out.
 - Linear syntax, a group of boxes written as text, reads as its boxes, as the kernel reads it; a group that *code* asks to be read as input reads as [LinearBoxes]() of them, where the kernel gives the expression [MakeExpression]() makes of them.
 - Outside brackets a newline ends an expression wherever the expression could end, so `a` on one line and `+ b` on the next are two expressions, while `a +` followed by `b` is one. Inside brackets a newline is whitespace. Comments, nested ones included, are whitespace. A `\` at the end of a line, outside a string, continues it: `a\` and `b` on the next line are the name `ab`. A `?` or `??` where an operand begins asks about the words after it, as `?Plot*` is `Information["Plot*", LongForm -> False]`, and a `.` before a digit begins a number, so `a.5` is `a*0.5`.
 - The forms come out as the kernel builds them: `a - b` is `Plus[a, Times[-1, b]]`, `a/b` is `Times[a, Power[b, -1]]`, a minus folds into a number (`-2` is the integer `-2`), and a chain of one flat operator is one call (`a + b + c` is `Plus[a, b, c]`).
 - A colon after a symbol names a pattern, as `x : _Integer` is `Pattern[x, _Integer]`, and a colon after a pattern gives its default, so `x_ : 1` is `Optional[x_, 1]` and `x_ | y_ : 1` is `x_ | Optional[y_, 1]`; after any other expression a colon is no Wolfram Language. The function between the two tildes of `a ~ f ~ b` may end in a postfix operator, as `a ~ f & ~ b` is `(f &)[a, b]`.
+- An operand of a span left out is `All`, as `a ;;` is `Span[a, All]`, but one a prefix operator begins is never left out: `a ;; !b` is `Span[a, !b]`, as in any other operand and as [CodeParser]() reads it, where Wolfram 15 ends the span before `!`, `!!` and a long-name prefix operator and multiplies, `(a ;; All)*(!b)` [W15 bug]. The `;;` after a span's second operand takes a third only where one begins after it; there, and after a span of three, a `;;` begins a span of its own, the spans one product: `a ;; b ;;` is `(a ;; b)*(1 ;; All)` and `a ;; b ;; c ;; d` is `(a ;; b ;; c)*(1 ;; d)`.
 - The binding powers are the precedences [CodeParser]() publishes; [WolframLanguageGrammar]() generates the levels of its [ParseOperatorTable]() from them.
 - A long name that is an operator, a bracket or an integral reads as the kernel reads it, spelt out or as its character: `a \[CircleTimes] b` is `CircleTimes[a, b]`, `\[LeftFloor]x\[RightFloor]` is `Floor[x]` and `\[Integral] f \[DifferentialD] x` is `Integrate[f, x]`; a long name that is whitespace is whitespace.
 - A return is a newline, and so is a long name that is one, NewLine, RawReturn, IndentingNewLine, LineSeparator or ParagraphSeparator, written out or as its character: outside brackets it ends an expression, as [ToExpression]() reads it. [ImportString]() leaves out the expressions after one written out; the two discretionary separators are no Wolfram Language.
@@ -90,6 +91,14 @@ WolframLanguageHeld["Replace[m[[2 ;; -1]], x:{__Integer} :> Total[x] / Length[x]
 
 <!-- => {HoldComplete[Replace[m[[2 ;; -1]], (x:{__Integer} :> Total[x]/Length[x] & ) /@ x]]} -->
 
+A `;;` after a span of three begins a span of its own, the spans a product:
+
+```wl
+WolframLanguageHeld["a ;; b ;; c ;; d"]
+```
+
+<!-- => {HoldComplete[(a ;; b ;; c)*(1 ;; d)]} -->
+
 ## Properties and Relations
 
 `WolframLanguageHeld` gives what [ImportString]() gives:
@@ -121,6 +130,22 @@ WolframLanguageHeld["f[x)"]["Position"]
 ```
 
 <!-- => 5 -->
+
+A prefix operator after `;;` begins the span's operand:
+
+```wl
+WolframLanguageHeld["a ;; !b"]
+```
+
+<!-- => {HoldComplete[a ;; ( !b)]} -->
+
+Wolfram 15 ends the span there and multiplies [W15 bug]:
+
+```wl
+ImportString["a ;; !b", {"WL", "HeldExpressions"}]
+```
+
+<!-- => {HoldComplete[(a ;; All)*( !b)]} -->
 
 ## Neat Examples
 

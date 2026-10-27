@@ -664,7 +664,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
     Function[{pTok, pLed, pSpecs, pPrefix, pGroups, pIntegrals, pSpecial, pHeads, pKeys, pCodes, pClasses},
         Native`UncheckedBlock[Module[{n = pTok[[2]], out, fr, maxFrames, sp = 0, on = 0, t = 1, brackets = 0, status = 0, mode = 0,
                 pMin = 0, pRbp = 0, pPlain = 0, base = 0, k = 0, o = 0, i = 0, bp = 0, fx = 0, hd = 0, ky = 0, mn = 0, rb = 0, pl = 0,
-                ft = 0, cnt = 0, bt = 0, colons = 0, ok = 0, x = 0, lg = 0, e = 0, we = 0, c = 0, cl = 0, tt = 0, far = 0, stmt = 1},
+                ft = 0, cnt = 0, bt = 0, colons = 0, ok = 0, x = 0, lg = 0, e = 0, we = 0, c = 0, cl = 0, tt = 0, far = 0, stmt = 1, se = 0},
             out = Native`UncheckedArray[0, 3 (8 n + 16) + 2];
             maxFrames = 4 n + 64;
             fr = Native`UncheckedArray[0, 8 maxFrames];
@@ -683,14 +683,16 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                         base = 8 (sp - 1); mn = fr[[base + 2]]; pl = fr[[base + 4]];
                         k = pTok[[5 t - 2]]; o = pTok[[5 t - 1]];
                         Which[
-                            (* a prefix operator, but right after a ., one that is an infix or postfix operator too, as
-                               -, ! and ++ are, its spec one that takes its token, not the juxtaposition, fixity 15,
-                               every prefix operator has: Wolfram 15 reads no operand of them there *)
-                            k == 9 && pPrefix[[2 o + 1]] > mn &&
+                            (* a prefix operator, in a span's operand one of any precedence, its operand all that binds
+                               more tightly than it, as CodeParser reads it [W15 bug]; but right after a ., one that is
+                               an infix or postfix operator too, as -, ! and ++ are, its spec one that takes its token,
+                               not the juxtaposition, fixity 15, every prefix operator has: Wolfram 15 reads no operand
+                               of them there *)
+                            k == 9 && pPrefix[[2 o + 1]] > 0 && (pPrefix[[2 o + 1]] > mn || mn == pSpecial[[17]]) &&
                                 ! (t > 1 && pTok[[5 t - 7]] == 9 && pTok[[5 t - 6]] == pSpecial[[7]] && pLed[[t]] > 0 && pSpecs[[4 pLed[[t]] - 2]] != 15),
                                 hd = pPrefix[[2 o + 2]]; pRbp = pPrefix[[2 o + 1]]; t++;
                                 sp++; base = 8 (sp - 1); fr[[base + 1]] = 2; fr[[base + 2]] = hd;
-                                pMin = mn; pPlain = pl; mode = 1,
+                                pMin = If[mn == pSpecial[[17]], 0, mn]; pPlain = pl; mode = 1,
                             k == 1,
                                 on++; out[[3 on]] = 1; out[[3 on + 1]] = 1; out[[3 on + 2]] = t; t++;
                                 If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
@@ -762,6 +764,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                     mode == 3,
                         base = 8 (sp - 1); mn = fr[[base + 2]]; rb = fr[[base + 3]]; pl = fr[[base + 4]];
                         i = pLed[[t]];
+                        (* a ;; right where a span ends begins a span of its own, the two a product *)
+                        If[se == t && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]], i = pSpecial[[22]]];
                         If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1) &&
                                 ((out[[3 on]] == 1 && out[[3 on + 1]] == 2 && pCodes[[pTok[[5 out[[3 on + 2]] + 1]] - 1]] != 46) || out[[3 on]] == 23),
                             t++; sp++; base = 8 (sp - 1); fr[[base + 1]] = 3; fr[[base + 2]] = pHeads[[7]];
@@ -856,6 +860,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                     If[fr[[base + 6]] == 1, on++; out[[3 on]] = 2; out[[3 on + 1]] = pHeads[[1]]; out[[3 on + 2]] = 0];
                                     fr[[base + 5]] = fr[[base + 5]] + 1;
                                     i = pLed[[t]];
+                                    If[se == t && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]], i = pSpecial[[22]]];
                                     If[brackets == 0 && pTok[[5 t + 2]] == 1, i = 0];
                                     If[ i > 0 && pSpecs[[4 i - 3]] == fr[[base + 2]] && (pSpecs[[4 i - 2]] == 3 || pSpecs[[4 i - 2]] == 15) && pSpecs[[4 i]] == fr[[base + 3]],
                                         fr[[base + 6]] = If[fr[[base + 3]] == pKeys[[1]] && pTok[[5 t - 2]] == 9 && (pTok[[5 t - 1]] == pSpecial[[11]] || pTok[[5 t - 1]] == pSpecial[[12]]), 1, 0];
@@ -877,6 +882,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                 ft == 8,
                                     sp--; base = 8 (sp - 1);
                                     If[fr[[base + 1]] == 9, mode = 12, fr[[base + 2]] = fr[[base + 2]] + 1; mode = 13],
+                                (* a span's operand that could not be left out *)
+                                ft == 9, mode = 12,
                                 (* after a ~ and its middle operand: the second ~; a postfix operator on the middle
                                    operand, then what binds more tightly than ~; a ; before the second ~, the middle
                                    a compound with Null; anything else, reading on as the kernel's reader does, to a
@@ -936,9 +943,13 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                             If[ fr[[base + 1]] == 7,
                                 sp--; mode = 3,
                                 sp--; base = 8 (sp - 1);
-                                If[ fr[[base + 1]] == 9,
-                                    on++; out[[3 on]] = 12; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 12,
-                                    on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; fr[[base + 2]] = fr[[base + 2]] + 1; mode = 13]]],
+                                Which[
+                                    fr[[base + 1]] == 9 && fr[[base + 2]] == 2,
+                                        t--; se = t; on++; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; mode = 3,
+                                    fr[[base + 1]] == 9,
+                                        on++; out[[3 on]] = 12; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 12,
+                                    True,
+                                        on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; fr[[base + 2]] = fr[[base + 2]] + 1; mode = 13]]],
                     (* a bracket's items: none before the closer, else the first *)
                     mode == 6,
                         base = 8 (sp - 1);
@@ -974,18 +985,27 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                         t++;
                         sp++; base = 8 (sp - 1); fr[[base + 1]] = 9; fr[[base + 2]] = 1; fr[[base + 3]] = 1;
                         mode = 11,
-                    (* a span's operand, All where it is left out *)
+                    (* a span's operand, All where the first is left out; where the second is, the span ends
+                       before its ;;, which begins a span of its own. A prefix operator, a << or an integral begins
+                       one that is not left out. *)
                     mode == 11,
-                        If[ (pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]]) || (brackets == 0 && pTok[[5 t + 2]] == 1) || pTok[[5 t - 2]] == 0,
-                            on++; out[[3 on]] = 12; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 12,
-                            sp++; base = 8 (sp - 1); fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
-                            pMin = pSpecial[[17]]; pRbp = 0; pPlain = 0; mode = 1],
+                        base = 8 (sp - 1); o = pTok[[5 t - 1]];
+                        Which[
+                            pTok[[5 t - 2]] == 9 && (pPrefix[[2 o + 1]] > 0 || o == pSpecial[[9]] || pIntegrals[[o + 1]] > 0) && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
+                                pMin = pSpecial[[17]]; pRbp = 0; pPlain = 0; mode = 1,
+                            ! ((pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]]) || (brackets == 0 && pTok[[5 t + 2]] == 1) || pTok[[5 t - 2]] == 0),
+                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
+                                pMin = pSpecial[[17]]; pRbp = 0; pPlain = 0; mode = 1,
+                            fr[[base + 2]] == 2,
+                                t--; se = t; on++; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; mode = 3,
+                            True,
+                                on++; out[[3 on]] = 12; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 12],
                     (* after a span's operand: a second ;; and its operand, else the span *)
                     mode == 12,
                         base = 8 (sp - 1); fr[[base + 3]] = fr[[base + 3]] + 1;
                         If[ fr[[base + 2]] == 1 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
                             t++; fr[[base + 2]] = 2; mode = 11,
-                            on++; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; mode = 3],
+                            on++; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; se = t; mode = 3],
                     (* a ; and its operand, Null where it is left out, else the compound *)
                     mode == 13,
                         If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[3]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
@@ -1413,7 +1433,8 @@ $fastIntegralArray := $fastIntegralArray = Developer`ToPackedArray[Table[
 $fastSpecialArray := $fastSpecialArray = Developer`ToPackedArray[Join[
     {$fastColon, $fastSemiSemi, $fastSemi, $fastColonColon, $fastEqual, $fastEqualDot, $fastDot, $fastTilde, $fastGet, $fastColonEqual,
      $fastMinus, $fastLongMinus, $fastRightDoubleBracket, $fastQuestion},
-    {$integralPrecedence, $fastPatternColon, $fastSpanOperand, $fastCompoundOperand, $fastTagLeft, $fastTagRight, $fastOptionalColon}]]
+    {$integralPrecedence, $fastPatternColon, $fastSpanOperand, $fastCompoundOperand, $fastTagLeft, $fastTagRight, $fastOptionalColon},
+    {fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}]}]]
 $fastHeadCodeArray := $fastHeadCodeArray = Developer`ToPackedArray[fastHeadCode /@ {"Minus", "Unset", "Paren", "List", "Association", "NotNot", "Optional"}]
 $fastKeyCodeArray := $fastKeyCodeArray = Developer`ToPackedArray[fastKeyCode /@ {"Plus", "Relation", "Divisible"}]
 
