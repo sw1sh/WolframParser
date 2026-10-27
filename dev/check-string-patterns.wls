@@ -100,9 +100,18 @@ answers[s_String, p_, q_, pr_, qr_] := <|
     "AllRules" -> {bounded[engineAllRules[s, p, q]], native[StringCases[s, {pr -> 1, qr -> 2}, Overlaps -> All]]},
     "AllPositions" -> {bounded[Map[{#[[1]] + 1, #[[2]]} &, engineMatches[s, {p, q}, "All"]]], native[StringPosition[s, {pr, qr}, Overlaps -> All]]}|>
 
+(* A case whose patterns may match the empty text, or have a literal "" among alternatives, the engine
+   matches as PCRE2 goes on through a text: an empty match at a place once, then a match there that is
+   not empty, the alternatives in the order written, where Wolfram 15 does not [W15 bug]. Of such a
+   case only the answers that hold in any order, StringMatchQ's and the ways of Overlaps -> All, these
+   sorted, are held to Wolfram 15's. *)
+emptyCaseQ[p_] := TrueQ[Wolfram`Parser`StringPatterns`Private`nullableQ[StringPatternProgram[p]["Program"]]] ||
+    ! FreeQ[p, HoldPattern[Alternatives][___, "", ___] | {___, "", ___}]
+orderFree[a_Association] := Map[Function[pair, Map[If[ListQ[#], Sort[#], #] &, pair]], KeyTake[a, {"MatchQ", "All", "AllRules", "AllPositions"}]]
+
 (* --- the cases --- *)
 
-differ = {}; noProgram = 0; notNative = 0; agree = 0; twice = 0;
+differ = {}; noProgram = 0; notNative = 0; agree = 0; twice = 0; empties = 0;
 Do[
     With[{p = pattern[RandomInteger[{0, 3}]], q = pattern[RandomInteger[{0, 2}]], s = randomString[]},
         Which[
@@ -114,7 +123,7 @@ Do[
             (* a test reads a name that occurs more than once by where it occurs first [WL 15.0.0], and the
                engine by what it matched: no case *)
             Count[{p, q}, Verbatim[Pattern][z, _], Infinity] > 1, twice++,
-            True, With[{a = answers[s, p, q]},
+            True, With[{a = If[emptyCaseQ[p] || emptyCaseQ[q], empties++; orderFree[answers[s, p, q]], answers[s, p, q]]},
                 With[{bad = Select[a, MatchQ[#[[2]], $Failed | $Aborted] &], wrong = Select[a, ! MatchQ[#[[2]], $Failed | $Aborted] && #[[1]] =!= #[[2]] &]},
                     If[Length[bad] === Length[a], notNative++,
                         If[wrong === <||>, agree++, AppendTo[differ, {s, p, q, wrong}]]]]]]],
@@ -124,4 +133,5 @@ Scan[Function[d, Print["   ", ToString[d[[1]], InputForm], "  ", ToString[d[[2]]
     KeyValueMap[Print["      ", #1, ": engine ", ToString[#2[[1]], InputForm], "  W15 ", ToString[#2[[2]], InputForm]] &, d[[4]]]],
     Take[differ, UpTo[40]]];
 Print["string patterns: ", count, " cases, seed ", seed, ": ", agree, " agree, ", Length[differ], " differ, ",
-    noProgram, " with no program, ", notNative, " no string pattern in Wolfram 15, ", twice, " with a tested name twice"];
+    noProgram, " with no program, ", notNative, " no string pattern in Wolfram 15, ", twice, " with a tested name twice, ",
+    empties, " that may match nothing held in any order"];

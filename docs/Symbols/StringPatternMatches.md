@@ -18,16 +18,17 @@ RelatedGuides: [WolframParser]
 
 - In a match <code>{*start*, *end*, *k*, *rules*}</code>, the program *prog*<sub>*k*</sub> matched the characters of *s* after position *start* up to position *end*, and *rules* bind the names of its pattern to the text each matched.
 - A name that took no part in a match is bound to `""`, or to `{}` if it occurs more than once in the pattern.
-- The modes take the matches as Wolfram 15's String functions do:
+- The modes take the matches as the String functions do, an empty match as PCRE2 and Perl take one:
 
 | Mode | At each position | As |
 |---|---|---|
-| `"First"` | the first program that matches there | [StringReplace](), [StringSplit]() |
-| `"Each"` | the programs in turn, the next tried there after one that matches nothing | [StringCases](), [StringCount]() |
-| `"Overlapping"` | every program that matches there | [StringPosition]() |
+| `"First"` | the first program that matches there, and after an empty match the first that matches there with one not empty | [StringReplace](), [StringSplit]() |
+| `"Each"` | the same as `"First"` | [StringCases](), [StringCount]() |
+| `"Overlapping"` | every program that matches there, an empty match once, its program then tried there for one not empty | [StringPosition]() |
 | `"All"` | every way each program matches there, in the order its parts try them, the same text as often as it matches | [StringCases]() and [StringPosition]() with [Overlaps]() `->` [All]() |
 
-- After a match that is not empty, `"First"` and `"Each"` go on at its end; otherwise the next match is looked for a character later.
+- After a match that is not empty, `"First"` and `"Each"` go on at its end; after an empty one, which they take once at a position, they try the same position again for a match that is not empty and go on at its end, else a character later. Wolfram 15's [StringCases]() tries the next pattern of a list after an empty match, the same empty match again too, and its [StringReplace]() goes on a character later [W15 bug].
+- Alternatives are tried in the order written, a literal `""` among them, as the patterns of a list are; Wolfram 15 tries a literal `""` after the others [W15 bug].
 - [StringPatternRecords]() gives the same matches as packed records, with the left sides of the names.
 - A group of a [RegularExpression]() is bound by its number, *n* `->` *text*, as a rule's `"$n"` takes it.
 - [StringPatternMatches]() gives [None]() if one of the programs has none, as [StringPatternProgram]() gives for a regular expression with recursion.
@@ -72,7 +73,7 @@ Two programs, the first of which matches nothing at every position:
 progs = StringPatternProgram /@ {"x"..., "a"}
 ```
 
-In the mode `"Each"`, the second is tried where the first matched nothing:
+In the mode `"Each"`, after the first's empty match the position is tried again for a match that is not empty, which the second gives:
 
 ```wl
 StringPatternMatches["ab", progs, "Each"]
@@ -80,13 +81,13 @@ StringPatternMatches["ab", progs, "Each"]
 
 <!-- => {{0, 0, 1, {}}, {0, 1, 2, {}}, {1, 1, 1, {}}, {2, 2, 1, {}}} -->
 
-In the mode `"First"`, the first that matches is taken:
+The mode `"First"` takes the same matches:
 
 ```wl
 StringPatternMatches["ab", progs, "First"]
 ```
 
-<!-- => {{0, 0, 1, {}}, {1, 1, 1, {}}, {2, 2, 1, {}}} -->
+<!-- => {{0, 0, 1, {}}, {0, 1, 2, {}}, {1, 1, 1, {}}, {2, 2, 1, {}}} -->
 
 In the mode `"Overlapping"`, every program that matches at a position gives a match there:
 
@@ -126,7 +127,7 @@ StringCases["ab", {"x"..., "a"}]
 
 <!-- => {"", "a", "", ""} -->
 
-The mode `"First"` takes them as [StringReplace]() does, which leaves the `"a"` as it is:
+Wolfram 15's [StringReplace]() goes on a character later after an empty match, so it leaves the `"a"` as it is, where the mode `"First"` gives the match of the `"a"` too, which makes `"121b1"` [W15 bug]:
 
 ```wl
 StringReplace["ab", {"x"... -> "1", "a" -> "2"}]

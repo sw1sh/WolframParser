@@ -203,16 +203,16 @@ repeatOf[p_, min_, max_] := If[MatchQ[p, _anchor], declined["a repeat of an anch
    without backtracking. In the program of every way, the "Ways" of the object, they are one class
    only where Wolfram 15 makes them one, each a character or a class of its own but the hexadecimal
    one, and are otherwise each a way of its own, as Overlaps -> All counts them [WL 15.0.0];
-   $merged records a class the two programs make apart. A literal "" is tried after the others, as
-   an optional part is, the longest first, wherever it is written; in Shortest before them
-   [WL 15.0.0]. *)
+   $merged records a class the two programs make apart. Alternatives are tried in the order they
+   are written, a literal "" among them, as the patterns of a list are, where Wolfram 15 tries a
+   literal "" after the others, and in Shortest before them [W15 bug]. *)
 $oneClass = True;
 alternativesProgram[{p_}] := p
 alternativesProgram[parts_List] := Which[
     $oneClass && AllTrue[parts, singleCharacterQ],
         If[! AllTrue[parts, bracketPartQ], $merged = True]; characterClass[codeIn[unionSpec[classSpec /@ parts]]],
     ! $oneClass && AllTrue[parts, bracketPartQ], characterClass[codeIn[unionSpec[classSpec /@ parts]]],
-    True, alternatives[Join[DeleteCases[parts, literal[{}]], Cases[parts, literal[{}]]]]]
+    True, alternatives[parts]]
 
 (* the parts of alternatives inside alternatives, in the order given, which Wolfram 15 takes as one
    alternatives [WL 15.0.0] *)
@@ -238,7 +238,7 @@ unionSpec[specs_List] := With[{codes = Cases[specs, {"Codes", c_} :> c], others 
    shortest match the pattern has, where Wolfram 15 leaves NumberString's longest [W15 bug]. *)
 shortest[repeat[p_, min_, max_, _]] := repeat[shortest[p], min, max, False]
 shortest[sequence[parts_List]] := sequence[shortest /@ parts]
-shortest[alternatives[parts_List]] := With[{inner = shortest /@ parts}, alternatives[Join[Cases[inner, literal[{}]], DeleteCases[inner, literal[{}]]]]]
+shortest[alternatives[parts_List]] := alternatives[shortest /@ parts]
 shortest[named[x_, p_]] := named[x, shortest[p]]
 shortest[tested[p_, f_]] := tested[shortest[p], f]
 shortest[conditioned[p_, test_, names_]] := conditioned[shortest[p], test, names]
@@ -629,12 +629,16 @@ bindingRules[z_subject, b_Association, names_Association, use_String] := With[{b
    in the mode
      "First"        the first of the programs that matches there, as StringReplace and StringSplit
                     take them;
-     "Each"         the programs in turn, the next tried there after one that matches nothing, as
-                    StringCases and StringCount take them [WL 15.0.0];
-     "Overlapping"  every program that matches there, as StringPosition takes them;
+     "Each"         the same, as StringCases and StringCount take them;
+     "Overlapping"  every program that matches there, as StringPosition takes them, an empty match
+                    once, the program that has it tried there again for a match not empty;
      "All"          every way each program matches there, in the order its parts try them, the
                     same text as often as it matches, as Overlaps -> All takes them [WL 15.0.0].
-   After a match that is not empty, "First" and "Each" go on at its end; else a character later. *)
+   After a match that is not empty, "First" and "Each" go on at its end; after an empty one, which
+   they take once, they try the same place again for a match that is not empty, and go on at its
+   end, else a character later, as PCRE2 and Perl go on through a text. Wolfram 15's StringCases
+   tries the next pattern of a list after an empty match, an empty one again too, and its
+   StringReplace goes on a character later [W15 bug]. *)
 (* The typed matcher matches them, unless Method -> "Interpreter", the programs' interpreter, the
    reference it is held to. *)
 StringPatternMatches[s_String, programs : {___StringPatternProgram}, mode : "First" | "Each" | "Overlapping" | "All", OptionsPattern[]] := With[
@@ -678,22 +682,27 @@ programMatches[z_subject, programs_List, mode_String] := Replace[
 
 (* matchesAt[mode, programs, z, i] sows the matches at position i, tagged matchesAt, so collecting
    them copies none, and gives the position the next match may start at *)
-matchesAt["First", programs_List, z_subject, i_Integer] := With[
-    {result = firstMatch[Function[k, programMatch[programs, k, z, i]], Range[Length[programs]]]},
-    If[result === $noMatch,
-        i + 1,
-        Sow[result, matchesAt];
-        If[Extract[result, 2] === i, i + 1, Extract[result, 2]]
-    ]
+matchesAt["First" | "Each", programs_List, z_subject, i_Integer] := With[
+    {result = firstMatch[Function[k, programMatch[programs, k, z, i, False]], Range[Length[programs]]]},
+    Which[
+        result === $noMatch, i + 1,
+        Extract[result, 2] > i, Sow[result, matchesAt]; Extract[result, 2],
+        True,
+            Sow[result, matchesAt];
+            With[{again = firstMatch[Function[k, programMatch[programs, k, z, i, True]], Range[Length[programs]]]},
+                If[again === $noMatch, i + 1, Sow[again, matchesAt]; Extract[again, 2]]]]
 ]
-matchesAt["Each", programs_List, z_subject, i_Integer] := Catch[
-    Do[With[{result = programMatch[programs, k, z, i]},
-        If[result =!= $noMatch, Sow[result, matchesAt]; If[Extract[result, 2] =!= i, Throw[Extract[result, 2], matchesAt]]]], {k, Length[programs]}];
-    i + 1,
-    matchesAt
-]
+(* every program's match at a place: the first empty one, then the program's match there that is not
+   empty, and after it only those that are not *)
 matchesAt["Overlapping", programs_List, z_subject, i_Integer] := (
-    Do[With[{result = programMatch[programs, k, z, i]}, If[result =!= $noMatch, Sow[result, matchesAt]]], {k, Length[programs]}];
+    Fold[Function[{empty, k}, With[{result = programMatch[programs, k, z, i, empty]},
+        Which[
+            result === $noMatch, empty,
+            empty || Extract[result, 2] > i, Sow[result, matchesAt]; empty,
+            True,
+                Sow[result, matchesAt];
+                With[{again = programMatch[programs, k, z, i, True]}, If[again =!= $noMatch, Sow[again, matchesAt]]];
+                True]]], False, Range[Length[programs]]];
     i + 1
 )
 (* every way: a match is sown where the program ends and taken for none there, so that its parts
@@ -703,8 +712,10 @@ matchesAt["All", programs_List, z_subject, i_Integer] := (
     i + 1
 )
 
-(* the match of the kth program at position i, {i, end, k, bindings}, or $noMatch *)
-programMatch[programs_List, k_Integer, z_subject, i_Integer] := matched[Extract[programs, k], z, i, <||>, Function[{j, b}, {i, j, k, b}]]
+(* the match of the kth program at position i, {i, end, k, bindings}, or $noMatch: one that is not
+   empty, where nonEmpty is True *)
+programMatch[programs_List, k_Integer, z_subject, i_Integer, nonEmpty_] := matched[Extract[programs, k], z, i, <||>,
+    If[nonEmpty, Function[{j, b}, If[j === i, $noMatch, {i, j, k, b}]], Function[{j, b}, {i, j, k, b}]]]
 
 (* the records of the interpreter's matches, the spans of each program's names, as the typed
    matcher gives them *)

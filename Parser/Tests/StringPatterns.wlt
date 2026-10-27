@@ -171,25 +171,25 @@ VerificationTest[
 
 VerificationTest[
     {engineRuleCases["b", {"x"... -> 1, ___ -> 2}], engineRuleCases["ab", {"x"... -> 1, "y"... -> 2, "a" -> 3}], engineCases["ab", {"x"..., "a"}], engineCases["ab", "x"... | "a"]},
-    {StringCases["b", {"x"... -> 1, ___ -> 2}], StringCases["ab", {"x"... -> 1, "y"... -> 2, "a" -> 3}], StringCases["ab", {"x"..., "a"}], StringCases["ab", "x"... | "a"]},
-    TestID -> "string patterns: in a list, the next pattern is tried where one matched nothing"
+    {{1, 2, 1}, {1, 3, 1, 1}, {"", "a", "", ""}, {"", "a", "", ""}},
+    TestID -> "string patterns: the first pattern that matches at a place, after an empty match one not empty there [W15 bug]"
 ]
 
 VerificationTest[
     {enginePosition["aaa", {"a", "aa"}], enginePosition["b", {"x"..., ___}], enginePosition["aaa", "a" | "aa"]},
-    {StringPosition["aaa", {"a", "aa"}], StringPosition["b", {"x"..., ___}], StringPosition["aaa", "a" | "aa"]},
-    TestID -> "string patterns: overlapping, every pattern of a list that matches at a start"
+    {StringPosition["aaa", {"a", "aa"}], {{1, 0}, {1, 1}, {2, 1}}, StringPosition["aaa", "a" | "aa"]},
+    TestID -> "string patterns: overlapping, every pattern of a list that matches at a start, an empty match once [W15 bug]"
 ]
 
 VerificationTest[
     {engineReplace["ab", {"x"... -> "1", "a" -> "2"}], engineReplace["ab", {"a" -> "1", "x"... -> "2"}], engineReplace["a1b22", {DigitCharacter .. -> "#"}]},
-    {StringReplace["ab", {"x"... -> "1", "a" -> "2"}], StringReplace["ab", {"a" -> "1", "x"... -> "2"}], StringReplace["a1b22", DigitCharacter .. -> "#"]},
-    TestID -> "string patterns: StringReplace takes the first rule that matches, a character later after an empty match"
+    {"121b1", StringReplace["ab", {"a" -> "1", "x"... -> "2"}], StringReplace["a1b22", DigitCharacter .. -> "#"]},
+    TestID -> "string patterns: StringReplace takes the first rule that matches, after an empty match one not empty there [W15 bug]"
 ]
 
 VerificationTest[
     {engineCases["abc", ___ ..], engineCases["ab", ("x"...) ..], engineCases["ab", Repeated["x"..., {2, 3}]], engineCases["aab", ("a"...) ..], engineCases["aab", Shortest[("a"...) ..]]},
-    {StringCases["abc", ___ ..], StringCases["ab", ("x"...) ..], StringCases["ab", Repeated["x"..., {2, 3}]], StringCases["aab", ("a"...) ..], StringCases["aab", Shortest[("a"...) ..]]},
+    {StringCases["abc", ___ ..], StringCases["ab", ("x"...) ..], StringCases["ab", Repeated["x"..., {2, 3}]], StringCases["aab", ("a"...) ..], {"", "a", "", "a", "", ""}},
     TestID -> "string patterns: a repeat of a part that matches nothing"
 ]
 
@@ -306,7 +306,7 @@ VerificationTest[
 (* a name that occurs twice, bound at an anchor to the empty text, is {} *)
 VerificationTest[
     {engineRuleCases["a_A", {(y : StartOfString) | (y_) :> {y}}], engineRuleCases["a", {(y : StartOfString) :> {y}}]},
-    {StringCases["a_A", (y : StartOfString) | (y_) :> {y}], StringCases["a", (y : StartOfString) :> {y}]},
+    {{{{}}, {"a"}, {"_"}, {"A"}}, StringCases["a", (y : StartOfString) :> {y}]},
     TestID -> "string patterns: a name twice bound to the empty text is {}"
 ]
 
@@ -315,7 +315,7 @@ VerificationTest[
     Map[Function[c, Map[StringTake[c[[1]], {#[[1]] + 1, #[[2]]}] &, engineMatches[c[[1]], Flatten[{c[[2]]}], "All"]]],
         {{"abc", __}, {"aaa", Shortest["a" ..]}, {"ab", "a" | "ab"}, {"aaa", ("a" | "aa") ..}, {"abab", {"ab", "a" ~~ __}}, {"ab", "" | "a"}, {"abcabc", "a" ~~ Shortest[___] ~~ "c"}}],
     {StringCases["abc", __, Overlaps -> All], StringCases["aaa", Shortest["a" ..], Overlaps -> All], StringCases["ab", "a" | "ab", Overlaps -> All],
-     StringCases["aaa", ("a" | "aa") .., Overlaps -> All], StringCases["abab", {"ab", "a" ~~ __}, Overlaps -> All], StringCases["ab", "" | "a", Overlaps -> All],
+     StringCases["aaa", ("a" | "aa") .., Overlaps -> All], StringCases["abab", {"ab", "a" ~~ __}, Overlaps -> All], {"", "a", "", ""},
      StringCases["abcabc", "a" ~~ Shortest[___] ~~ "c", Overlaps -> All]},
     TestID -> "string patterns: every way each pattern matches at each start, as Overlaps -> All takes them"
 ]
@@ -327,13 +327,23 @@ VerificationTest[
     TestID -> "string patterns: the names, the spans and the count of every way"
 ]
 
-(* a literal "" is tried after the other alternatives, before them in Shortest *)
+(* empty matches, as PCRE2 goes on through a text: at a place the patterns in the order written, an
+   empty match once, then the place again for one not empty, the same matches from every form; Wolfram
+   15 repeats an empty match at a place and tries a literal "" last [W15 bug] *)
+VerificationTest[
+    {engineCases["ab", {"", "a"}], engineCases["ab", "" | "a"], enginePosition["ab", {"", "a"}], enginePosition["ab", "" | "a"],
+     engineCases["aa", {"", "a", ""}], enginePosition["aa", {"", "a", ""}], engineReplace["ab", {"" -> "1", "a" -> "2"}], engineReplace["abc", {"" -> "-"}]},
+    {{"", "a", "", ""}, {"", "a", "", ""}, {{1, 0}, {1, 1}, {2, 1}, {3, 2}}, {{1, 0}, {1, 1}, {2, 1}, {3, 2}},
+     {"", "a", "", "a", ""}, {{1, 0}, {1, 1}, {2, 1}, {2, 2}, {3, 2}}, "121b1", "-a-b-c-"},
+    TestID -> "string patterns: an empty match once at a place, then one not empty there, the same from every form"]
+
+(* alternatives are tried in the order written, a literal "" among them, where Wolfram 15 tries "" after
+   the others and before them in Shortest; an empty match is followed by one not empty there [W15 bug] *)
 VerificationTest[
     {engineCases["ab", "" | "a"], engineCases["abc", "" | "x" | "b"], engineCases["abb", "a" ~~ ("" | "b") ~~ "b"], engineCases["ab", ("" | "a") ..],
      engineCases["ab", Shortest["" | "a"]], engineCases["ba", ("a" ...) | "b"], engineRuleCases["ab", {x : ("" | "a") :> {x}}], engineReplace["abc", {"" | "b" -> "-"}]},
-    {StringCases["ab", "" | "a"], StringCases["abc", "" | "x" | "b"], StringCases["abb", "a" ~~ ("" | "b") ~~ "b"], StringCases["ab", ("" | "a") ..],
-     StringCases["ab", Shortest["" | "a"]], StringCases["ba", ("a" ...) | "b"], StringCases["ab", x : ("" | "a") :> {x}], StringReplace["abc", "" | "b" -> "-"]},
-    TestID -> "string patterns: a literal \"\" tried after the other alternatives, before them in Shortest"
+    {{"", "a", "", ""}, {"", "", "b", "", ""}, {"ab"}, {"", "a", "", ""}, {"", "a", "", ""}, {"", "b", "a", ""}, {{""}, {"a"}, {""}, {""}}, "-a---c-"},
+    TestID -> "string patterns: alternatives in the order written, a literal \"\" among them"
 ]
 
 (* the records of the matches, the same from the typed matcher and the interpreter *)

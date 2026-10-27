@@ -53,7 +53,13 @@ SetAttributes[native, HoldFirst];
 cut[s_String, matches_List] := Map[StringTake[s, {#[[1]] + 1, #[[2]]}] &, matches];
 groups[matches_List] := Map[Cases[#[[4]], (_Integer -> t_) :> t] &, matches];
 
-differ = {}; agree = 0; noProgram = 0; notNative = 0; both = 0; unmade = {};
+(* A regex that may match the empty text the engine matches as PCRE2 goes on through a text, an empty
+   match at a place once, then one there that is not empty, where Wolfram 15's StringCases goes on a
+   character later [W15 bug]: of such a regex only every way it matches, Overlaps -> All, is held to
+   Wolfram 15's. *)
+emptyQ[p_] := TrueQ[Wolfram`Parser`StringPatterns`Private`nullableQ[p["Program"]]]
+
+differ = {}; agree = 0; noProgram = 0; notNative = 0; both = 0; unmade = {}; empties = 0;
 Do[
     With[{re = regex[RandomInteger[{0, 2}]], s = randomString[]},
         With[{p = StringPatternProgram[RegularExpression[re]], w = native[StringCases[s, RegularExpression[re]]]},
@@ -62,11 +68,13 @@ Do[
                 p["Program"] === None, noProgram++; If[MatchQ[w, $Failed | $Aborted], both++, AppendTo[unmade, re]],
                 (* a regex that Wolfram 15 does not take has no program *)
                 MatchQ[w, $Failed | $Aborted], notNative++; AppendTo[differ, {re, s, "Program", {p["Program"], w}}],
-                True, With[{n = Length[Union[Cases[p["Program"], Wolfram`Parser`StringPatterns`Private`capture[k_, _] :> k, {0, Infinity}]]]},
-                    With[{wanted = {w, native[StringCases[s, RuleDelayed @@ {RegularExpression[re], Table["$" <> ToString[k], {k, n}]}]], native[StringCases[s, RegularExpression[re], Overlaps -> All]]}},
+                True, With[{n = Length[Union[Cases[p["Program"], Wolfram`Parser`StringPatterns`Private`capture[k_, _] :> k, {0, Infinity}]]], empty = emptyQ[p]},
+                    If[empty, empties++];
+                    With[{wanted = If[empty, {native[StringCases[s, RegularExpression[re], Overlaps -> All]]},
+                            {w, native[StringCases[s, RuleDelayed @@ {RegularExpression[re], Table["$" <> ToString[k], {k, n}]}]], native[StringCases[s, RegularExpression[re], Overlaps -> All]]}]},
                         With[{wrong = Select[
                                 AssociationMap[Function[method, With[{e = StringPatternMatches[s, {p}, "Each", Method -> method], a = StringPatternMatches[s, {p}, "All", Method -> method]},
-                                    {cut[s, e], groups[e], cut[s, a]}]], {"VM", "Interpreter"}],
+                                    If[empty, {cut[s, a]}, {cut[s, e], groups[e], cut[s, a]}]]], {"VM", "Interpreter"}],
                                 # =!= wanted &]},
                             If[wrong === <||>, agree++, AppendTo[differ, {re, s, Keys[wrong], {First[Values[wrong]], wanted}}]]]]]]]],
     {count}];
@@ -75,5 +83,5 @@ Scan[Function[d, Print["   ", ToString[d[[1]], InputForm], " on ", ToString[d[[2
     "\n      W15    ", ToString[d[[4, 2]], InputForm]]], Take[differ, UpTo[30]]];
 Print["   a sample of the regexes with no program that Wolfram 15 takes: ", ToString[Take[unmade, UpTo[12]], InputForm]];
 Print["regex: ", count, " cases, seed ", seed, ": ", agree, " agree, ", Length[differ], " differ, ", noProgram, " with no program (", both,
-    " of them no regex in Wolfram 15 either), ", notNative, " no regex in Wolfram 15 with a program"];
+    " of them no regex in Wolfram 15 either), ", notNative, " no regex in Wolfram 15 with a program, ", empties, " that may match nothing held by every way"];
 If[differ =!= {}, Exit[1]];

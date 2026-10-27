@@ -17,8 +17,10 @@ Begin["Wolfram`Parser`StringPatterns`Private`"]
    pool of constants; the classes, {k, the start of each of the k, then each four words of 32 bits
    of its codes below 128 and its runs, {count, first, last, ...}}; the text's codes; the
    parameters {mode, from, programs, names, registers, the program table in the pool}, the mode 1
-   the first program that matches at a position, 2 each in turn, 3 every one, 4 every way of every
-   one; and the state to go on from, {} at first. It gives {status, matches, width, then each match {start, end,
+   or 2 the first program that matches at a position, after an empty match the position again for
+   one not empty, 3 every one, an empty match once and its program again for one not empty, 4
+   every way of every one; and the state to go
+   on from, {} at first. It gives {status, matches, width, then each match {start, end,
    k, the start and end of each name}}, status 0 when the scan is done, and 2 where a condition is
    to be evaluated, then {condition, k, the names, the length of the state, the state}, to call
    again with the state and the condition's value after it, 1 or 0.
@@ -76,7 +78,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                 pc = 0, sp = 0, start = 0, top = 0, ttop = 0, regs, stack, trail, out, outLen = 3, nRec = 0,
                 op = 0, a = 0, b = 0, c = 0, d = 0, j = 0, cc = 0, inside = 0, ok = 0, len = 0, e = 0, r = 0,
                 cnt = 0, mn = 0, mx = 0, kind = 0, rpc = 0, rsp = 0, rtt = 0, x = 0, y = 0, cls = 0, grown, q = 0, before = 0, after = 0,
-                nNames = 0, entry = 0, firstClass = 0, stateLen = 0, base = 0, masks, u = 0, w = 0, fold = 0, flo = 0, fhi = 0, fmid = 0},
+                nNames = 0, entry = 0, firstClass = 0, stateLen = 0, base = 0, masks, u = 0, w = 0, fold = 0, flo = 0, fhi = 0, fmid = 0, ne = 0},
             (* the bit of each of 32, a class's test of a code its word's and its bit's: Compile takes a
                shift by a variable for a real *)
             masks = Table[2^j, {j, 0, 31}];
@@ -94,9 +96,10 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                 ttop = vState[[q]]; q++;
                 If[2 ttop > Length[trail], trail = Table[0, {2 ttop + 64}]];
                 Do[trail[[j]] = vState[[q + j - 1]], {j, 1, 2 ttop}]; q = q + 2 ttop;
+                ne = vState[[q]]; q++;
                 answer = vState[[q]]; pending = 1];
             While[ i <= n && status == 0,
-                If[ k > m, i++; k = 1,
+                If[ k > m, i++; k = 1; ne = 0,
                     entry = progOff + 4 (k - 1); nNames = vPool[[entry + 1]];
                     If[ pending == 0,
                         (* the program k at position i, unless its first character cannot be there *)
@@ -149,7 +152,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                                     pc = a,
                                 op == 6, pc = a,
                                 op == 7, fail = 1,
-                                op == 8, result = 1,
+                                op == 8, If[ne == 1 && sp == start, fail = 1, result = 1],
                                 op == 9,
                                     Which[
                                         a == 1, ok = If[sp == 0, 1, 0],
@@ -342,8 +345,10 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                             Do[ out[[outLen + 4 + 2 j]] = If[j < nNames, regs[[3 j + 1]], -1]; out[[outLen + 5 + 2 j]] = If[j < nNames, regs[[3 j + 2]], -1], {j, 0, maxNames - 1}];
                             outLen = outLen + width; nRec++;
                             Which[
-                                mode == 1, If[sp > i, i = sp, i++]; k = 1,
-                                mode == 2, If[sp > i, i = sp; k = 1, k++],
+                                (* the first match at a place; after an empty one, the place again for one not empty *)
+                                mode == 1 || mode == 2, If[sp > i, i = sp; k = 1; ne = 0, k = 1; ne = 1],
+                                (* every program's match at a place, an empty one once, its program there again for one not empty *)
+                                mode == 3, If[sp == i, ne = 1, k++],
                                 (* every way: the program's next, as after a condition that fails *)
                                 mode == 4, pending = 1; answer = 0,
                                 True, k++],
@@ -351,7 +356,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
             out[[1]] = status; out[[2]] = nRec; out[[3]] = width;
             If[ status == 2,
                 (* the condition, its program's names, and the state to go on from *)
-                stateLen = 5 + nRegs + 1 + 6 top + 1 + 2 ttop;
+                stateLen = 5 + nRegs + 1 + 6 top + 1 + 2 ttop + 1;
                 If[ outLen + 3 + 2 maxNames + stateLen > Length[out],
                     grown = Table[0, {outLen + 3 + 2 maxNames + stateLen}]; Do[grown[[q]] = out[[q]], {q, outLen}]; out = grown];
                 out[[outLen + 1]] = vCode[[5 pc + 2]]; out[[outLen + 2]] = k;
@@ -361,6 +366,7 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
                 q = q + 6; Do[out[[q + j]] = regs[[j + 1]], {j, 0, nRegs - 1}]; q = q + nRegs;
                 out[[q]] = top; q++; Do[out[[q + j - 1]] = stack[[j]], {j, 1, 6 top}]; q = q + 6 top;
                 out[[q]] = ttop; q++; Do[out[[q + j - 1]] = trail[[j]], {j, 1, 2 ttop}]; q = q + 2 ttop;
+                out[[q]] = ne; q++;
                 outLen = q - 1];
             Take[out, outLen]]]];
 
