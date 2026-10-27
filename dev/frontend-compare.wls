@@ -8,7 +8,7 @@
    kernel, which starts its own front end:
        WolframKernel -script dev/frontend-compare.wls [out]
    It prints how many sources differ, how, and Puts {{source, kernel, front end} ...} for each that
-   does into out, by default frontend-compare.m in the working directory. *)
+   does into out, in FullForm, by default frontend-compare.m in the working directory. *)
 
 $ProgressReporting = False;
 arguments = Replace[$CommandLine, {{___, "-script", script_, rest___} :> {script, rest}, _ -> {}}];
@@ -56,5 +56,5 @@ differ = Select[results, #[[2]] =!= #[[3]] &];
 Print["differ: ", Length[differ], " of ", Length[results], "; the kernel fails where the front end reads: ", Count[differ, {_, "$Failed", _}],
     "; the front end fails where the kernel reads: ", Count[differ, {_, Except["$Failed"], "$Failed"}],
     "; both read, differently: ", Count[differ, {_, Except["$Failed"], Except["$Failed"]}]];
-Put[differ, out];
+Export[out, ToString[FullForm[differ], CharacterEncoding -> "ASCII"], "Text"];
 Print["into ", out];

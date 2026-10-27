@@ -5,8 +5,9 @@
    does. Run it with Wolfram 15's kernel, which starts its own front end:
        WolframKernel -script dev/frontend-held.wls sources [out]
    sources is a file of WL that evaluates to a list of strings, or of text with one source on each
-   line. out, a file it Puts {{source, held} ...} into, held a HoldComplete of the expressions or
-   $Failed; without it, each is printed. *)
+   line. out, a file it writes {{source, held} ...} into in FullForm, which Get reads back as it
+   is (InputForm writes FreeformEvaluate["b"] as =[b], which does not), held a HoldComplete of the
+   expressions or $Failed; without it, each is printed. *)
 
 $ProgressReporting = False;
 arguments = Replace[$CommandLine, {{___, "-script", _, rest___} :> {rest}, _ -> {}}];
@@ -30,5 +31,5 @@ frontEndHeld[s_String] := Module[{p, made},
 
 results = UsingFrontEnd[{#, frontEndHeld[#]} & /@ sources];
 If[ Length[arguments] >= 2,
-    Put[results, arguments[[2]]]; Print[Length[results], " sources into ", arguments[[2]]],
+    Export[arguments[[2]], ToString[FullForm[results], CharacterEncoding -> "ASCII"], "Text"]; Print[Length[results], " sources into ", arguments[[2]]],
     Scan[Print[ToString[#[[1]], InputForm, CharacterEncoding -> "ASCII"], "  ", ToString[#[[2]], InputForm, CharacterEncoding -> "ASCII"]] &, results]]
