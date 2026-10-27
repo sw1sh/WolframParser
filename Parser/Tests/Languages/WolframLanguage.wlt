@@ -2,7 +2,9 @@
 (* :Context: Wolfram`Parser`Languages`WolframLanguage` *)
 (* :Summary: each form below read by WolframLanguageHeld, against what
    Wolfram 15's ImportString[s, {"WL", "HeldExpressions"}] gives for it
-   (recorded once from the kernel, then frozen here); how a source splits
+   (recorded once from the kernel, then frozen here), or, where a notebook's
+   input cell reads it otherwise, what the cell gives (recorded with
+   dev/frontend-held.wls); how a source splits
    into its top-level expressions; the grammar reading the zoo's own
    sources as the kernel does; the standard AST; failures; and the
    statements WolframLanguageHeldNext reads one at a time, against the parts
@@ -11,7 +13,7 @@
 
 ClearAll[$wlCases, $wlZoo]
 
-(* {source, the list of held expressions Wolfram 15 reads from it} *)
+(* {source, the list of held expressions Wolfram 15 reads from it, as a notebook does} *)
 $wlCases = {
     {"-a b", List[HoldComplete[Times[Times[-1, a], b]]]},
     {"-a/b", List[HoldComplete[Times[Times[-1, a], Power[b, -1]]]]},
@@ -19,7 +21,14 @@ $wlCases = {
     {"a b/c", List[HoldComplete[Times[a, Times[b, Power[c, -1]]]]]},
     {"-2 a", List[HoldComplete[Times[-2, a]]]},
     {"- 2", List[HoldComplete[-2]]},
-    {"-(2)", List[HoldComplete[-2]]},
+    (* a minus folds into a number written right after it, and takes anything else whole, a
+       number in parentheses and a product too, as a notebook reads it *)
+    {"-(2)", List[HoldComplete[Times[-1, 2]]]},
+    {"a - (2)", List[HoldComplete[Plus[a, Times[-1, 2]]]]},
+    {"x^-(2)", List[HoldComplete[Power[x, Times[-1, 2]]]]},
+    {"a - b c", List[HoldComplete[Plus[a, Times[-1, Times[b, c]]]]]},
+    {"a - 2 b", List[HoldComplete[Plus[a, Times[-1, Times[2, b]]]]]},
+    {"a + -2 b", List[HoldComplete[Plus[a, Times[-2, b]]]]},
     {"-a^2", List[HoldComplete[Times[-1, Power[a, 2]]]]},
     {"a - b + c", List[HoldComplete[Plus[a, Times[-1, b], c]]]},
     {"a - -b", List[HoldComplete[Plus[a, Times[-1, Times[-1, b]]]]]},
@@ -214,10 +223,36 @@ $wlCases = {
     {"a:\\\n=b", List[HoldComplete[a := b]]},
     {"a\\\n+ b", List[HoldComplete[a + b]]},
     {"1\\\n.5\\\n", List[HoldComplete[1.5]]},
-    {"a; ? b", List[HoldComplete[CompoundExpression[a, Information["b", Rule[LongForm, False]]]]]},
+    (* a query that does not begin its statement reads the expression after it, all that binds more
+       tightly than ;, a word of one token its text, and ?? a word of one token, as a notebook reads
+       them; one that begins its statement, which a notebook answers itself, the words after it; a ?
+       after a ; is a pattern test of the compound *)
+    {"a; ? b", List[HoldComplete[PatternTest[CompoundExpression[a, Null], b]]]},
+    {"a;?b", List[HoldComplete[PatternTest[CompoundExpression[a, Null], b]]]},
+    {"a; ?b; c", List[HoldComplete[CompoundExpression[PatternTest[CompoundExpression[a, Null], b], c]]]},
+    {"x = ?a = b", List[HoldComplete[Set[x, Set[Information["a", Rule[LongForm, False]], b]]]]},
+    {"f[?a >> b]", List[HoldComplete[f[Put[Information["a", Rule[LongForm, False]], "b"]]]]},
+    {"a ;; ? b", List[HoldComplete[Span[a, Information["b", Rule[LongForm, False]]]]]},
+    {"x::?a b", List[HoldComplete[MessageName[x, Information[Times[a, b], Rule[LongForm, False]]]]]},
     {"?Plot*", List[HoldComplete[Information["Plot*", Rule[LongForm, False]]]]},
     {"??x\ty z", List[HoldComplete[Information["x y z", Rule[LongForm, True]]]]},
-    {"f[?x, ? \"y\" z]", List[HoldComplete[f[Information["x", Rule[LongForm, False]], Times[Information["y", Rule[LongForm, False]], z]]]]},
+    {"f[?x, ? \"y\" z]", List[HoldComplete[f[Information["x", Rule[LongForm, False]], Information[Times["y", z], Rule[LongForm, False]]]]]},
+    {"f[a, ?b c]", List[HoldComplete[f[a, Information[Times[b, c], Rule[LongForm, False]]]]]},
+    {"x = ?a b", List[HoldComplete[Set[x, Information[Times[a, b], Rule[LongForm, False]]]]]},
+    {"x = ??a", List[HoldComplete[Set[x, Information["a", Rule[LongForm, True]]]]]},
+    {"x = ?a; b", List[HoldComplete[CompoundExpression[Set[x, Information["a", Rule[LongForm, False]]], b]]]},
+    {"f[? a + b]", List[HoldComplete[f[Information[Plus[a, b], Rule[LongForm, False]]]]]},
+    {"f[?a//b]", List[HoldComplete[f[Information[b[a], Rule[LongForm, False]]]]]},
+    {"f[?a&]", List[HoldComplete[f[Information[Function[a], Rule[LongForm, False]]]]]},
+    {"f[?a?b]", List[HoldComplete[f[Information[PatternTest[a, b], Rule[LongForm, False]]]]]},
+    {"f[?-a]", List[HoldComplete[f[Information[Times[-1, a], Rule[LongForm, False]]]]]},
+    {"f[?<<a]", List[HoldComplete[f[Information[Get["a"], Rule[LongForm, False]]]]]},
+    {"f[?a', b]", List[HoldComplete[f[Information[Derivative[1][a], Rule[LongForm, False]], b]]]},
+    {"f[?(a)]", List[HoldComplete[f[Information[a, Rule[LongForm, False]]]]]},
+    {"f[?a_]", List[HoldComplete[f[Information["a_", Rule[LongForm, False]]]]]},
+    {"f[?#]", List[HoldComplete[f[Information["#", Rule[LongForm, False]]]]]},
+    {"<|a ->? 1|>", List[HoldComplete[Association[Rule[a, Information["1", Rule[LongForm, False]]]]]]},
+    {"a?b c", List[HoldComplete[Times[PatternTest[a, b], c]]]},
     {"a.5", List[HoldComplete[Times[a, 0.5]]]},
     {"1.5.2", List[HoldComplete[Times[1.5, 0.2]]]},
     {"f[x].5", List[HoldComplete[Times[f[x], 0.5]]]},
@@ -231,7 +266,10 @@ $wlCases = {
     {"a[[1]\n ]", List[HoldComplete[Part[a, 1]]]},
     {"\"a\\\r\nb\"", List[HoldComplete["a\nb"]]},
     {"a\nNull\nb", List[HoldComplete[a], HoldComplete[b]]},
-    {"a <> StringJoin @ b + Plus @ c", List[HoldComplete[Plus[StringJoin[a, b], c]]]},
+    (* f @ x is the call wherever it stands, as a notebook reads it, where Wolfram 15's kernel
+       splices it into a flat chain of f *)
+    {"a <> StringJoin @ b + Plus @ c", List[HoldComplete[Plus[StringJoin[a, StringJoin[b]], Plus[c]]]]},
+    {"a b Times@c", List[HoldComplete[Times[a, b, Times[c]]]]},
     {"a <> (StringJoin @ b)", List[HoldComplete[StringJoin[a, StringJoin[b]]]]},
     {"a \\[CircleTimes] b \\[CircleTimes] c", List[HoldComplete[CircleTimes[a, b, c]]]},
     {"x \\[Distributed] d", List[HoldComplete[Distributed[x, d]]]},
@@ -402,6 +440,11 @@ $wlSpans = {
     {"a;;b\n;;c", List[HoldComplete[Span[a, b]], HoldComplete[Span[1, c]]]},
     {"a;;\n;\nb", List[HoldComplete[CompoundExpression[Span[a, All], Null]], HoldComplete[b]]},
     {"a;;\n+b", List[HoldComplete[Span[a, Plus[b]]]]},
+    {"a\n;;\n;;", List[HoldComplete[a], HoldComplete[Span[1, All]], HoldComplete[Span[1, All]]]},
+    {"a+\n;;\n;;", List[HoldComplete[Plus[a, Span[1, All]]], HoldComplete[Span[1, All]]]},
+    {"x = ;;\n;;", List[HoldComplete[Set[x, Span[1, All]]], HoldComplete[Span[1, All]]]},
+    {"a!;;\n;;", List[HoldComplete[Times[Span[Factorial[a], All], Span[1, All]]]]},
+    {"a; ;;\n;;", List[HoldComplete[Times[Span[CompoundExpression[a, Null], All], Span[1, All]]]]},
     (* a prefix operator after ;; begins the span's operand, as in any other operand and as
        CodeParser reads it; Wolfram 15 ends the span there and multiplies, (a ;; All)*(!b), but
        for -, +, ++, -- and << [W15 bug] *)
@@ -917,15 +960,19 @@ VerificationTest[
     {{6, True}, {HoldComplete[LinearBoxes[SuperscriptBox["x", "2"]]], 17, <|"Warnings" -> {}|>}},
     TestID -> "wl linear: a group not closed is incomplete; a statement of one reads one at a time"]
 
-(* a colon after a pattern gives its default, and only there; a tilde's operands read as the kernel reads them *)
+(* a colon after a pattern gives its default, and only there; a tilde's operands read as a notebook reads them *)
 VerificationTest[
     WolframLanguageHeld /@ {"x_ | y_ : 1", "x_ : y_ : 1", "f[x:_:1]"},
     {{HoldComplete[x_ | (y_ : 1)]}, {HoldComplete[x_ : (y_ : 1)]}, {HoldComplete[f[x_ : 1]]}},
     TestID -> "wl: a colon after a pattern is its default"]
 VerificationTest[
-    WolframLanguageHeld /@ {"a ~ b & ~ c", "a ~ b ~ c ~ d ~ e"},
-    {{HoldComplete[(b &)[a, c]]}, {HoldComplete[d[b[a, c], e]]}},
-    TestID -> "wl: a tilde's function may end in a postfix operator; tildes group to the left"]
+    WolframLanguageSyntaxQ /@ {"f[??a b]", "f[?a*]", "a?b?c", "a ? b ? c", "(a?b)?c"},
+    {False, False, False, False, True},
+    TestID -> "wl: a ?? that does not begin its statement takes a word alone; a ? after a pattern test is no Wolfram Language"]
+VerificationTest[
+    {WolframLanguageSyntaxQ /@ {"a ~ b & ~ c", "a ~ f! ~ b", "a ~ f' ~ b", "a ~ f.. ~ b"}, WolframLanguageHeld /@ {"a ~ f++ ~ b", "a ~ (f&) ~ b", "a ~ b ~ c ~ d ~ e"}},
+    {{False, False, False, False}, {{HoldComplete[Increment[f][a, b]]}, {HoldComplete[Function[f][a, b]]}, {HoldComplete[d[b[a, c], e]]}}},
+    TestID -> "wl: a tilde's function binds more tightly than ~; tildes group to the left"]
 VerificationTest[
     wlStop /@ (WolframLanguageHeld /@ {"f[x] : 1", "x_. : 1", "a ~ b c", "a ~ b"}),
     {{7, False}, {6, False}, {8, True}, {6, True}},
@@ -941,12 +988,12 @@ VerificationTest[
     {HoldComplete[a Get["b"]], 6, <|"Warnings" -> {}|>},
     TestID -> "wl next: << after an operand is a factor"]
 
-(* a unary plus is its own call, but a flat chain of Plus reads its operand, as the kernel reads it *)
+(* a unary plus is its own call, in a chain of Plus too, as a notebook reads it *)
 VerificationTest[
-    WolframLanguageHeld /@ {"+b", "+b - 1", "a + +b", "(+a) + b", "a - +b", "x + +y z"},
-    {{HoldComplete[Plus[b]]}, {HoldComplete[Plus[b, -1]]}, {HoldComplete[Plus[a, b]]}, {HoldComplete[Plus[Plus[a], b]]},
-     {HoldComplete[Plus[a, Times[-1, Plus[b]]]]}, {HoldComplete[Plus[x, Times[Plus[y], z]]]}},
-    TestID -> "wl: a unary plus in a chain of Plus is its operand"]
+    WolframLanguageHeld /@ {"+b", "+b - 1", "a + +b", "(+a) + b", "a - +b", "x + +y z", "a >+ b - c"},
+    {{HoldComplete[Plus[b]]}, {HoldComplete[Plus[Plus[b], -1]]}, {HoldComplete[Plus[a, Plus[b]]]}, {HoldComplete[Plus[Plus[a], b]]},
+     {HoldComplete[Plus[a, Times[-1, Plus[b]]]]}, {HoldComplete[Plus[x, Times[Plus[y], z]]]}, {HoldComplete[Greater[a, Plus[Plus[b], Times[-1, c]]]]}},
+    TestID -> "wl: a unary plus is its own call, in a chain of Plus too"]
 
 (* a slot's name is read as a name is, $, contexts and long names in it; ## takes digits only *)
 VerificationTest[
@@ -1034,7 +1081,7 @@ $wlSyntaxCases = {
     {"f[x]]", False, 4},
     {"]", False, 0},
     {"a::", False, 2},
-    {"a::1", False, 2},
+    {"a::1", True, 4},
     {"a::b::c::", False, 7},
     {"f[x] ::=", False, 5},
     {"       A ::= A", False, 9},
@@ -1051,7 +1098,7 @@ $wlSyntaxCases = {
     {"x_ | y_ : 1", True, 11},
     {"x_. : 1", False, 4},
     {"a ~ b c", False, 9},
-    {"a ~ b & ~ c", True, 11},
+    {"a ~ b & ~ c", False, 13},
     {"i ~ s t, u", False, 7},
     {"<|a -> 1", False, 10},
     {"\\!\\(x\\^2\\)", True, 10},
@@ -1090,17 +1137,55 @@ VerificationTest[
      {HoldComplete[Information["a*", LongForm -> False] := b]}, {HoldComplete[Information["x`*", LongForm -> False]]}},
     TestID -> "wl: the words of a query that end inside a token, the token split there"]
 
-VerificationTest[
-    {WolframLanguageHeld["a::b_"], WolframLanguageHeld["a::b_c"], WolframLanguageHeld["f[a::b_]"], WolframLanguageHeld["x = a::b_ + 1"]},
-    {ToExpression["a::b_", InputForm, HoldComplete], ToExpression["a::b_c", InputForm, HoldComplete], ToExpression["f[a::b_]", InputForm, HoldComplete],
-     ToExpression["x = a::b_ + 1", InputForm, HoldComplete]} /. h_HoldComplete :> {h},
-    TestID -> "wl: a message name's tag and a blank in one token, read as the kernel reads them"]
-
-VerificationTest[
-    {WolframLanguageHeld["a::_"]["Position"], WolframLanguageHeld["a::b::_"]["Position"], WolframLanguageSyntaxQ["a::b_"], WolframLanguageSyntaxQ["a::_"],
-     WolframLanguageSyntaxQ["?a*=b"]},
-    {4, 7, True, False, True},
-    TestID -> "wl: a blank where a message name's tag goes is no Wolfram Language"]
+(* === message names, as a notebook reads them: after each ::, a word of one token, a name, a
+   number, a blank, a slot or a %, is its text, a string its value; a group, a prefix operator and
+   its operand, and a name or a blank with a colon after it, the pattern, are the expression; each
+   :: adds a part. Wolfram 15's kernel takes names and strings alone, two at most === *)
+$wlMessageNames = {
+    {"a::b_", List[HoldComplete[MessageName[a, "b_"]]]},
+    {"a::b_c", List[HoldComplete[MessageName[a, "b_c"]]]},
+    {"f[a::b_]", List[HoldComplete[f[MessageName[a, "b_"]]]]},
+    {"x = a::b_ + 1", List[HoldComplete[Set[x, Plus[MessageName[a, "b_"], 1]]]]},
+    {"a::_", List[HoldComplete[MessageName[a, "_"]]]},
+    {"a::b::_", List[HoldComplete[MessageName[a, "b", "_"]]]},
+    {"x_::_h", List[HoldComplete[MessageName[Pattern[x, Blank[]], "_h"]]]},
+    {"a::1", List[HoldComplete[MessageName[a, "1"]]]},
+    {"a::1.5", List[HoldComplete[MessageName[a, "1.5"]]]},
+    {"a::1a", List[HoldComplete[Times[MessageName[a, "1"], a]]]},
+    {"a::2^c", List[HoldComplete[Power[MessageName[a, "2"], c]]]},
+    {"a::#", List[HoldComplete[MessageName[a, "#"]]]},
+    {"a::%", List[HoldComplete[MessageName[a, "%"]]]},
+    {"a:: b", List[HoldComplete[MessageName[a, "b"]]]},
+    {"a::b::c::d::e", List[HoldComplete[MessageName[a, "b", "c", "d", "e"]]]},
+    {"x::y::1", List[HoldComplete[MessageName[x, "y", "1"]]]},
+    {"a::(b)", List[HoldComplete[MessageName[a, b]]]},
+    {"a::(b)c", List[HoldComplete[Times[MessageName[a, b], c]]]},
+    {"a::{b}", List[HoldComplete[MessageName[a, List[b]]]]},
+    {"a::(b::c)", List[HoldComplete[MessageName[a, MessageName[b, "c"]]]]},
+    {"a::b::(c::d)", List[HoldComplete[MessageName[a, "b", MessageName[c, "d"]]]]},
+    {"a::-b", List[HoldComplete[MessageName[a, Times[-1, b]]]]},
+    {"a::-b+c", List[HoldComplete[Plus[MessageName[a, Times[-1, b]], c]]]},
+    {"a::!b&&c", List[HoldComplete[And[MessageName[a, Not[b]], c]]]},
+    {"a::b::-c", List[HoldComplete[MessageName[a, "b", Times[-1, c]]]]},
+    {"a::<<c", List[HoldComplete[MessageName[a, Get["c"]]]]},
+    {"a::?b", List[HoldComplete[MessageName[a, Information["b", Rule[LongForm, False]]]]]},
+    {"a::b:c", List[HoldComplete[MessageName[a, Pattern[b, c]]]]},
+    {"a::b:c+d", List[HoldComplete[MessageName[a, Pattern[b, Plus[c, d]]]]]},
+    {"a::b:c:d", List[HoldComplete[MessageName[a, Optional[Pattern[b, c], d]]]]},
+    {"a::b_:c", List[HoldComplete[MessageName[a, Optional[Pattern[b, Blank[]], c]]]]},
+    {"a::b:_", List[HoldComplete[MessageName[a, Pattern[b, Blank[]]]]]},
+    {"a::b:=c", List[HoldComplete[SetDelayed[MessageName[a, "b"], c]]]},
+    {"a::b c::d", List[HoldComplete[Times[MessageName[a, "b"], MessageName[c, "d"]]]]},
+    {"a::b[[1]]", List[HoldComplete[Part[MessageName[a, "b"], 1]]]},
+    {"a::b!", List[HoldComplete[Factorial[MessageName[a, "b"]]]]},
+    {"a::b~c~d", List[HoldComplete[c[MessageName[a, "b"], d]]]}
+};
+Scan[
+    Function[c, VerificationTest[
+        {WolframLanguageHeld[c[[1]]], Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$fastHeldReader = False}, WolframLanguageHeld[c[[1]]]]},
+        {c[[2]], c[[2]]},
+        TestID -> "wl message name, reader and grammar: " <> c[[1]]]],
+    $wlMessageNames]
 
 (* a . after __ or ___ is a token of its own, a Dot or the start of a number, and after a single _
    an Optional's; right after a ., a prefix operator begins an operand, as a notebook reads it,
@@ -1126,5 +1211,5 @@ VerificationTest[
 
 VerificationTest[
     {Take[WolframLanguageHeldNext["?a*=b\na::b_", 1], 2], Take[WolframLanguageHeldNext["?a*=b\na::b_", 7], 2]},
-    {{HoldComplete[Information["a*", LongForm -> False] = b], 7}, {HoldComplete[a::b*_], 12}},
+    {{HoldComplete[Information["a*", LongForm -> False] = b], 7}, {HoldComplete[MessageName[a, "b_"]], 12}},
     TestID -> "wl: one statement at a time, the tokens that are two split too"]

@@ -402,8 +402,10 @@ $lexNumberDeclaration = FunctionDeclaration[lexNumber,
                 j = nmAt + 1; While[j <= nmN && 48 <= nmCodes[[j]] <= 57, j++],
                 j = nmAt; While[j <= nmN && 48 <= nmCodes[[j]] <= 57, j++];
                 Which[
+                    (* b^^ and a digit, or a point and a digit, as a notebook reads 16^^.f *)
                     j + 2 <= nmN && nmCodes[[j]] == 94 && nmCodes[[j + 1]] == 94 &&
-                        ((48 <= nmCodes[[j + 2]] <= 57) || (65 <= nmCodes[[j + 2]] <= 90) || (97 <= nmCodes[[j + 2]] <= 122)),
+                        ((48 <= nmCodes[[j + 2]] <= 57) || (65 <= nmCodes[[j + 2]] <= 90) || (97 <= nmCodes[[j + 2]] <= 122) ||
+                            (nmCodes[[j + 2]] == 46 && j + 3 <= nmN && ((48 <= nmCodes[[j + 3]] <= 57) || (65 <= nmCodes[[j + 3]] <= 90) || (97 <= nmCodes[[j + 3]] <= 122)))),
                         a = 0; m = nmAt;
                         While[m < j, If[a <= 36, a = 10 a + nmCodes[[m]] - 48]; m++];
                         j += 2;
@@ -688,7 +690,8 @@ $fastUnsetSpecIndex := $fastUnsetSpecIndex = fastSpecIndex[{9, "Unset", "Unset"}
    parameters; 7 a pattern and 8 an operand left out, {token, length,
    brackets}; 9 a span {state, count}; 10 a compound {count};
    11 a ternary {state, precedence, min, plain}; 12 a tag set {state}; 13
-   an integral {integral}.
+   an integral {integral}; 14 a message name {count, first token, instructions}; 15 a query
+   that does not begin its statement {??, first token, instructions}.
 
    Instructions: 1 a leaf {kind, token}; 2 prefix {head}; 3 postfix
    {head}; 4 binary {head}; 5 a flat chain {head, n}; 6 a relation's
@@ -719,7 +722,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
             (* the line break before each token, a newline before it outside comments, but for one
                right after a ;;, which a notebook reads as whitespace, unless another ;; comes after
                it and the first has no operand before it: nothing, a line break outside brackets,
-               or a token that ends no operand *)
+               or a token that ends no operand; a ; ends one, as a ;; after it spans the compound *)
             nls = Native`UncheckedArray[0, n + 1];
             tt = 1;
             While[ tt <= n,
@@ -729,7 +732,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                 ps = If[k == 9 && o == pSpecial[[2]], 1, 0];
                 If[ps == 1, ol = If[pe == 0 || (nls[[tt]] == 1 && nst == 0), 1, 0]];
                 pe = Which[
-                    (k >= 1 && k <= 8) || k == 11 || k == 13 || k == 15 || k == 17 || k == 19 || k == 20 || k == 21, 1,
+                    (k >= 1 && k <= 8) || k == 11 || k == 13 || k == 15 || k == 17 || k == 19 || k == 20 || k == 21 || (k == 9 && o == pSpecial[[3]]), 1,
                     k == 9 && pLed[[tt]] > 0 && pSpecs[[4 pLed[[tt]] - 2]] == 4, If[pPrefix[[2 o + 1]] > 0, pe, 1],
                     True, 0];
                 If[k == 10 || k == 12 || k == 14 || k == 16, nst++];
@@ -788,7 +791,16 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                     mode = 5],
                             k == 9 && o == pSpecial[[2]],
                                 on++; out[[3 on]] = 13; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 10,
-                            (* ?words, ??words: Information of the words, to the end of their last token, or of a string *)
+                            (* a query that does not begin its statement, as a notebook reads it: ? and the expression
+                               after it, all that binds more tightly than =, a word of one token its text, and ?? and a
+                               word of one token; frame 15 {??, first token, instructions} *)
+                            k == 9 && o == pSpecial[[14]] && t != stmt,
+                                t++; lg = 0;
+                                If[pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[14]] && pTok[[5 t]] == pTok[[5 t - 4]], lg = 1; t++];
+                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 15; fr[[base + 2]] = lg; fr[[base + 3]] = t; fr[[base + 4]] = on;
+                                pMin = pSpecial[[19]]; pRbp = 0; pPlain = 0; mode = 1,
+                            (* ?words, ??words at the beginning of a statement: Information of the words, to the end of
+                               their last token, or of a string, which a notebook answers itself *)
                             k == 9 && o == pSpecial[[14]],
                                 t++; lg = 0;
                                 If[pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[14]] && pTok[[5 t]] == pTok[[5 t - 4]], lg = 1; t++];
@@ -841,6 +853,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                             bp = pSpecs[[4 i - 3]]; fx = pSpecs[[4 i - 2]]; hd = pSpecs[[4 i - 1]]; ky = pSpecs[[4 i]];
                             If[ bp <= rb || bp <= mn, mode = 4,
                                 Which[
+                                    (* a ? after a pattern test, as a notebook reads a?b?c: no Wolfram Language *)
+                                    fx == 1 && pTok[[5 t - 1]] == pSpecial[[14]] && out[[3 on]] == 4 && out[[3 on + 1]] == hd, mode = 5,
                                     fx == 1 || fx == 2,
                                         t++;
                                         sp++; base = 8 (sp - 1); fr[[base + 1]] = 3; fr[[base + 2]] = hd;
@@ -875,25 +889,11 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                             t++; brackets++;
                                             sp++; base = 8 (sp - 1); fr[[base + 1]] = 6; fr[[base + 2]] = 7; fr[[base + 3]] = 13; fr[[base + 4]] = 0; fr[[base + 5]] = 0; fr[[base + 6]] = 0;
                                             mode = 6,
-                                            cnt = 1; ok = 1; x = 0;
-                                            While[ ok == 1 && x < 2,
-                                                Which[
-                                                    pTok[[5 t]] != colons, ok = 0; mode = 5,
-                                                    pTok[[5 t - 2]] == 1, on++; out[[3 on]] = 1; out[[3 on + 1]] = 100; out[[3 on + 2]] = t; t++; cnt++,
-                                                    pTok[[5 t - 2]] == 5, on++; out[[3 on]] = 1; out[[3 on + 1]] = 5; out[[3 on + 2]] = t; t++; cnt++,
-                                                    (* a blank after ::, no tag; a name and a blank in one token, as a::b_, which is
-                                                       split after the name, status 3 *)
-                                                    pTok[[5 t - 2]] == 2,
-                                                        ok = 0;
-                                                        If[ pCodes[[pTok[[5 t]]]] == 95, mode = 5,
-                                                            e = pTok[[5 t]]; While[pCodes[[e]] != 95, e++]; status = 3; far = e; mode = 99],
-                                                    True, ok = 0; mode = 5];
-                                                x++;
-                                                If[ ok == 1 && x < 2,
-                                                    If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[4]] && ! (brackets == 0 && nls[[t]] == 1),
-                                                        colons = pTok[[5 t + 1]]; t++,
-                                                        x = 2]]];
-                                            If[ok == 1, on++; out[[3 on]] = 14; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0]],
+                                            (* a message name, as a notebook reads it: after each ::, an operand, read with
+                                               no operator after it but a pattern's colon, a prefix operator of any
+                                               precedence beginning one; frame 14 {count, first token, instructions} *)
+                                            sp++; base = 8 (sp - 1); fr[[base + 1]] = 14; fr[[base + 2]] = 1; fr[[base + 3]] = t; fr[[base + 4]] = on;
+                                            pMin = pSpecial[[17]]; pRbp = 100000; pPlain = 0; mode = 1],
                                     fx == 9, mode = 10,
                                     fx == 10,
                                         sp++; base = 8 (sp - 1); fr[[base + 1]] = 10; fr[[base + 2]] = 1; mode = 13,
@@ -952,27 +952,15 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                 (* a span's or a compound's operand that could not be left out *)
                                 ft == 9, mode = 12,
                                 ft == 10, fr[[base + 2]] = fr[[base + 2]] + 1; mode = 13,
-                                (* after a ~ and its middle operand: the second ~; a postfix operator on the middle
-                                   operand, then what binds more tightly than ~; a ; before the second ~, the middle
-                                   a compound with Null; anything else, reading on as the kernel's reader does, to a
-                                   closer or a comma, where it stops, else to the end of the source *)
+                                (* after a ~ and its middle operand: the second ~; anything else, a postfix operator
+                                   that binds less tightly than ~ or a ; too, as a notebook reads a ~ f & ~ b, reading on
+                                   as the kernel's reader does, to a closer or a comma, where it stops, else to the end
+                                   of the source *)
                                 ft == 11,
                                     If[ fr[[base + 2]] == 1,
-                                        i = pLed[[t]];
                                         Which[
                                             pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[8]] && ! (brackets == 0 && nls[[t]] == 1),
                                                 t++; fr[[base + 2]] = 2; pMin = fr[[base + 4]]; pRbp = fr[[base + 3]]; pPlain = fr[[base + 5]]; mode = 1,
-                                            i > 0 && (pSpecs[[4 i - 2]] == 4 || pSpecs[[4 i - 2]] == 6) && pSpecs[[4 i - 1]] != pHeads[[2]] && ! (brackets == 0 && nls[[t]] == 1),
-                                                on++;
-                                                If[ pSpecs[[4 i - 2]] == 4,
-                                                    out[[3 on]] = 3; out[[3 on + 1]] = pSpecs[[4 i - 1]]; out[[3 on + 2]] = 0,
-                                                    out[[3 on]] = 16; out[[3 on + 1]] = pTok[[5 t + 1]] - pTok[[5 t]]; out[[3 on + 2]] = 0];
-                                                t++; x = base;
-                                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 1; fr[[base + 2]] = fr[[x + 4]]; fr[[base + 3]] = fr[[x + 3]]; fr[[base + 4]] = fr[[x + 5]];
-                                                mode = 3,
-                                            pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[3]] && t < n && pTok[[5 t + 3]] == 9 && pTok[[5 t + 4]] == pSpecial[[8]],
-                                                t++; on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0;
-                                                on++; out[[3 on]] = 19; out[[3 on + 1]] = 2; out[[3 on + 2]] = 0,
                                             True,
                                                 (* reading goes on to a closer or a comma outside brackets, no Wolfram Language,
                                                    else the end *)
@@ -999,6 +987,22 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                         on++; out[[3 on]] = 20; out[[3 on + 1]] = If[fr[[base + 2]] == 2, 1, 2]; out[[3 on + 2]] = 0; sp--; mode = 3],
                                 ft == 13,
                                     on++; out[[3 on]] = 24; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3,
+                                (* a query's expression: a word of one token its text, and after ?? nothing else *)
+                                ft == 15,
+                                    x = If[on == fr[[base + 4]] + 1 && t == fr[[base + 3]] + 1 && out[[3 on]] == 1, 1, 0];
+                                    If[x == 1 && (out[[3 on + 1]] <= 4 || out[[3 on + 1]] == 6 || out[[3 on + 1]] == 7), out[[3 on + 1]] = 100];
+                                    If[ fr[[base + 2]] == 1 && x == 0, mode = 5,
+                                        on++; out[[3 on]] = 29; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3],
+                                (* a message name's operand: a word of one token, a name, a number, a blank, a slot
+                                   or a %, its text; another :: after it, another operand *)
+                                ft == 14,
+                                    If[ on == fr[[base + 4]] + 1 && t == fr[[base + 3]] + 1 && out[[3 on]] == 1 &&
+                                            (out[[3 on + 1]] <= 4 || out[[3 on + 1]] == 6 || out[[3 on + 1]] == 7),
+                                        out[[3 on + 1]] = 100];
+                                    fr[[base + 2]] = fr[[base + 2]] + 1;
+                                    If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[4]] && ! (brackets == 0 && nls[[t]] == 1),
+                                        t++; fr[[base + 3]] = t; fr[[base + 4]] = on; pMin = pSpecial[[17]]; pRbp = 100000; pPlain = 0; mode = 1,
+                                        on++; out[[3 on]] = 14; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3],
                                 True, mode = 5]],
                     (* no Wolfram Language: back to a pattern's name or an operand left out, else the end *)
                     mode == 5,
@@ -1080,7 +1084,9 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                         If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[3]] && ! (brackets == 0 && nls[[t]] == 1),
                             t++; o = pTok[[5 t - 1]];
                             Which[
-                                (brackets == 0 && nls[[t]] == 1) || pTok[[5 t - 2]] == 0,
+                                (* Null at the end of a line, of the source, and before a ? or a ;;, a pattern test or a
+                                   span of the compound, as a notebook reads a; ?b and a; ;; *)
+                                (brackets == 0 && nls[[t]] == 1) || pTok[[5 t - 2]] == 0 || (pTok[[5 t - 2]] == 9 && (o == pSpecial[[14]] || o == pSpecial[[2]])),
                                     on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0;
                                     base = 8 (sp - 1); fr[[base + 2]] = fr[[base + 2]] + 1,
                                 pTok[[5 t - 2]] == 9 && (pPrefix[[2 o + 1]] > 0 || o == pSpecial[[9]] || pIntegrals[[o + 1]] > 0),
@@ -1519,16 +1525,15 @@ $fastLeafKinds = <|1 -> "Symbol", 2 -> "Blank", 3 -> "Integer", 4 -> "Real", 5 -
 
 (* the held values of a postfix program, its instructions {code, a, b} one after another, and the
    kinds, texts and marks of its leaves, those fastLeafData gives: the statements'. A value on the
-   stack is its expression, held, and its mark what the kernel reads differently for it: 1 a number
-   literal, into which a minus folds, 2 a product, whose factors a minus joins, 3 a name's call by
-   @ or a unary plus, the name and the argument in ats, a flat chain of the name reading the
-   argument, 0 anything else. The values wait in an association by their place on the stack, which a write does not
+   stack is its expression, held, and its mark: 1 a number literal written right after where a
+   minus may stand, into which the minus folds, 0 anything else, a product and a number in
+   parentheses too, as a notebook reads -(2). The values wait in an association by their place on the stack, which a write does not
    copy, as it does a list of them, and the marks in a packed array. A leaf's value is made once for
    each kind and text, before the instructions run, as nothing is evaluated while the program is
    built. The names are Block's,
    not Module's, which would rewrite the body at every call, and each instruction is the rule of
    its code, a call or an operator of one or two operands its own rule. *)
-fastBuild[steps_List, kinds_List, texts_List, marks_List] := Block[{vals = <||>, mk = ConstantArray[0, Length[steps] / 3 + 1], ats = <||>, sp = 0,
+fastBuild[steps_List, kinds_List, texts_List, marks_List] := Block[{vals = <||>, mk = ConstantArray[0, Length[steps] / 3 + 1], sp = 0,
         heads = <||>, hp = 0, statements = <||>, ns = 0, leafValues = fastLeafValues[kinds, texts], leafMarks = marks,
         leafIndex = 0, xs, spec},
     fastStep @@@ Partition[steps, 3];
@@ -1579,20 +1584,12 @@ fastStep[8, 2, _] := (sp -= 2; vals[sp] = heldCall[vals[sp], {vals[sp + 1], vals
 fastStep[8, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = heldCall[vals[sp], xs]; mk[[sp]] = 0)
 fastStep[4, a_, _] := (sp--; fastBinary[a, vals[sp + 1]])
 fastStep[25, _, _] := (ns++; statements[ns] = vals[sp]; sp--)
-fastStep[5, a_, 2] := (sp--;
-    vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]],
-        If[$fastSpliceHeads[[a]] === 1 && (mk[[sp]] === 3 || mk[[sp + 1]] === 3), splicedAt[a, {sp, sp + 1}], {vals[sp], vals[sp + 1]}]];
-    mk[[sp]] = If[a === $fastTimesHead, 2, 0])
-fastStep[5, a_, b_] := (xs = Range[sp - b + 1, sp]; sp -= b - 1;
-    vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], If[$fastSpliceHeads[[a]] === 1 && MemberQ[mk[[xs]], 3], splicedAt[a, xs], Lookup[vals, xs]]];
-    mk[[sp]] = If[a === $fastTimesHead, 2, 0])
-fastStep[9, a_, b_] := If[ a === $fastParenHead, mk[[sp]] = If[mk[[sp]] === 1, 1, 0],
+fastStep[5, a_, 2] := (sp--; vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp], vals[sp + 1]}]; mk[[sp]] = 0)
+fastStep[5, a_, b_] := (xs = Lookup[vals, Range[sp - b + 1, sp]]; sp -= b - 1; vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], xs]; mk[[sp]] = 0)
+fastStep[9, a_, b_] := If[ a === $fastParenHead, mk[[sp]] = 0,
     xs = Lookup[vals, Range[sp - b + 1, sp]]; sp -= b - 1; vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], xs]; mk[[sp]] = 0]
 fastStep[19, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = symbolCall["CompoundExpression", xs]; mk[[sp]] = 0)
-fastStep[2, a_, _] := Which[
-    a === $fastMinusHead, vals[sp] = negatedHeld[vals[sp], mk[[sp]]]; mk[[sp]] = 0,
-    a === $fastPlusHead, ats[sp] = {heldSymbol["Plus"], vals[sp]}; vals[sp] = heldCall[ats[sp][[1]], {vals[sp]}]; mk[[sp]] = 3,
-    True, vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp]}]; mk[[sp]] = 0]
+fastStep[2, a_, _] := (vals[sp] = If[a === $fastMinusHead, negatedHeld[vals[sp], mk[[sp]]], heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp]}]]; mk[[sp]] = 0)
 fastStep[3, a_, _] := (vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp]}]; mk[[sp]] = 0)
 fastStep[23, _, _] := (sp--; vals[sp] = symbolCall["Pattern", {vals[sp], vals[sp + 1]}]; mk[[sp]] = 0)
 fastStep[11, _, _] := (sp++; vals[sp] = heldSymbol["Null"]; mk[[sp]] = 0)
@@ -1619,34 +1616,26 @@ fastStep[28, a_, b_] := (sp++; vals[sp] = heldLeafValue["String", "\"" <> String
 fastStep[29, a_, _] := (vals[sp] = symbolCall["Information", {vals[sp], symbolCall["Rule", {heldSymbol["LongForm"], heldSymbol[If[a === 1, "True", "False"]]}]}];
     mk[[sp]] = 0)
 
-(* the head codes the build pass reads apart, and the heads whose flat chain reads a call of the
-   head by @ as its argument *)
+(* the head codes the build pass reads apart *)
 $fastMinusHead := $fastMinusHead = fastHeadCode["Minus"]
-$fastPlusHead := $fastPlusHead = fastHeadCode["Plus"]
 $fastParenHead := $fastParenHead = fastHeadCode["Paren"]
-$fastTimesHead := $fastTimesHead = fastHeadCode["Times"]
 $fastAtHead := $fastAtHead = fastHeadCode["At"]
 $fastSlashSlashHead := $fastSlashSlashHead = fastHeadCode["SlashSlash"]
 $fastDivideHead := $fastDivideHead = fastHeadCode["Divide"]
-$fastSpliceHeads := $fastSpliceHeads = Boole[KeyExistsQ[$atSpliceHeads, #] & /@ $fastHeadNames]
 
-(* the binary operator of code 4 on the value at the top and y: f @ x the call, marked as the
-   name's where f is one; x // f the call of f; a/b Times[a, Power[b, -1]]; the rest the call of its
-   head *)
-fastBinary[a_Integer, y_] := Which[
-    a === $fastAtHead,
-        If[MatchQ[vals[sp], HoldComplete[_Symbol]], ats[sp] = {vals[sp], y}; mk[[sp]] = 3, mk[[sp]] = 0]; vals[sp] = heldCall[vals[sp], {y}],
-    a === $fastSlashSlashHead, vals[sp] = heldCall[y, {vals[sp]}]; mk[[sp]] = 0,
-    a === $fastDivideHead, vals[sp] = binaryHeld["Divide", vals[sp], y]; mk[[sp]] = 0,
-    True, vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp], y}]; mk[[sp]] = 0]
+(* the binary operator of code 4 on the value at the top and y: f @ x the call of f; x // f the call
+   of f; a/b Times[a, Power[b, -1]]; the rest the call of its head *)
+fastBinary[a_Integer, y_] := (vals[sp] = Which[
+    a === $fastAtHead, heldCall[vals[sp], {y}],
+    a === $fastSlashSlashHead, heldCall[y, {vals[sp]}],
+    a === $fastDivideHead, binaryHeld["Divide", vals[sp], y],
+    True, heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp], y}]]; mk[[sp]] = 0)
 
 (* a chain of relations: of one kind, not a vector one, the call of its head; else as the held
    algebra reads it *)
 relationHeld[xs_List, {h_String ..}] /; ! KeyExistsQ[$vectorRelations, h] := symbolCall[h, xs]
 relationHeld[xs_List, heads_List] := relationValue[WolframLanguageSemantic, held /@ xs, heads]["Expr"]
 
-(* the operands of the flat chain of head a at the slots, a call of the head by @ its argument *)
-splicedAt[a_Integer, slots_List] := With[{h = heldSymbol[$fastHeadNames[[a]]]}, Map[If[mk[[#]] === 3 && ats[#][[1]] === h, ats[#][[2]], vals[#]] &, slots]]
 
 (* the source's top-level expressions, held, by the lexer, the parser and
    the build pass; source that is no Wolfram Language a failure where the
