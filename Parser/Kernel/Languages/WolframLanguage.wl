@@ -313,7 +313,10 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
                 alg["Infix"]["Span", Join[{a, If[MissingQ[b], all, b]}, If[MissingQ[c], {}, {c}]]]]]]]];
         span = ParseAction[RecRef[spans], Function[f, Function[a, Replace[f[a], {{s_} :> s, l_ :> alg["Infix"]["Times", l]}]]]]
     ];
-    compound = ParseAction[ParseSome[ParseAction[postfixOperator[";"] ~~ ParseOptional[RecRef[compoundOperand]], {#2} &]],
+    (* a; b; c, an operand left out Null, but for one a prefix operator begins *)
+    compound = ParseAction[ParseSome[ParseAction[postfixOperator[";"] ~~
+            ParseChoice[ParseAction[ParseLookahead[RecRef[prefixAhead]] ~~ RecRef[compoundOperand], #2 &],
+                ParseAction[ParseNotFollowedBy[RecRef[prefixAhead]] ~~ ParseOptional[RecRef[compoundOperand]], #2 &]], {#2} &]],
         Function[With[{parts = nullLeaf /@ Map[First, {##}]}, Function[a, alg["Infix"]["CompoundExpression", Prepend[parts, a]]]]]];
     (* the = of a set, before a number its . begins too; and = then a .
        not a number's, trivia between them, an unset *)
@@ -1314,7 +1317,9 @@ concreteParser[ws_, wsAll_, nested_] := Module[
         ParseLookahead[ParseCharacter[DigitCharacter | "."]] ~~ ParseCondition[$numberText, numberTextValidQ],
         ParseLookahead[ParseLiteral["\""]] ~~ $string,
         ParseLookahead[ParseCharacter[_?prefixOnlyStartQ]] ~~ ParseChoice @@ (ParseLiteral /@ Catenate[longNameSpellings /@ $prefixOnlyNames])];
-    operandAhead = ParseLookahead[ParseChoice[leafAhead, ParseCharacter["[" | "-" | "+" | "!"], ParseLiteral["<<"], ParseLiteral[";;"],
+    (* what begins an operand: a leaf, a [, a ;; and a prefix operator, a -, + or ! only as one, not
+       as ->, != or += *)
+    operandAhead = ParseLookahead[ParseChoice[leafAhead, ParseCharacter["["], RecRef[prefixAhead], ParseLiteral[";;"],
         ParseLookahead[ParseCharacter[_?longNameStartQ]] ~~ ParseChoice @@ (ParseLiteral /@ Catenate[longNameSpellings /@ $longNameTable["Prefix"][[All, 1]]])]];
 
     (* --- groups --- *)
@@ -1386,10 +1391,9 @@ concreteParser[ws_, wsAll_, nested_] := Module[
             concreteNode[CodeParser`SyntaxErrorNode, SyntaxError`ExpectedTilde, Join[kids[l], kids[o1]], m],
             stepsItem[CodeParser`TernaryNode, CodeParser`TernaryTilde, l, {step[{}, kids[o1], m], second}]]]]];
     (* a ;; b ;; c: the operand after the first ;; left out but for one a prefix operator begins,
-       a -, + or ! beginning one only as that operator, not as ->, != or +=; the ;; after b only
-       with an operand after it, and a ;; after the span the beginning of a span of its own *)
-    spanOperandItem = ParseAction[ParseNotFollowedBy[ParseLiteral[";;"]] ~~
-            ParseChoice[ParseLookahead[RecRef[prefixAhead]], ParseNotFollowedBy[ParseCharacter["-" | "+" | "!"]] ~~ operandAhead] ~~ RecRef[spanOperand], #3 &];
+       the ;; after b only with an operand after it, and a ;; after the span the beginning of a
+       span of its own *)
+    spanOperandItem = ParseAction[ParseNotFollowedBy[ParseLiteral[";;"]] ~~ operandAhead ~~ RecRef[spanOperand], #3 &];
     spanTail = ParseAction[postOp[";;"] ~~
             ParseChoice[ParseAction[ParseLookahead[RecRef[prefixAhead]] ~~ spanOperandItem, #2 &],
                 ParseAction[ParseNotFollowedBy[RecRef[prefixAhead]] ~~ ParseOptional[spanOperandItem], #2 &]] ~~

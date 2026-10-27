@@ -882,8 +882,9 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                 ft == 8,
                                     sp--; base = 8 (sp - 1);
                                     If[fr[[base + 1]] == 9, mode = 12, fr[[base + 2]] = fr[[base + 2]] + 1; mode = 13],
-                                (* a span's operand that could not be left out *)
+                                (* a span's or a compound's operand that could not be left out *)
                                 ft == 9, mode = 12,
+                                ft == 10, fr[[base + 2]] = fr[[base + 2]] + 1; mode = 13,
                                 (* after a ~ and its middle operand: the second ~; a postfix operator on the middle
                                    operand, then what binds more tightly than ~; a ; before the second ~, the middle
                                    a compound with Null; anything else, reading on as the kernel's reader does, to a
@@ -1006,15 +1007,20 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                         If[ fr[[base + 2]] == 1 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
                             t++; fr[[base + 2]] = 2; mode = 11,
                             on++; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; se = t; mode = 3],
-                    (* a ; and its operand, Null where it is left out, else the compound *)
+                    (* a ; and its operand, Null where it is left out, but for one a prefix operator, a << or
+                       an integral begins, else the compound *)
                     mode == 13,
                         If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[3]] && ! (brackets == 0 && pTok[[5 t + 2]] == 1),
-                            t++;
-                            If[ (brackets == 0 && pTok[[5 t + 2]] == 1) || pTok[[5 t - 2]] == 0,
-                                on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0;
-                                base = 8 (sp - 1); fr[[base + 2]] = fr[[base + 2]] + 1,
-                                sp++; base = 8 (sp - 1); fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
-                                pMin = pSpecial[[18]]; pRbp = 0; pPlain = 0; mode = 1],
+                            t++; o = pTok[[5 t - 1]];
+                            Which[
+                                (brackets == 0 && pTok[[5 t + 2]] == 1) || pTok[[5 t - 2]] == 0,
+                                    on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0;
+                                    base = 8 (sp - 1); fr[[base + 2]] = fr[[base + 2]] + 1,
+                                pTok[[5 t - 2]] == 9 && (pPrefix[[2 o + 1]] > 0 || o == pSpecial[[9]] || pIntegrals[[o + 1]] > 0),
+                                    pMin = pSpecial[[18]]; pRbp = 0; pPlain = 0; mode = 1,
+                                True,
+                                    sp++; base = 8 (sp - 1); fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
+                                    pMin = pSpecial[[18]]; pRbp = 0; pPlain = 0; mode = 1],
                             base = 8 (sp - 1);
                             on++; out[[3 on]] = 19; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3],
                     True, status = 1; If[t > far, far = t]; mode = 99]];

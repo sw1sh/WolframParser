@@ -515,9 +515,11 @@ $wlFailures = {
     {"a == == b", {8, False}},
     {"#1 + &", {7, False}},
     {"a[[1]] [[2]", {12, True}},
-    (* a prefix operator after ;; begins an operand that is not left out *)
+    (* a prefix operator after ;; or ; begins an operand that is not left out *)
     {"a ;; !", {7, True}},
-    {"a ;; b ;; ++", {13, True}}
+    {"a ;; b ;; ++", {13, True}},
+    {"a;!", {4, True}},
+    {"a; ++", {6, True}}
 };
 Scan[
     Function[c, VerificationTest[wlStop[WolframLanguageHeld[c[[1]]]], c[[2]], TestID -> "wl failure: " <> c[[1]]]],
