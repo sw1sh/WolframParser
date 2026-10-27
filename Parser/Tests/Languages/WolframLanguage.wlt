@@ -463,7 +463,20 @@ $wlEscapes = {
     {"<<a+b", List[HoldComplete[Plus[Get["a"], b]]]},
     {"<<a@b", List[HoldComplete[Get["a"][b]]]},
     {"f[<<a+b]", List[HoldComplete[f[Plus[Get["a"], b]]]]},
-    {"f[<<a, x >> b]", List[HoldComplete[f[Get["a"], Put[x, "b"]]]]}
+    {"f[<<a, x >> b]", List[HoldComplete[f[Get["a"], Put[x, "b"]]]]},
+    (* after >> or >>> a file alone, else all that follows an expression, as a notebook reads it: a
+       file where the end, a newline outside brackets, ;, , or a closer comes after it *)
+    {"x >> a b", List[HoldComplete[Put[x, Times[a, b]]]]},
+    {"x >> a+b", List[HoldComplete[Put[x, Plus[a, b]]]]},
+    {"x >>> a+b", List[HoldComplete[PutAppend[x, Plus[a, b]]]]},
+    {"x >> a = b", List[HoldComplete[Put[x, Set[a, b]]]]},
+    {"x >> a // f", List[HoldComplete[Put[x, f[a]]]]},
+    {"x >> a//f", List[HoldComplete[Put[x, "a//f"]]]},
+    {"x >> \"f\" b", List[HoldComplete[Put[x, Times["f", b]]]]},
+    {"x >> a (* c *)", List[HoldComplete[Put[x, "a"]]]},
+    {"x >> a\n b", List[HoldComplete[Put[x, "a"]], HoldComplete[b]]},
+    {"f[x >> a\n b]", List[HoldComplete[f[Put[x, Times[a, b]]]]]},
+    {"<|k -> x >> a|>", List[HoldComplete[Association[Put[Rule[k, x], "a"]]]]}
 };
 VerificationTest[
     FailureQ[WolframLanguageHeld["(* a \\*) b *)"]],

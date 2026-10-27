@@ -217,7 +217,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
      items, comma, call, part, messageName, tag, derivative, span, spans, spanStart, compound, tagSet, put,
      binary, prefix, postfix, flat, plus, relation, relationOp, implicit, specs, table, information, dot, setOperator, unset,
      longOperator, longPostfixOperator, longSpecs, longGroups, longCalls, integrals, integrandOperand, divisible,
-     patternRight, spanOperand, compoundOperand, tagLeft, tagRight, prefixAhead, prefixedTable},
+     patternRight, spanOperand, compoundOperand, tagLeft, tagRight, prefixAhead, prefixedTable, putRight},
 
     after[p_, w_] := ParseAction[p ~~ w, #1 &];
     operator[op_String] := after[ParseChoice @@ (longest /@ spellings[op]), wsAll];
@@ -241,7 +241,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
         ParseAction[ParseSepBy[ParseOptional[RecRef[nested]], comma], Function[nullLeaf /@ {##}]]];
 
     patternRight = RecCell[]; spanOperand = RecCell[]; compoundOperand = RecCell[]; tagLeft = RecCell[]; tagRight = RecCell[];
-    integrandOperand = RecCell[]; spans = RecCell[]; prefixAhead = RecCell[];
+    integrandOperand = RecCell[]; spans = RecCell[]; prefixAhead = RecCell[]; putRight = RecCell[];
 
     (* \[LeftFloor] x \[RightFloor] and the other brackets of long names *)
     longGroups = Map[Function[g,
@@ -339,7 +339,11 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
         Function[{slash, lhs, rest}, Function[t, If[First[rest] === "TagUnset",
             alg["Binary"]["TagUnset", t, lhs],
             alg["Ternary"][First[rest], t, lhs, Last[rest]]]]]];
-    put = ParseAction[ParseChoice[operator[">>>"], operator[">>"]] ~~ leaf[$file, "File"],
+    (* >> or >>> and a file alone, else, as a notebook reads it, the expression after it: a file
+       where the end, a newline, ;, , or a closer follows it *)
+    put = ParseAction[ParseChoice[operator[">>>"], operator[">>"]] ~~ ParseChoice[
+            ParseAction[leaf[$file, "File"] ~~ ParseLookahead[ParseChoice[ParseRegex["\\z"], ParseRegex["[\\n\\r;,)\\]}]"], ParseLiteral["|>"]]], #1 &],
+            RecRef[putRight]],
         Function[{o, file}, Function[x, alg["Binary"][If[o === ">>>", "PutAppend", "Put"], x, file]]]];
 
     (* --- operators whose parser gives the combining function --- *)
@@ -465,6 +469,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     SetRec[prefixAhead, ParseChoice @@ Join[Cases[specs, {_, {"Prefix", p_}} :> p], {operator["<<"]}, longOperator /@ $longNameTable["Integrals"][[All, 1]]]];
     SetRec[integrandOperand, table[unit, $integralPrecedence]];
     SetRec[patternRight, table[plainUnit, $codeParserPrecedence["Fake`PatternColon"]]];
+    SetRec[putRight, table[unit, $codeParserPrecedence["GreaterGreater"]]];
     (* a span's operand: what binds more tightly than ;;, and a prefix operator of any precedence,
        as in any other operand, its operand all that binds more tightly than it, as CodeParser reads
        it [W15 bug] *)

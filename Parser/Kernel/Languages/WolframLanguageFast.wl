@@ -164,7 +164,7 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
         "PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
     Function[{lexCodes, lexClasses, lexOp1, lexOp2, lexOp3, lexLongOps, lexSpecial},
         Native`UncheckedBlock[Module[{n = Length[lexCodes] - 3, out, k = 0, i = 1, j = 0, c = 0, c2 = 0, cl = 0, nl = 0, kind = 0, op = 0, file = 0,
-                status = 0, done = 0, scanning = 0, m = 0, a = 0, len = 0, base = 0, start = 0, tick = 0, r = 0, e2 = 0, lnAt = 0, lnVal = 0,
+                status = 0, done = 0, scanning = 0, m = 0, a = 0, len = 0, base = 0, start = 0, tick = 0, r = 0, e2 = 0, lnAt = 0, lnVal = 0, nest = 0, pk = 0,
                 spOpen = lexSpecial[[1]], spClose = lexSpecial[[2]], spGet = lexSpecial[[3]], spPut = lexSpecial[[4]], spPutAppend = lexSpecial[[5]],
                 spUnset = lexSpecial[[6]], spSet = lexSpecial[[7]], spSpace = lexSpecial[[8]], spComma = lexSpecial[[9]], spNewline = lexSpecial[[10]]},
             out = Native`UncheckedArray[0, 5 n + 7];
@@ -193,6 +193,20 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                     out[[base + 1]] = 0; out[[base + 2]] = 0; out[[base + 4]] = i; done = 1,
                     c = lexCodes[[i]]; cl = If[c > 65535, 5, lexClasses[[c + 1]]]; op = 0; kind = 0; j = i + 1; start = i;
                     If[c == 92 && lnAt != i, lnAt = i; lnVal = lexLongName[lexCodes, lexLongOps, i, n]];
+                    (* after >> or >>>, as a notebook reads it, a file alone, or else all that follows code: a
+                       file where the end, a newline outside brackets, ;, , or a closer comes after it,
+                       spaces, tabs and comments between *)
+                    If[ file == 2,
+                        r = lexFile[lexCodes, lexClasses, lexLongOps, i, n]; pk = Quotient[r, 4]; scanning = 1;
+                        While[ scanning == 1 && pk <= n,
+                            c2 = lexCodes[[pk]];
+                            Which[
+                                c2 == 32 || c2 == 9 || ((c2 == 10 || c2 == 13) && nest > 0), pk++,
+                                c2 == 40 && lexCodes[[pk + 1]] == 42, e2 = lexComment[lexCodes, pk, n]; pk = Quotient[e2, 2],
+                                True, scanning = 0]];
+                        c2 = If[pk > n, 0, lexCodes[[pk]]];
+                        file = If[ pk > n || c2 == 10 || c2 == 13 || c2 == 59 || c2 == 44 || c2 == 41 || c2 == 93 || c2 == 125 ||
+                            (c2 == 124 && lexCodes[[pk + 1]] == 62), 1, 0]];
                     Which[
                         (* the file of << or >>: a string, or the characters of a path *)
                         file == 1,
@@ -284,7 +298,9 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                     (* a blank: _, __ or ___, then a . or a name *)
                     If[ kind == 2 && status == 0,
                         r = lexBlank[lexCodes, lexClasses, lexLongOps, i, j, n]; j = Quotient[r, 2]; status = Mod[r, 2]];
-                    file = If[kind == 9 && (op == spGet || op == spPut || op == spPutAppend), 1, 0];
+                    file = Which[kind == 9 && op == spGet, 1, kind == 9 && (op == spPut || op == spPutAppend), 2, True, 0];
+                    If[kind == 10 || kind == 12 || kind == 14 || kind == 16, nest++];
+                    If[(kind == 11 || kind == 13 || kind == 15 || kind == 17) && nest > 0, nest--];
                     out[[base + 1]] = kind; out[[base + 2]] = If[kind == 9, op, 0]; out[[base + 4]] = j;
                     If[status != 0, done = 1];
                     i = j]];
@@ -859,12 +875,14 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                         t++;
                                         sp++; base = 8 (sp - 1); fr[[base + 1]] = 12; fr[[base + 2]] = 1;
                                         pMin = pSpecial[[19]]; pRbp = 0; pPlain = 0; mode = 1,
+                                    (* >> or >>> and a file, else, as a notebook reads it, the expression after it *)
                                     fx == 12,
                                         t++;
                                         If[ pTok[[5 t - 2]] == 8,
                                             on++; out[[3 on]] = 1; out[[3 on + 1]] = 8; out[[3 on + 2]] = t; t++;
                                             on++; out[[3 on]] = 21; out[[3 on + 1]] = hd; out[[3 on + 2]] = 0,
-                                            mode = 5],
+                                            sp++; base = 8 (sp - 1); fr[[base + 1]] = 3; fr[[base + 2]] = hd;
+                                            pMin = mn; pRbp = bp; pPlain = pl; mode = 1],
                                     True, mode = 5]]]],
                     (* the expression at the top is read: what waited for it *)
                     mode == 4,
