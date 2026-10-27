@@ -423,16 +423,17 @@ $lexSlotDeclaration = FunctionDeclaration[lexSlot,
                 True, j = j];
             2 j + status]]]];
 
-(* The blank after a name or a _ at from, of the token at at: up to three _, then a . or a head,
-   whose context marks are a name's: twice just past it, plus 1 where a malformed head makes no
-   blank and reading stops at the token. *)
+(* The blank after a name or a _ at from, of the token at at: up to three _, then a head, whose
+   context marks are a name's, or, after a single _, a .: twice just past it, plus 1 where a
+   malformed head makes no blank and reading stops at the token. A . after __ or ___ is a token of
+   its own, a Dot or the start of a number, as Wolfram 15 reads __._ and __.1. *)
 $lexBlankDeclaration = FunctionDeclaration[lexBlank,
     Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger",
         "MachineInteger"} -> "MachineInteger"] @
     Function[{bkCodes, bkClasses, bkTable, bkAt, bkFrom, bkN},
         Native`UncheckedBlock[Module[{j = bkFrom, count = 0, start = 0, scanning = 1, c2 = 0, cl = 0, m = 0, tick = 0, status = 0, ln = 0, d = 0},
             While[j <= bkN && bkCodes[[j]] == 95 && count < 3, j++; count++];
-            If[ j <= bkN && bkCodes[[j]] == 46,
+            If[ count == 1 && j <= bkN && bkCodes[[j]] == 46,
                 j++,
                 d = If[j <= bkN, bkCodes[[j]], 0];
                 ln = If[j <= bkN && d == 92, lexLongName[bkCodes, bkTable, j, bkN], 0];
@@ -682,7 +683,11 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                         base = 8 (sp - 1); mn = fr[[base + 2]]; pl = fr[[base + 4]];
                         k = pTok[[5 t - 2]]; o = pTok[[5 t - 1]];
                         Which[
-                            k == 9 && pPrefix[[2 o + 1]] > mn,
+                            (* a prefix operator, but right after a ., one that is an infix or postfix operator too, as
+                               -, ! and ++ are, its spec one that takes its token, not the juxtaposition, fixity 15,
+                               every prefix operator has: Wolfram 15 reads no operand of them there *)
+                            k == 9 && pPrefix[[2 o + 1]] > mn &&
+                                ! (t > 1 && pTok[[5 t - 7]] == 9 && pTok[[5 t - 6]] == pSpecial[[7]] && pLed[[t]] > 0 && pSpecs[[4 pLed[[t]] - 2]] != 15),
                                 hd = pPrefix[[2 o + 2]]; pRbp = pPrefix[[2 o + 1]]; t++;
                                 sp++; base = 8 (sp - 1); fr[[base + 1]] = 2; fr[[base + 2]] = hd;
                                 pMin = mn; pPlain = pl; mode = 1,

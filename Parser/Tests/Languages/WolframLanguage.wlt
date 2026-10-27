@@ -934,6 +934,19 @@ VerificationTest[
     {4, 7, True, False, True},
     TestID -> "wl: a blank where a message name's tag goes is no Wolfram Language"]
 
+(* a . after __ or ___ is a token of its own, a Dot or the start of a number, and after a single _
+   an Optional's; right after a ., a prefix operator that is infix or postfix too begins no operand *)
+VerificationTest[
+    With[{sources = {"__._", "x__.y", "__.1", "__..", "___.a", "_._", "x_.y", "f[x__.]"}},
+        {WolframLanguageHeld /@ Most[sources], WolframLanguageSyntaxQ[Last[sources]]}],
+    {List /@ (ToExpression[#, InputForm, HoldComplete] & /@ {"__._", "x__.y", "__.1", "__..", "___.a", "_._", "x_.y"}), False},
+    TestID -> "wl: a . after __ or ___ is a Dot or a number, after a single _ an Optional's"]
+VerificationTest[
+    {WolframLanguageSyntaxQ /@ {"a . -b", "a.!b", "a . ++b", "a.\\[PlusMinus]b", "a . (-b)", "a . \\[Sqrt]b", "a . \\[Not]b", "a . <<b"},
+     WolframLanguageSyntaxLength["b . - c"], WolframLanguageHeld["a . \\[Sqrt]b"]},
+    {{False, False, False, False, True, True, True, True}, SyntaxLength["b . - c"], {ToExpression["a . \\[Sqrt]b", InputForm, HoldComplete]}},
+    TestID -> "wl: right after a ., a prefix operator that is infix or postfix too begins no operand"]
+
 (* the words of a query that reach a backslash past the last token the lexer read end there, each
    entry returning at once *)
 VerificationTest[
