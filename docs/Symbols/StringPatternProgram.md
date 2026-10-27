@@ -23,7 +23,7 @@ RelatedGuides: [WolframParser]
   - <code>[Except]()[*c*, *p*]</code> as *p* after a character that *c*, a pattern of one character, does not match;
   - a name that occurs again, after it on the way a match goes, as the text it matched first;
   - the names of a repeated part as the text they matched the first time round.
-- The classes of characters, such as [LetterCharacter](), [DigitCharacter]() and [WhitespaceCharacter](), are Wolfram 15's at every code point, as the paclet records them.
+- The classes of characters, such as [LetterCharacter](), [DigitCharacter]() and [WhitespaceCharacter](), are Wolfram 15's at every code point, as the paclet records them, but for two: [DigitCharacter]() is `0` to `9` alone, as [DigitQ]() is, and [WordCharacter]() a letter, as [LetterQ]() takes one, or one of them, where Wolfram 15 matches the decimal digits of every script and numbers such as `²` and `½` too [W15 bug]. A [RegularExpression]()'s `\d` keeps Wolfram 15's digits.
 - The properties of a program are:
 
 | Property | Value |
@@ -191,13 +191,13 @@ StringCases["a1b22a3", "a" ~~ DigitCharacter ..]
 
 <!-- => {"a1", "a3"} -->
 
-The decimal digits of every script are digits:
+[DigitCharacter]() is `0` to `9` alone, as [DigitQ]() is, where Wolfram 15 takes the decimal digits of every script [W15 bug]:
 
 ```wl
 StringTake["1\:0661\:0662\:0663 2", {#[[1]] + 1, #[[2]]}] & /@ StringPatternMatches["1\:0661\:0662\:0663 2", {StringPatternProgram[DigitCharacter ..]}, "Each"]
 ```
 
-<!-- => {"1١٢٣", "2"} -->
+<!-- => {"1", "2"} -->
 
 ## Possible Issues
 

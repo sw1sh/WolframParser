@@ -20,7 +20,7 @@ SeedRandom[seed];
 
 (* --- random strings and patterns --- *)
 
-$alphabet = {"a", "b", "c", "1", "2", " ", "\n", "-", ".", "_", "\[EAcute]", FromCharacterCode[16^^0663], "\[Alpha]", "\t", "A"};
+$alphabet = {"a", "b", "c", "1", "2", " ", "\n", "-", ".", "_", "\[EAcute]", "\[Pi]", "\[Alpha]", "\t", "A"};
 randomString[] := StringJoin[RandomChoice[$alphabet, RandomInteger[{0, 8}]]]
 
 (* no literal holds a regex's metacharacter: in Except[c, p], Wolfram 15 matches p's literals as the

@@ -53,6 +53,16 @@ VerificationTest[
     TestID -> "string patterns: a name twice matches the same text, the starts and ends of lines"
 ]
 
+(* DigitCharacter is 0 to 9 alone, as DigitQ is, and WordCharacter a letter or one of them, where
+   Wolfram 15 matches the decimal digits of every script and numbers such as superscript 2 [W15 bug];
+   a regex's \d keeps Wolfram 15's digits *)
+VerificationTest[
+    With[{s = "a\:0663b12\.b2c\.bd3\:ff13x\:0966_"},
+        {engineCases[s, DigitCharacter], engineCases[s, WordCharacter], engineCases[s, DigitCharacter ..], engineCases[s, NumberString],
+         engineCases[s, RegularExpression["\\d"]] === StringCases[s, RegularExpression["\\d"]]}],
+    {{"1", "2", "3"}, {"a", "b", "1", "2", "c", "3", "x"}, {"12", "3"}, {"12", "3"}, True},
+    TestID -> "string patterns: DigitCharacter is 0 to 9, WordCharacter a letter or one of them"]
+
 VerificationTest[
     engineCases["a -1.5 2. .5 +3 1e5 12", NumberString],
     StringCases["a -1.5 2. .5 +3 1e5 12", NumberString],
@@ -91,27 +101,30 @@ VerificationTest[
     TestID -> "string patterns: a whole string matched between its start and its end"
 ]
 
-(* the classes beyond ASCII: the decimal digits of every script, the other numerals word characters,
-   the letters of every script *)
+(* the classes beyond ASCII: the letters of every script, Wolfram 15's; DigitCharacter 0 to 9 alone and
+   WordCharacter a letter or one of them, where Wolfram 15 takes the decimal digits of every script and
+   other numerals too [W15 bug] *)
 $classCharacters = FromCharacterCode /@ {16^^0663, 16^^0969, 16^^0E53, 16^^FF11, 16^^1D7D1, 16^^00B2, 16^^2163, 16^^00E9, 16^^03B1, 16^^1D4B6};
 
 VerificationTest[
     Map[Function[c, Select[$classCharacters, engineMatchQ[#, c] &]], {DigitCharacter, WordCharacter, LetterCharacter}],
-    Map[Function[c, Select[$classCharacters, StringMatchQ[#, c] &]], {DigitCharacter, WordCharacter, LetterCharacter}],
-    TestID -> "string patterns: digits, word characters and letters beyond ASCII are Wolfram 15's"
+    {{}, Select[$classCharacters, StringMatchQ[#, LetterCharacter] &], Select[$classCharacters, StringMatchQ[#, LetterCharacter] &]},
+    TestID -> "string patterns: letters beyond ASCII are Wolfram 15's, and digits are 0 to 9, word characters letters or digits"
 ]
 
-(* every whitespace and hexadecimal character Wolfram 15 takes, of the codes below 65536 *)
+(* every whitespace and hexadecimal character Wolfram 15 takes, of the codes below 65536, and the digits
+   DigitQ takes *)
 VerificationTest[
-    Map[Function[c, Flatten[Position[StringPatternProgram[c]["ClassCodes"], 1]] - 1 === Select[Range[0, 65535], StringMatchQ[FromCharacterCode[#], c] &]],
-        {WhitespaceCharacter, HexadecimalCharacter, PunctuationCharacter, DigitCharacter}],
+    Append[Map[Function[c, Flatten[Position[StringPatternProgram[c]["ClassCodes"], 1]] - 1 === Select[Range[0, 65535], StringMatchQ[FromCharacterCode[#], c] &]],
+        {WhitespaceCharacter, HexadecimalCharacter, PunctuationCharacter}],
+        Flatten[Position[StringPatternProgram[DigitCharacter]["ClassCodes"], 1]] - 1 === Select[Range[0, 65535], DigitQ[FromCharacterCode[#]] &]],
     {True, True, True, True},
     TestID -> "string patterns: the codes of a class are Wolfram 15's, whitespace and hexadecimal digits too"
 ]
 
 VerificationTest[
     With[{s = StringJoin[FromCharacterCode /@ Range[0, 12300]]}, {engineCases[s, WhitespaceCharacter ..], engineCases[s, PunctuationCharacter ~~ DigitCharacter]}],
-    With[{s = StringJoin[FromCharacterCode /@ Range[0, 12300]]}, {StringCases[s, WhitespaceCharacter ..], StringCases[s, PunctuationCharacter ~~ DigitCharacter]}],
+    With[{s = StringJoin[FromCharacterCode /@ Range[0, 12300]]}, {StringCases[s, WhitespaceCharacter ..], StringCases[s, PunctuationCharacter ~~ CharacterRange["0", "9"]]}],
     TestID -> "string patterns: runs of classes in a text of many scripts"
 ]
 
@@ -259,10 +272,12 @@ VerificationTest[
     TestID -> "string patterns: no regex for a name twice, an anchor in a repeat or a shortest repeat"
 ]
 
-(* a class is data, codeIn[spec], from which the table of any class of one character is made *)
+(* a class is data, codeIn[spec], from which the table of any class of one character is made; Wolfram
+   15's matches with DigitCharacter 0 to 9 alone, as the engine's is *)
 VerificationTest[
     With[{codes = Join[Range[0, 16^^D7FF], Range[16^^E000, 16^^FFFF]]},
-        Map[Function[p, Pick[codes, StringPatternProgram[p]["ClassCodes"][[codes + 1]], 1] === Select[codes, StringMatchQ[FromCharacterCode[#], p] &]],
+        Map[Function[p, Pick[codes, StringPatternProgram[p]["ClassCodes"][[codes + 1]], 1] ===
+            Select[codes, StringMatchQ[FromCharacterCode[#], p /. DigitCharacter -> CharacterRange["0", "9"]] &]],
             {Except[DigitCharacter], {"a", "b", DigitCharacter}, Except[{"a", "1"}], Except[WhitespaceCharacter | "x"]}]],
     {True, True, True, True},
     TestID -> "string patterns: the codes of any class of one character, a union, an Except and a range"

@@ -448,9 +448,13 @@ classCodeQ[class_String, code_Integer] := If[code < 65536,
      {"Not", spec}             a character not of it
      {"Fold", spec}            a character of it, or one a caseless regex takes for one of it *)
 codeIn["Any"][_Integer] := True
-codeIn[{"Named", "digit"}][code_Integer] := 48 <= code <= 57 || (code > 127 && classCodeQ["digit", code])
+(* DigitCharacter is 0 to 9 alone, as DigitQ is and its reference page says, and WordCharacter a
+   letter, as LetterQ takes one, or one of them; Wolfram 15 matches every decimal digit and some
+   other numbers too, as superscript 2 and one half [W15 bug 477554]. The regex classes keep
+   Wolfram 15's digits, as PCRE's \d does. *)
+codeIn[{"Named", "digit"}][code_Integer] := 48 <= code <= 57
 codeIn[{"Named", "letter"}][code_Integer] := 65 <= code <= 90 || 97 <= code <= 122 || (code > 127 && classCodeQ["letter", code])
-codeIn[{"Named", "word"}][code_Integer] := 48 <= code <= 57 || 65 <= code <= 90 || 97 <= code <= 122 || (code > 127 && classCodeQ["word", code])
+codeIn[{"Named", "word"}][code_Integer] := 48 <= code <= 57 || 65 <= code <= 90 || 97 <= code <= 122 || (code > 127 && classCodeQ["letter", code])
 codeIn[{"Named", "regex \\w"}][code_Integer] := 48 <= code <= 57 || 65 <= code <= 90 || 97 <= code <= 122 || code === 95 || (code > 127 && classCodeQ["regex \\w", code])
 codeIn[{"Named", class_String}][code_Integer] := classCodeQ[class, code]
 codeIn[{"Codes", codes_List}][code_Integer] := MemberQ[codes, code]
@@ -473,6 +477,8 @@ classCodes[_] := None
 
 specTable[spec_] := specTable[spec] = Developer`ToPackedArray[tableOf[spec]]
 tableOf["Any"] := ConstantArray[1, 65536]
+tableOf[{"Named", "digit"}] := tableOf[{"Range", 48, 57}]
+tableOf[{"Named", "word"}] := tableOf[{"Union", {{"Range", 48, 57}, {"Named", "letter"}}}]
 tableOf[{"Named", class_String}] := classTable[class]
 tableOf[{"Codes", codes_List}] := Module[{table = ConstantArray[0, 65536]}, table[[Select[codes, 0 <= # < 65536 &] + 1]] = 1; table]
 tableOf[{"Range", low_Integer, high_Integer}] := Module[{table = ConstantArray[0, 65536]},
@@ -840,6 +846,8 @@ firstSpec[_] := None
 
 (* the runs of the codes of a class, sorted and apart, over every code point *)
 specRuns["Any"] := {{0, 1114111}}
+specRuns[{"Named", "digit"}] := {{48, 57}}
+specRuns[{"Named", "word"}] := mergedRuns[Join[{{48, 57}}, recordedRuns["letter"]]]
 specRuns[{"Named", class_String}] := recordedRuns[class]
 specRuns[{"Codes", codes_List}] := codeRuns[codes]
 specRuns[{"Range", low_Integer, high_Integer}] := If[Max[low, 0] <= Min[high, 1114111], {{Max[low, 0], Min[high, 1114111]}}, {}]
