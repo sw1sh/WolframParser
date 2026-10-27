@@ -94,7 +94,7 @@ A value's mark is what a notebook reads differently for it:
 | Mark | The value | What reads it |
 |---|---|---|
 | 0 | anything else, a number in parentheses and a product too | A minus is `Times[-1, x]`: `-(2)` is `Times[-1, 2]`, `a - b c` is `Plus[a, Times[-1, Times[b, c]]]`. |
-| 1 | a number literal | A minus right before it folds into it: `-5` is the integer `-5`. |
+| 1 | a number literal | A minus right before it folds into an integer or a real: `-5` is the integer `-5`; a rational, as `1*^-3` is, stays `Times[-1, x]`. |
 
 No flat chain splices an operand: `a <> StringJoin @ b` is `StringJoin[a, StringJoin[b]]` and `a + +b` is `Plus[a, Plus[b]]`.
 
@@ -109,7 +109,7 @@ where the instruction takes none.
 | Code | Operands | Effect |
 |---|---|---|
 | 1 | kind, token | Push the next leaf's value (see Leaves), its mark the leaf's. The kind and token are the lexer's: `texts` holds the token's characters. |
-| 2 | head | Prefix. `Minus`: `x` negated: mark 1, the number negated; else `Times[-1, x]`. Else `head[x]`, `Plus[x]` for a unary plus. |
+| 2 | head | Prefix. `Minus`: `x` negated: mark 1 and an integer or a real, the number negated; else `Times[-1, x]`. Else `head[x]`, `Plus[x]` for a unary plus. |
 | 3 | head | Postfix: `head[x]`. |
 | 4 | head | Binary, pop 1 (`y`): `At`: `x[y]`; `SlashSlash`: `y[x]`; `Divide`: `Times[x, Power[y, -1]]`; else `head[x, y]`. |
 | 5 | head, n | A flat chain of `n` operands: `head[ops...]`. |

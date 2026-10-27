@@ -976,6 +976,21 @@ VerificationTest[
     {HoldComplete[a Get["b"]], 6, <|"Warnings" -> {}|>},
     TestID -> "wl next: << after an operand is a factor"]
 
+(* a real is the machine real nearest its digits, as a notebook reads it, where Wolfram 15's
+   ToExpression can be a bit away; the digits of FullForm tell machine reals apart that SameQ takes
+   for one *)
+VerificationTest[
+    Map[ToString[FullForm[First[First[WolframLanguageHeld[#]]]]] &, {"0.00000000000000000001234", "1.234*^-20", "2.2250738585072014*^-308", "0.3", "7.*^-300", "0.000000001234"}],
+    {"1.234`*^-20", "1.234`*^-20", "2.2250738585072014`*^-308", "0.3`", "7.`*^-300", "1.234`*^-9"},
+    TestID -> "wl number: a real is the machine real nearest its digits"]
+
+(* a minus folds into an integer or a real right after it, not into a rational, as a notebook reads -1*^-3 *)
+VerificationTest[
+    WolframLanguageHeld /@ {"-1*^-3", "a - 2*^-1", "-16^^f*^-1", "-1.5*^-3", "-2*^3"},
+    {{HoldComplete[Times[-1, Rational[1, 1000]]]}, {HoldComplete[Plus[a, Times[-1, Rational[1, 5]]]]}, {HoldComplete[Times[-1, Rational[15, 16]]]},
+     {HoldComplete[-0.0015]}, {HoldComplete[-2000]}},
+    TestID -> "wl: a minus folds into an integer or a real, not a rational"]
+
 (* a unary plus is its own call, in a chain of Plus too, as a notebook reads it *)
 VerificationTest[
     WolframLanguageHeld /@ {"+b", "+b - 1", "a + +b", "(+a) + b", "a - +b", "x + +y z", "a >+ b - c"},

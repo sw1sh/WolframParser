@@ -135,8 +135,12 @@ $letter = ParseChoice[
 (* a name: letters, digits, $ and ` context marks; not beginning with a
    digit. The loop after the first run of ASCII is entered only at a
    letter past ASCII. *)
-$name = text[ParseChoice[ParseRegex["[A-Za-z$`][A-Za-z0-9$`]*"], $letter] ~~
-    ParseMany[ParseAction[ParseLookahead[ParseCharacter[_?nameContinuesQ]] ~~ ParseChoice[ParseRegex["[A-Za-z0-9$`]+"], $letter], #2 &]]]
+$name = ParseCondition[text[ParseChoice[ParseRegex["[A-Za-z$`][A-Za-z0-9$`]*"], $letter] ~~
+    ParseMany[ParseAction[ParseLookahead[ParseCharacter[_?nameContinuesQ]] ~~ ParseChoice[ParseRegex["[A-Za-z0-9$`]+"], $letter], #2 &]]], contextMarksQ]
+
+(* a name's context marks, as the reader's lexer takes them: none at its end, none before another or
+   before a digit *)
+contextMarksQ[s_String] := ! StringEndsQ[s, "`"] && StringFreeQ[s, "``" | ("`" ~~ DigitCharacter)]
 
 nameContinuesQ[c_String] := c === "\\" || First[ToCharacterCode[c]] > 127 || StringMatchQ[c, LetterCharacter | DigitCharacter | "$" | "`"]
 
@@ -570,12 +574,13 @@ heldSymbol[name_String] := heldSymbol[name] = heldName["System`" <> name]
 
 symbolCall[name_String, args_List] := heldCall[heldSymbol[name], args]
 
-(* -x, as a notebook reads it: a number literal right after the minus folds it in, anything else,
-   a product too, is Times[-1, x] *)
+(* -x, as a notebook reads it: a number literal right after the minus, an integer or a real, folds
+   it in, anything else, a product, a rational as 1*^-3 is and a number in parentheses too, is
+   Times[-1, x] *)
 negated[x_Association] := negatedHeld[x["Expr"], If[x["Literal"], 1, 0]]
 
 (* the same of a held expression, its mark 1 for a number literal *)
-negatedHeld[e_HoldComplete, 1] := Replace[e, HoldComplete[n_] :> With[{m = -n}, HoldComplete[m]]]
+negatedHeld[HoldComplete[n : (_Integer | _Real)], 1] := With[{m = -n}, HoldComplete[m]]
 negatedHeld[e_HoldComplete, _] := Replace[e, HoldComplete[x_] :> HoldComplete[Times[-1, x]]]
 
 (* x_h, __, x___., ...: the name before the underscores, their count, and
@@ -697,13 +702,24 @@ machineValue[digits_Integer, base_Integer, scale_Integer] := If[ Abs[scale] <= 1
         (* by its difference, as a comparison of machine reals takes ones near each other for equal *)
         Which[m - N[Log10[$MinNumber]] < 0, Underflow[], m < -400, 0., m <= 400, machineReal[digits base^scale], True, N[scaledValue[digits, base, scale, 20]]]]]
 
-(* The machine real nearest an exact value, as the kernel's reader makes one: below the least
-   normal one the subnormal nearest it, by its multiple of the least subnormal, zero where that is
-   nearer, and past the greatest the value at machine precision [WL 15.0.0]. *)
+(* The machine real nearest an exact value, as a notebook reads one: by the power of 2 at or below
+   it, from the bits of its numerator and denominator, its 53 bits rounded to the nearest, halves to
+   even, where N, which Wolfram 15's ToExpression reads 1.234*^-20 and 0.1*^-299 by, can be a bit
+   away. Below the least normal one the subnormal nearest it, by its multiple of the least
+   subnormal, zero where that is nearer, and past the greatest the value at machine precision
+   [WL 15.0.0]. *)
 machineReal[x_] := Which[
     x == 0, 0.,
-    Abs[x] >= 2^-1022, N[x],
+    Abs[x] > $MaxMachineNumber, N[x],
+    Abs[x] >= 2^-1022, nearestMachineReal[x],
     True, With[{k = Round[Abs[x] 2^1074]}, If[k === 0, 0., Quiet[N[Sign[x] k / 2^1074], General::munfl]]]]
+
+nearestMachineReal[x_] := Module[{a = Abs[x], e, m},
+    e = BitLength[Numerator[a]] - BitLength[Denominator[a]];
+    If[a < 2^e, e--];
+    m = Round[a 2^(52 - e)];
+    If[m === 2^53, m = 2^52; e++];
+    Sign[x] N[m 2^(e - 52)]]
 
 (* --- strings --- *)
 
