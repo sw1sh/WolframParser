@@ -2056,6 +2056,50 @@ $fastProgramTextDeclaration = FunctionDeclaration[fastProgramText,
 	one did; else None, and flatProgram reads by the stages, each compiled on its own *)
 fastProgramTextFunction := fastProgramTextFunction = If[DownValues[fastProgramText] =!= {} || OwnValues[fastProgramText] =!= {}, fastProgramText, None]
 
+(* Whether a source reads, typed code that lexes and parses its codes in one call, as SyntaxQ asks:
+	the source and the tables fastProgram takes after the codes -> 0 where the lexer reads it to its
+	end and the parser reads its tokens, 1 where the parser stops, and 2 for a source the stages
+	read: one with a \, whose line continuations and character escapes the stages read first, one
+	where the lexer stops, which a token the parser splits may still read on, or one whose token
+	the parser splits. *)
+$fastSyntaxTextDeclaration = FunctionDeclaration[fastSyntaxText,
+	Typed[{"String", "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
+		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]
+	} ->
+		"MachineInteger"
+	] @
+	Function[{stText, stClasses, stOp1, stOp2, stOp3, stLongOps, stSpecial, stKindSpecs, stOpSpecs, stLedParams, stSpecs, stPrefix,
+			stGroups, stIntegrals, stSpecialOps, stHeads, stKeys, stNewlineNames
+	},
+		Native`UncheckedBlock[Module[{codes, n = 0, padded, lexed, prog, status = 0, i = 1},
+			codes = ToCharacterCode[stText];
+			n = Length[codes];
+			padded = Native`UncheckedArray[0, n + 3];
+			While[i <= n, padded[[i]] = codes[[i]]; If[codes[[i]] == 92, status = 2]; i++];
+			padded[[n + 1]] = 0; padded[[n + 2]] = 0; padded[[n + 3]] = 0;
+			lexed = If[status == 0, fastLex[padded, stClasses, stOp1, stOp2, stOp3, stLongOps, stSpecial], Table[0, {2}]];
+			If[status == 0 && lexed[[1]] != 0, status = 2];
+			prog = If[ status == 0,
+				fastParse[lexed, fastLed[lexed, stKindSpecs, stOpSpecs, stLedParams], stSpecs, stPrefix, stGroups, stIntegrals, stSpecialOps, stHeads, stKeys,
+					padded, stClasses
+				],
+				Table[0, {2}]
+			];
+			If[status == 0 && prog[[1]] == 3, status = 2];
+			If[status == 0 && prog[[1]] != 0, status = 1];
+			status
+		]]
+	]
+]
+
+(* the typed syntax test run here: the definition a compiler of typed code gave fastSyntaxText, where
+	one did; else None, and the stages read the source *)
+fastSyntaxTextFunction := fastSyntaxTextFunction = If[DownValues[fastSyntaxText] =!= {} || OwnValues[fastSyntaxText] =!= {}, fastSyntaxText, None]
+
 (* the tables fastProgram takes after the codes, made once *)
 $fastProgramTables := $fastProgramTables = {$fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial, $fastKindSpecIndex, $fastOpSpecIndex,
 	$fastLedParams, $fastSpecTable, $fastPrefixArray, $fastGroupArray, $fastIntegralArray, $fastSpecialArray, $fastHeadCodeArray, $fastKeyCodeArray,
@@ -3271,7 +3315,25 @@ commentStep[codes_List, {_Integer, depth_Integer, open_Integer}, i_Integer] /; c
 commentStep[codes_List, {_Integer, depth_Integer, open_Integer}, i_Integer] /; depth > 0 := {i + 2, If[codes[[i]] === 42, depth - 1, depth], open}
 commentStep[_List, state_List, _Integer] := state
 
-WolframLanguageSyntaxQ[s_String] := s =!= "" && syntaxStop[s] === None
+(* A source reads where the lexer reads it to its end and the parser reads its tokens: syntaxStop
+	gives a place for every other, which SyntaxQ does not ask for. *)
+WolframLanguageSyntaxQ[s_String] := s =!= "" && syntaxReadQ[s]
+
+syntaxReadQ::usage = "syntaxReadQ[s] is True where the source s reads without a syntax error, by the typed syntax test where it settles \
+the source, else by the stages."
+syntaxReadQ[s_String] := Replace[
+	If[fastSyntaxTextFunction === None, 2, fastSyntaxTextFunction[s, Sequence @@ $fastProgramTables]],
+	{0 -> True, 1 -> False, _ :> stagesReadQ[s]}
+]
+
+stagesReadQ::usage = "stagesReadQ[s] is True where the typed stages read the source s, its line continuations and character escapes \
+read first, without a syntax error."
+stagesReadQ[s_String] := With[
+	{read = readSource[s]},
+	{padded = paddedCodes[ToCharacterCode[First[read]]]},
+	{split = splitParse[lexedCodes[padded], padded]},
+	lexerStatus[First[split]] === 0 && parseStatus[Last[split]] === 0
+]
 
 WolframLanguageSyntaxLength[s_String] := Replace[syntaxStop[s], None -> StringLength[s]]
 
