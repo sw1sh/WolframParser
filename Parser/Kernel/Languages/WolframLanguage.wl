@@ -1267,15 +1267,24 @@ $vectorRelations = <|"VectorLess" -> True, "VectorGreater" -> True, "VectorLessE
 $neutralRelations = <|"Equal" -> True, "Unequal" -> True, "Less" -> True, "Greater" -> True, "LessEqual" -> True, "GreaterEqual" -> True|>
 vectorAffinity[head_String] := Which[KeyExistsQ[$vectorRelations, head], True, KeyExistsQ[$neutralRelations, head], None, True, False]
 
-relationValue[alg_, operands_List, heads_List] := Module[{processed = {First[operands]}, affinity = None, a},
-	Do[
-		a = vectorAffinity[heads[[i]]];
-		If[ a =!= None && affinity =!= None && a =!= affinity,
-			processed = {simplifiedRelation[alg, processed, affinity], heads[[i]], operands[[i + 1]]},
-			processed = Join[processed, {heads[[i]], operands[[i + 1]]}]];
-		If[a =!= None, affinity = a],
-		{i, Length[heads]}];
-	simplifiedRelation[alg, processed, affinity]]
+relationValue::usage = "relationValue[alg, operands, heads] gives the chain of relations of the heads between the operands, built by the \
+algebra alg."
+relationValue[alg_, operands_List, heads_List] := relationOf[alg, Fold[relationStep[alg, #1, #2] &, {{First[operands]}, None}, Transpose[{heads, Rest[operands]}]]]
+
+relationOf::usage = "relationOf[alg, {processed, affinity}] gives the relation of the operands and heads processed, built by alg."
+relationOf[alg_, {processed_List, affinity_}] := simplifiedRelation[alg, processed, affinity]
+
+relationStep::usage = "relationStep[alg, {processed, affinity}, {head, operand}] gives the operands and heads after the head and its \
+operand, a chain of the other kind of relation made one operand, and the affinity of the chain."
+relationStep[alg_, {processed_List, affinity_}, {head_String, operand_}] := With[{a = vectorAffinity[head]},
+	{
+		If[a =!= None && affinity =!= None && a =!= affinity,
+			{simplifiedRelation[alg, processed, affinity], head, operand},
+			Join[processed, {head, operand}]
+		],
+		If[a =!= None, a, affinity]
+	}
+]
 
 simplifiedRelation[alg_, processed_List, affinity_] := With[{rators = processed[[2 ;; -2 ;; 2]], rands = processed[[1 ;; -1 ;; 2]]},
 	Which[
@@ -1459,19 +1468,21 @@ $numberText = text[
 (* A number's text is CodeParser's Token`Error`Number where its base is
 	not 2 to 36, a digit is not one of the base's, or a ^^, a `` or a *^ has
 	nothing after it. *)
-numberTextValidQ[s_String] := Module[{body = s, parts, base},
-	If[ StringContainsQ[body, "*^"],
-		parts = StringSplit[body, "*^", All];
-		If[ ! StringMatchQ[Last[parts], RegularExpression["[-+]?[0-9]+"]], Return[False, Module]];
-		body = First[parts]];
-	If[ StringContainsQ[body, "``"] && Last[StringSplit[body, "``", All]] === "", Return[False, Module]];
-	body = First[StringSplit[body, "`", All]];
-	If[ StringContainsQ[body, "^^"],
-		parts = StringSplit[body, "^^", All];
-		base = FromDigits[First[parts]];
-		If[ ! (2 <= base <= 36) || StringDelete[Last[parts], "."] === "", Return[False, Module]];
-		If[ ! AllTrue[Characters[ToLowerCase[StringDelete[Last[parts], "."]]], digitValue[#] < base &], Return[False, Module]]];
-	True]
+numberTextValidQ::usage = "numberTextValidQ[s] is True where the number text s is no Token`Error`Number of CodeParser's."
+numberTextValidQ[s_String] := With[{body = First[StringSplit[s, "*^", All]]},
+	And[
+		!StringContainsQ[s, "*^"] || StringMatchQ[Last[StringSplit[s, "*^", All]], RegularExpression["[-+]?[0-9]+"]],
+		!(StringContainsQ[body, "``"] && Last[StringSplit[body, "``", All]] === ""),
+		baseDigitsValidQ[First[StringSplit[body, "`", All]]]
+	]
+]
+
+baseDigitsValidQ::usage = "baseDigitsValidQ[body] is True where the number text body has no base, or a base from 2 to 36 and digits after \
+its ^^ that are all of the base."
+baseDigitsValidQ[body_String] /; !StringContainsQ[body, "^^"] := True
+baseDigitsValidQ[body_String] := With[{base = FromDigits[First[StringSplit[body, "^^", All]]], digits = StringDelete[Last[StringSplit[body, "^^", All]], "."]},
+	2 <= base <= 36 && digits =!= "" && AllTrue[Characters[ToLowerCase[digits]], digitValue[#] < base &]
+]
 
 digitValue[c_String] := With[{n = First[ToCharacterCode[c]]}, If[n <= 57, n - 48, n - 87]]
 
@@ -1565,7 +1576,8 @@ groupItem[tag_, open_String, lead_List, children_List, {end_String}] :=
 	With[{all = Join[{tokenLeaf[open]}, lead, Catenate[kids /@ children]]}, With[{n = trailingTriviaCount[all]},
 		item[CodeParser`GroupMissingCloserNode[tag, Drop[all, -n], If[end === "End", <|unterminated -> True|>, <||>]], Take[all, -n]]]]
 
-trailingTriviaCount[all_List] := Module[{n = 0}, While[n < Length[all] && triviaLeafQ[all[[-n - 1]]], n++]; n]
+trailingTriviaCount::usage = "trailingTriviaCount[all] gives how many of the nodes all end in are whitespace, newlines or comments."
+trailingTriviaCount[all_List] := LengthWhile[Reverse[all], triviaLeafQ]
 
 triviaLeafQ[CodeParser`LeafNode[Whitespace | Token`Newline | Token`Comment, _, _]] := True
 triviaLeafQ[_] := False
@@ -2171,18 +2183,31 @@ continuedFailure[f_Failure, kept_List, s_String] := With[{at = f["Position"]},
 
 (* the leaves of a tree read from s without its line continuations, each
 	given its text in s: kept is the positions in s of the characters read *)
-continuedLeaves[children_List, s_String, kept_List] := Module[{p = 0, leaf, walked},
-	leaf[head_, k_, t_String, m_] := If[t === "", head[k, t, m],
-		With[{first = kept[[p + 1]], last = kept[[p + StringLength[t]]], from = If[p === 0, 1, kept[[p]] + 1]},
-			p += StringLength[t];
-			If[ from === first && last - first + 1 === StringLength[t],
-				head[k, t, m],
-				head[k, StringTake[s, {from, last}], Append[m, continuedBy -> first - from]]]]];
-	walked[CodeParser`LeafNode[k_, t_String, m_]] := leaf[CodeParser`LeafNode, k, t, m];
-	walked[CodeParser`ErrorNode[k_, t_String, m_]] := leaf[CodeParser`ErrorNode, k, t, m];
-	walked[CodeParser`CallNode[head_List, group_, m_]] := With[{h = walked /@ head}, CodeParser`CallNode[h, walked[group], m]];
-	walked[node_[tag_, kids_List, m_]] := node[tag, walked /@ kids, m];
-	walked /@ children]
+continuedLeaves::usage = "continuedLeaves[children, s, kept] gives the nodes children, read from s without its line continuations, each \
+leaf given its text in s, kept the positions in s of the characters read."
+continuedLeaves[children_List, s_String, kept_List] := With[
+	{positions = Position[children, (CodeParser`LeafNode | CodeParser`ErrorNode)[_, _String, _], Infinity, Heads -> False]},
+	{leaves = Extract[children, positions]},
+	ReplacePart[
+		children,
+		Thread[positions -> MapThread[continuedLeaf[#1, #2, s, kept] &, {leaves, Most[Accumulate[Prepend[leafTextLength /@ leaves, 0]]]}]]
+	]
+]
+
+leafTextLength::usage = "leafTextLength[leaf] gives the length of the text of a leaf."
+leafTextLength[_[_, t_String, _]] := StringLength[t]
+
+(* a leaf whose text begins after the characters before characters read, its text in s: those of
+	the line continuations before and in it too, where any are *)
+continuedLeaf::usage = "continuedLeaf[leaf, before, s, kept] gives the leaf, the characters read before it before, with its text in s."
+continuedLeaf[leaf : (CodeParser`LeafNode | CodeParser`ErrorNode)[_, "", _], _Integer, _String, _List] := leaf
+continuedLeaf[(head : CodeParser`LeafNode | CodeParser`ErrorNode)[k_, t_String, m_], before_Integer, s_String, kept_List] := With[
+	{first = kept[[before + 1]], last = kept[[before + StringLength[t]]], from = If[before === 0, 1, kept[[before]] + 1]},
+	If[from === first && last - first + 1 === StringLength[t],
+		head[k, t, m],
+		head[k, StringTake[s, {from, last}], Append[m, continuedBy -> first - from]]
+	]
+]
 
 (* ::Section:: *)
 (*What CodeParser reads again*)
@@ -2221,10 +2246,12 @@ readAgain[CodeParser`ContainerNode[kind_, children_List, meta_], lines_] := Code
 
 (* {the span from where the source begins to the end of its chunk's last
 	line, but blank ones, the lines of the chunk up to that one} *)
-chunkEnd[{start_, end_}, lines_List] := Module[{chunk = First[Split[lines[[start[[1]] ;; end[[1]]]], ! StringMatchQ[#2, $chunkPattern] &]], last},
-	last = Length[chunk];
-	While[chunk[[last]] === "", last--];
-	{{start, {start[[1]] + last - 1, StringLength[chunk[[last]]] + 1}}, Take[chunk, last]}]
+chunkEnd::usage = "chunkEnd[{start, end}, lines] gives {the span from start to the end of the last line of its chunk that is not blank, \
+the lines of the chunk up to that one}."
+chunkEnd[{start_, end_}, lines_List] := With[{chunk = First[Split[Take[lines, {First[start], First[end]}], !StringMatchQ[#2, $chunkPattern] &]]},
+	{last = Length[chunk] - LengthWhile[Reverse[chunk], # === "" &]},
+	{{start, {First[start] + last - 1, StringLength[chunk[[last]]] + 1}}, Take[chunk, last]}
+]
 
 (* a span within a span, by CodeParser's line and column test *)
 sourceWithinQ[span_, {a_, b_}] := positionWithinQ[span, a] && positionWithinQ[span, b]
