@@ -68,6 +68,23 @@ $vmMemberDeclaration := $vmMemberDeclaration = FunctionDeclaration[vmMember,
 						True, inside = 1; rlo = rhi + 1]]];
 			inside]]]
 
+(* The program to try next at a position, past the program k: the first after k of those the table of
+	starts lists for the text's code there, below 128, as their first character may be it, m + 1
+	where none is left; else k + 1. The table is at starts in the pool, 0 for none, the place of the
+	list of each code c below 128 at starts + c, its programs in order and a 0 after them. *)
+$vmNextDeclaration := $vmNextDeclaration = FunctionDeclaration[vmNext,
+	Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger", "MachineInteger",
+		"MachineInteger", "MachineInteger"} -> "MachineInteger"] @
+	Function[{nxPool, nxText, nxStarts, nxAt, nxK, nxM, nxN},
+		Module[{p = 0, c = 0, r = nxK + 1},
+			If[ nxStarts > 0 && nxAt < nxN,
+				c = nxText[[nxAt + 1]];
+				If[ c >= 0 && c < 128,
+					p = nxPool[[nxStarts + c]];
+					While[nxPool[[p]] != 0 && nxPool[[p]] <= nxK, p++];
+					r = If[nxPool[[p]] == 0, nxM + 1, nxPool[[p]]]]];
+			r]]]
+
 $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
 	Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
 		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} ->
@@ -78,7 +95,8 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
 				pc = 0, sp = 0, start = 0, top = 0, ttop = 0, regs, stack, trail, out, outLen = 3, nRec = 0,
 				op = 0, a = 0, b = 0, c = 0, d = 0, j = 0, cc = 0, inside = 0, ok = 0, len = 0, e = 0, r = 0,
 				cnt = 0, mn = 0, mx = 0, kind = 0, rpc = 0, rsp = 0, rtt = 0, x = 0, y = 0, cls = 0, grown, q = 0, before = 0, after = 0,
-				nNames = 0, entry = 0, firstClass = 0, stateLen = 0, base = 0, masks, u = 0, w = 0, fold = 0, flo = 0, fhi = 0, fmid = 0, ne = 0},
+				nNames = 0, entry = 0, firstClass = 0, stateLen = 0, base = 0, masks, u = 0, w = 0, fold = 0, flo = 0, fhi = 0, fmid = 0, ne = 0,
+				starts = If[Length[vParams] >= 7, vParams[[7]], 0]},
 			(* the bit of each of 32, a class's test of a code its word's and its bit's: Compile takes a
 				shift by a variable for a real *)
 			masks = Table[2^j, {j, 0, 31}];
@@ -98,8 +116,10 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
 				Do[trail[[j]] = vState[[q + j - 1]], {j, 1, 2 ttop}]; q = q + 2 ttop;
 				ne = vState[[q]]; q++;
 				answer = vState[[q]]; pending = 1];
+			(* the first program at the first position, by the table of starts *)
+			If[Length[vState] == 0, k = vmNext[vPool, vText, starts, i, 0, m, n]];
 			While[ i <= n && status == 0,
-				If[ k > m, i++; k = 1; ne = 0,
+				If[ k > m, i++; k = vmNext[vPool, vText, starts, i, 0, m, n]; ne = 0,
 					entry = progOff + 4 (k - 1); nNames = vPool[[entry + 1]];
 					If[ pending == 0,
 						(* the program k at position i, unless its first character cannot be there *)
@@ -346,13 +366,13 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
 							outLen = outLen + width; nRec++;
 							Which[
 								(* the first match at a place; after an empty one, the place again for one not empty *)
-								mode == 1 || mode == 2, If[sp > i, i = sp; k = 1; ne = 0, k = 1; ne = 1],
+								mode == 1 || mode == 2, If[sp > i, i = sp; k = vmNext[vPool, vText, starts, i, 0, m, n]; ne = 0, k = vmNext[vPool, vText, starts, i, 0, m, n]; ne = 1],
 								(* every program's match at a place, an empty one once, its program there again for one not empty *)
-								mode == 3, If[sp == i, ne = 1, k++],
+								mode == 3, If[sp == i, ne = 1, k = vmNext[vPool, vText, starts, i, k, m, n]],
 								(* every way: the program's next, as after a condition that fails *)
 								mode == 4, pending = 1; answer = 0,
-								True, k++],
-						True, k++]]];
+								True, k = vmNext[vPool, vText, starts, i, k, m, n]],
+						True, k = vmNext[vPool, vText, starts, i, k, m, n]]]];
 			out[[1]] = status; out[[2]] = nRec; out[[3]] = width;
 			If[ status == 2,
 				(* the condition, its program's names, and the state to go on from *)
@@ -371,18 +391,21 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
 			Take[out, outLen]]]]
 
 (* The matcher: the host's compiled one, where its units define vmRun; else the declarations'
-	Functions compiled by Compile, vmMember's first and put in vmRun's code, where Compile inlines it,
+	Functions compiled by Compile, vmMember's and vmNext's first and put in vmRun's code, where Compile inlines them,
 	every argument of vmRun a packed vector of integers, as the paclet's typed code is; else
 	evaluated. *)
 vmFunction := vmFunction = If[DownValues[vmRun] =!= {} || OwnValues[vmRun] =!= {}, vmRun,
 	With[{member = With[{f = $vmMemberDeclaration[[2, 1]]},
 			Compile @@ Join[Hold[{{cc, _Integer}, {cls, _Integer}, {vClasses, _Integer, 1}, {masks, _Integer, 1}}], Extract[f, {2}, Hold]]],
+			next = With[{f = $vmNextDeclaration[[2, 1]]},
+				Compile @@ Join[Hold[{{nxPool, _Integer, 1}, {nxText, _Integer, 1}, {nxStarts, _Integer}, {nxAt, _Integer}, {nxK, _Integer}, {nxM, _Integer},
+					{nxN, _Integer}}], Extract[f, {2}, Hold]]],
 			run = $vmDeclaration[[2, 1]]},
 		Replace[
-			If[ Head[member] === CompiledFunction,
-				Compile @@ Join[Hold[Evaluate[Map[{#, _Integer, 1} &, run[[1]]]]], Extract[run, {2}, Hold] /. vmMember -> member,
+			If[ Head[member] === CompiledFunction && Head[next] === CompiledFunction,
+				Compile @@ Join[Hold[Evaluate[Map[{#, _Integer, 1} &, run[[1]]]]], Extract[run, {2}, Hold] /. {vmMember -> member, vmNext -> next},
 					Hold[CompilationOptions -> {"InlineCompiledFunctions" -> True}]],
 				$Failed],
-			Except[_CompiledFunction] -> run]]]
+			Except[_CompiledFunction] -> (run /. {vmMember -> $vmMemberDeclaration[[2, 1]], vmNext -> $vmNextDeclaration[[2, 1]]})]]]
 
 End[]

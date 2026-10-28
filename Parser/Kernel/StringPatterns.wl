@@ -671,8 +671,8 @@ textSubject[s_String] := subject[ToCharacterCode[s], StringLength[s], s]
 interpretedQ[programs_List, method_] := method === "Interpreter"
 
 (* the programs a mode matches: every way of each in the mode "All" *)
-modePrograms[programs_List, "All"] := Map[#["Ways"] &, programs]
-modePrograms[programs_List, _String] := Map[#["Program"] &, programs]
+modePrograms[programs_List, "All"] := Lookup[First /@ programs, "Ways"]
+modePrograms[programs_List, _String] := Lookup[First /@ programs, "Program"]
 
 (* the matches of the programs by their interpreter, each {start, end, k, bindings} *)
 programMatches[z_subject, programs_List, mode_String] := Replace[
@@ -779,12 +779,34 @@ programCode[p_] := With[{names = programNames[p]},
 (* the bytecode made, of the programs' codes, each {its row of the table, its names, its registers} *)
 bytecodeAssembled::usage = "bytecodeAssembled[codes] gives the bytecode made, of the programs' codes, each {its row of the table, its names, its \
 registers}."
-bytecodeAssembled[codes_List] := With[{tableAt = vmPoolAdd[Flatten[codes[[All, 1]]]], allNames = codes[[All, 2]]},
+bytecodeAssembled[codes_List] := With[
+	{tableAt = vmPoolAdd[Flatten[codes[[All, 1]]]], allNames = codes[[All, 2]], classes = If[$tests === {}, specsClasses[$specs], None]},
+	{startsAt = startsAdded[classes, codes[[All, 1, 3]]]},
 	With[{bc = <|"Code" -> Developer`ToPackedArray[Flatten[Values[$ins]]], "Pool" -> Developer`ToPackedArray[Join[$pool, {0}]], "Specs" -> $specs,
 			"Tests" -> $tests, "Conditions" -> $conditions, "Table" -> tableAt, "MaxNames" -> Max[0, Length /@ allNames], "Registers" -> Max[1, codes[[All, 3]]],
-			"Names" -> allNames, "Sides" -> Map[nameSides, allNames]|>},
-		If[$tests === {}, Append[bc, "Classes" -> specsClasses[$specs]], bc]
+			"Names" -> allNames, "Sides" -> Map[nameSides, allNames], "Starts" -> startsAt|>},
+		If[classes === None, bc, Append[bc, "Classes" -> classes]]
 	]
+]
+
+(* The table of starts in the pool, which the matcher reads to try at a position only the programs
+	whose first character may be there: for each code c below 128, at the table's place + c, the place
+	of the list of those programs, in order, a 0 after them, a program of no first class in every
+	list; 0 for no table, where a test of a class reads the text. *)
+startsAdded::usage = "startsAdded[classes, firsts] gives the place in the pool of the table of starts it adds of the programs whose first classes are firsts, by the classes, or 0 for classes None."
+startsAdded[None, _List] := 0
+startsAdded[_List, {}] := 0
+startsAdded[classes_List, firsts_List] := With[{lists = Map[Flatten[Position[#, 1]] &, Transpose[asciiMembers[classes, #] & /@ firsts]]},
+	{listsAt = vmPoolAdd[Flatten[Map[Append[#, 0] &, lists]]]},
+	vmPoolAdd[listsAt + Most[FoldList[Plus, 0, Map[Length[#] + 1 &, lists]]]]
+]
+
+(* each code below 128 in the class of index f, 1 or 0 for each, as the matcher reads its words; every
+	code in no class, 0 *)
+asciiMembers::usage = "asciiMembers[classes, f] gives 1 or 0 for each code from 0 to 127, whether the class of index f of the classes holds it, 1 for all where f is 0."
+asciiMembers[_List, 0] := ConstantArray[1, 128]
+asciiMembers[classes_List, f_Integer] := With[{codes = Range[0, 127]},
+	Unitize[BitAnd[classes[[classes[[f + 1]] + Quotient[codes, 32]]], 2^Mod[codes, 32]]]
 ]
 
 (* the assembler, on the bytecode being made: an instruction, at the next position, so that the
@@ -913,13 +935,21 @@ $vmModes = <|"First" -> 1, "Each" -> 2, "Overlapping" -> 3, "All" -> 4|>
 	{start, end, k, then the start and end of each name} in a packed array: each condition the
 	matcher stops at evaluated here, the matcher then called again from its state. *)
 vmRecords[s_String, programs_List, mode_String] := With[{bc = vmBytecode[programs], codes = Developer`ToPackedArray[ToCharacterCode[s]]},
-	{bc, Developer`ToPackedArray[matcherRecords[NestWhile[
-		matcherRun,
-		{bc, vmClasses[bc, codes], codes, Developer`ToPackedArray[{$vmModes[mode], 0, Length[programs], bc["MaxNames"], bc["Registers"], bc["Table"]}],
-			subject[codes, Length[codes], s], {}, {}, True},
-		matcherGoesOnQ
-	]]]}
+	{classes = vmClasses[bc, codes],
+		params = Developer`ToPackedArray[{$vmModes[mode], 0, Length[programs], bc["MaxNames"], bc["Registers"], bc["Table"], Lookup[bc, "Starts", 0]}]},
+	{bc, matcherRunRecords[bc, classes, codes, params, s, vmFunction[bc["Code"], bc["Pool"], classes, codes, params, Developer`ToPackedArray[{}]]]}
 ]
+
+(* the records of the matcher's first run, where it stops at no condition; else of its runs from the
+	condition it stops at on *)
+matcherRunRecords::usage = "matcherRunRecords[bc, classes, codes, params, s, out] gives the records of the matcher's runs on the text s, out its first."
+matcherRunRecords[_Association, _, _List, _List, _String, out_List] /; out[[1]] =!= 2 :=
+	Developer`ToPackedArray[Partition[out[[4 ;; 3 + out[[2]] out[[3]]]], out[[3]]]]
+matcherRunRecords[bc_Association, classes_, codes_List, params_List, s_String, out_List] := Developer`ToPackedArray[matcherRecords[NestWhile[
+	matcherRun,
+	matcherRunEnd[{bc, classes, codes, params, subject[codes, Length[codes], s], {}, Partition[out[[4 ;; 3 + out[[2]] out[[3]]]], out[[3]]], True}, out],
+	matcherGoesOnQ
+]]]
 
 (* A run of the typed matcher from the state {bytecode, classes, codes, params, subject, matcher's
 	state, records, going on}: its records taken, and where it stops at a condition, the condition's
