@@ -853,9 +853,15 @@ VerificationTest[
     {None},
     TestID -> "wl program: a source that does not read whole, or that gives a warning, has none"]
 VerificationTest[
-    MatchQ[#, {_List, _List, _List}] & /@ (WolframLanguageProgram /@ {"f[1, +2]", "(* \\[Foo] *) a", "\"\\8\""}),
-    {True, True, True},
+    MatchQ[#, {_List, _List, _List}] & /@ (WolframLanguageProgram /@ {"f[1, +2]", "(* \\[Foo] *) a", "\"\\8\"",
+        "{\"\\[Alpha]\\[FormalScriptA]\", \"\\[COMPATIBILITYNoBreak]\\[ \\101\\.41\\:0041\\n\"}"}),
+    {True, True, True, True},
     TestID -> "wl program: a source that reads whole with no warning has one"]
+VerificationTest[
+    With[{private = "Wolfram`Parser`Languages`WolframLanguage`Private`"},
+        Sort[Keys[Symbol[private <> "$fastLongNameOps"]]] === Sort[Keys[Symbol[private <> "longNameCharacters"][]]]],
+    True,
+    TestID -> "wl program: the lexer's long names are those a string decodes, as the typed escape scan reads them by the lexer's table"]
 VerificationTest[
     WolframLanguageProgram["x = 1\n\ny = x + 1"][[3]],
     {0, 5, 2, 1, 3, 1, 1, 3, 0, 1, 0, 0, 1, 1, 5, 8, 12, 16, 2, 6, 9, 13, 17, 1, 4, 1, 2, 5, 10, 3, 5},

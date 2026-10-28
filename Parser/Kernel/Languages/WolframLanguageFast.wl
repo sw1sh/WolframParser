@@ -1527,12 +1527,50 @@ $fastNewlineNames := $fastNewlineNames = Developer`ToPackedArray[Flatten[Map[Joi
 (* ::Section:: *)
 (*The typed program*)
 
+(* The escapes of the strings of a lexed source read whole, as stringWarnings reads them, typed code
+	over packed integers: the codes, the lexer's tokens and the table of long names -> 1 where one
+	warns, else 0. \ooo, \.hh, \:hhhh and \|hhhhhh, \n, \t, \r, \b and \f, a long name the table
+	has, closed, and \ before any other character but a letter are quiet, and so is a \[ before no
+	letter or digit, but at the end of the text. *)
+$fastEscapesDeclaration = FunctionDeclaration[fastEscapes,
+	Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} -> "MachineInteger"] @
+	Function[{esCodes, esLexed, esLongOps},
+		Native`UncheckedBlock[Module[{n = Length[esCodes], t = 1, p = 0, e = 0, c = 0, k = 0, q = 0, h = 0, r = 0, warned = 0},
+			While[ warned == 0 && t <= esLexed[[2]],
+				If[ esLexed[[5 t - 2]] == 5,
+					p = esLexed[[5 t]] + 1; e = Min[esLexed[[5 t + 1]], n + 1] - 1;
+					While[ p < e && warned == 0,
+						If[ esCodes[[p]] != 92, p++,
+							c = esCodes[[p + 1]];
+							Which[
+								c == 91,
+									r = lexLongName[esCodes, esLongOps, p, e];
+									Which[
+										r != 0 && Mod[r, 8192] != 1, p = Quotient[r, 8192],
+										r == 0 && p + 2 < e && !(48 <= esCodes[[p + 2]] <= 57 || 65 <= esCodes[[p + 2]] <= 90 || 97 <= esCodes[[p + 2]] <= 122), p += 2,
+										True, warned = 1],
+								48 <= c <= 55,
+									If[p + 3 < e && 48 <= esCodes[[p + 2]] <= 55 && 48 <= esCodes[[p + 3]] <= 55, p += 4, warned = 1],
+								c == 46 || c == 58 || c == 124,
+									k = If[c == 46, 2, If[c == 58, 4, 6]]; q = p + 2; h = 0;
+									While[h < k && q < e && (48 <= esCodes[[q]] <= 57 || 65 <= esCodes[[q]] <= 70 || 97 <= esCodes[[q]] <= 102), h++; q++];
+									If[h == k, p += 2 + k, warned = 1],
+								65 <= c <= 90 || 97 <= c <= 122,
+									If[c == 110 || c == 116 || c == 114 || c == 98 || c == 102, p += 2, warned = 1],
+								True,
+									p += 2]]]];
+				t++];
+			warned]]]]
+
+(* the typed escape scan run here, fixed at its first use *)
+fastEscapesFunction := fastEscapesFunction = typedFunction[fastEscapes, $fastEscapesDeclaration, {$lexLongNameDeclaration}]
+
 (* The program of a source read whole, typed code over packed integers that calls the lexer, the
 	parser, the lines and the parts each once, with nothing between them: the codes and three zeros
 	after them, and the tables the five take -> {0, the program's length, the program, then the
 	parts}, as WolframLanguageProgram gives them; {1} for a source that has none; {2} for one the
-	stages alone do not settle, a line continuation, a token that is two or a long name in a
-	string, which WolframLanguageProgram reads by its stages. *)
+	stages alone do not settle, a line continuation or a token that is two, which
+	WolframLanguageProgram reads by its stages. *)
 $fastProgramDeclaration = FunctionDeclaration[fastProgram,
 	Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
 		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
@@ -1543,7 +1581,7 @@ $fastProgramDeclaration = FunctionDeclaration[fastProgram,
 		"PackedArray"::["MachineInteger", 1]] @
 	Function[{pgCodes, pgClasses, pgOp1, pgOp2, pgOp3, pgLongOps, pgSpecial, pgKindSpecs, pgOpSpecs, pgLedParams, pgSpecs, pgPrefix,
 			pgGroups, pgIntegrals, pgSpecialOps, pgHeads, pgKeys, pgNewlineNames},
-		Native`UncheckedBlock[Module[{n = Length[pgCodes] - 3, lexed, prog, lines, flat, params, out, i = 1, t = 1, p = 0, e = 0, c = 0, k = 0, q = 0, h = 0, status = 0},
+		Native`UncheckedBlock[Module[{n = Length[pgCodes] - 3, lexed, prog, lines, flat, params, out, i = 1, status = 0},
 			(* codes that do not end in three zeros are the stages' to read *)
 			If[n < 0, status = 2, If[pgCodes[[n + 1]] != 0 || pgCodes[[n + 2]] != 0 || pgCodes[[n + 3]] != 0, status = 2]];
 			While[ i <= n,
@@ -1551,26 +1589,8 @@ $fastProgramDeclaration = FunctionDeclaration[fastProgram,
 				i++];
 			lexed = If[status == 0, fastLex[pgCodes, pgClasses, pgOp1, pgOp2, pgOp3, pgLongOps, pgSpecial], Table[0, {2}]];
 			If[status == 0 && lexed[[1]] != 0, status = 1];
-			(* each string's escapes, as stringWarnings reads them: one that warns leaves no
-				program, one of a long name is the stages' to read, and the rest are quiet:
-				\ooo, \.hh, \:hhhh and \|hhhhhh, \n, \t, \r, \b and \f, and \ before
-				any other character but a letter *)
-			While[ status == 0 && t <= lexed[[2]],
-				If[ lexed[[5 t - 2]] == 5,
-					p = lexed[[5 t]] + 1; e = Min[lexed[[5 t + 1]], n + 1] - 1;
-					While[ p < e && status == 0,
-						If[ pgCodes[[p]] != 92, p++,
-							c = If[p + 1 < e, pgCodes[[p + 1]], 0];
-							Which[
-								c == 0 || c == 91, status = 2,
-								48 <= c <= 55, If[p + 3 < e && 48 <= pgCodes[[p + 2]] <= 55 && 48 <= pgCodes[[p + 3]] <= 55, p += 4, status = 1],
-								c == 46 || c == 58 || c == 124,
-									k = If[c == 46, 2, If[c == 58, 4, 6]]; q = p + 2; h = 0;
-									While[ h < k && q < e && (48 <= pgCodes[[q]] <= 57 || 65 <= pgCodes[[q]] <= 70 || 97 <= pgCodes[[q]] <= 102), h++; q++];
-									If[h == k, p += 2 + k, status = 1],
-								65 <= c <= 90 || 97 <= c <= 122, If[c == 110 || c == 116 || c == 114 || c == 98 || c == 102, p += 2, status = 1],
-								True, p += 2]]]];
-				t++];
+			(* a string's escape that warns leaves no program *)
+			If[status == 0 && fastEscapes[pgCodes, lexed, pgLongOps] != 0, status = 1];
 			prog = If[ status == 0,
 				fastParse[lexed, fastLed[lexed, pgKindSpecs, pgOpSpecs, pgLedParams], pgSpecs, pgPrefix, pgGroups, pgIntegrals, pgSpecialOps, pgHeads, pgKeys,
 					pgCodes, pgClasses],
@@ -2585,9 +2605,9 @@ wholeLines[codes_List, padded_List, lexed_List, program_List] := fastLinesFuncti
 commaNulls::usage = "commaNulls[flat] gives how many Nulls a comma leaves in the program of the array flat."
 commaNulls[flat_List] := flat[[3 + flat[[2]]]]
 
-(* whether a string of a lexed source read whole warns of an escape *)
+(* whether a string of a lexed source read whole warns of an escape, by the typed escape scan *)
 escapeWarnedQ::usage = "escapeWarnedQ[codes, lexed] is True where a string of the lexer's tokens lexed of the codes warns of an escape."
-escapeWarnedQ[codes_List, lexed_List] := AnyTrue[stringTokens[lexed], stringTokenWarnings[codes, lexed, 1, #] =!= {} &]
+escapeWarnedQ[codes_List, lexed_List] := fastEscapesFunction[codes, lexed, $fastLongOpTable] =!= 0
 
 stringTokens::usage = "stringTokens[lexed] gives the tokens of lexed that are strings."
 stringTokens[lexed_List] := Flatten @ Position[tokenKinds[lexed], $tkString]
