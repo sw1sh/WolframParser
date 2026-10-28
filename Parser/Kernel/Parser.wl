@@ -91,14 +91,17 @@ ParseAction::usage = "ParseAction[p, f] runs p and applies f to its result; f is
 Begin["`Private`"]
 
 
-(* === predicate === *)
+(* ::Section:: *)
+(*Predicate*)
 
 ParserCombinatorQ[_ParserCombinator] := True
 ParserCombinatorQ[_] := False
 
 
-(* === constructors ===
-	Each Parse* function returns a ParserCombinator[type, args, opts]
+(* ::Section:: *)
+(*Constructors*)
+
+(* Each Parse* function returns a ParserCombinator[type, args, opts]
 	with type a String. The type strings are an open vocabulary;
 	adding a combinator means adding a (constructor, interpret rule,
 	colour, name) pair, not minting a new symbol. *)
@@ -264,8 +267,10 @@ ParseAction[pc_ParserCombinator, f_] :=
 	ParserCombinator["Action", {pc, f}, <||>]
 
 
-(* === operator overloads ===
-	The pattern-special heads (Alternatives, Optional, Repeated,
+(* ::Section:: *)
+(*Operator overloads*)
+
+(* The pattern-special heads (Alternatives, Optional, Repeated,
 	RepeatedNull) are ordinarily refused by SetDelayed and TagSetDelayed
 	because the system treats them as pattern primitives. Wrapping
 	the LHS head in Verbatim[...] sidesteps that interpretation and
@@ -283,8 +288,10 @@ ParserCombinator /: Verbatim[Repeated][pc_ParserCombinator] := ParseSome[pc]
 ParserCombinator /: Verbatim[RepeatedNull][pc_ParserCombinator] := ParseMany[pc]
 
 
-(* === SubValue: call a ParserCombinator as a function ===
-	Restricted to String / List input so the SummaryBox internals (which
+(* ::Section:: *)
+(*SubValue: call a ParserCombinator as a function*)
+
+(* Restricted to String / List input so the SummaryBox internals (which
 	apply pc to Hold-wrapped expressions during box rendering) don't
 	trigger the parser and recurse. *)
 
@@ -294,8 +301,10 @@ ParserCombinator /: (pc : ParserCombinator[_, _, _])[input_List] :=
 	Parse[pc, input]
 
 
-(* === Information ===
-	Information[pc, "prop"] exposes the wrapper's structure without the
+(* ::Section:: *)
+(*Information*)
+
+(* Information[pc, "prop"] exposes the wrapper's structure without the
 	user reaching into the (opaque) ParserCombinator[type, args, opts]
 	layout by hand. "CompiledFunction" pulls the underlying
 	CompiledCodeFunction out of a FunctionCompile-backed parser (or the
@@ -330,8 +339,10 @@ ParserCombinator /: Information[pc : ParserCombinator[_, _, _]] :=
 	Association[# -> parserProperty[pc, #] & /@ DeleteCases[$parserCombinatorProperties, "Properties"]]
 
 
-(* === top-level Parse / ParsePartial ===
-	$RecursionLimit is capped at a deliberately modest value: the
+(* ::Section:: *)
+(*Top-level Parse / ParsePartial*)
+
+(* $RecursionLimit is capped at a deliberately modest value: the
 	recursive-descent interpreter nests several frames per grammar
 	level, so input nested hundreds of levels deep can exhaust the
 	stack. We bound it well below the segfault threshold and convert
@@ -435,15 +446,18 @@ inputTake[input_String, a_Integer, b_Integer] :=
 	If[ $inputCodes === None, StringTake[input, {a, b}], FromCharacterCode[$inputCodes[[a ;; b]]] ]
 
 
-(* === linked lists === *)
+(* ::Section:: *)
+(*Linked lists*)
 
 (* A linked list is {first, rest}, the empty one {}: a step of a loop that puts an item on one
 	neither copies it nor writes over it. *)
 linkedItems::usage = "linkedItems[list] gives the items of the linked list {first, {second, ... {}}}, the first first."
 linkedItems[list_List] := First /@ Most[NestWhileList[Last, list, # =!= {} &]]
 
-(* === interpretive engine ===
-	The internal contract: interpret[pc, input, pos] returns either
+(* ::Section:: *)
+(*Interpretive engine*)
+
+(* The internal contract: interpret[pc, input, pos] returns either
 		parseOk[result, newPos]    - success
 		parseErr[pos, expected, found] - failure
 	parseOk / parseErr are private internal heads.
@@ -1113,8 +1127,10 @@ interpretDispatch[ParserCombinator["Recursive", Hold[s_Symbol], _], input_, pos_
 	]
 
 
-(* === GrammarRules lowering ===
-	The built-in GrammarRules is just inert data:
+(* ::Section:: *)
+(*GrammarRules lowering*)
+
+(* The built-in GrammarRules is just inert data:
 		GrammarRules[{template -> action, template :> action, ...}]
 	Each template is a string with optional <name> or <name:Type> slots.
 	We split each template into literal segments and slot specs, build a
@@ -1200,27 +1216,13 @@ lowerGrammarRule[template_String, held : HoldComplete[_]] :=
 		<name:Type>      (e.g. Number, Word, Integer)
 	Type is read as a single bareword - more elaborate Restricted[...]
 	etc. forms will lower to v0.3+ Interpreter-backed parsers. *)
-(* Done iteratively: StringSplit's :> Function form is fiddly. *)
-parseGrammarTemplate[s_String] :=
-	Block[{result = {}, rest = s, m},
-		While[
-			m = StringCases[rest,
-				RegularExpression["<([A-Za-z][A-Za-z0-9_]*)(?::([^>]+))?>"] :>
-					{"$1", "$2", "$0"},
-				1
-			];
-			m =!= {},
-			Block[{name = m[[1, 1]], typ = m[[1, 2]], whole = m[[1, 3]],
-					idx = StringPosition[rest, m[[1, 3]], 1][[1, 1]]
-			},
-				If[idx > 1, AppendTo[result, grammarLit[StringTake[rest, idx - 1]]]];
-				AppendTo[result, grammarSlot[name, If[typ === "", Automatic, typ]]];
-				rest = StringDrop[rest, idx - 1 + StringLength[whole]]
-			]
-		];
-		If[rest =!= "", AppendTo[result, grammarLit[rest]]];
-		result
-	]
+parseGrammarTemplate::usage = "parseGrammarTemplate[s] gives the segments of the template s, each grammarLit[text] or grammarSlot[name, \
+type]."
+parseGrammarTemplate[s_String] := Replace[
+	DeleteCases[StringSplit[s, RegularExpression["<([A-Za-z][A-Za-z0-9_]*)(?::([^>]+))?>"] :> grammarSlot["$1", "$2"]], ""],
+	{text_String :> grammarLit[text], grammarSlot[name_String, ""] :> grammarSlot[name, Automatic]},
+	{1}
+]
 
 lowerSegment[grammarLit[s_String]] := ParseLiteral[s]
 lowerSegment[grammarSlot[_, type_]] := slotParser[type]
@@ -1273,8 +1275,10 @@ evalBoundBody[HoldComplete[body_], slotNames_List, values_List] :=
 	]
 
 
-(* === GrammarRules: lowering the *pattern* form ===
-	Templates ("the weather in <city>") are handled above. This branch
+(* ::Section:: *)
+(*GrammarRules: lowering the *pattern* form*)
+
+(* Templates ("the weather in <city>") are handled above. This branch
 	handles the richer pattern shapes that real GrammarRules expressions
 	carry: FixedOrder, AnyOrder, OptionalElement, DelimitedSequence,
 	Repeated (form..), Alternatives (form1 | form2), CaseSensitive,
@@ -1424,7 +1428,8 @@ lowerGrammarRulePattern[pattern_, held : HoldComplete[_]] :=
 	]
 
 
-(* === character-class names for diagnostics === *)
+(* ::Section:: *)
+(*Character-class names for diagnostics*)
 
 charPatName[DigitCharacter] := "<digit>"
 charPatName[LetterCharacter] := "<letter>"
@@ -1443,8 +1448,10 @@ charPatName[s_String] := s
 charPatName[other_] := ToString[other, InputForm]
 
 
-(* === ParserCompile : value-threading codegen ===
-	Lowers a ParserCombinator tree to a SINGLE FunctionCompile'd function
+(* ::Section:: *)
+(*ParserCompile : value-threading codegen*)
+
+(* Lowers a ParserCombinator tree to a SINGLE FunctionCompile'd function
 
 		(cgInput :: "String", cgPos :: "MachineInteger") -> {finalPos, value}
 
@@ -1776,8 +1783,10 @@ cgShim[pc_, cf_CompiledCodeFunction] :=
 		]
 	]
 
-(* === Recursive grammars ===
-	A grammar that uses ParseRecursive can't be lowered to a single flat
+(* ::Section:: *)
+(*Recursive grammars*)
+
+(* A grammar that uses ParseRecursive can't be lowered to a single flat
 	function. Instead each non-terminal becomes a typed FunctionDeclaration
 	returning an inert parse-state cgOkState[value, newPos] / cgFailState,
 	and a ParseRecursive[s] reference compiles to a call to that
@@ -1809,15 +1818,17 @@ cgEmit[ParserCombinator["Recursive", h : Hold[_Symbol], _]] :=
 cgNtNameMap = <||>
 
 (* collect all Hold[sym] reachable through Recursive nodes *)
-cgCollectNts[rootPc_] := Module[{seen = {}, queue, cur, found},
-	found[x_] := Cases[x, ParserCombinator["Recursive", hh_Hold, _] :> hh, Infinity];
-	queue = found[rootPc];
-	While[queue =!= {},
-		cur = First[queue]; queue = Rest[queue];
-		If[! MemberQ[seen, cur],
-			AppendTo[seen, cur];
-			queue = Join[queue, found[ReleaseHold[cur]]]]];
-	seen]
+cgCollectNts::usage = "cgCollectNts[root] gives the Hold[symbol] of each non-terminal the parser root reaches through Recursive \
+nodes, in the order a breadth-first walk meets them."
+cgCollectNts[rootPc_] := First @ NestWhile[ntVisit, {{}, recursiveHolds[rootPc]}, Last[#] =!= {} &]
+
+recursiveHolds::usage = "recursiveHolds[x] gives the Hold[symbol] of each Recursive node in x."
+recursiveHolds[x_] := Cases[x, ParserCombinator["Recursive", held_Hold, _] :> held, Infinity]
+
+ntVisit::usage = "ntVisit[{seen, queue}] gives the walk's state after the first of the queue: met, and the non-terminals it reaches \
+queued, where it was not met before."
+ntVisit[{seen_List, {current_, rest___}}] /; MemberQ[seen, current] := {seen, {rest}}
+ntVisit[{seen_List, {current_, rest___}}] := {Append[seen, current], Join[{rest}, recursiveHolds[ReleaseHold[current]]]}
 
 (* one function body; asTuple=True for the root (returns {finalPos,value}),
 	False for a non-terminal (returns inert state). Snapshots the fresh-var
@@ -2175,8 +2186,10 @@ cgInterpFallback[pc_] := ParserCombinator[pc[[1]], pc[[2]],
 		interpret[ParserCombinator[pc[[1]], pc[[2]], KeyDrop[pc[[3]], "Code"]], input, pos]]]]
 
 
-(* === SummaryBox formatter ===
-	Modelled on the PAdicNumber / FiniteFieldElement convention. *)
+(* ::Section:: *)
+(*SummaryBox formatter*)
+
+(* Modelled on the PAdicNumber / FiniteFieldElement convention. *)
 
 arity[args_List] := Length[args]
 arity[_] := 1

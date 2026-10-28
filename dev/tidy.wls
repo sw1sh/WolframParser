@@ -6,7 +6,7 @@
    - tabs indent, one for each four columns of the spaces they replace;
    - no ; ends a top-level definition;
    - a section is a package-editor section, (* ::Section:: *) then its title,
-     in place of a (* --- title --- *) banner.
+     in place of a (* --- title --- *) or (* === title === *) banner.
 
 	wl -f dev/tidy.wls [--check] file ...
 
@@ -65,12 +65,14 @@ withoutDefinitionSemicolons[text_String] := With[{semicolons = definitionSemicol
 	If[semicolons === {}, text, StringReplacePart[text, "", semicolons]]
 ]
 
-sectionedText::usage = "sectionedText[text] gives text with each (* --- title --- *) banner a package-editor section of the title."
-sectionedText[text_String] := StringReplace[
-	text,
-	StartOfLine ~~ "(* --- " ~~ title : Shortest[Except["\n"] ..] ~~ " --- *)" ~~ EndOfLine :>
-		"(* ::Section:: *)\n(*" <> Capitalize[title] <> "*)"
-]
+sectionedText::usage = "sectionedText[text] gives text with each (* --- title --- *) or (* === title === *) banner a package-editor section \
+of the title, and the text after the title of a banner of more lines a comment of its own."
+sectionedText[text_String] := StringReplace[text, {
+	StartOfLine ~~ "(* " ~~ rule : ("-" .. | "=" ..) ~~ " " ~~ title : Shortest[Except["\n"] ..] ~~ " " ~~ rule2 : ("-" .. | "=" ..) ~~ " *)" ~~ EndOfLine /;
+		rule === rule2 && StringLength[rule] >= 3 :> "(* ::Section:: *)\n(*" <> Capitalize[title] <> "*)",
+	StartOfLine ~~ "(* === " ~~ title : Shortest[Except["\n"] ..] ~~ " ===\n" ~~ ("\t" | " ") .. ~~ body : Shortest[__] ~~ "*)" /; StringFreeQ[body, "(*" | "*)"] :>
+		"(* ::Section:: *)\n(*" <> Capitalize[title] <> "*)\n\n(* " <> body <> "*)"
+}]
 
 tidyText::usage = "tidyText[text] gives text laid out as the style guide asks."
 tidyText[text_String] := tabbedText @ sectionedText @ withoutDefinitionSemicolons[text]

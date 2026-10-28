@@ -41,8 +41,10 @@ ExportLaTeX::usage = "ExportLaTeX[boxes] serializes a Wolfram box tree - Fractio
 Begin["`LaTeXPrivate`"]
 
 
-(* === lexical ===
-	Math mode treats whitespace as non-significant, so we strip it
+(* ::Section:: *)
+(*Lexical*)
+
+(* Math mode treats whitespace as non-significant, so we strip it
 	after each token. *)
 
 ws = ParseMany[ParseCharacter[WhitespaceCharacter]]
@@ -52,13 +54,15 @@ token[p_] := ParseAction[p ~~ ws, #1 &]
 literal[s_String] := token[ParseLiteral[s]]
 
 
-(* === character classes used by identifiers / numbers === *)
+(* ::Section:: *)
+(*Character classes used by identifiers / numbers*)
 
 letter = ParseCharacter[LetterCharacter]
 digit = ParseCharacter[DigitCharacter]
 
 
-(* === numbers === *)
+(* ::Section:: *)
+(*Numbers*)
 
 intLit = ParseAction[ParseSome[digit], StringJoin]
 
@@ -73,7 +77,8 @@ decLit = ParseAction[
 numberAtom = ParseAction[token[decLit | intLit], #1 &]
 
 
-(* === bare identifier (single letter, italic by math convention) === *)
+(* ::Section:: *)
+(*Bare identifier (single letter, italic by math convention)*)
 
 identAtom = ParseAction[
 	token[letter],
@@ -115,8 +120,10 @@ bareUnicodeAtomQ[c_String] := StringLength[c] == 1 && (! LetterQ[c] || preStyled
 uprightUnicodeSymbols[boxes_] := boxes /. StyleBox[s_String, "TI"] /; bareUnicodeAtomQ[s] :> s
 
 
-(* === command (\name, optional [bracketed] arg, any number of {braced} args) ===
-	A command name is a backslash followed by either one-or-more letters
+(* ::Section:: *)
+(*Command (\name, optional [bracketed] arg, any number of {braced} args)*)
+
+(* A command name is a backslash followed by either one-or-more letters
 	(\frac, \mathbb, \alpha, ...) OR a single non-letter character
 	(\{, \}, \,, \;, \$, \%, \&, \#, \_, the escaped punctuation /
 	spacing commands). *)
@@ -206,8 +213,10 @@ bracedArg = ParseBetween[
 bracketedArg = ParseBetween[literal["["], ParseRecursive[topRow], literal["]"]]
 
 
-(* === environments: \begin{name} cells \end{name} ===
-	Rows are separated by \\, columns by &; each cell is a mathRow.
+(* ::Section:: *)
+(*Environments: \begin{name} cells \end{name}*)
+
+(* Rows are separated by \\, columns by &; each cell is a mathRow.
 	Renders as a GridBox wrapped in the delimiters the environment name
 	implies (pmatrix -> (), bmatrix -> [], vmatrix -> | |, cases -> {,
 	plain matrix / align / aligned / array -> bare grid). The optional
@@ -407,8 +416,10 @@ buildEnv[name_String, rowsIn_List] :=
 	]
 
 
-(* === command dispatch table ===
-	Each handler takes (optArg, reqArgs_List) and returns a box.
+(* ::Section:: *)
+(*Command dispatch table*)
+
+(* Each handler takes (optArg, reqArgs_List) and returns a box.
 	Add a handler to extend the parser. *)
 
 dispatchCommand[name_String, opt_, req_List] :=
@@ -423,8 +434,10 @@ dispatchCommand[name_String, opt_, req_List] :=
 commandHandlers[_String] := Missing["NotFound"]
 
 
-(* === named characters for \mathbb / \mathcal / \mathfrak ===
-	Each is constructed at load time via ToExpression, which parses the
+(* ::Section:: *)
+(*Named characters for \mathbb / \mathcal / \mathfrak*)
+
+(* Each is constructed at load time via ToExpression, which parses the
 	literal "\[DoubleStruckCapitalR]" form into a single named character.
 	Doing this in source directly with string concatenation runs afoul
 	of the WL tokenizer (which sees "\[DoubleStruckCapital" as a
@@ -680,8 +693,10 @@ commandHandlers["\\not"] = Function[{opt, req},
 ]
 
 
-(* === accents ===
-	Each is a command with one required arg; renders as an OverscriptBox
+(* ::Section:: *)
+(*Accents*)
+
+(* Each is a command with one required arg; renders as an OverscriptBox
 	with the accent glyph on top. \overline / \underline / the wide
 	accents span their whole argument. *)
 
@@ -741,7 +756,8 @@ commandHandlers["\\overrightharpoon"]   = accentHandler["\[RightArrow]"]
 commandHandlers["\\utilde"] = Function[{opt, req}, UnderscriptBox[First[req, ""], "~"]]
 
 
-(* === fractions, roots, binomials === *)
+(* ::Section:: *)
+(*Fractions, roots, binomials*)
 
 fracHandler = Function[{opt, req},
 	If[ Length[req] >= 2, FractionBox[req[[1]], req[[2]]], "\\frac" ]
@@ -808,8 +824,10 @@ commandHandlers["\\mod"]  = Function[{opt, req},
 ]
 
 
-(* === structural no-ops ===
-	Commands that exist for TeX's typesetting needs (numbering, line
+(* ::Section:: *)
+(*Structural no-ops*)
+
+(* Commands that exist for TeX's typesetting needs (numbering, line
 	breaking, hint to spacing engine) but carry no semantic information
 	for a doc-math renderer. We accept them and emit nothing. *)
 
@@ -915,8 +933,10 @@ commandHandlers["\\quad"]  = Function[{opt, req}, namedSymbolChars["\\quad"]]
 commandHandlers["\\qquad"] = Function[{opt, req}, namedSymbolChars["\\qquad"]]
 
 
-(* === math-atom classification ===
-	\mathop / \mathrel / \mathbin / \mathord / \mathopen / \mathclose /
+(* ::Section:: *)
+(*Math-atom classification*)
+
+(* \mathop / \mathrel / \mathbin / \mathord / \mathopen / \mathclose /
 	\mathpunct only affect spacing classification in TeX. For rendering,
 	we just emit the argument unchanged. Same for \smash and \boxed (a
 	visual box that we drop). *)
@@ -1065,8 +1085,10 @@ commandHandlers["\\phantom"]  = Function[{opt, req}, ""]
 commandHandlers["\\hphantom"] = commandHandlers["\\phantom"]
 commandHandlers["\\vphantom"] = commandHandlers["\\phantom"]
 
-(* === colors ===
-	KaTeX `\color{name}{body}` and `\textcolor{name}{body}` accept a
+(* ::Section:: *)
+(*Colors*)
+
+(* KaTeX `\color{name}{body}` and `\textcolor{name}{body}` accept a
 	CSS / dvips color name (or a #RRGGBB hex) and apply that colour
 	to the body. We map known names to RGBColor / GrayLevel and wrap
 	the body in StyleBox[body, FontColor -> ...] so the notebook FE
@@ -1144,8 +1166,10 @@ Scan[
 	Keys[$colorMap]
 ]
 
-(* === strike-through / cancel ===
-	\sout, \cancel, \bcancel, \xcancel all visually score out the
+(* ::Section:: *)
+(*Strike-through / cancel*)
+
+(* \sout, \cancel, \bcancel, \xcancel all visually score out the
 	argument; render the arg with `FontVariations -> {"StrikeThrough" -> True}`.
 	The struck-through glyph captures the semantic intent (the bit being
 	cancelled) better than dropping the macro. *)
@@ -1331,7 +1355,8 @@ commandHandlers["\\widecheck"] = accentHandler["\[Hacek]"]
 commandHandlers["\\widebreve"] = accentHandler["\[Breve]"]
 
 
-(* === big operators and named symbols === *)
+(* ::Section:: *)
+(*Big operators and named symbols*)
 
 (* Bare-symbol commands: each emits a single Unicode character. *)
 namedSymbolChars = <|
@@ -1523,8 +1548,10 @@ Scan[
 ]
 
 
-(* === Greek letter macros ===
-	The escapes below resolve at *load* time to single named characters
+(* ::Section:: *)
+(*Greek letter macros*)
+
+(* The escapes below resolve at *load* time to single named characters
 	(\[Alpha] etc.), since they're typed directly into the source. *)
 
 greekChars = <|
@@ -1616,7 +1643,8 @@ funcAtomQ[RowBox[parts_List]] := parts =!= {} && funcAtomQ[Last[parts]]
 funcAtomQ[_] := False
 
 
-(* === precedence stratification: atom < factor < term < expr === *)
+(* ::Section:: *)
+(*Precedence stratification: atom < factor < term < expr*)
 
 (* parenthesised subexpression: emits the parens as part of the box so
 	they render visually, unlike `{...}` which is structural-only. Inner
@@ -1973,7 +2001,8 @@ outerRow = ParseAction[
 ]
 
 
-(* === top-level entry === *)
+(* ::Section:: *)
+(*Top-level entry*)
 
 LaTeXMathParser := ParseAction[ws ~~ outerRow, #2 &]
 
@@ -3097,8 +3126,10 @@ BuildLaTeXParserAsset[] := Module[{data, path},
 $nonASCIIQ = StringContainsQ[#, RegularExpression["[^\\x00-\\x7F]"]] &
 latexParserFor[pre_String] := If[$nonASCIIQ[pre], LaTeXMathParser, activeLatexParser[]]
 
-(* === Dirac bra/ket -> auto-growing bracketed RowBoxes ===
-	The active Dirac delimiters come out as StyleBox[char, SpanMaxSize -> 1]
+(* ::Section:: *)
+(*Dirac bra/ket -> auto-growing bracketed RowBoxes*)
+
+(* The active Dirac delimiters come out as StyleBox[char, SpanMaxSize -> 1]
 	(fixedFence), which caps the stretchy-delimiter machinery so bars/angles draw
 	at nominal glyph height and sit detached from tall content.  Rewrite them to
 	plain RowBoxes built from the FE's auto-growing delimiter glyphs (see ketBox
@@ -3201,8 +3232,10 @@ LaTeXMathParse[source_String] := Module[
 ]
 
 
-(* === LaTeXMathStyle: give parser output a Computer-Modern look ===
-	The parser is font-agnostic - identifiers are tagged StyleBox[_, "TI"] (the
+(* ::Section:: *)
+(*LaTeXMathStyle: give parser output a Computer-Modern look*)
+
+(* The parser is font-agnostic - identifiers are tagged StyleBox[_, "TI"] (the
 	FE's default Times-based math italic).  This restyles that into the
 	Computer-Modern look LaTeX/MaTeX produces.  An OpenType *math* font (Latin
 	Modern Math) carries the cmmi math-italic letterforms at the
