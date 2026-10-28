@@ -877,6 +877,12 @@ VerificationTest[
     {True, True, {0, 2, 0, 0, 0, 0, 0}, None},
     TestID -> "wl program: flat, the program, its parts and the source's codes in one array"]
 VerificationTest[
+    With[{reading = Wolfram`Parser`Languages`WolframLanguage`Private`flatReading, flat = Wolfram`Parser`Languages`WolframLanguage`Private`flatProgram},
+        {reading["f[x"] === First[WolframLanguageHeldNext["f[x", 1]], reading["a b c"] === flat["a b c"], reading["(a + b"] === First[WolframLanguageHeldNext["(a + b", 1]],
+            reading["f[1,"], reading["x = 1\nf[x"], reading["\"a\\qb"]}],
+    {True, True, True, None, None, None},
+    TestID -> "wl program: flatReading gives the program, or the failure of a quiet first statement as HeldNext gives it, else None"]
+VerificationTest[
     Developer`PackedArrayQ /@ WolframLanguageProgram["f[x_] := x^2\n\ng[1]"],
     {True, True, True},
     TestID -> "wl program: its codes, instructions and parts are packed"]

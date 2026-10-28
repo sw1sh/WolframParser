@@ -1976,9 +1976,15 @@ readingOf[codes_List, padded_List, {lexed_List, program_List}] := <|
 	reading stopped at the token that holds its code. *)
 splitParse::usage = "splitParse[lexed, padded] gives {tokens, program}: the lexer's tokens lexed of the codes padded, each token that \
 is two split, and the parser's program of them."
-splitParse[lexed_List, padded_List] := splitParsed @ NestWhile[
+splitParse[lexed_List, padded_List] := splitParseOf[lexed, padded, parsedTokens[lexed, padded]]
+
+(* tokens the parser splits none of are its program's at once *)
+splitParseOf::usage = "splitParseOf[lexed, padded, program] gives splitParse's {tokens, program} of the tokens lexed of the codes padded, \
+program the parser's first program of them."
+splitParseOf[lexed_List, _List, program_List] /; parseStatus[program] =!= 3 := {lexed, program}
+splitParseOf[lexed_List, padded_List, program_List] := splitParsed @ NestWhile[
 	splitAgain[#, padded] &,
-	{lexed, parsedTokens[lexed, padded], {}},
+	{lexed, program, {}},
 	splitPendingQ
 ]
 
@@ -2270,8 +2276,8 @@ rowStarts[rows_List] := rows[[All, 2]]
 (* the statement of the source s whose line begins at pos, 1 or the position the call before gave;
 	a source that holds no comma and no \, and whose first statement, on its first line, cannot be
 	read, is that statement's failure at once, with no warning, and nothing is kept for it *)
-WolframLanguageHeldNext[s_String, 1] := With[{reading = quietReading[s]},
-	{warned[failureAt[reading["Stop"]["Failure"], reading["Stop"]["Failure"]["Position"]], {}], 1} /; firstStatementStopQ[reading]
+WolframLanguageHeldNext[s_String, 1] := With[{failure = quietFailure[s]},
+	{failure, 1} /; FailureQ[failure]
 ]
 WolframLanguageHeldNext[s_String, pos_Integer] := With[
 	{place = heldNextState[s]},
@@ -2280,18 +2286,34 @@ WolframLanguageHeldNext[s_String, pos_Integer] := With[
 	heldNextPart[place, state, index, state["Parts"][[index]]]
 ]
 
-quietReading::usage = "quietReading[s] gives the reading of the codes of the source s where it holds no comma and no \\, and no parts \
-of it are kept, else None."
-quietReading[s_String] /; StringContainsQ[s, "," | "\\"] || MemberQ[Lookup[$heldNextStates, "Source"], s] := None
-quietReading[s_String] := codesReading[ToCharacterCode[s]]
-
-firstStatementStopQ::usage = "firstStatementStopQ[reading] is True where reading stops in the first statement, on the first line."
-firstStatementStopQ[None] := False
-firstStatementStopQ[reading_Association] := And[
-	reading["Stop"] =!= None,
-	reading["Stop"]["Statement"] === 1,
-	newlineBefore[reading["Lexed"], 1] === 0
+(* The failure of a source that holds no comma and no \, no parts of it kept, whose reading stops in
+	its first statement, on its first line: the failure of that statement, placed at its own
+	position, with no warning, as no warning comes from such a source; from one reading of its codes,
+	with no association of the reading. *)
+quietFailure::usage = "quietFailure[s] gives the failure of the first statement of the source s, with no warning, where s holds no comma \
+and no \\, no parts of it are kept, and its reading stops in its first statement, on its first line, else None."
+quietFailure[s_String] /; StringContainsQ[s, "," | "\\"] || MemberQ[Lookup[$heldNextStates, "Source"], s] := None
+quietFailure[s_String] := With[{codes = ToCharacterCode[s]},
+	{padded = paddedCodes[codes]},
+	firstStopFailure[splitParse[lexedCodes[padded], padded], Length[codes]]
 ]
+
+firstStopFailure::usage = "firstStopFailure[{lexed, program}, n] gives the failure, with no warning, where reading the tokens lexed of n \
+codes by the program stops in the first statement, on the first line, else None."
+firstStopFailure[{lexed_List, program_List}, n_Integer] := firstStop[lexed, readingStop[lexed, program, n]]
+
+firstStop::usage = "firstStop[lexed, stop] gives the failure of the stop, with no warning, where it is in the first statement, on the \
+first line, else None."
+firstStop[lexed_List, stop_Association] /; stop["Statement"] === 1 && newlineBefore[lexed, 1] === 0 := warned[stop["Failure"], {}]
+firstStop[_List, _] := None
+
+(* What a reader of whole texts takes in one call: the program of a source as flatProgram gives it;
+	or, for a source whose reading WolframLanguageHeldNext stops at a failure in its first statement,
+	on its first line, with no warning, that failure, as WolframLanguageHeldNext[s, 1] gives it; else
+	None, for WolframLanguageHeldNext to read. *)
+flatReading::usage = "flatReading[s] gives flatProgram's array of the source s, or the failure WolframLanguageHeldNext[s, 1] gives where \
+reading stops in its first statement, on its first line, with no warning, or None."
+flatReading[s_String] := Replace[flatProgram[s], None :> quietFailure[s]]
 
 partIndex::usage = "partIndex[state, pos] gives the place among the state's parts of the one whose line begins at pos, or of the first \
 that begins past it, or of the last."
