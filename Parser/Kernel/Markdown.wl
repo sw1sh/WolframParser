@@ -407,7 +407,8 @@ parseFmValue[v_String] := With[{tr = StringTrim[v]},
 			StringTrim /@ StringSplit[StringTake[tr, {2, -2}], ","],
 		StringMatchQ[tr, "\"" ~~ ___ ~~ "\""] || StringMatchQ[tr, "'" ~~ ___ ~~ "'"],
 			StringTake[tr, {2, -2}],
-		True, tr
+		True,
+			tr
 	]
 ]
 

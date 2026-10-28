@@ -252,14 +252,38 @@ cellLeadingOp = ParseAction[
 		literal["\\subset"] | literal["\\subseteq"] |
 		literal["\\supset"] | literal["\\supseteq"],
 	Switch[#1,
-		"\\neq", "\[NotEqual]", "\\equiv", "\[Congruent]",
-		"\\leq" | "\\le", "\[LessEqual]", "\\geq" | "\\ge", "\[GreaterEqual]",
-		"\\to", "\[Rule]", "\\mapsto", "\[Function]",
-		"\\sim", "\[Tilde]", "\\approx", "\[TildeTilde]",
-		"\\in", "\[Element]", "\\notin", "\[NotElement]", "\\mid", "\[VerticalSeparator]",
-		"\\subset", "\[Subset]", "\\subseteq", "\[SubsetEqual]",
-		"\\supset", "\[Superset]", "\\supseteq", "\[SupersetEqual]",
-		_, #1
+		"\\neq",
+			"\[NotEqual]",
+		"\\equiv",
+			"\[Congruent]",
+		"\\leq" | "\\le",
+			"\[LessEqual]",
+		"\\geq" | "\\ge",
+			"\[GreaterEqual]",
+		"\\to",
+			"\[Rule]",
+		"\\mapsto",
+			"\[Function]",
+		"\\sim",
+			"\[Tilde]",
+		"\\approx",
+			"\[TildeTilde]",
+		"\\in",
+			"\[Element]",
+		"\\notin",
+			"\[NotElement]",
+		"\\mid",
+			"\[VerticalSeparator]",
+		"\\subset",
+			"\[Subset]",
+		"\\subseteq",
+			"\[SubsetEqual]",
+		"\\supset",
+			"\[Superset]",
+		"\\supseteq",
+			"\[SupersetEqual]",
+		_,
+			#1
 	] &
 ]
 
@@ -857,9 +881,12 @@ noopHandler = Function[{opt, req}, ""]
 	for the no-following-brace case this still emits "". *)
 styleScopeHandler = Function[{opt, req},
 	Which[
-		Length[req] === 0, "",
-		Length[req] === 1, First[req],
-		True, RowBox[req]
+		Length[req] === 0,
+			"",
+		Length[req] === 1,
+			First[req],
+		True,
+			RowBox[req]
 	]
 ]
 
@@ -928,9 +955,12 @@ Scan[
 	emit "" - same as the old noopHandler did. *)
 sizeHandler[pt_] := Function[{opt, req},
 	Which[
-		Length[req] === 0, "",
-		Length[req] === 1, StyleBox[First[req], FontSize -> pt],
-		True, StyleBox[RowBox[req], FontSize -> pt]
+		Length[req] === 0,
+			"",
+		Length[req] === 1,
+			StyleBox[First[req], FontSize -> pt],
+		True,
+			StyleBox[RowBox[req], FontSize -> pt]
 	]
 ]
 commandHandlers["\\tiny"]         = sizeHandler[12]
@@ -1009,12 +1039,26 @@ texLengthToPt[s_String] := Module[{m},
 	If[ m === {}, Missing[],
 		With[{n = ToExpression[m[[1, 1]]], u = m[[1, 2]]},
 			n * Switch[u,
-				"em", 12,  "ex", 6,
-				"pt", 1,   "bp", 1,
-				"in", 72,  "cm", 28.35, "mm", 2.835,
-				"px", 0.75,
-				"mu", 1,
-				_, 1
+				"em",
+					12,
+				"ex",
+					6,
+				"pt",
+					1,
+				"bp",
+					1,
+				"in",
+					72,
+				"cm",
+					28.35,
+				"mm",
+					2.835,
+				"px",
+					0.75,
+				"mu",
+					1,
+				_,
+					1
 			]
 		]
 	]
@@ -1846,9 +1890,12 @@ postfix = ParseChoice[
 	ParseAction[
 		ParseSome[literal["'"]],
 		{"sup", Switch[Length[{##}],
-			1, "\[Prime]",
-			2, "\[DoublePrime]",
-			_, StringJoin[ConstantArray["\[Prime]", Length[{##}]]]
+			1,
+				"\[Prime]",
+			2,
+				"\[DoublePrime]",
+			_,
+				StringJoin[ConstantArray["\[Prime]", Length[{##}]]]
 		]} &
 	]
 ]
@@ -1861,15 +1908,22 @@ attachScripts[base_, posts_List] := Module[{sub, sups},
 	sub = FirstCase[posts, {"sub", v_} :> v, Missing[]];
 	sups = Cases[posts, {"sup", v_} :> v];
 	With[{sup = Which[
-			Length[sups] === 0, Missing[],
-			Length[sups] === 1, First[sups],
-			True, RowBox[sups]
+		Length[sups] === 0,
+			Missing[],
+		Length[sups] === 1,
+			First[sups],
+		True,
+			RowBox[sups]
 	]},
 		Which[
-			! MissingQ[sub] && ! MissingQ[sup], SubsuperscriptBox[base, sub, sup],
-			! MissingQ[sub],                    SubscriptBox[base, sub],
-			! MissingQ[sup],                    SuperscriptBox[base, sup],
-			True,                                base
+			! MissingQ[sub] && ! MissingQ[sup],
+				SubsuperscriptBox[base, sub, sup],
+			! MissingQ[sub],
+				SubscriptBox[base, sub],
+			! MissingQ[sup],
+				SuperscriptBox[base, sup],
+			True,
+				base
 		]
 	]
 ]
@@ -1949,22 +2003,38 @@ relOp = ParseAction[
 		literal["\\mid"],
 	Function[op, Function[{a, b},
 		rowJoin[a, Switch[op,
-			"\\neq", "\[NotEqual]",
-			"\\equiv", "\[Congruent]",
-			"\\leq" | "\\le", "\[LessEqual]",
-			"\\geq" | "\\ge", "\[GreaterEqual]",
-			"\\subset", "\[Subset]",
-			"\\subseteq", "\[SubsetEqual]",
-			"\\supset", "\[Superset]",
-			"\\supseteq", "\[SupersetEqual]",
-			"\\in", "\[Element]",
-			"\\notin", "\[NotElement]",
-			"\\to", "\[Rule]",
-			"\\mapsto", "\[Function]",
-			"\\sim", "\[Tilde]",
-			"\\approx", "\[TildeTilde]",
-			"\\mid", "\[VerticalSeparator]",
-			_, op
+			"\\neq",
+				"\[NotEqual]",
+			"\\equiv",
+				"\[Congruent]",
+			"\\leq" | "\\le",
+				"\[LessEqual]",
+			"\\geq" | "\\ge",
+				"\[GreaterEqual]",
+			"\\subset",
+				"\[Subset]",
+			"\\subseteq",
+				"\[SubsetEqual]",
+			"\\supset",
+				"\[Superset]",
+			"\\supseteq",
+				"\[SupersetEqual]",
+			"\\in",
+				"\[Element]",
+			"\\notin",
+				"\[NotElement]",
+			"\\to",
+				"\[Rule]",
+			"\\mapsto",
+				"\[Function]",
+			"\\sim",
+				"\[Tilde]",
+			"\\approx",
+				"\[TildeTilde]",
+			"\\mid",
+				"\[VerticalSeparator]",
+			_,
+				op
 		], b
 		]
 	]]
@@ -3159,10 +3229,14 @@ LaTeXMathParse[source_String] := Module[
 $cmFontDirs := {FileNameJoin[{$HomeDirectory, "Library", "Fonts"}], "/Library/Fonts", "/System/Library/Fonts"}
 (* memoized - installed fonts don't change within a session *)
 detectMathFont[] := detectMathFont[] = Which[
-	FileNames["latinmodern-math*" | "lmmath*", $cmFontDirs] =!= {}, "Latin Modern Math",
-	FileNames["lmroman*" | "latinmodern*", $cmFontDirs] =!= {}, "Latin Modern Roman",
-	FileNames["cmun*", $cmFontDirs] =!= {}, "CMU Serif",
-	True, None
+	FileNames["latinmodern-math*" | "lmmath*", $cmFontDirs] =!= {},
+		"Latin Modern Math",
+	FileNames["lmroman*" | "latinmodern*", $cmFontDirs] =!= {},
+		"Latin Modern Roman",
+	FileNames["cmun*", $cmFontDirs] =!= {},
+		"CMU Serif",
+	True,
+		None
 ]
 detectMSBMFont[] := detectMSBMFont[] = If[FileNames["MSBM10.otf", $cmFontDirs] =!= {}, "MSBM10", None]
 
@@ -3238,16 +3312,26 @@ $mathAlphaTeX = Association @ Flatten @ Table[
 ]
 
 normCharCode[n_Integer] := Which[
-	63488 <= n <= 63513, FromCharacterCode[n - 63488 + 97],
-	63514 <= n <= 63539, FromCharacterCode[n - 63514 + 65],
-	KeyExistsQ[$puaAlphaGlyph, n], $puaAlphaGlyph[n],
-	63307 <= n <= 63311, FromCharacterCode @ {68, 100, 101, 105, 106}[[n - 63306]],
-	n === 16^^F603 || n === 16^^F604, "|",
-	n === 16^^F7D9, "=",
-	n === 16^^F39E, "+",
-	n === 16^^F438, "lim",
-	57344 <= n <= 63487, "",
-	True, FromCharacterCode[n]
+	63488 <= n <= 63513,
+		FromCharacterCode[n - 63488 + 97],
+	63514 <= n <= 63539,
+		FromCharacterCode[n - 63514 + 65],
+	KeyExistsQ[$puaAlphaGlyph, n],
+		$puaAlphaGlyph[n],
+	63307 <= n <= 63311,
+		FromCharacterCode @ {68, 100, 101, 105, 106}[[n - 63306]],
+	n === 16^^F603 || n === 16^^F604,
+		"|",
+	n === 16^^F7D9,
+		"=",
+	n === 16^^F39E,
+		"+",
+	n === 16^^F438,
+		"lim",
+	57344 <= n <= 63487,
+		"",
+	True,
+		FromCharacterCode[n]
 ]
 (* exposed for reuse: PUA/formal glyph -> canonical Unicode (prose-safe) *)
 Wolfram`Parser`normStr[s_String] := StringJoin[normCharCode /@ ToCharacterCode[s]]

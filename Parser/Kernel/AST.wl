@@ -169,8 +169,18 @@ ASTStripSource[tree_] := tree /. (a_Association /; KeyExistsQ[a, "Source"] || Ke
 opSymbol[opmap_, op_] := Lookup[opmap, op, op]
 
 leafKind[k_String] := Switch[k,
-	"Integer", Integer, "Real", Real, "String", String,
-	"Symbol", Symbol, "Rational", Rational, _, Symbol
+	"Integer",
+		Integer,
+	"Real",
+		Real,
+	"String",
+		String,
+	"Symbol",
+		Symbol,
+	"Rational",
+		Rational,
+	_,
+		Symbol
 ]
 leafKind[k_] := k
 

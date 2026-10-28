@@ -9,7 +9,11 @@
 	in place of a (* --- title --- *) or (* === title === *) banner;
 	- a bracket, brace, association or parenthesis that spans lines closes at
 	the start of a line, indented as the line it opens on; the closers of
-	forms that open on one line share a line.
+	forms that open on one line share a line;
+	- a Which or a Switch that spans lines has each test on a line of its own,
+	one level deeper than its head's line, and each value on the line after,
+	one level deeper again; one whose arguments span lines or hold a comment
+	is left as it is.
 
 	wl -f dev/tidy.wls [--check] file ...
 
@@ -145,8 +149,90 @@ closedOnce[text_String] := With[{edits = closerEdits[text]},
 	If[edits === {}, text, StringReplacePart[text, edits[[All, 2]], edits[[All, 1]]]]
 ]
 
+(* A Which or a Switch that spans lines, its arguments each on one line and no comment in it, laid out
+	again: Which[ and its tests one level deeper than its line, Switch[expr, and its forms so, each
+	value one level deeper again, and the closer under the line. *)
+casesEdits::usage = "casesEdits[text] gives {{from, to}, new} for the bracket of each Which or Switch of text that spans lines, the text from \
+from to to laid out again as new."
+casesEdits[text_String] := With[{codes = ToCharacterCode[text], lines = Prepend[1 + Accumulate[1 - Unitize[ToCharacterCode[text] - 10]], 1]},
+	Cases[
+		CodeParser`CodeConcreteParse[text, "SourceConvention" -> "SourceCharacterIndex"],
+		CodeParser`CallNode[
+			{CodeParser`LeafNode[Symbol, head : "Which" | "Switch", _]},
+			CodeParser`GroupNode[
+				CodeParser`GroupSquare,
+				{
+					CodeParser`LeafNode[Token`OpenSquare, _, KeyValuePattern[CodeParser`Source -> {open_, _}]],
+					inner___,
+					CodeParser`LeafNode[Token`CloseSquare, _, KeyValuePattern[CodeParser`Source -> {close_, _}]]
+				},
+				_
+			],
+			_
+		] /; lines[[open]] =!= lines[[close]] :> casesEdit[text, codes, lines, head, open, close, {inner}],
+		Infinity
+	]
+]
+
+casesEdit::usage = "casesEdit[text, codes, lines, head, open, close, inner] gives the edit of the bracket of a Which or Switch from open to \
+close, its nodes inner, or Nothing where it is left as it is."
+casesEdit[text_String, codes_List, lines_List, head_String, open_Integer, close_Integer, inner_List] := casesLaidOut[
+	text,
+	codes,
+	lines,
+	head,
+	open,
+	close,
+	Replace[
+		DeleteCases[inner, CodeParser`LeafNode[Whitespace | Token`Newline, _, _]],
+		{
+			{CodeParser`InfixNode[Comma, items_List, _]} :> DeleteCases[items, CodeParser`LeafNode[Token`Comma | Whitespace | Token`Newline, _, _]],
+			_ -> None
+		}
+	]
+]
+
+casesLaidOut::usage = "casesLaidOut[text, codes, lines, head, open, close, arguments] gives the edit that lays the arguments of a Which or \
+Switch out again, or Nothing for arguments that span lines, hold a comment, or are not of tests and values."
+casesLaidOut[text_String, codes_List, lines_List, head_String, open_Integer, close_Integer, arguments_List] /; And[
+	FreeQ[arguments, CodeParser`LeafNode[Token`Comment, _, _]],
+	StringFreeQ[StringTake[text, {open, close}], "(*"],
+	If[head === "Which", EvenQ[Length[arguments]] && Length[arguments] >= 2, OddQ[Length[arguments]] && Length[arguments] >= 3]
+] := casesText[
+	head,
+	open,
+	close,
+	Map[StringTake[text, Lookup[Last[#], CodeParser`Source]] &, arguments],
+	lineIndent[codes, lines, lines[[open]]]
+]
+casesLaidOut[___] := Nothing
+
+casesText::usage = "casesText[head, open, close, texts, indent] gives the edit of the bracket from open to close of a Which or Switch whose \
+arguments' texts are texts, its line indented by indent, or Nothing where a text spans lines."
+casesText[_String, _Integer, _Integer, texts_List, _String] /; AnyTrue[texts, StringContainsQ[#, "\n"] &] := Nothing
+casesText[head_String, open_Integer, close_Integer, texts_List, indent_String] := {
+	{open, close},
+	StringJoin[
+		"[",
+		If[head === "Switch", First[texts] <> ",", ""],
+		"\n",
+		StringRiffle[
+			MapIndexed[If[OddQ[First[#2]], indent <> "\t" <> #1, indent <> "\t\t" <> #1] &, If[head === "Switch", Rest[texts], texts]],
+			",\n"
+		],
+		"\n",
+		indent,
+		"]"
+	]
+}
+
+casedText::usage = "casedText[text] gives text with each Which and Switch that spans lines laid out as the style guide asks."
+casedText[text_String] := With[{edits = casesEdits[text]},
+	If[edits === {}, text, StringReplacePart[text, edits[[All, 2]], edits[[All, 1]]]]
+]
+
 tidyText::usage = "tidyText[text] gives text laid out as the style guide asks."
-tidyText[text_String] := closedText @ tabbedText @ sectionedText @ withoutDefinitionSemicolons[text]
+tidyText[text_String] := closedText @ FixedPoint[casedText, tabbedText @ sectionedText @ withoutDefinitionSemicolons[text], 8]
 
 heldStatements::usage = "heldStatements[text] gives the statements of text, each held, a definition and the Null a ; after it leaves as the \
 definition alone."

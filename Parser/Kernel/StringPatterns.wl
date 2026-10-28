@@ -220,8 +220,10 @@ alternativesProgram[{p_}] := p
 alternativesProgram[parts_List] := Which[
 	$oneClass && AllTrue[parts, singleCharacterQ],
 		If[! AllTrue[parts, bracketPartQ], $merged = True]; characterClass[codeIn[unionSpec[classSpec /@ parts]]],
-	! $oneClass && AllTrue[parts, bracketPartQ], characterClass[codeIn[unionSpec[classSpec /@ parts]]],
-	True, alternatives[parts]
+	! $oneClass && AllTrue[parts, bracketPartQ],
+		characterClass[codeIn[unionSpec[classSpec /@ parts]]],
+	True,
+		alternatives[parts]
 ]
 
 (* the parts of alternatives inside alternatives, in the order given, which Wolfram 15 takes as one
@@ -239,10 +241,14 @@ bracketPartQ[_] := False
 (* the union of classes, those of characters one *)
 unionSpec[specs_List] := With[{codes = Cases[specs, {"Codes", c_} :> c], others = DeleteCases[specs, {"Codes", _}]},
 	Which[
-		others === {}, {"Codes", Union @@ codes},
-		codes === {} && Length[others] === 1, First[others],
-		codes === {}, {"Union", others},
-		True, {"Union", Prepend[others, {"Codes", Union @@ codes}]}
+		others === {},
+			{"Codes", Union @@ codes},
+		codes === {} && Length[others] === 1,
+			First[others],
+		codes === {},
+			{"Union", others},
+		True,
+			{"Union", Prepend[others, {"Codes", Union @@ codes}]}
 	]
 ]
 
@@ -401,9 +407,12 @@ $regexEscapes = Function[c, c -> "\\" <> c] /@ Characters[".[]{}()\\*+?^$|"]
 bracketed[chars_List, negated_] := With[{set = DeleteDuplicates[chars]},
 	With[{middle = Join[DeleteCases[set, "]" | "-" | "^" | "["], Intersection[set, {"["}]]},
 		Which[
-			! negated && set === {"^"}, "\\^",
-			! negated && ! MemberQ[set, "]"] && middle === {} && MemberQ[set, "^"], "[" <> If[MemberQ[set, "-"], "-", ""] <> "^]",
-			True, StringJoin["[", If[negated, "^", ""], Intersection[set, {"]"}], middle, Intersection[set, {"^"}], Intersection[set, {"-"}], "]"]
+			! negated && set === {"^"},
+				"\\^",
+			! negated && ! MemberQ[set, "]"] && middle === {} && MemberQ[set, "^"],
+				"[" <> If[MemberQ[set, "-"], "-", ""] <> "^]",
+			True,
+				StringJoin["[", If[negated, "^", ""], Intersection[set, {"]"}], middle, Intersection[set, {"^"}], Intersection[set, {"-"}], "]"]
 		]
 	]
 ]
@@ -543,9 +552,12 @@ matched[repeat[p_, min_, max_, longest_], z_subject, i_Integer, b_, k_] := repea
 	group holds none, once if it may repeat no time, else not at all [WL 15.0.0] *)
 matched[repeat[p : captured[n_, ___], min_, max_, longest_], z_subject, i_Integer, b_, k_] := With[{span = Lookup[b, group[n]]},
 	Which[
-		! ListQ[span], If[min === 0, k[i, b], $noMatch],
-		span[[1]] === span[[2]], k[i, b],
-		True, repeated[{p, min, max, longest}, z, 0, i, b, k]
+		! ListQ[span],
+			If[min === 0, k[i, b], $noMatch],
+		span[[1]] === span[[2]],
+			k[i, b],
+		True,
+			repeated[{p, min, max, longest}, z, 0, i, b, k]
 	]
 ]
 (* A name bound before, the first time round a repeat, matches the text it matched then; one that
@@ -606,9 +618,12 @@ repeated[spec : {p_, min_, max_, longest_}, z_subject, count_Integer, i_Integer,
 		]]], $noMatch
 		]],
 		done = Function[Null, Which[
-			count === 0 && min === 0 && ! FreeQ[p, _named], repeated[spec, z, 1, i, Join[b, AssociationThread[Complement[Keys[programNames[p]], Keys[b]] -> None]], k],
-			count >= min, k[i, b],
-			True, $noMatch
+			count === 0 && min === 0 && ! FreeQ[p, _named],
+				repeated[spec, z, 1, i, Join[b, AssociationThread[Complement[Keys[programNames[p]], Keys[b]] -> None]], k],
+			count >= min,
+				k[i, b],
+			True,
+				$noMatch
 		]]
 	},
 	firstMatch[Function[way, way[]], If[longest, {more, done}, {done, more}]]

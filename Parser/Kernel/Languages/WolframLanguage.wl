@@ -578,13 +578,20 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 
 	longSpecs = Join[
 		Map[Function[row, With[{name = row[[1]], head = heldLongHead[row]}, {row[[4]], Which[
-			row[[3]] === CodeParser`InfixInequality, {"InfixN", ParseAction[longOperator[name], head &], relation},
-			name === "Minus", {"InfixN", ParseAction[longOperator[name], "-" &], plus},
-			name === "ImplicitPlus", {"InfixL", ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Binary"]["Plus", l, r]]]]},
-			name === "Divides", {"InfixN", longOperator[name], divisible},
-			name === "InvisibleApplication", {"InfixR", ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Call"][l, {r}]]]]},
-			row[[2]] === "InfixNode", {"InfixN", longOperator[name], flat[head]},
-			True, {If[row[[5]] === "Right", "InfixR", "InfixL"], ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Binary"][head, l, r]]]]}
+			row[[3]] === CodeParser`InfixInequality,
+				{"InfixN", ParseAction[longOperator[name], head &], relation},
+			name === "Minus",
+				{"InfixN", ParseAction[longOperator[name], "-" &], plus},
+			name === "ImplicitPlus",
+				{"InfixL", ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Binary"]["Plus", l, r]]]]},
+			name === "Divides",
+				{"InfixN", longOperator[name], divisible},
+			name === "InvisibleApplication",
+				{"InfixR", ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Call"][l, {r}]]]]},
+			row[[2]] === "InfixNode",
+				{"InfixN", longOperator[name], flat[head]},
+			True,
+				{If[row[[5]] === "Right", "InfixR", "InfixL"], ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Binary"][head, l, r]]]]}
 		]}]],
 			$heldLongInfix
 		],
@@ -856,10 +863,14 @@ machineValue[digits_Integer, base_Integer, scale_Integer] := If[ Abs[scale] <= 1
 	subnormal, zero where that is nearer, and past the greatest the value at machine precision
 	[WL 15.0.0]. *)
 machineReal[x_] := Which[
-	x == 0, 0.,
-	Abs[x] > $MaxMachineNumber, N[x],
-	Abs[x] >= 2^-1022, nearestMachineReal[x],
-	True, With[{k = Round[Abs[x] 2^1074]}, If[k === 0, 0., Quiet[N[Sign[x] k / 2^1074], General::munfl]]]
+	x == 0,
+		0.,
+	Abs[x] > $MaxMachineNumber,
+		N[x],
+	Abs[x] >= 2^-1022,
+		nearestMachineReal[x],
+	True,
+		With[{k = Round[Abs[x] 2^1074]}, If[k === 0, 0., Quiet[N[Sign[x] k / 2^1074], General::munfl]]]
 ]
 
 nearestMachineReal::usage = "nearestMachineReal[x] gives the machine real nearest the exact value x, at least the least normal one."
@@ -1323,9 +1334,12 @@ $integralPrecedence := $integralPrecedence = First[Cases[$longNameTable["Prefix"
 (* the head the kernel gives a long-name operator: its tag's, a relation's
 	the kernel's symbol for it, and \[HermitianConjugate] ConjugateTranspose *)
 heldLongHead[row_List] := Which[
-	row[[3]] === CodeParser`InfixInequality, Lookup[$relationHeads, row[[1]], row[[1]]],
-	row[[1]] === "HermitianConjugate", "ConjugateTranspose",
-	True, SymbolName[row[[3]]]
+	row[[3]] === CodeParser`InfixInequality,
+		Lookup[$relationHeads, row[[1]], row[[1]]],
+	row[[1]] === "HermitianConjugate",
+		"ConjugateTranspose",
+	True,
+		SymbolName[row[[3]]]
 ]
 $relationHeads = <|"NotEqual" -> "Unequal", "LessSlantEqual" -> "LessEqual", "GreaterSlantEqual" -> "GreaterEqual",
 	"Equal" -> "Equal", "LongEqual" -> "Equal"
@@ -1340,9 +1354,12 @@ $relationHeads = <|"NotEqual" -> "Unequal", "LessSlantEqual" -> "LessEqual", "Gr
 	nodes, the standard tree's, of each sign in turn, of a Times node whose last operand is a
 	differential's, which the call keeps. *)
 integrandQ[k_Integer, f_Association] := Which[
-	MatchQ[f["Expr"], HoldComplete[_?differentialHeadQ[_]]], k === 1,
-	KeyExistsQ[f, "Differentials"], With[{d = f["Differentials"]}, With[{n = LengthWhile[Reverse[d], TrueQ]}, n === k && FreeQ[Drop[d, -n], True]]],
-	True, False
+	MatchQ[f["Expr"], HoldComplete[_?differentialHeadQ[_]]],
+		k === 1,
+	KeyExistsQ[f, "Differentials"],
+		With[{d = f["Differentials"]}, With[{n = LengthWhile[Reverse[d], TrueQ]}, n === k && FreeQ[Drop[d, -n], True]]],
+	True,
+		False
 ]
 integrandQ[_Integer, _] := True
 integralOf[alg_, head_String, f_Association, k_Integer] := held[integralHeld[head, f["Expr"], k]]
@@ -1397,10 +1414,12 @@ simplifiedRelation[alg_, processed_List, affinity_] := With[{rators = processed[
 	Which[
 		Length[Union[rators]] === 1 && KeyExistsQ[$vectorRelations, First[rators]],
 			alg["Call"][alg["Leaf"]["Symbol", First[rators]], {alg["Group"]["List", rands]}],
-		Length[Union[rators]] === 1, alg["Infix"][First[rators], rands],
+		Length[Union[rators]] === 1,
+			alg["Infix"][First[rators], rands],
 		affinity === True,
 			alg["Call"][alg["Leaf"]["Symbol", "Developer`VectorInequality"], Riffle[rands, alg["Leaf"]["Symbol", #] & /@ rators]],
-		True, alg["Infix"]["Inequality", Riffle[rands, alg["Leaf"]["Symbol", #] & /@ rators]]
+		True,
+			alg["Infix"]["Inequality", Riffle[rands, alg["Leaf"]["Symbol", #] & /@ rators]]
 	]
 ]
 
@@ -1493,9 +1512,12 @@ $tokenCharacterNames = <|
 |>
 
 tokenSymbol[s_String] := tokenSymbol[s] = Symbol["Token`" <> Which[
-	StringStartsQ[s, "\\["], "LongName`" <> StringTake[s, {3, -2}],
-	StringLength[s] === 1 && ! KeyExistsQ[$tokenCharacterNames, s], "LongName`" <> CharacterName[s],
-	True, StringJoin[Lookup[$tokenCharacterNames, Characters[s]]]
+	StringStartsQ[s, "\\["],
+		"LongName`" <> StringTake[s, {3, -2}],
+	StringLength[s] === 1 && ! KeyExistsQ[$tokenCharacterNames, s],
+		"LongName`" <> CharacterName[s],
+	True,
+		StringJoin[Lookup[$tokenCharacterNames, Characters[s]]]
 ]]
 
 tokenLeaf[s_String] := concreteLeaf[tokenSymbol[s], s]
@@ -2488,11 +2510,16 @@ chunkEnd[{start_, end_}, lines_List] := With[{chunk = First[Split[Take[lines, {F
 (* a span within a span, by CodeParser's line and column test *)
 sourceWithinQ[span_, {a_, b_}] := positionWithinQ[span, a] && positionWithinQ[span, b]
 positionWithinQ[{{l1_, c1_}, {l2_, c2_}}, {l_, c_}] := Which[
-	! (l1 <= l <= l2), False,
-	l == l1 == l2, c1 <= c <= c2,
-	l == l1, c1 <= c,
-	l == l2, c <= c2,
-	True, True
+	! (l1 <= l <= l2),
+		False,
+	l == l1 == l2,
+		c1 <= c <= c2,
+	l == l1,
+		c1 <= c,
+	l == l2,
+		c <= c2,
+	True,
+		True
 ]
 
 (* <|"Program" -> the parser of a whole source, the children of its

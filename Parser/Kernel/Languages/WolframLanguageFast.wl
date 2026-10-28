@@ -84,11 +84,16 @@ $fastInvisibleCommaId := $fastInvisibleCommaId = $fastSpaceId + 1
 $fastNotId := $fastNotId = $fastSpaceId + 2
 $fastNewlineId := $fastNewlineId = $fastSpaceId + 3
 fastLongOp[name_String] := Which[
-	KeyExistsQ[$fastLongIds, name], $fastLongIds[name],
-	MemberQ[$spaceNames, name], $fastSpaceId,
-	MemberQ[$heldNewlineNames, name], $fastNewlineId,
-	name === "InvisibleComma", $fastInvisibleCommaId,
-	True, 0
+	KeyExistsQ[$fastLongIds, name],
+		$fastLongIds[name],
+	MemberQ[$spaceNames, name],
+		$fastSpaceId,
+	MemberQ[$heldNewlineNames, name],
+		$fastNewlineId,
+	name === "InvisibleComma",
+		$fastInvisibleCommaId,
+	True,
+		0
 ]
 
 (* the operators of one, two and three ASCII characters, and of a character
@@ -267,9 +272,12 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 						c == 92,
 							If[lnAt != i, lnAt = i; lnVal = lexLongName[lexCodes, lexLongOps, i, n]];
 							Which[
-								lnVal > 0 && Mod[lnVal, 8192] - 1 == spSpace, i = Quotient[lnVal, 8192],
-								lnVal > 0 && Mod[lnVal, 8192] - 1 == spNewline, nl = 1; i = Quotient[lnVal, 8192],
-								True, scanning = 0
+								lnVal > 0 && Mod[lnVal, 8192] - 1 == spSpace,
+									i = Quotient[lnVal, 8192],
+								lnVal > 0 && Mod[lnVal, 8192] - 1 == spNewline,
+									nl = 1; i = Quotient[lnVal, 8192],
+								True,
+									scanning = 0
 							],
 						c == 40 && i < n && lexCodes[[i + 1]] == 42,
 							r = lexComment[lexCodes, i, n];
@@ -292,9 +300,12 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 						While[ scanning == 1 && pk <= n,
 							c2 = lexCodes[[pk]];
 							Which[
-								c2 == 32 || c2 == 9 || ((c2 == 10 || c2 == 13) && nest > 0), pk++,
-								c2 == 40 && lexCodes[[pk + 1]] == 42, e2 = lexComment[lexCodes, pk, n]; pk = Quotient[e2, 2],
-								True, scanning = 0
+								c2 == 32 || c2 == 9 || ((c2 == 10 || c2 == 13) && nest > 0),
+									pk++,
+								c2 == 40 && lexCodes[[pk + 1]] == 42,
+									e2 = lexComment[lexCodes, pk, n]; pk = Quotient[e2, 2],
+								True,
+									scanning = 0
 							]
 						];
 						c2 = If[pk > n, 0, lexCodes[[pk]]];
@@ -412,11 +423,16 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 									While[ scanning == 1 && j <= n,
 										c2 = lexCodes[[j]];
 										Which[
-											c2 == 93, scanning = 0,
-											c2 == 10 || c2 == 13, If[a == 1, a = 2]; j++,
-											c2 == 32 || c2 == 9, j++,
-											a == 2, status = 1; scanning = 0,
-											True, a = 1; j++
+											c2 == 93,
+												scanning = 0,
+											c2 == 10 || c2 == 13,
+												If[a == 1, a = 2]; j++,
+											c2 == 32 || c2 == 9,
+												j++,
+											a == 2,
+												status = 1; scanning = 0,
+											True,
+												a = 1; j++
 										]
 									];
 									If[status == 0, If[j > n, status = 3, j++]];
@@ -478,11 +494,16 @@ $lexCommentDeclaration = FunctionDeclaration[lexComment,
 		Native`UncheckedBlock[Module[{depth = 1, j = cmAt + 2, unclosed = 0},
 			While[ depth > 0,
 				Which[
-					j + 1 > cmN, unclosed = 1; depth = 0,
-					cmCodes[[j]] == 40 && cmCodes[[j + 1]] == 42, depth++; j += 2,
-					cmCodes[[j]] == 42 && cmCodes[[j + 1]] == 41, depth--; j += 2,
-					cmCodes[[j]] == 92 && cmCodes[[j + 1]] == 40, j += 2,
-					True, j++
+					j + 1 > cmN,
+						unclosed = 1; depth = 0,
+					cmCodes[[j]] == 40 && cmCodes[[j + 1]] == 42,
+						depth++; j += 2,
+					cmCodes[[j]] == 42 && cmCodes[[j + 1]] == 41,
+						depth--; j += 2,
+					cmCodes[[j]] == 92 && cmCodes[[j + 1]] == 40,
+						j += 2,
+					True,
+						j++
 				]
 			];
 			2 j + unclosed
@@ -623,9 +644,12 @@ $lexSlotDeclaration = FunctionDeclaration[lexSlot,
 					While[ scanning == 1 && j <= slN,
 						c2 = slCodes[[j]]; cl = If[c2 > 65535, 5, slClasses[[c2 + 1]]];
 						Which[
-							cl == 1 || cl == 5 || (cl == 2 && j > m), j++,
-							c2 == 92, ln = lexLongName[slCodes, slTable, j, slN]; If[ln > 0 && Mod[ln, 8192] == 0, j = Quotient[ln, 8192], scanning = 0],
-							True, scanning = 0
+							cl == 1 || cl == 5 || (cl == 2 && j > m),
+								j++,
+							c2 == 92,
+								ln = lexLongName[slCodes, slTable, j, slN]; If[ln > 0 && Mod[ln, 8192] == 0, j = Quotient[ln, 8192], scanning = 0],
+							True,
+								scanning = 0
 						]
 					];
 					tick = 0;
@@ -663,9 +687,12 @@ $lexBlankDeclaration = FunctionDeclaration[lexBlank,
 					While[ scanning == 1 && j <= bkN,
 						c2 = bkCodes[[j]]; cl = If[c2 > 65535, 5, bkClasses[[c2 + 1]]];
 						Which[
-							cl == 1 || cl == 5 || (cl == 2 && j > start), j++,
-							c2 == 92, ln = lexLongName[bkCodes, bkTable, j, bkN]; If[ln > 0 && Mod[ln, 8192] == 0, j = Quotient[ln, 8192], scanning = 0],
-							True, scanning = 0
+							cl == 1 || cl == 5 || (cl == 2 && j > start),
+								j++,
+							c2 == 92,
+								ln = lexLongName[bkCodes, bkTable, j, bkN]; If[ln > 0 && Mod[ln, 8192] == 0, j = Quotient[ln, 8192], scanning = 0],
+							True,
+								scanning = 0
 						]
 					];
 					(* the head's context marks, as a name's *)
@@ -691,11 +718,16 @@ $lexBoxesDeclaration = FunctionDeclaration[lexBoxes,
 		Native`UncheckedBlock[Module[{j = If[bxCodes[[bxAt + 1]] == 40, bxAt + 2, bxAt + 4], depth = 1, unclosed = 0},
 			While[ depth > 0,
 				Which[
-					j >= bxN, unclosed = 1; depth = 0; j = bxN + 1,
-					bxCodes[[j]] == 92 && bxCodes[[j + 1]] == 40, depth++; j += 2,
-					bxCodes[[j]] == 92 && bxCodes[[j + 1]] == 41, depth--; j += 2,
-					bxCodes[[j]] == 92, j += 2,
-					True, j++
+					j >= bxN,
+						unclosed = 1; depth = 0; j = bxN + 1,
+					bxCodes[[j]] == 92 && bxCodes[[j + 1]] == 40,
+						depth++; j += 2,
+					bxCodes[[j]] == 92 && bxCodes[[j + 1]] == 41,
+						depth--; j += 2,
+					bxCodes[[j]] == 92,
+						j += 2,
+					True,
+						j++
 				]
 			];
 			2 j + unclosed
@@ -818,13 +850,20 @@ $fastPrefix = Association[Map[fastOp[#[[1]]] -> Rest[#] &, {
 	prefix operators that a product goes on at. *)
 $fastLedTable := $fastLedTable = Join[$fastLed, Association[Join[
 	Map[Function[row, fastLongOp[row[[1]]] -> With[{head = heldLongHead[row], p = row[[4]]}, Which[
-		row[[3]] === CodeParser`InfixInequality, {p, "InfixN", head, "Relation"},
-		row[[1]] === "Minus", {p, "InfixN", "Plus", "Plus"},
-		row[[1]] === "ImplicitPlus", {p, "InfixL", "Plus"},
-		row[[1]] === "Divides", {p, "InfixN", "Divisible", "Divisible"},
-		row[[1]] === "InvisibleApplication", {p, "InfixR", "At"},
-		row[[2]] === "InfixNode", {p, "InfixN", head, head},
-		True, {p, If[row[[5]] === "Right", "InfixR", "InfixL"], head}
+		row[[3]] === CodeParser`InfixInequality,
+			{p, "InfixN", head, "Relation"},
+		row[[1]] === "Minus",
+			{p, "InfixN", "Plus", "Plus"},
+		row[[1]] === "ImplicitPlus",
+			{p, "InfixL", "Plus"},
+		row[[1]] === "Divides",
+			{p, "InfixN", "Divisible", "Divisible"},
+		row[[1]] === "InvisibleApplication",
+			{p, "InfixR", "At"},
+		row[[2]] === "InfixNode",
+			{p, "InfixN", head, head},
+		True,
+			{p, If[row[[5]] === "Right", "InfixR", "InfixL"], head}
 	]]], $heldLongInfix
 	],
 	Map[fastLongOp[#[[1]]] -> {#[[4]], "Postfix", heldLongHead[#]} &, $longNameTable["Postfix"]],
@@ -857,8 +896,13 @@ $fastSpecList := $fastSpecList = DeleteDuplicates[Join[Values[$fastLedTable],
 ]]
 fastSpecIndex[spec_] := First[FirstPosition[$fastSpecList, spec, {0}, {1}, Heads -> False]]
 $fastOpSpecIndex := $fastOpSpecIndex = With[{n = $fastNotId + 1}, Developer`ToPackedArray[
-	Table[Which[KeyExistsQ[$fastLedTable, k], fastSpecIndex[$fastLedTable[k]],
-		KeyExistsQ[$fastPrefixOnly, k], fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}], True, 0
+	Table[Which[
+		KeyExistsQ[$fastLedTable, k],
+			fastSpecIndex[$fastLedTable[k]],
+		KeyExistsQ[$fastPrefixOnly, k],
+			fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}],
+		True,
+			0
 	], {k, 0, n}
 	]
 ]]
@@ -946,9 +990,12 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 				ps = If[k == 9 && o == pSpecial[[2]], 1, 0];
 				If[ps == 1, ol = If[pe == 0 || (nls[[tt]] == 1 && nst == 0), 1, 0]];
 				pe = Which[
-					(k >= 1 && k <= 8) || k == 11 || k == 13 || k == 15 || k == 17 || k == 19 || k == 20 || k == 21 || (k == 9 && o == pSpecial[[3]]), 1,
-					k == 9 && pLed[[tt]] > 0 && pSpecs[[4 pLed[[tt]] - 2]] == 4, If[pPrefix[[2 o + 1]] > 0, pe, 1],
-					True, 0
+					(k >= 1 && k <= 8) || k == 11 || k == 13 || k == 15 || k == 17 || k == 19 || k == 20 || k == 21 || (k == 9 && o == pSpecial[[3]]),
+						1,
+					k == 9 && pLed[[tt]] > 0 && pSpecs[[4 pLed[[tt]] - 2]] == 4,
+						If[pPrefix[[2 o + 1]] > 0, pe, 1],
+					True,
+						0
 				];
 				If[k == 10 || k == 12 || k == 14 || k == 16, nst++];
 				If[(k == 11 || k == 13 || k == 15 || k == 17) && nst > 0, nst--];
@@ -1183,9 +1230,12 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 										pMin = fr[[base + 7]]; pRbp = fr[[base + 2]]; pPlain = fr[[base + 8]]; mode = 1,
 										on++;
 										Which[
-											fr[[base + 3]] == pKeys[[2]], out[[3 on]] = 7; out[[3 on + 1]] = fr[[base + 5]]; out[[3 on + 2]] = 0,
-											fr[[base + 3]] == pKeys[[3]], out[[3 on]] = 26; out[[3 on + 1]] = fr[[base + 5]]; out[[3 on + 2]] = 0,
-											True, out[[3 on]] = 5; out[[3 on + 1]] = fr[[base + 4]]; out[[3 on + 2]] = fr[[base + 5]]
+											fr[[base + 3]] == pKeys[[2]],
+												out[[3 on]] = 7; out[[3 on + 1]] = fr[[base + 5]]; out[[3 on + 2]] = 0,
+											fr[[base + 3]] == pKeys[[3]],
+												out[[3 on]] = 26; out[[3 on + 1]] = fr[[base + 5]]; out[[3 on + 2]] = 0,
+											True,
+												out[[3 on]] = 5; out[[3 on + 1]] = fr[[base + 4]]; out[[3 on + 2]] = fr[[base + 5]]
 										];
 										sp--; mode = 3
 									],
@@ -1227,7 +1277,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 								ft == 12,
 									If[ fr[[base + 2]] == 1,
 										Which[
-											(brackets == 0 && nls[[t]] == 1) || pTok[[5 t - 2]] != 9, mode = 5,
+											(brackets == 0 && nls[[t]] == 1) || pTok[[5 t - 2]] != 9,
+												mode = 5,
 											pTok[[5 t - 1]] == pSpecial[[5]] && t < n && pTok[[5 t + 3]] == 9 && pTok[[5 t + 4]] == pSpecial[[7]],
 												t += 2; on++; out[[3 on]] = 20; out[[3 on + 1]] = 3; out[[3 on + 2]] = 0; sp--; mode = 3,
 											pTok[[5 t - 1]] == pSpecial[[10]],
@@ -1236,7 +1287,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 												t++; fr[[base + 2]] = 3; pMin = pSpecial[[20]]; pRbp = 0; pPlain = 0; mode = 1,
 											pTok[[5 t - 1]] == pSpecial[[6]],
 												t++; on++; out[[3 on]] = 20; out[[3 on + 1]] = 3; out[[3 on + 2]] = 0; sp--; mode = 3,
-											True, mode = 5
+											True,
+												mode = 5
 										],
 										on++; out[[3 on]] = 20; out[[3 on + 1]] = If[fr[[base + 2]] == 2, 1, 2]; out[[3 on + 2]] = 0; sp--; mode = 3
 									],
@@ -1261,15 +1313,24 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 												While[ need > 0,
 													c = out[[3 q]];
 													need += Which[
-														c == 1 || c == 6 || c == 11 || c == 12 || c == 13 || c == 28, 0,
-														c == 4 || c == 21 || c == 23, 2,
-														c == 5, out[[3 q + 2]],
-														c == 7 || c == 14 || c == 18 || c == 19 || c == 26, out[[3 q + 1]],
-														c == 8 || c == 10 || c == 15, out[[3 q + 1]] + 1,
-														c == 9, If[out[[3 q + 1]] == pHeads[[3]], 1, out[[3 q + 2]]],
-														c == 17, 3,
-														c == 20, If[out[[3 q + 1]] == 3, 2, 3],
-														True, 1
+														c == 1 || c == 6 || c == 11 || c == 12 || c == 13 || c == 28,
+															0,
+														c == 4 || c == 21 || c == 23,
+															2,
+														c == 5,
+															out[[3 q + 2]],
+														c == 7 || c == 14 || c == 18 || c == 19 || c == 26,
+															out[[3 q + 1]],
+														c == 8 || c == 10 || c == 15,
+															out[[3 q + 1]] + 1,
+														c == 9,
+															If[out[[3 q + 1]] == pHeads[[3]], 1, out[[3 q + 2]]],
+														c == 17,
+															3,
+														c == 20,
+															If[out[[3 q + 1]] == 3, 2, 3],
+														True,
+															1
 													] - If[c == 6, 0, 1];
 													q--
 												];
@@ -1342,19 +1403,28 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 					mode == 9,
 						base = 8 (sp - 1); bt = fr[[base + 2]]; cnt = fr[[base + 5]];
 						Which[
-							bt == 2, If[pTok[[5 t - 2]] == 13 && t < n && pTok[[5 t + 3]] == 13, t += 2; ok = 1, If[pTok[[5 t - 2]] == 13 && t < n, t++]; ok = 0],
-							pTok[[5 t - 2]] == fr[[base + 3]] && (fr[[base + 3]] != 9 || pTok[[5 t - 1]] == fr[[base + 4]]), t++; ok = 1,
-							True, ok = 0
+							bt == 2,
+								If[pTok[[5 t - 2]] == 13 && t < n && pTok[[5 t + 3]] == 13, t += 2; ok = 1, If[pTok[[5 t - 2]] == 13 && t < n, t++]; ok = 0],
+							pTok[[5 t - 2]] == fr[[base + 3]] && (fr[[base + 3]] != 9 || pTok[[5 t - 1]] == fr[[base + 4]]),
+								t++; ok = 1,
+							True,
+								ok = 0
 						];
 						If[ ok == 0, mode = 5,
 							brackets--; on++;
 							Which[
-								bt == 1, out[[3 on]] = 8; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0,
-								bt == 2 || bt == 6, out[[3 on]] = 10; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0,
-								bt == 3, out[[3 on]] = 9; out[[3 on + 1]] = pHeads[[4]]; out[[3 on + 2]] = cnt,
-								bt == 4, out[[3 on]] = 9; out[[3 on + 1]] = pHeads[[5]]; out[[3 on + 2]] = cnt,
-								bt == 5, out[[3 on]] = 9; out[[3 on + 1]] = fr[[base + 6]]; out[[3 on + 2]] = cnt,
-								True, out[[3 on]] = 15; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0
+								bt == 1,
+									out[[3 on]] = 8; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0,
+								bt == 2 || bt == 6,
+									out[[3 on]] = 10; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0,
+								bt == 3,
+									out[[3 on]] = 9; out[[3 on + 1]] = pHeads[[4]]; out[[3 on + 2]] = cnt,
+								bt == 4,
+									out[[3 on]] = 9; out[[3 on + 1]] = pHeads[[5]]; out[[3 on + 2]] = cnt,
+								bt == 5,
+									out[[3 on]] = 9; out[[3 on + 1]] = fr[[base + 6]]; out[[3 on + 2]] = cnt,
+								True,
+									out[[3 on]] = 15; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0
 							];
 							sp--; mode = 3
 						],
@@ -1782,9 +1852,12 @@ $fastEscapesDeclaration = FunctionDeclaration[fastEscapes,
 								c == 91,
 									r = lexLongName[esCodes, esLongOps, p, e];
 									Which[
-										r != 0 && Mod[r, 8192] != 1, p = Quotient[r, 8192],
-										r == 0 && p + 2 < e && !(48 <= esCodes[[p + 2]] <= 57 || 65 <= esCodes[[p + 2]] <= 90 || 97 <= esCodes[[p + 2]] <= 122), p += 2,
-										True, warned = 1
+										r != 0 && Mod[r, 8192] != 1,
+											p = Quotient[r, 8192],
+										r == 0 && p + 2 < e && !(48 <= esCodes[[p + 2]] <= 57 || 65 <= esCodes[[p + 2]] <= 90 || 97 <= esCodes[[p + 2]] <= 122),
+											p += 2,
+										True,
+											warned = 1
 									],
 								48 <= c <= 55,
 									If[p + 3 < e && 48 <= esCodes[[p + 2]] <= 55 && 48 <= esCodes[[p + 3]] <= 55, p += 4, warned = 1],
@@ -2673,10 +2746,14 @@ from to to."
 	takes a Switch's forms as patterns as they are written, where $tkComma is a symbol. *)
 tokenWarning[codes_List, lexed_List, from_Integer, to_Integer, stop_Integer, t_Integer] := With[{kind = tokenKind[lexed, t]},
 	Which[
-		kind === $tkString, stringTokenWarnings[codes, lexed, from, t],
-		kind === $tkComma, commaWarnings[lexed, from, to, stop, t],
-		kind === $tkEnd, endWarnings[codes, lexed, from, t],
-		True, {}
+		kind === $tkString,
+			stringTokenWarnings[codes, lexed, from, t],
+		kind === $tkComma,
+			commaWarnings[lexed, from, to, stop, t],
+		kind === $tkEnd,
+			endWarnings[codes, lexed, from, t],
+		True,
+			{}
 	]
 ]
 
@@ -2771,9 +2848,12 @@ bracketQ::usage = "bracketQ[lexed, t, brackets] is True where token t of lexed o
 $warnOpeners or $warnClosers, tells."
 bracketQ[lexed_List, t_Integer, brackets_Association] := With[{kind = tokenKind[lexed, t]},
 	Which[
-		kind === $tkOperator, KeyExistsQ[brackets, tokenOperator[lexed, t]],
-		kind === $tkEnd, brackets === $warnClosers && (lexerStatus[lexed] =!= 1 || t < tokenCount[lexed]),
-		True, MemberQ[brackets["Kinds"], kind]
+		kind === $tkOperator,
+			KeyExistsQ[brackets, tokenOperator[lexed, t]],
+		kind === $tkEnd,
+			brackets === $warnClosers && (lexerStatus[lexed] =!= 1 || t < tokenCount[lexed]),
+		True,
+			MemberQ[brackets["Kinds"], kind]
 	]
 ]
 

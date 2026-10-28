@@ -152,9 +152,12 @@ ABCAST[s_String] := With[{r = Parse[$astParser, s]},
 
 (* the mode a program needs: 3 with a call, 2 with a named calculation, 1 otherwise *)
 programMode[program_List] := Which[
-	! FreeQ[program, {"call", _String, _List}], 3,
-	MemberQ[program, {"define", __}], 2,
-	True, 1
+	! FreeQ[program, {"call", _String, _List}],
+		3,
+	MemberQ[program, {"define", __}],
+		2,
+	True,
+		1
 ]
 
 (* the parameters of a calculation: the names that name no calculation, in the order they
@@ -255,9 +258,12 @@ runMachine[program_List, inputs_List, calls_, maxNumber_, maxDepth_] := Module[
 			Do[
 				line = i;
 				Switch[program[[i]],
-					{"stop"}, Break[],
-					{"print", _}, With[{e = program[[i, 2]]}, AppendTo[out, ev[e, parameters[e, defs], {}]]],
-					_, Null
+					{"stop"},
+						Break[],
+					{"print", _},
+						With[{e = program[[i, 2]]}, AppendTo[out, ev[e, parameters[e, defs], {}]]],
+					_,
+						Null
 				],
 				{i, Length[program]}
 			];

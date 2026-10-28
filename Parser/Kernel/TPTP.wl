@@ -134,18 +134,26 @@ ensureTptpParser[] := Module[{bnf = tptpGrammar[$tptpBnfURL], parsers},
 id = Function[#]
 
 binConn[op_String, x_, y_] := Switch[op,
-	"<=>", Equivalent[x, y],
-	"=>",  Implies[x, y],
-	"<=",  Implies[y, x],
-	"<~>", Xor[x, y],
-	"~|",  Not[Or[x, y]],
-	"~&",  Not[And[x, y]]
+	"<=>",
+		Equivalent[x, y],
+	"=>",
+		Implies[x, y],
+	"<=",
+		Implies[y, x],
+	"<~>",
+		Xor[x, y],
+	"~|",
+		Not[Or[x, y]],
+	"~&",
+		Not[And[x, y]]
 ]
 
 rightList[args__] := Block[{a = {args}},
 	Switch[Length[a],
-		1, {a[[1]]},
-		3, Prepend[a[[3]], a[[1]]]
+		1,
+			{a[[1]]},
+		3,
+			Prepend[a[[3]], a[[1]]]
 	]
 ]
 
@@ -177,9 +185,12 @@ unquoteSingle[s_String] := If[
 ]
 
 dollarAtom[s_String] := Switch[s,
-	"$true",  True,
-	"$false", False,
-	_,        s[]
+	"$true",
+		True,
+	"$false",
+		False,
+	_,
+		s[]
 ]
 
 
@@ -358,9 +369,12 @@ $tptpQuantActions = <|
 $tptpCnfActions = <|
 	"cnf_literal"     -> Function[Block[{a = {##}},
 		Switch[Length[a],
-			1, a[[1]],
-			2, Not[a[[2]]],
-			4, Not[a[[3]]]
+			1,
+				a[[1]],
+			2,
+				Not[a[[2]]],
+			4,
+				Not[a[[3]]]
 		]
 	]],
 	"cnf_disjunction" -> Function[Block[{a = {##}},
@@ -406,9 +420,12 @@ tptpFile[cs__] := Block[{
 							<|"Name" -> kv["Name"], "Formula" -> kv["Formula"]|>
 		],
 		"Conjecture" -> Which[
-			c  =!= None, c["Formula"],
-			nc =!= None, Not[nc["Formula"]],
-			True,        None
+			c  =!= None,
+				c["Formula"],
+			nc =!= None,
+				Not[nc["Formula"]],
+			True,
+				None
 		]
 	|>
 ]
@@ -587,13 +604,20 @@ $tptpHeads = {"cnf", "fof", "tff", "tcf", "thf", "tpi"}
 	with StringJoin @ Flatten at each break, so the whole scan is O(n). *)
 splitTopLevel[str_String, seps_List] := Block[{step, final},
 	step[{out_, piece_, depth_, inq_}, c_] := Which[
-		inq && c === "'",                {out, {piece, c}, depth, False},
-		inq,                             {out, {piece, c}, depth, True},
-		c === "'",                       {out, {piece, c}, depth, True},
-		c === "(" || c === "[",          {out, {piece, c}, depth + 1, inq},
-		c === ")" || c === "]",          {out, {piece, c}, depth - 1, inq},
-		depth === 0 && MemberQ[seps, c], {Append[out, StringJoin @ Flatten @ {piece}], {}, depth, inq},
-		True,                            {out, {piece, c}, depth, inq}
+		inq && c === "'",
+			{out, {piece, c}, depth, False},
+		inq,
+			{out, {piece, c}, depth, True},
+		c === "'",
+			{out, {piece, c}, depth, True},
+		c === "(" || c === "[",
+			{out, {piece, c}, depth + 1, inq},
+		c === ")" || c === "]",
+			{out, {piece, c}, depth - 1, inq},
+		depth === 0 && MemberQ[seps, c],
+			{Append[out, StringJoin @ Flatten @ {piece}], {}, depth, inq},
+		True,
+			{out, {piece, c}, depth, inq}
 	];
 	final = Fold[step, {{}, {}, 0, False}, Characters[str]];
 	DeleteCases[

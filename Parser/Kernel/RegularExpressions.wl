@@ -128,20 +128,28 @@ regexQuantifier[] := With[{saved = $at},
 
 (* the least and the most of the repeat here, or None *)
 regexRepeatBounds::usage = "regexRepeatBounds[] gives {least, most} of the repeat at the place of the regex, past it, or None."
-regexRepeatBounds[] := Switch[ regexPeek[],
-	42, $at++; {0, Infinity},
-	43, $at++; {1, Infinity},
-	63, $at++; {0, 1},
-	123, $at++; regexBraceBounds[regexNumber[]],
-	_, None
+regexRepeatBounds[] := Switch[regexPeek[],
+	42,
+		$at++; {0, Infinity},
+	43,
+		$at++; {1, Infinity},
+	63,
+		$at++; {0, 1},
+	123,
+		$at++; regexBraceBounds[regexNumber[]],
+	_,
+		None
 ]
 
 regexBraceBounds::usage = "regexBraceBounds[min] gives {least, most} of a {min}, {min,} or {min,max} repeat whose least min is read, or None."
 regexBraceBounds[None] := None
 regexBraceBounds[min_Integer] := Which[
-	regexSkip["}"], {min, min},
-	regexSkip[","], With[{max = Replace[regexNumber[], None -> Infinity]}, If[regexSkip["}"], {min, max}, None]],
-	True, None
+	regexSkip["}"],
+		{min, min},
+	regexSkip[","],
+		With[{max = Replace[regexNumber[], None -> Infinity]}, If[regexSkip["}"], {min, max}, None]],
+	True,
+		None
 ]
 
 regexNumber[] := With[{start = $at, end = regexCodesFrom[$at, 48 <= # <= 57 &]},
@@ -151,16 +159,25 @@ regexNumber[] := With[{start = $at, end = regexCodesFrom[$at, 48 <= # <= 57 &]},
 
 (* a character, a class, a group, an escape or an anchor *)
 regexAtom[] := With[{c = regexNext[]},
-	Switch[ c,
-		40, regexGroup[],
-		91, regexClassProgram[],
-		46, characterClass[codeIn[If[$dotAll, "Any", {"Not", {"Codes", {10}}}]]],
-		94, anchor[If[$multiline, StartOfLine, StartOfString]],
-		36, anchor[If[$multiline, EndOfLine, "EndOrFinalNewline"]],
-		92, regexEscape[],
-		42 | 43 | 63, regexFails[],
-		123, $at--; If[regexQuantifier[] =!= None, regexFails[], $at++; regexCharacter[c]],
-		_, regexCharacter[c]
+	Switch[c,
+		40,
+			regexGroup[],
+		91,
+			regexClassProgram[],
+		46,
+			characterClass[codeIn[If[$dotAll, "Any", {"Not", {"Codes", {10}}}]]],
+		94,
+			anchor[If[$multiline, StartOfLine, StartOfString]],
+		36,
+			anchor[If[$multiline, EndOfLine, "EndOrFinalNewline"]],
+		92,
+			regexEscape[],
+		42 | 43 | 63,
+			regexFails[],
+		123,
+			$at--; If[regexQuantifier[] =!= None, regexFails[], $at++; regexCharacter[c]],
+		_,
+			regexCharacter[c]
 	]
 ]
 
@@ -210,9 +227,12 @@ regexOptions[] := (
 		Which[
 			MemberQ[{82, 38}, c1] || (IntegerQ[c1] && 48 <= c1 <= 57) || (MemberQ[{43, 45}, c1] && IntegerQ[c2] && 48 <= c2 <= 57) || (c1 === 80 && c2 === 62),
 				regexFails["recursion"],
-			c1 === 40, regexFails["a conditional group"],
-			c1 === 124, regexFails["a branch reset"],
-			c1 === 67, regexFails["a callout"]
+			c1 === 40,
+				regexFails["a conditional group"],
+			c1 === 124,
+				regexFails["a branch reset"],
+			c1 === 67,
+				regexFails["a callout"]
 		]
 	];
 	regexOptionFlags[{$caseless, $multiline, $dotAll, $extended}, True]
@@ -259,23 +279,57 @@ fixedLength[_] := None
 
 (* an escape: a class, an anchor, a backreference, \Q...\E, or a character *)
 regexEscape[] := With[{c = regexNext[]},
-	Switch[ c,
-		100, regexSpecClass[{"Named", "regex \\d"}], 68, regexSpecClass[{"Not", {"Named", "regex \\d"}}],
-		119, regexSpecClass[{"Named", "regex \\w"}], 87, regexSpecClass[{"Not", {"Named", "regex \\w"}}],
-		115, regexSpecClass[{"Named", "regex \\s"}], 83, regexSpecClass[{"Not", {"Named", "regex \\s"}}],
-		104, regexSpecClass[{"Named", "regex \\h"}], 72, regexSpecClass[{"Not", {"Named", "regex \\h"}}],
-		118, regexSpecClass[{"Named", "regex \\v"}], 86, regexSpecClass[{"Not", {"Named", "regex \\v"}}],
-		78, characterClass[codeIn[{"Not", {"Codes", {10}}}]],
-		82, atomic[alternatives[{literal[{13, 10}], characterClass[codeIn[{"Codes", {10, 11, 12, 13, 133, 8232, 8233}}]]}]],
-		112, regexSpecClass[regexProperty[]], 80, regexSpecClass[{"Not", regexProperty[]}],
-		98, anchor[WordBoundary], 66, anchor["NotWordBoundary"],
-		65, anchor[StartOfString], 122, anchor[EndOfString], 90, anchor["EndOrFinalNewline"],
-		81, regexQuoted[],
-		69, Nothing,
-		103, regexReference[regexGroupNumber[]],
-		107, regexReference[regexNamed[]],
-		_?(49 <= # <= 57 &), $at--; regexDigitEscape[],
-		_, regexCharacter[regexEscapedCode[c]]
+	Switch[c,
+		100,
+			regexSpecClass[{"Named", "regex \\d"}],
+		68,
+			regexSpecClass[{"Not", {"Named", "regex \\d"}}],
+		119,
+			regexSpecClass[{"Named", "regex \\w"}],
+		87,
+			regexSpecClass[{"Not", {"Named", "regex \\w"}}],
+		115,
+			regexSpecClass[{"Named", "regex \\s"}],
+		83,
+			regexSpecClass[{"Not", {"Named", "regex \\s"}}],
+		104,
+			regexSpecClass[{"Named", "regex \\h"}],
+		72,
+			regexSpecClass[{"Not", {"Named", "regex \\h"}}],
+		118,
+			regexSpecClass[{"Named", "regex \\v"}],
+		86,
+			regexSpecClass[{"Not", {"Named", "regex \\v"}}],
+		78,
+			characterClass[codeIn[{"Not", {"Codes", {10}}}]],
+		82,
+			atomic[alternatives[{literal[{13, 10}], characterClass[codeIn[{"Codes", {10, 11, 12, 13, 133, 8232, 8233}}]]}]],
+		112,
+			regexSpecClass[regexProperty[]],
+		80,
+			regexSpecClass[{"Not", regexProperty[]}],
+		98,
+			anchor[WordBoundary],
+		66,
+			anchor["NotWordBoundary"],
+		65,
+			anchor[StartOfString],
+		122,
+			anchor[EndOfString],
+		90,
+			anchor["EndOrFinalNewline"],
+		81,
+			regexQuoted[],
+		69,
+			Nothing,
+		103,
+			regexReference[regexGroupNumber[]],
+		107,
+			regexReference[regexNamed[]],
+		_?(49 <= # <= 57 &),
+			$at--; regexDigitEscape[],
+		_,
+			regexCharacter[regexEscapedCode[c]]
 	]
 ]
 
@@ -302,9 +356,12 @@ regexGroupNumber[] := Module[{braced = regexSkip["{"], negative, n, name},
 	negative = regexSkip["-"];
 	n = regexNumber[];
 	Which[
-		n =!= None, If[braced && ! regexSkip["}"], regexFails[]]; If[negative, $groups - n + 1, n],
-		braced && ! negative, name = regexName[{125}]; Lookup[$groupNames, name, regexFails[]],
-		True, regexFails[]
+		n =!= None,
+			If[braced && ! regexSkip["}"], regexFails[]]; If[negative, $groups - n + 1, n],
+		braced && ! negative,
+			name = regexName[{125}]; Lookup[$groupNames, name, regexFails[]],
+		True,
+			regexFails[]
 	]
 ]
 
@@ -315,15 +372,39 @@ regexNamed[] := With[{open = regexNext[]},
 
 (* the code of an escaped character: \a \e \f \n \r \t, \cX, \x.., \o{..}, \0.., or the character
 	itself if it is not a letter or a digit *)
-regexEscapedCode[c_Integer] := Switch[ c,
-	97, 7, 101, 27, 102, 12, 110, 10, 114, 13, 116, 9,
-	99, BitXor[ToCharacterCode[ToUpperCase[FromCharacterCode[regexNext[]]]][[1]], 64],
-	120, regexHex[],
-	111, If[! regexSkip["{"], regexFails[]]; With[{v = regexDigits[8, Infinity]}, If[! regexSkip["}"], regexFails[]]; v],
-	48, $at--; regexOctal[3],
-	71, regexFails["\\G"], 75, regexFails["\\K"], 67, regexFails["\\C"], 88, regexFails["\\X"],
-	_?(48 <= # <= 57 || 65 <= # <= 90 || 97 <= # <= 122 &), regexFails[],
-	_, c
+regexEscapedCode[c_Integer] := Switch[c,
+	97,
+		7,
+	101,
+		27,
+	102,
+		12,
+	110,
+		10,
+	114,
+		13,
+	116,
+		9,
+	99,
+		BitXor[ToCharacterCode[ToUpperCase[FromCharacterCode[regexNext[]]]][[1]], 64],
+	120,
+		regexHex[],
+	111,
+		If[! regexSkip["{"], regexFails[]]; With[{v = regexDigits[8, Infinity]}, If[! regexSkip["}"], regexFails[]]; v],
+	48,
+		$at--; regexOctal[3],
+	71,
+		regexFails["\\G"],
+	75,
+		regexFails["\\K"],
+	67,
+		regexFails["\\C"],
+	88,
+		regexFails["\\X"],
+	_?(48 <= # <= 57 || 65 <= # <= 90 || 97 <= # <= 122 &),
+		regexFails[],
+	_,
+		c
 ]
 
 regexHex[] := If[regexSkip["{"], With[{v = regexDigits[16, Infinity]}, If[! regexSkip["}"] || v > 1114111, regexFails[]]; v], Replace[regexDigits[16, 2], None -> 0]]
@@ -377,16 +458,37 @@ regexClassItem[] := With[{c = regexNext[]},
 	Which[
 		c === 91 && regexAhead[":"], regexPosix[],
 		c === 92, With[{e = regexNext[]},
-			Switch[ e,
-				100, {"Named", "regex \\d"}, 68, {"Not", {"Named", "regex \\d"}},
-				119, {"Named", "regex \\w"}, 87, {"Not", {"Named", "regex \\w"}},
-				115, {"Named", "regex \\s"}, 83, {"Not", {"Named", "regex \\s"}},
-				104, {"Named", "regex \\h"}, 72, {"Not", {"Named", "regex \\h"}},
-				118, {"Named", "regex \\v"}, 86, {"Not", {"Named", "regex \\v"}},
-				112, regexProperty[], 80, {"Not", regexProperty[]},
-				98, 8,
-				_?(48 <= # <= 57 &), $at--; regexOctal[3],
-				_, regexEscapedCode[e]
+			Switch[e,
+				100,
+					{"Named", "regex \\d"},
+				68,
+					{"Not", {"Named", "regex \\d"}},
+				119,
+					{"Named", "regex \\w"},
+				87,
+					{"Not", {"Named", "regex \\w"}},
+				115,
+					{"Named", "regex \\s"},
+				83,
+					{"Not", {"Named", "regex \\s"}},
+				104,
+					{"Named", "regex \\h"},
+				72,
+					{"Not", {"Named", "regex \\h"}},
+				118,
+					{"Named", "regex \\v"},
+				86,
+					{"Not", {"Named", "regex \\v"}},
+				112,
+					regexProperty[],
+				80,
+					{"Not", regexProperty[]},
+				98,
+					8,
+				_?(48 <= # <= 57 &),
+					$at--; regexOctal[3],
+				_,
+					regexEscapedCode[e]
 			]
 		],
 		True, c

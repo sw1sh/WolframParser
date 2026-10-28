@@ -326,10 +326,15 @@ parserProperty[ParserCombinator[_, _, opts_], "Options"] := KeyDrop[opts, "Code"
 parserProperty[ParserCombinator[_, _, opts_], "Compiled"] := KeyExistsQ[opts, "Code"]
 parserProperty[ParserCombinator[_, _, opts_], "Code"] := Lookup[opts, "Code", Missing["NotCompiled"]]
 parserProperty[ParserCombinator[_, _, opts_], "Backend"] :=
-	Which[! KeyExistsQ[opts, "Code"], Missing["NotCompiled"],
-		! FreeQ[opts["Code"], _CompiledCodeFunction], "FunctionCompile",
-		! FreeQ[opts["Code"], HoldPattern[pegMachine]], "PEGVM",
-		True, "Interpretive"
+	Which[
+		! KeyExistsQ[opts, "Code"],
+			Missing["NotCompiled"],
+		! FreeQ[opts["Code"], _CompiledCodeFunction],
+			"FunctionCompile",
+		! FreeQ[opts["Code"], HoldPattern[pegMachine]],
+			"PEGVM",
+		True,
+			"Interpretive"
 	]
 (* the compiled function: the embedded CompiledCodeFunction for the
 	FunctionCompile backend (it appears applied, cf[input, pos], so match
@@ -389,14 +394,11 @@ Parse[pc_ParserCombinator, input_String, opts : OptionsPattern[]] :=
 		];
 		Which[
 			MatchQ[r, _TerminatedEvaluation],
-				makeFailure[1, "<input within nesting limit>", "<input nested too deeply>"]
-			,
+				makeFailure[1, "<input within nesting limit>", "<input nested too deeply>"],
 			MatchQ[r, _parseErr],
-				errToFailure[r]
-			,
+				errToFailure[r],
 			r[[2]] != len + 1,
-				makeFailure[r[[2]], "<end of input>", safeChar[input, r[[2]]]]
-			,
+				makeFailure[r[[2]], "<end of input>", safeChar[input, r[[2]]]],
 			True,
 				r[[1]]
 		]
@@ -1176,9 +1178,12 @@ parseGrammarDefs[_] := <||>
 lowerGrammarRules[HoldPattern[GrammarRules[rules_List]]] :=
 	Block[{ps = lowerGrammarRule /@ rules},
 		Switch[Length[ps],
-			0, ParseFail["empty grammar"],
-			1, First[ps],
-			_, ParseChoice @@ ps
+			0,
+				ParseFail["empty grammar"],
+			1,
+				First[ps],
+			_,
+				ParseChoice @@ ps
 		]
 	]
 
@@ -1186,9 +1191,12 @@ lowerGrammarRules[HoldPattern[GrammarRules[rules_List, defs_List, ___]]] :=
 	Block[{$grammarDefs = parseGrammarDefs[defs]},
 		Block[{ps = lowerGrammarRule /@ rules},
 			Switch[Length[ps],
-				0, ParseFail["empty grammar"],
-				1, First[ps],
-				_, ParseChoice @@ ps
+				0,
+					ParseFail["empty grammar"],
+				1,
+					First[ps],
+				_,
+					ParseChoice @@ ps
 			]
 		]
 	]
@@ -2125,10 +2133,14 @@ pegCompile[root_] := Module[
 		whole ParserCombinator (with its child subtrees) per node blows the
 		serialized size up by orders of magnitude. *)
 	reg[pc_] := (++nodeCtr; specTable[nodeCtr] = Switch[pc[[1]],
-		"Literal", {"Literal", pc[[2]]},
-		"Action", {"Action", pc[[2, 2]]},
-		"Succeed", {"Succeed", pc[[2]]},
-		_, {pc[[1]]}
+		"Literal",
+			{"Literal", pc[[2]]},
+		"Action",
+			{"Action", pc[[2, 2]]},
+		"Succeed",
+			{"Succeed", pc[[2]]},
+		_,
+			{pc[[1]]}
 	]; nodeCtr
 	);
 

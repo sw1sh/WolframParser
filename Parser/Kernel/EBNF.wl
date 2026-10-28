@@ -599,10 +599,14 @@ regexAtom = ParseChoice[
 regexEltWithPostfix = ParseAction[
 	regexAtom ~~ ParseOptional[ParseCharacter["*" | "+" | "?"]],
 	Switch[#2,
-		"*", ParseAction[ParseMany[#1], StringJoin @ {##} &],
-		"+", ParseAction[ParseSome[#1], StringJoin @ {##} &],
-		"?", ParseAction[ParseOptional[#1], If[MissingQ[#], "", #] &],
-		_,   #1
+		"*",
+			ParseAction[ParseMany[#1], StringJoin @ {##} &],
+		"+",
+			ParseAction[ParseSome[#1], StringJoin @ {##} &],
+		"?",
+			ParseAction[ParseOptional[#1], If[MissingQ[#], "", #] &],
+		_,
+			#1
 	] &
 ]
 
@@ -613,9 +617,12 @@ regexSeq = ParseAction[
 	ParseMany[regexEltWithPostfix],
 	With[{elts = {##}},
 		Switch[Length[elts],
-			0, ParseSucceed[""],
-			1, elts[[1]],
-			_, ParseAction[ParseSequence @@ elts, StringJoin @ {##} &]
+			0,
+				ParseSucceed[""],
+			1,
+				elts[[1]],
+			_,
+				ParseAction[ParseSequence @@ elts, StringJoin @ {##} &]
 		]
 	] &
 ]

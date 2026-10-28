@@ -63,9 +63,12 @@ $vmMemberDeclaration := $vmMemberDeclaration = FunctionDeclaration[vmMember,
 				While[ rlo <= rhi,
 					rmid = Quotient[rlo + rhi, 2];
 					Which[
-						cc < vClasses[[off + 5 + 2 rmid]], rhi = rmid - 1,
-						cc > vClasses[[off + 6 + 2 rmid]], rlo = rmid + 1,
-						True, inside = 1; rlo = rhi + 1
+						cc < vClasses[[off + 5 + 2 rmid]],
+							rhi = rmid - 1,
+						cc > vClasses[[off + 6 + 2 rmid]],
+							rlo = rmid + 1,
+						True,
+							inside = 1; rlo = rhi + 1
 					]
 				]
 			];
@@ -239,18 +242,24 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
 															While[ flo <= fhi,
 																fmid = Quotient[flo + fhi, 2];
 																Which[
-																	vPool[[d + 2 fmid - 1]] < u, flo = fmid + 1,
-																	vPool[[d + 2 fmid - 1]] > u, fhi = fmid - 1,
-																	True, fold = vPool[[d + 2 fmid]]; flo = fhi + 1
+																	vPool[[d + 2 fmid - 1]] < u,
+																		flo = fmid + 1,
+																	vPool[[d + 2 fmid - 1]] > u,
+																		fhi = fmid - 1,
+																	True,
+																		fold = vPool[[d + 2 fmid]]; flo = fhi + 1
 																]
 															];
 															u = fold; fold = w; flo = 1; fhi = vPool[[d]];
 															While[ flo <= fhi,
 																fmid = Quotient[flo + fhi, 2];
 																Which[
-																	vPool[[d + 2 fmid - 1]] < w, flo = fmid + 1,
-																	vPool[[d + 2 fmid - 1]] > w, fhi = fmid - 1,
-																	True, fold = vPool[[d + 2 fmid]]; flo = fhi + 1
+																	vPool[[d + 2 fmid - 1]] < w,
+																		flo = fmid + 1,
+																	vPool[[d + 2 fmid - 1]] > w,
+																		fhi = fmid - 1,
+																	True,
+																		fold = vPool[[d + 2 fmid]]; flo = fhi + 1
 																]
 															];
 															If[u != fold, ok = 0],
@@ -376,9 +385,12 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
 									(* a repeat of a backreference: past it where its group holds nothing, and where it holds
 										none, past it if it may be none, else no match *)
 									Which[
-										regs[[a + 1]] < 0, If[b == 0, pc = c, fail = 1],
-										regs[[a + 2]] == regs[[a + 1]], pc = c,
-										True, pc++
+										regs[[a + 1]] < 0,
+											If[b == 0, pc = c, fail = 1],
+										regs[[a + 2]] == regs[[a + 1]],
+											pc = c,
+										True,
+											pc++
 									],
 								True, fail = 1
 							]

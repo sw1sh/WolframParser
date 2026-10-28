@@ -239,7 +239,16 @@ qasmReadAlgebra = <|
 	"Const"  -> (constVal[#] &),
 	"Neg"    -> ((-#2) &),
 	"BinOp"  -> Function[{op, l, r}, Switch[op,
-		"+", l + r, "-", l - r, "*", l*r, "/", l/r, "^" | "**", l^r
+		"+",
+			l + r,
+		"-",
+			l - r,
+		"*",
+			l*r,
+		"/",
+			l/r,
+		"^" | "**",
+			l^r
 	]],
 	"Physical" -> (<|"Physical" -> toInt[StringDrop[#, 1]]|> &),
 	"Indexed"  -> Function[{nm, i}, <|"Register" -> nm, "Index" -> toInt[i]|>],
