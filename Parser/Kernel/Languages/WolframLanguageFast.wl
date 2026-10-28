@@ -2368,15 +2368,15 @@ warningsAt[codes_List, lexed_List, from_Integer, to_Integer, stop_Integer, token
 
 tokenWarning::usage = "tokenWarning[codes, lexed, from, to, stop, t] gives the warnings that token t gives, of the statement of tokens \
 from to to."
-tokenWarning[codes_List, lexed_List, from_Integer, to_Integer, stop_Integer, t_Integer] := Switch[tokenKind[lexed, t],
-	$tkString,
-		stringTokenWarnings[codes, lexed, from, t],
-	$tkComma,
-		commaWarnings[lexed, from, to, stop, t],
-	$tkEnd,
-		endWarnings[codes, lexed, from, t],
-	_,
-		{}
+(* The kinds are compared by ===, not as the forms of a Switch: a compiler of the kernel's code
+	takes a Switch's forms as patterns as they are written, where $tkComma is a symbol. *)
+tokenWarning[codes_List, lexed_List, from_Integer, to_Integer, stop_Integer, t_Integer] := With[{kind = tokenKind[lexed, t]},
+	Which[
+		kind === $tkString, stringTokenWarnings[codes, lexed, from, t],
+		kind === $tkComma, commaWarnings[lexed, from, to, stop, t],
+		kind === $tkEnd, endWarnings[codes, lexed, from, t],
+		True, {}
+	]
 ]
 
 stringTokenWarnings::usage = "stringTokenWarnings[codes, lexed, from, t] gives the warnings of the escapes of the string of token t, of \
@@ -2468,13 +2468,12 @@ longNameText[codes_List, i_Integer] := FromCharacterCode @ TakeWhile[Drop[codes,
 	the end of the source closes them too, where the lexer reads it *)
 bracketQ::usage = "bracketQ[lexed, t, brackets] is True where token t of lexed opens, or closes, a bracket's items, as brackets, \
 $warnOpeners or $warnClosers, tells."
-bracketQ[lexed_List, t_Integer, brackets_Association] := Switch[tokenKind[lexed, t],
-	$tkOperator,
-		KeyExistsQ[brackets, tokenOperator[lexed, t]],
-	$tkEnd,
-		brackets === $warnClosers && (lexerStatus[lexed] =!= 1 || t < tokenCount[lexed]),
-	_,
-		MemberQ[brackets["Kinds"], tokenKind[lexed, t]]
+bracketQ[lexed_List, t_Integer, brackets_Association] := With[{kind = tokenKind[lexed, t]},
+	Which[
+		kind === $tkOperator, KeyExistsQ[brackets, tokenOperator[lexed, t]],
+		kind === $tkEnd, brackets === $warnClosers && (lexerStatus[lexed] =!= 1 || t < tokenCount[lexed]),
+		True, MemberQ[brackets["Kinds"], kind]
+	]
 ]
 
 $warnOpeners := $warnOpeners = Join[
