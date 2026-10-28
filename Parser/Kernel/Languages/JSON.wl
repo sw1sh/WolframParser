@@ -39,13 +39,16 @@ JSONGrammar[alg_] := Module[{ws, tok, str, num, bool, null, value, member, objec
 
 	member = ParseAction[
 		str ~~ tok @ ParseLiteral[":"] ~~ RecRef[value],
-		(alg["Member"][#1, #3]) &];
+		(alg["Member"][#1, #3]) &
+	];
 	object = ParseAction[
 		tok @ ParseLiteral["{"] ~~ ParseSepBy[member, tok @ ParseLiteral[","]] ~~ tok @ ParseLiteral["}"],
-		(alg["Object"][#2]) &];
+		(alg["Object"][#2]) &
+	];
 	array = ParseAction[
 		tok @ ParseLiteral["["] ~~ ParseSepBy[RecRef[value], tok @ ParseLiteral[","]] ~~ tok @ ParseLiteral["]"],
-		(alg["Array"][#2]) &];
+		(alg["Array"][#2]) &
+	];
 
 	SetRec[value, ParseChoice[str, num, object, array, bool, null]];
 
@@ -76,7 +79,8 @@ $astParser = JSONGrammar[jsonAstAlgebra]
 $semParser = JSONGrammar[JSONSemantic]
 
 JSONAST[s_String] := With[{r = Parse[$astParser, s]},
-	If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]]
+	If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]
+]
 
 JSONImport[s_String] := Parse[$semParser, s]
 

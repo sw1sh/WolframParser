@@ -51,11 +51,13 @@ LambdaGrammar[alg_] := Module[{ws, tok, name, var, lam, atom, app, term},
 	lam = ParseAction[
 		(tok @ ParseLiteral["\\"] | tok @ ParseLiteral["\[Lambda]"]) ~~
 			ParseSome[name] ~~ tok @ ParseLiteral["."] ~~ RecRef[term],
-		(Fold[Function[{acc, nm}, alg["Abs"][nm, acc]], #4, Reverse[#2]]) &];
+		(Fold[Function[{acc, nm}, alg["Abs"][nm, acc]], #4, Reverse[#2]]) &
+	];
 
 	atom = ParseChoice[
 		ParseAction[tok @ ParseLiteral["("] ~~ RecRef[term] ~~ tok @ ParseLiteral[")"], (#2) &],
-		var];
+		var
+	];
 
 	app  = ParseAction[ParseSome[atom], (foldApp[alg, {##}]) &];
 	SetRec[term, ParseChoice[lam, app]];
@@ -67,7 +69,8 @@ lambdaAstAlgebra = <|
 	"Var" -> (LeafNode["Symbol", #, <||>] &),
 	"App" -> Function[{f, x}, CallNode[f, {x}, <||>]],
 	"Abs" -> Function[{name, body},
-		CallNode[LeafNode["Symbol", "\[Lambda]", <||>], {LeafNode["Symbol", name, <||>], body}, <||>]]
+		CallNode[LeafNode["Symbol", "\[Lambda]", <||>], {LeafNode["Symbol", name, <||>], body}, <||>]
+	]
 |>
 
 LambdaSemantic = <|
@@ -80,7 +83,8 @@ $astParser = LambdaGrammar[lambdaAstAlgebra]
 $semParser = LambdaGrammar[LambdaSemantic]
 
 LambdaAST[s_String] := With[{r = Parse[$astParser, s]},
-	If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]]
+	If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]
+]
 
 LambdaEval[s_String] := Parse[$semParser, s]
 

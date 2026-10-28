@@ -37,7 +37,9 @@ Begin["`Private`"]
 $fastClasses := $fastClasses = With[{file = FileNameJoin[{$languagesDirectory, "WolframLanguageClasses.wl"}]},
 	Replace[Get[file], {
 		runs : {{_Integer, _Integer} ..} /; Total[runs[[All, 2]]] === 65536 :> Developer`ToPackedArray[Join @@ Apply[ConstantArray, runs, {1}]],
-		_ :> fastClassesComputed[]}]]
+		_ :> fastClassesComputed[]
+	}]
+]
 
 (* the table computed: what dev/freeze-classes.wls records, as runs, on Wolfram 15 *)
 fastClassesComputed::usage = "fastClassesComputed[] gives the class of each character code from 0 to 65535, computed."
@@ -86,7 +88,8 @@ fastLongOp[name_String] := Which[
 	MemberQ[$spaceNames, name], $fastSpaceId,
 	MemberQ[$heldNewlineNames, name], $fastNewlineId,
 	name === "InvisibleComma", $fastInvisibleCommaId,
-	True, 0]
+	True, 0
+]
 
 (* the operators of one, two and three ASCII characters, and of a character
 	past ASCII, by their codes *)
@@ -114,8 +117,11 @@ $fastOp3 = Association[Map[ToCharacterCode[#] -> fastOp[#] &, Select[$operatorSp
 $fastLongNameOps := $fastLongNameOps = Join[
 	AssociationMap[If[KeyExistsQ[$nonLetterNames, #] || MemberQ[$spaceNames, #], fastLongOp[#], -1] &, Keys[$longNames]],
 	Association[Catenate[KeyValueMap[Function[{op, spellings},
-		Map[StringTake[#, {3, -2}] -> fastOp[op] &, Select[spellings, StringStartsQ[#, "\\["] &]]], $longNameOperators]]],
-	<|"Not" -> $fastNotId|>]
+		Map[StringTake[#, {3, -2}] -> fastOp[op] &, Select[spellings, StringStartsQ[#, "\\["] &]]
+	], $longNameOperators
+	]]],
+	<|"Not" -> $fastNotId|>
+]
 
 (* the tables of the lexer, packed: the 2-character operators by the codes
 	of both, each 4096 times 1 more where a 3-character operator begins with
@@ -128,11 +134,13 @@ $fastOp2Flat := $fastOp2Flat = Developer`ToPackedArray @ Flatten[
 $fastOp3Table = Developer`ToPackedArray[Flatten[KeyValueMap[Append[#1, #2] &, $fastOp3]]]
 $fastLongOpTable := $fastLongOpTable = With[
 	{entries = Map[Join[{Length[#[[1]]]}, #[[1]], {#[[2]]}] &, SortBy[KeyValueMap[{ToCharacterCode[#1], #2} &, $fastLongNameOps], {Length[#[[1]]] &, First}]]},
-	Developer`ToPackedArray[Join[{Length[entries]}, 1 + Length[entries] + Most[FoldList[Plus, 1, Length /@ entries]], Flatten[entries]]]]
+	Developer`ToPackedArray[Join[{Length[entries]}, 1 + Length[entries] + Most[FoldList[Plus, 1, Length /@ entries]], Flatten[entries]]]
+]
 $fastOpenAssociation = fastOp["<|"]; $fastCloseAssociation = fastOp["|>"]
 $fastGet = fastOp["<<"]; $fastPut = fastOp[">>"]; $fastPutAppend = fastOp[">>>"]
 $fastSpecial := $fastSpecial = Developer`ToPackedArray[{$fastOpenAssociation, $fastCloseAssociation, $fastGet, $fastPut, $fastPutAppend, fastOp["=."], fastOp["="],
-	$fastSpaceId, $fastInvisibleCommaId, $fastNewlineId}]
+	$fastSpaceId, $fastInvisibleCommaId, $fastNewlineId
+}]
 
 (* ::Section:: *)
 (*Tokens*)
@@ -185,7 +193,8 @@ operatorBeforeQ[lexed_List, t_Integer, operators_] := t > 1 && tokenKind[lexed, 
 
 (* the kinds of token that end an operand *)
 $operandEndKinds = {$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkCloseParen, $tkCloseSquare, $tkCloseCurly,
-	$tkCloseAssociation, $tkPrimes}
+	$tkCloseAssociation, $tkPrimes
+}
 
 (* Reading stopped at token t, where the kernel's message points: just past the token, or, at the
 	end of the source, the source ending too early. But for a :: with no tag after it, the end or a
@@ -214,7 +223,8 @@ fastFailure[position_Integer, incomplete_] := Failure["ParseError", <|
 	"MessageParameters" -> <|"Position" -> position|>,
 	"Position" -> position,
 	"Incomplete" -> TrueQ[incomplete]
-|>]
+|>
+]
 
 (* The lexer, typed code over packed integers: the codes of a source and
 	three zeros after them, so that no look ahead reads past them, the
@@ -236,12 +246,15 @@ fastFailure[position_Integer, incomplete_] := Failure["ParseError", <|
 $fastLexDeclaration = FunctionDeclaration[fastLex,
 	Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
 		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
-		"PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
+		"PackedArray"::["MachineInteger", 1]
+	} -> "PackedArray"::["MachineInteger", 1]
+	] @
 	Function[{lexCodes, lexClasses, lexOp1, lexOp2, lexOp3, lexLongOps, lexSpecial},
 		Native`UncheckedBlock[Module[{n = Length[lexCodes] - 3, out, k = 0, i = 1, j = 0, c = 0, c2 = 0, cl = 0, nl = 0, kind = 0, op = 0, file = 0,
 				status = 0, done = 0, scanning = 0, m = 0, a = 0, len = 0, base = 0, start = 0, tick = 0, r = 0, e2 = 0, lnAt = 0, lnVal = 0, nest = 0, pk = 0,
 				spOpen = lexSpecial[[1]], spClose = lexSpecial[[2]], spGet = lexSpecial[[3]], spPut = lexSpecial[[4]], spPutAppend = lexSpecial[[5]],
-				spUnset = lexSpecial[[6]], spSet = lexSpecial[[7]], spSpace = lexSpecial[[8]], spComma = lexSpecial[[9]], spNewline = lexSpecial[[10]]},
+				spUnset = lexSpecial[[6]], spSet = lexSpecial[[7]], spSpace = lexSpecial[[8]], spComma = lexSpecial[[9]], spNewline = lexSpecial[[10]]
+		},
 			out = Native`UncheckedArray[0, 5 n + 7];
 			While[ done == 0,
 				(* whitespace, newlines and comments *)
@@ -256,12 +269,15 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 							Which[
 								lnVal > 0 && Mod[lnVal, 8192] - 1 == spSpace, i = Quotient[lnVal, 8192],
 								lnVal > 0 && Mod[lnVal, 8192] - 1 == spNewline, nl = 1; i = Quotient[lnVal, 8192],
-								True, scanning = 0],
+								True, scanning = 0
+							],
 						c == 40 && i < n && lexCodes[[i + 1]] == 42,
 							r = lexComment[lexCodes, i, n];
 							If[Mod[r, 2] == 1, status = 3];
 							i = Quotient[r, 2],
-						True, scanning = 0]];
+						True, scanning = 0
+					]
+				];
 				k++; base = 2 + 5 (k - 1);
 				out[[base + 3]] = i; out[[base + 5]] = nl;
 				If[ status != 0 || i > n,
@@ -278,15 +294,20 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 							Which[
 								c2 == 32 || c2 == 9 || ((c2 == 10 || c2 == 13) && nest > 0), pk++,
 								c2 == 40 && lexCodes[[pk + 1]] == 42, e2 = lexComment[lexCodes, pk, n]; pk = Quotient[e2, 2],
-								True, scanning = 0]];
+								True, scanning = 0
+							]
+						];
 						c2 = If[pk > n, 0, lexCodes[[pk]]];
 						file = If[ pk > n || c2 == 10 || c2 == 13 || c2 == 59 || c2 == 44 || c2 == 41 || c2 == 93 || c2 == 125 ||
-							(c2 == 124 && lexCodes[[pk + 1]] == 62), 1, 0];
+							(c2 == 124 && lexCodes[[pk + 1]] == 62), 1, 0
+						];
 						(* a name whose [ is not closed is no file after >>, as a notebook reads x >> b[c *)
 						If[ file == 1 && lexCodes[[i]] != 34,
 							m = i; a = 0;
 							While[m < Quotient[r, 4], If[lexCodes[[m]] == 91, a++]; If[lexCodes[[m]] == 93, a--]; m++];
-							If[a > 0, file = 0]]];
+							If[a > 0, file = 0]
+						]
+					];
 					Which[
 						(* the file of << or >>: a string, or the characters of a path *)
 						file == 1,
@@ -301,13 +322,16 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 									c2 == 92,
 										If[lnAt != j, lnAt = j; lnVal = lexLongName[lexCodes, lexLongOps, j, n]];
 										If[lnVal > 0 && Mod[lnVal, 8192] == 0, j = Quotient[lnVal, 8192], scanning = 0],
-									True, scanning = 0]];
+									True, scanning = 0
+								]
+							];
 							(* a context mark that ends the name, or comes before a digit or another
 								mark, makes no name: reading stops at the name *)
 							m = i; tick = 0;
 							While[ m < j && status == 0,
 								If[lexCodes[[m]] == 96, If[tick == 1, status = 1, tick = 1], If[tick == 1 && 48 <= lexCodes[[m]] <= 57, status = 1]; tick = 0];
-								m++];
+								m++
+							];
 							If[tick == 1, status = 1];
 							If[status == 1, j = i];
 							kind = 1;
@@ -325,7 +349,9 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 								If[ c == 34 && k > 1 && out[[base - 4]] == 9 && out[[base - 1]] - out[[base - 2]] == 2 &&
 										lexCodes[[out[[base - 2]]]] == 58 && lexCodes[[out[[base - 2]] + 1]] == 58,
 									kind = 22,
-									status = 3]],
+									status = 3
+								]
+							],
 						(* a slot: ## and its digits, or # and its digits or a name, read as a name's
 							token reads one, a name malformed making no slot *)
 						c == 35,
@@ -349,7 +375,8 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 						c == 92,
 							If[ lnVal > 0 && Mod[lnVal, 8192] - 1 > 0,
 								op = Mod[lnVal, 8192] - 1; j = Quotient[lnVal, 8192]; kind = If[op == spComma, 18, 9],
-								If[i == n, status = 3, status = 1; j = i]],
+								If[i == n, status = 3, status = 1; j = i]
+							],
 						(* an operator, the longest there: one of three characters where the
 							first two begin one, then two, then one *)
 						True,
@@ -360,14 +387,18 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 									a = 1;
 									While[ op == 0 && a <= Length[lexOp3],
 										If[lexOp3[[a]] == c && lexOp3[[a + 1]] == lexCodes[[i + 1]] && lexOp3[[a + 2]] == lexCodes[[i + 2]], op = lexOp3[[a + 3]]; len = 3];
-										a += 4]];
-								If[op == 0 && Mod[e2, 4096] > 0, op = Mod[e2, 4096]; len = 2]];
+										a += 4
+									]
+								];
+								If[op == 0 && Mod[e2, 4096] > 0, op = Mod[e2, 4096]; len = 2]
+							];
 							If[op == 0 && c <= 65535, op = lexOp1[[c + 1]]; len = 1];
 							(* an operator that ends in =, but //= and ^:=, right before a [ ends before its =, as
 								a notebook reads it: the = and the [ begin free-form input, a==[b] a = =[b] *)
 							If[ len >= 2 && lexCodes[[i + len - 1]] == 61 && lexCodes[[i + len]] == 91 && ! (len == 3 && (c == 47 || c == 94)),
 								e2 = If[len == 3, Mod[lexOp2[[128 c + lexCodes[[i + 1]] + 1]], 4096], 0];
-								If[e2 > 0, op = e2; len = 2, op = lexOp1[[c + 1]]; len = 1]];
+								If[e2 > 0, op = e2; len = 2, op = lexOp1[[c + 1]]; len = 1]
+							];
 							(* =. before a digit: =, then a number *)
 							If[op == spUnset && i + 2 <= n && 48 <= lexCodes[[i + 2]] <= 57, op = spSet; len = 1];
 							j = i + len;
@@ -385,21 +416,31 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 											c2 == 10 || c2 == 13, If[a == 1, a = 2]; j++,
 											c2 == 32 || c2 == 9, j++,
 											a == 2, status = 1; scanning = 0,
-											True, a = 1; j++]];
+											True, a = 1; j++
+										]
+									];
 									If[status == 0, If[j > n, status = 3, j++]];
 									kind = 21,
-								op == spOpen, kind = 16, op == spClose, kind = 17, op == spComma, kind = 18, True, kind = 9]];
+								op == spOpen, kind = 16, op == spClose, kind = 17, op == spComma, kind = 18, True, kind = 9
+							]
+					];
 					(* a blank: _, __ or ___, then a . or a name *)
 					If[ kind == 2 && status == 0,
-						r = lexBlank[lexCodes, lexClasses, lexLongOps, i, j, n]; j = Quotient[r, 2]; status = Mod[r, 2]];
+						r = lexBlank[lexCodes, lexClasses, lexLongOps, i, j, n]; j = Quotient[r, 2]; status = Mod[r, 2]
+					];
 					file = Which[kind == 9 && op == spGet, 1, kind == 9 && (op == spPut || op == spPutAppend), 2, True, 0];
 					If[kind == 10 || kind == 12 || kind == 14 || kind == 16, nest++];
 					If[(kind == 11 || kind == 13 || kind == 15 || kind == 17) && nest > 0, nest--];
 					out[[base + 1]] = kind; out[[base + 2]] = If[kind == 9, op, 0]; out[[base + 4]] = j;
 					If[status != 0, done = 1];
-					i = j]];
+					i = j
+				]
+			];
 			out[[1]] = status; out[[2]] = k;
-			Take[out, 2 + 5 k]]]]]
+			Take[out, 2 + 5 k]
+		]]
+	]
+]
 
 (* A long name \[Name] at at, letters and digits closed by a ]: 8192 times just past it, plus 1
 	more than what the table of long names gives it, -1 a letter, an operator, or 0, as for a name
@@ -417,9 +458,15 @@ $lexLongNameDeclaration = FunctionDeclaration[lexLongName,
 						mid = Quotient[lo + hi, 2]; a = lnTable[[1 + mid]]; len = lnTable[[a]];
 						cmp = len - size; q = 1;
 						While[cmp == 0 && q <= len, cmp = lnTable[[a + q]] - lnCodes[[lnAt + 1 + q]]; q++];
-						Which[cmp < 0, lo = mid + 1, cmp > 0, hi = mid - 1, True, op = lnTable[[a + len + 1]]]];
-					result = 8192 (j + 1) + op + 1]];
-			result]]]]
+						Which[cmp < 0, lo = mid + 1, cmp > 0, hi = mid - 1, True, op = lnTable[[a + len + 1]]]
+					];
+					result = 8192 (j + 1) + op + 1
+				]
+			];
+			result
+		]]
+	]
+]
 
 (* A comment from its opening paren and star at at, nested ones in it, a backslash before an
 	opening paren taking it, so that it opens none, as a notebook reads it:
@@ -435,8 +482,13 @@ $lexCommentDeclaration = FunctionDeclaration[lexComment,
 					cmCodes[[j]] == 40 && cmCodes[[j + 1]] == 42, depth++; j += 2,
 					cmCodes[[j]] == 42 && cmCodes[[j + 1]] == 41, depth--; j += 2,
 					cmCodes[[j]] == 92 && cmCodes[[j + 1]] == 40, j += 2,
-					True, j++]];
-			2 j + unclosed]]]]
+					True, j++
+				]
+			];
+			2 j + unclosed
+		]]
+	]
+]
 
 (* The characters quoted from from, past the opening ": twice just past the closing ", plus 1
 	where the source ends before it, a \ taking the character after it. *)
@@ -447,8 +499,13 @@ $lexQuotedDeclaration = FunctionDeclaration[lexQuoted,
 			While[ scanning == 1,
 				If[ j > qtN, unclosed = 1; scanning = 0,
 					c2 = qtCodes[[j]];
-					Which[c2 == 34, j++; scanning = 0, c2 == 92, j += 2, True, j++]]];
-			2 j + unclosed]]]]
+					Which[c2 == 34, j++; scanning = 0, c2 == 92, j += 2, True, j++]
+				]
+			];
+			2 j + unclosed
+		]]
+	]
+]
 
 (* The file of << or >> at at: a quoted one, or the characters of a path, letters past ASCII
 	among them, its long names whole and a bracket in it to its ], brackets nested, or to the end
@@ -457,7 +514,8 @@ $lexQuotedDeclaration = FunctionDeclaration[lexQuoted,
 	its quotes. *)
 $lexFileDeclaration = FunctionDeclaration[lexFile,
 	Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger"} ->
-		"MachineInteger"] @
+		"MachineInteger"
+	] @
 	Function[{flCodes, flClasses, flTable, flAt, flN},
 		Native`UncheckedBlock[Module[{j = flAt, r = 0, status = 0, scanning = 1, c2 = 0, cl = 0, ln = 0, depth = 0},
 			If[ flCodes[[flAt]] == 34,
@@ -473,9 +531,15 @@ $lexFileDeclaration = FunctionDeclaration[lexFile,
 						c2 == 91,
 							depth = 1; j++;
 							While[depth > 0 && j <= flN, If[flCodes[[j]] == 91, depth++, If[flCodes[[j]] == 93, depth--]]; j++],
-						True, scanning = 0]];
-				If[j == flAt, status = 1]];
-			4 j + status]]]]
+						True, scanning = 0
+					]
+				];
+				If[j == flAt, status = 1]
+			];
+			4 j + status
+		]]
+	]
+]
 
 (* A number at at: its digits, b^^ and the digits of base b, a precision or an accuracy, which has
 	its digits, and a power of the base: 4 times just past it, plus 2 for a real, plus 1 where
@@ -491,14 +555,16 @@ $lexNumberDeclaration = FunctionDeclaration[lexNumber,
 					(* b^^ and a digit, or a point and a digit, as a notebook reads 16^^.f *)
 					j + 2 <= nmN && nmCodes[[j]] == 94 && nmCodes[[j + 1]] == 94 &&
 						((48 <= nmCodes[[j + 2]] <= 57) || (65 <= nmCodes[[j + 2]] <= 90) || (97 <= nmCodes[[j + 2]] <= 122) ||
-							(nmCodes[[j + 2]] == 46 && j + 3 <= nmN && ((48 <= nmCodes[[j + 3]] <= 57) || (65 <= nmCodes[[j + 3]] <= 90) || (97 <= nmCodes[[j + 3]] <= 122)))),
+							(nmCodes[[j + 2]] == 46 && j + 3 <= nmN && ((48 <= nmCodes[[j + 3]] <= 57) || (65 <= nmCodes[[j + 3]] <= 90) || (97 <= nmCodes[[j + 3]] <= 122)))
+						),
 						a = 0; m = nmAt;
 						While[m < j, If[a <= 36, a = 10 a + nmCodes[[m]] - 48]; m++];
 						j += 2;
 						While[j <= nmN && ((48 <= nmCodes[[j]] <= 57) || (65 <= nmCodes[[j]] <= 90) || (97 <= nmCodes[[j]] <= 122)), j++];
 						(* a point, not before another, as a notebook reads 16^^ff.. as Repeated[255] *)
 						If[ j <= nmN && nmCodes[[j]] == 46 && ! (j + 1 <= nmN && nmCodes[[j + 1]] == 46),
-							j++; While[j <= nmN && ((48 <= nmCodes[[j]] <= 57) || (65 <= nmCodes[[j]] <= 90) || (97 <= nmCodes[[j]] <= 122)), j++]];
+							j++; While[j <= nmN && ((48 <= nmCodes[[j]] <= 57) || (65 <= nmCodes[[j]] <= 90) || (97 <= nmCodes[[j]] <= 122)), j++]
+						];
 						If[a < 2 || a > 36, status = 1];
 						m = nmAt;
 						While[m < j && nmCodes[[m]] != 94, m++];
@@ -506,10 +572,13 @@ $lexNumberDeclaration = FunctionDeclaration[lexNumber,
 						While[ m < j && status == 0,
 							c2 = nmCodes[[m]];
 							If[ c2 != 46 && If[c2 <= 57, c2 - 48, If[c2 <= 90, c2 - 55, c2 - 87]] >= a, status = 1];
-							m++],
+							m++
+						],
 					j <= nmN && nmCodes[[j]] == 46 && ! (j + 1 <= nmN && nmCodes[[j + 1]] == 46),
 						j++; While[j <= nmN && 48 <= nmCodes[[j]] <= 57, j++],
-					True, j = j]];
+					True, j = j
+				]
+			];
 			If[ j <= nmN && nmCodes[[j]] == 96,
 				j++; accuracy = 0;
 				If[j <= nmN && nmCodes[[j]] == 96, j++; accuracy = 1];
@@ -522,19 +591,26 @@ $lexNumberDeclaration = FunctionDeclaration[lexNumber,
 					m + 1 <= nmN && nmCodes[[m]] == 46 && 48 <= nmCodes[[m + 1]] <= 57,
 						m++; While[m <= nmN && 48 <= nmCodes[[m]] <= 57, m++]; j = m,
 					accuracy == 1, j -= 2,
-					True, j = j]];
+					True, j = j
+				]
+			];
 			If[ j + 1 <= nmN && nmCodes[[j]] == 42 && nmCodes[[j + 1]] == 94,
 				m = If[j + 2 <= nmN && (nmCodes[[j + 2]] == 43 || nmCodes[[j + 2]] == 45), j + 3, j + 2];
-				If[m <= nmN && 48 <= nmCodes[[m]] <= 57, While[m <= nmN && 48 <= nmCodes[[m]] <= 57, m++]; j = m]];
+				If[m <= nmN && 48 <= nmCodes[[m]] <= 57, While[m <= nmN && 48 <= nmCodes[[m]] <= 57, m++]; j = m]
+			];
 			m = nmAt;
 			While[m < j, If[nmCodes[[m]] == 46 || nmCodes[[m]] == 96, real = 1]; m++];
-			4 j + 2 real + status]]]]
+			4 j + 2 real + status
+		]]
+	]
+]
 
 (* A slot at at: ## and its digits, or # and its digits or a name, read as a name's token reads one:
 	twice just past it, plus 1 where a malformed name makes none and reading stops at it. *)
 $lexSlotDeclaration = FunctionDeclaration[lexSlot,
 	Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger"} ->
-		"MachineInteger"] @
+		"MachineInteger"
+	] @
 	Function[{slCodes, slClasses, slTable, slAt, slN},
 		Native`UncheckedBlock[Module[{j = slAt + 1, m = 0, scanning = 1, c2 = 0, cl = 0, tick = 0, status = 0, ln = 0, d = 0},
 			d = If[j <= slN, slCodes[[j]], 0];
@@ -549,15 +625,22 @@ $lexSlotDeclaration = FunctionDeclaration[lexSlot,
 						Which[
 							cl == 1 || cl == 5 || (cl == 2 && j > m), j++,
 							c2 == 92, ln = lexLongName[slCodes, slTable, j, slN]; If[ln > 0 && Mod[ln, 8192] == 0, j = Quotient[ln, 8192], scanning = 0],
-							True, scanning = 0]];
+							True, scanning = 0
+						]
+					];
 					tick = 0;
 					While[ m < j && status == 0,
 						If[slCodes[[m]] == 96, If[tick == 1, status = 1, tick = 1], If[tick == 1 && 48 <= slCodes[[m]] <= 57, status = 1]; tick = 0];
-						m++];
+						m++
+					];
 					If[tick == 1, status = 1];
 					If[status == 1, j = slAt],
-				True, j = j];
-			2 j + status]]]]
+				True, j = j
+			];
+			2 j + status
+		]]
+	]
+]
 
 (* The blank after a name or a _ at from, of the token at at: up to three _, then a head, whose
 	context marks are a name's, or, after a single _, a .: twice just past it, plus 1 where a
@@ -565,7 +648,9 @@ $lexSlotDeclaration = FunctionDeclaration[lexSlot,
 	its own, a Dot or the start of a number, as Wolfram 15 reads __._ and __.1. *)
 $lexBlankDeclaration = FunctionDeclaration[lexBlank,
 	Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "MachineInteger", "MachineInteger",
-		"MachineInteger"} -> "MachineInteger"] @
+		"MachineInteger"
+	} -> "MachineInteger"
+	] @
 	Function[{bkCodes, bkClasses, bkTable, bkAt, bkFrom, bkN},
 		Native`UncheckedBlock[Module[{j = bkFrom, count = 0, start = 0, scanning = 1, c2 = 0, cl = 0, m = 0, tick = 0, status = 0, ln = 0, d = 0},
 			While[j <= bkN && bkCodes[[j]] == 95 && count < 3, j++; count++];
@@ -580,15 +665,23 @@ $lexBlankDeclaration = FunctionDeclaration[lexBlank,
 						Which[
 							cl == 1 || cl == 5 || (cl == 2 && j > start), j++,
 							c2 == 92, ln = lexLongName[bkCodes, bkTable, j, bkN]; If[ln > 0 && Mod[ln, 8192] == 0, j = Quotient[ln, 8192], scanning = 0],
-							True, scanning = 0]];
+							True, scanning = 0
+						]
+					];
 					(* the head's context marks, as a name's *)
 					m = start; tick = 0;
 					While[ m < j && status == 0,
 						If[bkCodes[[m]] == 96, If[tick == 1, status = 1, tick = 1], If[tick == 1 && 48 <= bkCodes[[m]] <= 57, status = 1]; tick = 0];
-						m++];
+						m++
+					];
 					If[tick == 1, status = 1];
-					If[status == 1, j = bkAt]]];
-			2 j + status]]]]
+					If[status == 1, j = bkAt]
+				]
+			];
+			2 j + status
+		]]
+	]
+]
 
 (* Linear syntax at at: \( to its \), or \!\( to it, nested ones in it: twice just past its end,
 	plus 1 where the source ends before it does. *)
@@ -602,12 +695,18 @@ $lexBoxesDeclaration = FunctionDeclaration[lexBoxes,
 					bxCodes[[j]] == 92 && bxCodes[[j + 1]] == 40, depth++; j += 2,
 					bxCodes[[j]] == 92 && bxCodes[[j + 1]] == 41, depth--; j += 2,
 					bxCodes[[j]] == 92, j += 2,
-					True, j++]];
-			2 j + unclosed]]]]
+					True, j++
+				]
+			];
+			2 j + unclosed
+		]]
+	]
+]
 
 (* the typed functions the lexer calls, each after those it calls *)
 $fastLexHelpers := {$lexLongNameDeclaration, $lexQuotedDeclaration, $lexCommentDeclaration, $lexFileDeclaration, $lexNumberDeclaration, $lexSlotDeclaration,
-	$lexBlankDeclaration, $lexBoxesDeclaration}
+	$lexBlankDeclaration, $lexBoxesDeclaration
+}
 
 (* a source's codes and three zeros after them, packed, as every typed function takes them: no
 	look ahead reads past them, and the empty source's are packed too *)
@@ -628,7 +727,10 @@ typedFunction[symbol_Symbol, declaration_, helpers_List] := If[ DownValues[symbo
 	With[{inlined = Fold[Function[{done, h}, Append[done, h[[1]] -> compiledDeclaration[h, done]]], {}, helpers]},
 		If[ AllTrue[inlined[[All, 2]], MatchQ[_CompiledFunction]],
 			Replace[compiledDeclaration[declaration, inlined], Except[_CompiledFunction] :> evaluatedDeclaration[declaration, helpers]],
-			evaluatedDeclaration[declaration, helpers]]]]
+			evaluatedDeclaration[declaration, helpers]
+		]
+	]
+]
 
 (* a typed declaration's Function, its body out of the Native`UncheckedBlock that a compiler of
 	typed code reads, which drops its index and overflow tests, and each Native`UncheckedArray, an
@@ -639,7 +741,9 @@ declarationFunction[declaration_] := (declaration[[2, 1]] /. HoldPattern[Native`
 	of them as its type says, the typed functions it calls put in its code, compiled *)
 compiledDeclaration[declaration_, inlined_List] := With[{f = declarationFunction[declaration], types = declaration[[2, 0, 1, 1]]},
 	Compile @@ Join[Hold[Evaluate[MapThread[{#1, _Integer, If[#2 === "MachineInteger", 0, 1]} &, {List @@ f[[1]], types}]]],
-		Extract[f, {2}, Hold] /. inlined, Hold[CompilationOptions -> {"InlineCompiledFunctions" -> True}]]]
+		Extract[f, {2}, Hold] /. inlined, Hold[CompilationOptions -> {"InlineCompiledFunctions" -> True}]
+	]
+]
 
 (* a typed declaration's Function, evaluated, the typed functions it calls their Functions *)
 evaluatedDeclaration[declaration_, helpers_List] :=
@@ -694,16 +798,19 @@ $fastLed = Association[Map[fastOp[#[[1]]] -> Rest[#] &, {
 	{"=", 9, "InfixR", "Set"}, {":=", 9, "InfixR", "SetDelayed"}, {"^=", 9, "InfixR", "UpSet"}, {"^:=", 9, "InfixR", "UpSetDelayed"},
 	{"|->", 9, "InfixR", "Function"}, {"=.", 9, "Postfix", "Unset"},
 	{">>", 6, "Put", "Put"}, {">>>", 6, "Put", "PutAppend"},
-	{";", 4, "Compound", "CompoundExpression"}}]]
+	{";", 4, "Compound", "CompoundExpression"}
+}]]
 
 (* the operators of one chain: the products, the sums, the relations *)
 $fastChainKey = <|"Times" -> "Times", "Plus" -> "Plus", "Equal" -> "Relation", "Unequal" -> "Relation", "LessEqual" -> "Relation",
-	"GreaterEqual" -> "Relation", "Less" -> "Relation", "Greater" -> "Relation"|>
+	"GreaterEqual" -> "Relation", "Less" -> "Relation", "Greater" -> "Relation"
+|>
 fastChainKey[spec_List] := If[Length[spec] >= 4, spec[[4]], Lookup[$fastChainKey, spec[[3]], spec[[3]]]]
 
 (* the prefix operators: the precedence and the head *)
 $fastPrefix = Association[Map[fastOp[#[[1]]] -> Rest[#] &, {
-	{"++", 172, "PreIncrement"}, {"--", 172, "PreDecrement"}, {"-", 124, "Minus"}, {"+", 124, "Plus"}, {"!", 64, "Not"}, {"!!", 64, "NotNot"}}]]
+	{"++", 172, "PreIncrement"}, {"--", 172, "PreDecrement"}, {"-", 124, "Minus"}, {"+", 124, "Plus"}, {"!", 64, "Not"}, {"!!", 64, "NotNot"}
+}]]
 
 (* The long-name operators, read at their first use: the led ones by the
 	held grammar's specs, the fourth of a spec the key of the chain it makes
@@ -717,13 +824,18 @@ $fastLedTable := $fastLedTable = Join[$fastLed, Association[Join[
 		row[[1]] === "Divides", {p, "InfixN", "Divisible", "Divisible"},
 		row[[1]] === "InvisibleApplication", {p, "InfixR", "At"},
 		row[[2]] === "InfixNode", {p, "InfixN", head, head},
-		True, {p, If[row[[5]] === "Right", "InfixR", "InfixL"], head}]]], $heldLongInfix],
+		True, {p, If[row[[5]] === "Right", "InfixR", "InfixL"], head}
+	]]], $heldLongInfix
+	],
 	Map[fastLongOp[#[[1]]] -> {#[[4]], "Postfix", heldLongHead[#]} &, $longNameTable["Postfix"]],
-	{fastLongOp["LeftDoubleBracket"] -> {176, "LongPart", "Part"}}]]]
+	{fastLongOp["LeftDoubleBracket"] -> {176, "LongPart", "Part"}}
+]]]
 $fastPrefixTable := $fastPrefixTable = Join[$fastPrefix,
-	Association[Map[fastLongOp[#[[1]]] -> {#[[4]], heldLongHead[#]} &, $heldLongPrefix]], <|$fastNotId -> {64, "Not"}|>]
+	Association[Map[fastLongOp[#[[1]]] -> {#[[4]], heldLongHead[#]} &, $heldLongPrefix]], <|$fastNotId -> {64, "Not"}|>
+]
 $fastGroupTable := $fastGroupTable = Association[Map[fastLongOp[#[[1]]] -> {fastLongOp[#[[2]]], SymbolName[#[[3]]]} &,
-	Select[$longNameTable["Groups"], #[[1]] =!= "LeftDoubleBracket" &]]]
+	Select[$longNameTable["Groups"], #[[1]] =!= "LeftDoubleBracket" &]
+]]
 $fastIntegralTable := $fastIntegralTable = Association[Map[fastLongOp[#[[1]]] -> {SymbolName[#[[2]]], #[[3]]} &, $longNameTable["Integrals"]]]
 $fastPrefixOnly := $fastPrefixOnly = AssociationThread[Join[DeleteCases[fastLongOp /@ $prefixOnlyNames, 0], {$fastNotId, $fastGet}] -> True]
 $fastLongMinus := $fastLongMinus = fastLongOp["Minus"]
@@ -741,15 +853,21 @@ $fastColonEqual = fastOp[":="]; $fastEqual = fastOp["="]; $fastEqualDot = fastOp
 	is the operator's it is, or that of the call, a derivative or a product
 	for its kind; = before . is an unset. *)
 $fastSpecList := $fastSpecList = DeleteDuplicates[Join[Values[$fastLedTable],
-	{{176, "Call", "Call"}, {154, "Derivative", "Derivative"}, {$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}, {9, "Unset", "Unset"}}]]
+	{{176, "Call", "Call"}, {154, "Derivative", "Derivative"}, {$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}, {9, "Unset", "Unset"}}
+]]
 fastSpecIndex[spec_] := First[FirstPosition[$fastSpecList, spec, {0}, {1}, Heads -> False]]
 $fastOpSpecIndex := $fastOpSpecIndex = With[{n = $fastNotId + 1}, Developer`ToPackedArray[
 	Table[Which[KeyExistsQ[$fastLedTable, k], fastSpecIndex[$fastLedTable[k]],
-		KeyExistsQ[$fastPrefixOnly, k], fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}], True, 0], {k, 0, n}]]]
+		KeyExistsQ[$fastPrefixOnly, k], fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}], True, 0
+	], {k, 0, n}
+	]
+]]
 $fastKindSpecIndex := $fastKindSpecIndex = Developer`ToPackedArray[ReplacePart[ConstantArray[0, $tkWord + 1], Join[
 	{($tkOpenSquare + 1) -> fastSpecIndex[{176, "Call", "Call"}], ($tkPrimes + 1) -> fastSpecIndex[{154, "Derivative", "Derivative"}]},
 	Map[(# + 1) -> fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}] &,
-		{$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation, $tkBoxes, $tkFreeform, $tkWord}]]]]
+		{$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation, $tkBoxes, $tkFreeform, $tkWord}
+	]
+]]]
 fastLedIndices[lexed_List] := fastLedFunction[lexed, $fastKindSpecIndex, $fastOpSpecIndex, $fastLedParams]
 $fastLedParams := $fastLedParams = Developer`ToPackedArray[{$tkOperator, $fastEqual, $fastDot, $fastUnsetSpecIndex}]
 $fastUnsetSpecIndex := $fastUnsetSpecIndex = fastSpecIndex[{9, "Unset", "Unset"}]
@@ -802,13 +920,16 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 	Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
 		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
 		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
-		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} ->
-		"PackedArray"::["MachineInteger", 1]] @
+		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]
+	} ->
+		"PackedArray"::["MachineInteger", 1]
+	] @
 	Function[{pTok, pLed, pSpecs, pPrefix, pGroups, pIntegrals, pSpecial, pHeads, pKeys, pCodes, pClasses},
 		Native`UncheckedBlock[Module[{n = pTok[[2]], out, fr, maxFrames, sp = 0, on = 0, t = 1, brackets = 0, status = 0, mode = 0,
 				pMin = 0, pRbp = 0, pPlain = 0, base = 0, k = 0, o = 0, i = 0, bp = 0, fx = 0, hd = 0, ky = 0, mn = 0, rb = 0, pl = 0,
 				ft = 0, cnt = 0, bt = 0, colons = 0, ok = 0, x = 0, lg = 0, e = 0, we = 0, c = 0, cl = 0, tt = 0, far = 0, stmt = 1, se = 0,
-				nls, ps = 0, ol = 0, pe = 0, nst = 0, q = 0, nf = 0, kk = 0, trail = 0, need = 0, wq = 0},
+				nls, ps = 0, ol = 0, pe = 0, nst = 0, q = 0, nf = 0, kk = 0, trail = 0, need = 0, wq = 0
+		},
 			out = Native`UncheckedArray[0, 3 (8 n + 16) + 2];
 			maxFrames = 4 n + 64;
 			fr = Native`UncheckedArray[0, 8 maxFrames];
@@ -827,10 +948,12 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 				pe = Which[
 					(k >= 1 && k <= 8) || k == 11 || k == 13 || k == 15 || k == 17 || k == 19 || k == 20 || k == 21 || (k == 9 && o == pSpecial[[3]]), 1,
 					k == 9 && pLed[[tt]] > 0 && pSpecs[[4 pLed[[tt]] - 2]] == 4, If[pPrefix[[2 o + 1]] > 0, pe, 1],
-					True, 0];
+					True, 0
+				];
 				If[k == 10 || k == 12 || k == 14 || k == 16, nst++];
 				If[(k == 11 || k == 13 || k == 15 || k == 17) && nst > 0, nst--];
-				tt++];
+				tt++
+			];
 			k = 0; o = 0;
 			While[ mode != 99,
 				Which[
@@ -841,7 +964,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 					mode == 1,
 						If[ sp >= maxFrames, status = 1; If[t > far, far = t]; mode = 99,
 							sp++; base = 8 (sp - 1); fr[[base + 1]] = 1; fr[[base + 2]] = pMin; fr[[base + 3]] = pRbp; fr[[base + 4]] = pPlain;
-							mode = 2],
+							mode = 2
+						],
 					(* the operand of the expression at the top *)
 					mode == 2,
 						base = 8 (sp - 1); mn = fr[[base + 2]]; pl = fr[[base + 4]];
@@ -859,7 +983,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 								If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && nls[[t]] == 1),
 									sp++; base = 8 (sp - 1); fr[[base + 1]] = 7; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
 									t++; pMin = pSpecial[[16]]; pRbp = 0; pPlain = 1; mode = 1,
-									mode = 3],
+									mode = 3
+								],
 							(k >= 2 && k <= 7) || k == 20 || k == 21 || k == 22,
 								on++; out[[3 on]] = 1; out[[3 on + 1]] = If[k == 22, 100, k]; out[[3 on + 2]] = t; t++; mode = 3,
 							k == 10,
@@ -881,7 +1006,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 								If[ pTok[[5 t - 2]] == 8,
 									on++; out[[3 on]] = 1; out[[3 on + 1]] = 8; out[[3 on + 2]] = t; t++;
 									on++; out[[3 on]] = 22; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 3,
-									mode = 5],
+									mode = 5
+								],
 							k == 9 && o == pSpecial[[2]],
 								on++; out[[3 on]] = 13; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 10,
 							(* a query that does not begin its statement, as a notebook reads it: ? and the expression
@@ -902,7 +1028,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 								If[ pCodes[[e]] == 34,
 									If[ pTok[[5 t - 2]] != 5 || pTok[[5 t]] != e, mode = 5,
 										on++; out[[3 on]] = 1; out[[3 on + 1]] = 5; out[[3 on + 2]] = t; t++;
-										on++; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; mode = 3],
+										on++; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; mode = 3
+									],
 									(* words after a name's letter, to an operator; after anything else, as Wolfram 15's
 										kernel reads ?[a and ?@@%3, the rest of the line, its spaces at the end left out *)
 									x = e; we = e; ok = 1; tt = t;
@@ -919,17 +1046,24 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 														x += 2;
 														While[(48 <= pCodes[[x]] && pCodes[[x]] <= 57) || (65 <= pCodes[[x]] && pCodes[[x]] <= 90) || (97 <= pCodes[[x]] && pCodes[[x]] <= 122), x++];
 														If[pCodes[[x]] == 93, x++; we = x, ok = 0],
-														ok = 0],
+														ok = 0
+													],
 												c == 32 || c == 9, x++,
-												True, ok = 0]],
+												True, ok = 0
+											]
+										],
 										While[pCodes[[we]] != 0 && pCodes[[we]] != 10 && pCodes[[we]] != 13, we++];
-										While[we > e && (pCodes[[we - 1]] == 32 || pCodes[[we - 1]] == 9), we--]];
+										While[we > e && (pCodes[[we - 1]] == 32 || pCodes[[we - 1]] == 9), we--]
+									];
 									If[ we == e, mode = 5,
 										While[pTok[[5 t - 2]] != 0 && pTok[[5 t]] < we, t++];
 										(* words that end inside a token, as ?a*=b: the token is split there, status 3 *)
 										If[ pTok[[5 t - 4]] != we, status = 3; far = we; mode = 99,
 											on++; out[[3 on]] = 28; out[[3 on + 1]] = e; out[[3 on + 2]] = we;
-											on++; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; wq = t; mode = 3]]],
+											on++; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; wq = t; mode = 3
+										]
+									]
+								],
 							(* an integral, the same signs right after it one integral of as many differentials, as a
 								notebook reads \[Integral]\[Integral] f \[DifferentialD]x \[DifferentialD]y *)
 							k == 9 && pIntegrals[[o + 1]] > 0,
@@ -937,7 +1071,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 								While[pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == o, t++; cnt++];
 								sp++; base = 8 (sp - 1); fr[[base + 1]] = 13; fr[[base + 2]] = x; fr[[base + 3]] = cnt;
 								pMin = pSpecial[[15]]; pRbp = 0; pPlain = 0; mode = 1,
-							True, mode = 5],
+							True, mode = 5
+						],
 					(* after an operand: an Optional's : after a blank or a pattern, else the operator that
 						takes it, if one binds tightly enough *)
 					mode == 3,
@@ -951,7 +1086,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 						If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && nls[[t]] == 1) &&
 								((out[[3 on]] == 1 && out[[3 on + 1]] == 2 && pCodes[[pTok[[5 out[[3 on + 2]] + 1]] - 1]] != 46) || out[[3 on]] == 23),
 							t++; sp++; base = 8 (sp - 1); fr[[base + 1]] = 3; fr[[base + 2]] = pHeads[[7]];
-							pMin = mn; pRbp = pSpecial[[21]]; pPlain = 0; i = -1; mode = 1];
+							pMin = mn; pRbp = pSpecial[[21]]; pPlain = 0; i = -1; mode = 1
+						];
 						If[brackets == 0 && nls[[t]] == 1 && i > 0, i = 0];
 						If[ i == 0, mode = 4,
 							If[ i > 0,
@@ -998,7 +1134,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 												no operator after it but a pattern's colon, a prefix operator of any
 												precedence beginning one; frame 14 {count, first token, instructions} *)
 											sp++; base = 8 (sp - 1); fr[[base + 1]] = 14; fr[[base + 2]] = 1; fr[[base + 3]] = t; fr[[base + 4]] = on;
-											pMin = pSpecial[[17]]; pRbp = 100000; pPlain = 0; mode = 1],
+											pMin = pSpecial[[17]]; pRbp = 100000; pPlain = 0; mode = 1
+										],
 									fx == 9, mode = 10,
 									fx == 10,
 										sp++; base = 8 (sp - 1); fr[[base + 1]] = 10; fr[[base + 2]] = 1; mode = 13,
@@ -1013,8 +1150,13 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 											on++; out[[3 on]] = 1; out[[3 on + 1]] = 8; out[[3 on + 2]] = t; t++;
 											on++; out[[3 on]] = 21; out[[3 on + 1]] = hd; out[[3 on + 2]] = 0,
 											sp++; base = 8 (sp - 1); fr[[base + 1]] = 3; fr[[base + 2]] = hd;
-											pMin = mn; pRbp = bp; pPlain = pl; mode = 1],
-									True, mode = 5]]]],
+											pMin = mn; pRbp = bp; pPlain = pl; mode = 1
+										],
+									True, mode = 5
+								]
+							]
+							]
+						],
 					(* the expression at the top is read: what waited for it *)
 					mode == 4,
 						sp--;
@@ -1043,12 +1185,15 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 										Which[
 											fr[[base + 3]] == pKeys[[2]], out[[3 on]] = 7; out[[3 on + 1]] = fr[[base + 5]]; out[[3 on + 2]] = 0,
 											fr[[base + 3]] == pKeys[[3]], out[[3 on]] = 26; out[[3 on + 1]] = fr[[base + 5]]; out[[3 on + 2]] = 0,
-											True, out[[3 on]] = 5; out[[3 on + 1]] = fr[[base + 4]]; out[[3 on + 2]] = fr[[base + 5]]];
-										sp--; mode = 3],
+											True, out[[3 on]] = 5; out[[3 on + 1]] = fr[[base + 4]]; out[[3 on + 2]] = fr[[base + 5]]
+										];
+										sp--; mode = 3
+									],
 								ft == 5,
 									If[ pTok[[5 t - 2]] == 11,
 										t++; brackets--; on++; out[[3 on]] = 9; out[[3 on + 1]] = pHeads[[3]]; out[[3 on + 2]] = 1; sp--; mode = 3,
-										mode = 5],
+										mode = 5
+									],
 								ft == 6, fr[[base + 5]] = fr[[base + 5]] + 1; mode = 8,
 								ft == 7, on++; out[[3 on]] = 23; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; sp--; mode = 3,
 								ft == 8,
@@ -1073,9 +1218,12 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 												While[ pTok[[5 tt - 2]] != 0 && ! (x == 0 && (pTok[[5 tt - 2]] == 11 || pTok[[5 tt - 2]] == 13 || pTok[[5 tt - 2]] == 15 || pTok[[5 tt - 2]] == 17 || pTok[[5 tt - 2]] == 18)),
 													If[pTok[[5 tt - 2]] == 10 || pTok[[5 tt - 2]] == 12 || pTok[[5 tt - 2]] == 14 || pTok[[5 tt - 2]] == 16, x++];
 													If[pTok[[5 tt - 2]] == 11 || pTok[[5 tt - 2]] == 13 || pTok[[5 tt - 2]] == 15 || pTok[[5 tt - 2]] == 17, x--];
-													tt++];
-												If[tt > far, far = tt]; mode = 5],
-										on++; out[[3 on]] = 17; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; sp--; mode = 3],
+													tt++
+												];
+												If[tt > far, far = tt]; mode = 5
+										],
+										on++; out[[3 on]] = 17; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; sp--; mode = 3
+									],
 								ft == 12,
 									If[ fr[[base + 2]] == 1,
 										Which[
@@ -1088,8 +1236,10 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 												t++; fr[[base + 2]] = 3; pMin = pSpecial[[20]]; pRbp = 0; pPlain = 0; mode = 1,
 											pTok[[5 t - 1]] == pSpecial[[6]],
 												t++; on++; out[[3 on]] = 20; out[[3 on + 1]] = 3; out[[3 on + 2]] = 0; sp--; mode = 3,
-											True, mode = 5],
-										on++; out[[3 on]] = 20; out[[3 on + 1]] = If[fr[[base + 2]] == 2, 1, 2]; out[[3 on + 2]] = 0; sp--; mode = 3],
+											True, mode = 5
+										],
+										on++; out[[3 on]] = 20; out[[3 on + 1]] = If[fr[[base + 2]] == 2, 1, 2]; out[[3 on + 2]] = 0; sp--; mode = 3
+									],
 								(* an integral's operand, as a notebook reads it: its factors, a parenthesis round them
 									all as none, end in as many differentials as the integral has signs, and no other
 									factor is one, a differential in parentheses none; else no Wolfram Language. Each
@@ -1105,7 +1255,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 											While[ nf > 0 && ok == 1,
 												If[ out[[3 q]] == 2 && (out[[3 q + 1]] == pHeads[[9]] || out[[3 q + 1]] == pHeads[[10]]),
 													If[trail == 1, kk++, ok = 0],
-													trail = 0];
+													trail = 0
+												];
 												need = 1;
 												While[ need > 0,
 													c = out[[3 q]];
@@ -1118,30 +1269,40 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 														c == 9, If[out[[3 q + 1]] == pHeads[[3]], 1, out[[3 q + 2]]],
 														c == 17, 3,
 														c == 20, If[out[[3 q + 1]] == 3, 2, 3],
-														True, 1] - If[c == 6, 0, 1];
-													q--];
-												nf--];
+														True, 1
+													] - If[c == 6, 0, 1];
+													q--
+												];
+												nf--
+											];
 											If[kk != fr[[base + 3]], ok = 0],
-										True, ok = 0];
+										True, ok = 0
+									];
 									If[ ok == 0, If[t > far, far = t]; mode = 5,
-										on++; out[[3 on]] = 24; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = fr[[base + 3]]; sp--; mode = 3],
+										on++; out[[3 on]] = 24; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = fr[[base + 3]]; sp--; mode = 3
+									],
 								(* a query's expression: a word of one token its text, and after ?? nothing else *)
 								ft == 15,
 									x = If[on == fr[[base + 4]] + 1 && t == fr[[base + 3]] + 1 && out[[3 on]] == 1, 1, 0];
 									If[x == 1 && (out[[3 on + 1]] <= 4 || out[[3 on + 1]] == 6 || out[[3 on + 1]] == 7), out[[3 on + 1]] = 100];
 									If[ fr[[base + 2]] == 1 && x == 0, mode = 5,
-										on++; out[[3 on]] = 29; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3],
+										on++; out[[3 on]] = 29; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3
+									],
 								(* a message name's operand: a word of one token, a name, a number, a blank, a slot
 									or a %, its text; another :: after it, another operand *)
 								ft == 14,
 									If[ on == fr[[base + 4]] + 1 && t == fr[[base + 3]] + 1 && out[[3 on]] == 1 &&
 											(out[[3 on + 1]] <= 4 || out[[3 on + 1]] == 6 || out[[3 on + 1]] == 7),
-										out[[3 on + 1]] = 100];
+										out[[3 on + 1]] = 100
+									];
 									fr[[base + 2]] = fr[[base + 2]] + 1;
 									If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[4]] && ! (brackets == 0 && nls[[t]] == 1),
 										t++; fr[[base + 3]] = t; fr[[base + 4]] = on; pMin = pSpecial[[17]]; pRbp = 100000; pPlain = 0; mode = 1,
-										on++; out[[3 on]] = 14; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3],
-								True, mode = 5]],
+										on++; out[[3 on]] = 14; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3
+									],
+								True, mode = 5
+							]
+						],
 					(* no Wolfram Language: back to a pattern's name or an operand left out, else the end *)
 					mode == 5,
 						If[t > far, far = t];
@@ -1159,7 +1320,10 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 									fr[[base + 1]] == 9,
 										on++; out[[3 on]] = 12; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 12,
 									True,
-										on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; fr[[base + 2]] = fr[[base + 2]] + 1; mode = 13]]],
+										on++; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; fr[[base + 2]] = fr[[base + 2]] + 1; mode = 13
+								]
+							]
+						],
 					(* a bracket's items: none before the closer, else the first *)
 					mode == 6,
 						base = 8 (sp - 1);
@@ -1169,7 +1333,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 						base = 8 (sp - 1);
 						If[ pTok[[5 t - 2]] == 18 || (pTok[[5 t - 2]] == fr[[base + 3]] && (fr[[base + 3]] != 9 || pTok[[5 t - 1]] == fr[[base + 4]])),
 							on++; out[[3 on]] = 11; out[[3 on + 1]] = 1; out[[3 on + 2]] = 0; fr[[base + 5]] = fr[[base + 5]] + 1; mode = 8,
-							pMin = 0; pRbp = 0; pPlain = 0; mode = 1],
+							pMin = 0; pRbp = 0; pPlain = 0; mode = 1
+						],
 					(* after an item: a comma and the next, else the closer *)
 					mode == 8,
 						If[pTok[[5 t - 2]] == 18, t++; mode = 7, mode = 9],
@@ -1179,7 +1344,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 						Which[
 							bt == 2, If[pTok[[5 t - 2]] == 13 && t < n && pTok[[5 t + 3]] == 13, t += 2; ok = 1, If[pTok[[5 t - 2]] == 13 && t < n, t++]; ok = 0],
 							pTok[[5 t - 2]] == fr[[base + 3]] && (fr[[base + 3]] != 9 || pTok[[5 t - 1]] == fr[[base + 4]]), t++; ok = 1,
-							True, ok = 0];
+							True, ok = 0
+						];
 						If[ ok == 0, mode = 5,
 							brackets--; on++;
 							Which[
@@ -1188,8 +1354,10 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 								bt == 3, out[[3 on]] = 9; out[[3 on + 1]] = pHeads[[4]]; out[[3 on + 2]] = cnt,
 								bt == 4, out[[3 on]] = 9; out[[3 on + 1]] = pHeads[[5]]; out[[3 on + 2]] = cnt,
 								bt == 5, out[[3 on]] = 9; out[[3 on + 1]] = fr[[base + 6]]; out[[3 on + 2]] = cnt,
-								True, out[[3 on]] = 15; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0];
-							sp--; mode = 3],
+								True, out[[3 on]] = 15; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0
+							];
+							sp--; mode = 3
+						],
 					(* a ;; and the span's frame *)
 					mode == 10,
 						t++;
@@ -1209,13 +1377,15 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 							fr[[base + 2]] == 2,
 								t--; se = t; on++; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; mode = 3,
 							True,
-								on++; out[[3 on]] = 12; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 12],
+								on++; out[[3 on]] = 12; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 12
+						],
 					(* after a span's operand: a second ;; and its operand, else the span *)
 					mode == 12,
 						base = 8 (sp - 1); fr[[base + 3]] = fr[[base + 3]] + 1;
 						If[ fr[[base + 2]] == 1 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]] && ! (brackets == 0 && nls[[t]] == 1),
 							t++; fr[[base + 2]] = 2; mode = 11,
-							on++; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; se = t; mode = 3],
+							on++; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; se = t; mode = 3
+						],
 					(* a ; and its operand, Null where it is left out, but for one a prefix operator, a << or
 						an integral begins, else the compound *)
 					mode == 13,
@@ -1231,13 +1401,20 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 									pMin = pSpecial[[18]]; pRbp = 0; pPlain = 0; mode = 1,
 								True,
 									sp++; base = 8 (sp - 1); fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
-									pMin = pSpecial[[18]]; pRbp = 0; pPlain = 0; mode = 1],
+									pMin = pSpecial[[18]]; pRbp = 0; pPlain = 0; mode = 1
+							],
 							base = 8 (sp - 1);
-							on++; out[[3 on]] = 19; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3],
-					True, status = 1; If[t > far, far = t]; mode = 99]];
+							on++; out[[3 on]] = 19; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3
+						],
+					True, status = 1; If[t > far, far = t]; mode = 99
+				]
+			];
 			out[[1]] = status; out[[2]] = If[status == 1 || status == 3, far, on];
 			If[status != 0, out[[3]] = stmt];
-			Take[out, If[status == 0, 2 + 3 on, 3]]]]]]
+			Take[out, If[status == 0, 2 + 3 on, 3]]
+		]]
+	]
+]
 
 (* the parser run here, fixed at its first use *)
 fastParseFunction := fastParseFunction = typedFunction[fastParse, $fastParseDeclaration]
@@ -1264,22 +1441,27 @@ fastParseFunction := fastParseFunction = typedFunction[fastParse, $fastParseDecl
 $fastLinesDeclaration = FunctionDeclaration[fastLines,
 	Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
 		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
-		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
+		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]
+	} -> "PackedArray"::["MachineInteger", 1]
+	] @
 	Function[{lnCodes, lnLexed, lnProg, lnWarn, lnClasses, lnNames, lnKept, lnParams},
 		Native`UncheckedBlock[Module[{nUse = lnParams[[1]], end = lnParams[[2]], pending = lnParams[[3]], seg = lnParams[[4]], stop = lnParams[[5]], offset = lnParams[[6]],
 				srcLen = lnParams[[7]], pendingStart = lnParams[[8]], keptLen = lnParams[[9]], n = Length[lnCodes] - 3,
 				js, nS = 0, j = 0, g = 0, lo = 0, hi = 0, p = 0, c = 0, depth = 0, k = 0, a = 0, len = 0, match = 0, q = 0,
 				pass = 1, total = 0, out, rows = 0, slot = 1, breaks = 0, at = 0, ti = 0, fI = 0, lI = 0, fT = 0, tA = 0, kind = 0, base = 0,
-				post = 1, r = 0, col = 0, v = 0},
+				post = 1, r = 0, col = 0, v = 0
+		},
 			js = Table[0, {nUse + 1}];
 			j = 1;
 			While[ j <= lnProg[[2]] && nS < nUse,
 				If[lnProg[[3 j]] == 25, nS++; js[[nS]] = j];
-				j++];
+				j++
+			];
 			out = Table[0, {2}];
 			While[ pass <= 2,
 				If[ pass == 2,
-					out = Table[0, {2 + 9 (total + post)}]];
+					out = Table[0, {2 + 9 (total + post)}]
+				];
 				rows = 0; slot = 1;
 				g = 1;
 				While[ g <= nS + 1,
@@ -1306,12 +1488,15 @@ $fastLinesDeclaration = FunctionDeclaration[fastLines,
 									len = lnNames[[a]];
 									If[ len == k - p - 2,
 										match = 1; q = 1;
-										While[match == 1 && q <= len, If[lnNames[[a + q]] != lnCodes[[p + 1 + q]], match = 0]; q++]];
-									a += len + 1];
+										While[match == 1 && q <= len, If[lnNames[[a + q]] != lnCodes[[p + 1 + q]], match = 0]; q++]
+									];
+									a += len + 1
+								];
 								If[match == 1, at = k + 1];
 								p = k,
 							lnClasses[[Min[Max[c, 0], 65535] + 1]] == 4, at = p + 1,
-							True, at = 0];
+							True, at = 0
+						];
 						(* the first break after a statement ends its row; any other makes none *)
 						If[ at > 0,
 							breaks++;
@@ -1322,9 +1507,13 @@ $fastLinesDeclaration = FunctionDeclaration[fastLines,
 								If[ kind == 1,
 									lI = js[[g - 1]]; fI = If[g == 2, 1, js[[g - 2]] + 1]; fT = lnProg[[3 lI + 1]]; tA = lnProg[[3 lI + 2]];
 									out[[base + 4]] = seg; out[[base + 5]] = fI; out[[base + 6]] = lI; out[[base + 7]] = fT; out[[base + 8]] = tA - 1;
-									out[[base + 9]] = lnWarn[[tA]] - lnWarn[[fT]]];
-								slot = at]]];
-						p++];
+									out[[base + 9]] = lnWarn[[tA]] - lnWarn[[fT]]
+								];
+								slot = at
+							]]
+						];
+						p++
+					];
 					(* a statement, or the one pending, whose gap holds no break: the token after it ends its line *)
 					If[ breaks == 0 && (g > 1 || pending == 1),
 						kind = If[g == 1, 5, 1];
@@ -1334,10 +1523,15 @@ $fastLinesDeclaration = FunctionDeclaration[fastLines,
 							If[ kind == 1,
 								lI = js[[g - 1]]; fI = If[g == 2, 1, js[[g - 2]] + 1]; fT = lnProg[[3 lI + 1]]; tA = lnProg[[3 lI + 2]];
 								out[[base + 4]] = seg; out[[base + 5]] = fI; out[[base + 6]] = lI; out[[base + 7]] = fT; out[[base + 8]] = tA - 1;
-								out[[base + 9]] = lnWarn[[tA]] - lnWarn[[fT]]];
-							slot = hi]];
-					g++];
-				pass++];
+								out[[base + 9]] = lnWarn[[tA]] - lnWarn[[fT]]
+							];
+							slot = hi
+						]
+					];
+					g++
+				];
+				pass++
+			];
 			(* where reading stops, or the end *)
 			out[[2 + 9 rows + 1]] = If[stop == 0, 6, stop]; out[[2 + 9 rows + 2]] = slot; out[[2 + 9 rows + 3]] = slot;
 			(* the positions the source's *)
@@ -1348,11 +1542,16 @@ $fastLinesDeclaration = FunctionDeclaration[fastLines,
 					v = out[[2 + 9 (r - 1) + col]] + offset;
 					If[keptLen > 0, v = If[v <= keptLen, lnKept[[v]], srcLen + v - keptLen]];
 					out[[2 + 9 (r - 1) + col]] = v;
-					col++];
-				r++];
+					col++
+				];
+				r++
+			];
 			If[pending == 1, out[[2 + 2]] = pendingStart];
 			out[[1]] = rows + post; out[[2]] = slot;
-			out]]]]
+			out
+		]]
+	]
+]
 
 fastLinesFunction := fastLinesFunction = typedFunction[fastLines, $fastLinesDeclaration]
 $fastNoKept = Developer`ToPackedArray[{0}]
@@ -1366,7 +1565,9 @@ $fastNoKept = Developer`ToPackedArray[{0}]
 	kind, Unset's for an = before a . *)
 $fastLedDeclaration = FunctionDeclaration[fastLed,
 	Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
-		"PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
+		"PackedArray"::["MachineInteger", 1]
+	} -> "PackedArray"::["MachineInteger", 1]
+	] @
 	Function[{ldLexed, ldKinds, ldOps, ldParams},
 		Native`UncheckedBlock[Module[{n = ldLexed[[2]], out, t = 1, u = 1, kind = 0, op = 0},
 			out = Table[0, {n}];
@@ -1375,8 +1576,12 @@ $fastLedDeclaration = FunctionDeclaration[fastLed,
 				out[[t]] = ldKinds[[kind + 1]] + If[kind == ldParams[[1]], ldOps[[op + 1]], 0];
 				u = If[t < n, t + 1, 1];
 				If[op == ldParams[[2]] && ldLexed[[5 u - 1]] == ldParams[[3]] && ldLexed[[5 u - 2]] == ldParams[[1]], out[[t]] = ldParams[[4]]];
-				t++];
-			out]]]]
+				t++
+			];
+			out
+		]]
+	]
+]
 
 fastLedFunction := fastLedFunction = typedFunction[fastLed, $fastLedDeclaration]
 
@@ -1389,7 +1594,9 @@ fastLedFunction := fastLedFunction = typedFunction[fastLed, $fastLedDeclaration]
 $fastWarnDeclaration = FunctionDeclaration[fastWarn,
 	Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
 		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
-		"PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
+		"PackedArray"::["MachineInteger", 1]
+	} -> "PackedArray"::["MachineInteger", 1]
+	] @
 	Function[{wnCodes, wnLexed, wnOpenKinds, wnCloseKinds, wnOpenOps, wnCloseOps, wnParams},
 		Native`UncheckedBlock[Module[{n = wnLexed[[2]], len = Length[wnCodes], marks, out, t = 1, u = 0, kind = 0, flag = 0, m = 0, p = 0, e = 0, before = 0, top = Length[wnOpenOps] - 1},
 			marks = Table[0, {n}];
@@ -1399,24 +1606,33 @@ $fastWarnDeclaration = FunctionDeclaration[fastWarn,
 				If[ kind == wnParams[[2]],
 					u = Max[t - 1, 1];
 					If[ wnOpenKinds[[wnLexed[[5 u - 2]] + 1]] == 1 ||
-							(wnLexed[[5 u - 2]] == wnParams[[1]] && wnOpenOps[[Min[Max[wnLexed[[5 u - 1]], 0], top] + 1]] == 1), flag = 1];
+							(wnLexed[[5 u - 2]] == wnParams[[1]] && wnOpenOps[[Min[Max[wnLexed[[5 u - 1]], 0], top] + 1]] == 1), flag = 1
+					];
 					u = Min[t + 1, n];
 					If[ wnCloseKinds[[wnLexed[[5 u - 2]] + 1]] == 1 ||
-							(wnLexed[[5 u - 2]] == wnParams[[1]] && wnCloseOps[[Min[Max[wnLexed[[5 u - 1]], 0], top] + 1]] == 1), flag = 1]];
+							(wnLexed[[5 u - 2]] == wnParams[[1]] && wnCloseOps[[Min[Max[wnLexed[[5 u - 1]], 0], top] + 1]] == 1), flag = 1
+					]
+				];
 				If[ kind == wnParams[[3]],
 					p = wnLexed[[5 t]]; e = Min[wnLexed[[5 t + 1]], len + 1];
-					While[p < e && flag == 0, If[wnCodes[[p]] == 92, flag = 1]; p++]];
+					While[p < e && flag == 0, If[wnCodes[[p]] == 92, flag = 1]; p++]
+				];
 				If[flag == 1, marks[[t]] = 1; m++];
-				t++];
+				t++
+			];
 			out = Table[0, {1 + m + n + 1}];
 			out[[1]] = m;
 			t = 1; u = 1; before = 0;
 			While[ t <= n,
 				out[[1 + m + t]] = before;
 				If[marks[[t]] == 1, out[[1 + u]] = t; u++; before++];
-				t++];
+				t++
+			];
 			out[[1 + m + n + 1]] = before;
-			out]]]]
+			out
+		]]
+	]
+]
 
 fastWarnFunction := fastWarnFunction = typedFunction[fastWarn, $fastWarnDeclaration]
 
@@ -1436,9 +1652,14 @@ $fastRangesDeclaration = FunctionDeclaration[fastRanges,
 			While[ j <= n,
 				If[ rgProg[[3 j]] == 25,
 					out[[2 + 4 k]] = first; out[[3 + 4 k]] = j; out[[4 + 4 k]] = rgProg[[3 j + 1]]; out[[5 + 4 k]] = rgProg[[3 j + 2]];
-					k++; first = j + 1];
-				j++];
-			out]]]]
+					k++; first = j + 1
+				];
+				j++
+			];
+			out
+		]]
+	]
+]
 
 fastRangesFunction := fastRangesFunction = typedFunction[fastRanges, $fastRangesDeclaration]
 
@@ -1461,8 +1682,10 @@ $fastLeafDeclaration = FunctionDeclaration[fastLeafCodes,
 					k++;
 					out[[3 + k]] = lfProg[[3 j + 1]];
 					out[[3 + m + k]] = lfProg[[3 j + 2]];
-					out[[3 + 2 m + k]] = If[lfProg[[3 j + 1]] == 3 || lfProg[[3 j + 1]] == 4, 1, 0]];
-				j++];
+					out[[3 + 2 m + k]] = If[lfProg[[3 j + 1]] == 3 || lfProg[[3 j + 1]] == 4, 1, 0]
+				];
+				j++
+			];
 			out[[3 + 3 m + n + 1]] = k;
 			base = 3 + 3 m + n + 1;
 			k = 1;
@@ -1471,10 +1694,15 @@ $fastLeafDeclaration = FunctionDeclaration[fastLeafCodes,
 				out[[base + 2 k - 1]] = lfLexed[[5 t + 1]] - lfLexed[[5 t]];
 				If[ k < m,
 					out[[base + 2 k]] = lfLexed[[5 out[[3 + m + k + 1]]]] - lfLexed[[5 t + 1]];
-					If[out[[base + 2 k]] < 0, ordered = 0]];
-				k++];
+					If[out[[base + 2 k]] < 0, ordered = 0]
+				];
+				k++
+			];
 			out[[3]] = ordered;
-			out]]]]
+			out
+		]]
+	]
+]
 
 fastLeafFunction := fastLeafFunction = typedFunction[fastLeafCodes, $fastLeafDeclaration]
 
@@ -1488,7 +1716,8 @@ $fastWholeDeclaration = FunctionDeclaration[fastWhole,
 	Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
 	Function[{whProg, whLexed, whLines},
 		Native`UncheckedBlock[Module[{n = Min[whProg[[2]], Quotient[Length[whProg] - 2, 3]], lp = Length[whProg], m = 0, nulls = 0, parts = whLines[[1]] - 1, j = 1,
-				k = 0, r = 1, t = 0, row = 0, at = 0, base = 0, before, out},
+				k = 0, r = 1, t = 0, row = 0, at = 0, base = 0, before, out
+		},
 			While[j <= n, If[whProg[[3 j]] == 1, m++]; j++];
 			before = Native`UncheckedArray[0, n + 1];
 			out = Native`UncheckedArray[0, 2 + lp + 3 + 4 m + 4 parts];
@@ -1506,8 +1735,10 @@ $fastWholeDeclaration = FunctionDeclaration[fastWhole,
 						out[[at + 3 + m + k]] = If[whProg[[3 j + 1]] == 3 || whProg[[3 j + 1]] == 4, 1, 0];
 						out[[at + 3 + 2 m + k]] = whLexed[[5 t]];
 						out[[at + 3 + 3 m + k]] = whLexed[[5 t + 1]],
-					whProg[[3 j]] == 11 && whProg[[3 j + 1]] == 1, nulls++];
-				j++];
+					whProg[[3 j]] == 11 && whProg[[3 j + 1]] == 1, nulls++
+				];
+				j++
+			];
 			before[[n + 1]] = k;
 			base = at + 3 + 4 m;
 			While[ r <= parts,
@@ -1515,10 +1746,15 @@ $fastWholeDeclaration = FunctionDeclaration[fastWhole,
 				If[ whLines[[row + 1]] == 1,
 					out[[base + 4 r - 3]] = whLines[[row + 5]]; out[[base + 4 r - 2]] = whLines[[row + 6]];
 					out[[base + 4 r - 1]] = before[[whLines[[row + 5]]]] + 1; out[[base + 4 r]] = before[[whLines[[row + 6]] + 1]],
-					out[[base + 4 r - 3]] = 0; out[[base + 4 r - 2]] = 0; out[[base + 4 r - 1]] = 0; out[[base + 4 r]] = 0];
-				r++];
+					out[[base + 4 r - 3]] = 0; out[[base + 4 r - 2]] = 0; out[[base + 4 r - 1]] = 0; out[[base + 4 r]] = 0
+				];
+				r++
+			];
 			out[[at + 1]] = nulls; out[[at + 2]] = m; out[[at + 3]] = parts;
-			out]]]]
+			out
+		]]
+	]
+]
 
 fastWholeFunction := fastWholeFunction = typedFunction[fastWhole, $fastWholeDeclaration]
 
@@ -1548,7 +1784,8 @@ $fastEscapesDeclaration = FunctionDeclaration[fastEscapes,
 									Which[
 										r != 0 && Mod[r, 8192] != 1, p = Quotient[r, 8192],
 										r == 0 && p + 2 < e && !(48 <= esCodes[[p + 2]] <= 57 || 65 <= esCodes[[p + 2]] <= 90 || 97 <= esCodes[[p + 2]] <= 122), p += 2,
-										True, warned = 1],
+										True, warned = 1
+									],
 								48 <= c <= 55,
 									If[p + 3 < e && 48 <= esCodes[[p + 2]] <= 55 && 48 <= esCodes[[p + 3]] <= 55, p += 4, warned = 1],
 								c == 46 || c == 58 || c == 124,
@@ -1558,9 +1795,17 @@ $fastEscapesDeclaration = FunctionDeclaration[fastEscapes,
 								65 <= c <= 90 || 97 <= c <= 122,
 									If[c == 110 || c == 116 || c == 114 || c == 98 || c == 102, p += 2, warned = 1],
 								True,
-									p += 2]]]];
-				t++];
-			warned]]]]
+									p += 2
+							]
+						]
+					]
+				];
+				t++
+			];
+			warned
+		]]
+	]
+]
 
 (* the typed escape scan run here, fixed at its first use *)
 fastEscapesFunction := fastEscapesFunction = typedFunction[fastEscapes, $fastEscapesDeclaration, {$lexLongNameDeclaration}]
@@ -1577,34 +1822,44 @@ $fastProgramDeclaration = FunctionDeclaration[fastProgram,
 		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
 		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
 		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
-		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} ->
-		"PackedArray"::["MachineInteger", 1]] @
+		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]
+	} ->
+		"PackedArray"::["MachineInteger", 1]
+	] @
 	Function[{pgCodes, pgClasses, pgOp1, pgOp2, pgOp3, pgLongOps, pgSpecial, pgKindSpecs, pgOpSpecs, pgLedParams, pgSpecs, pgPrefix,
-			pgGroups, pgIntegrals, pgSpecialOps, pgHeads, pgKeys, pgNewlineNames},
+			pgGroups, pgIntegrals, pgSpecialOps, pgHeads, pgKeys, pgNewlineNames
+	},
 		Native`UncheckedBlock[Module[{n = Length[pgCodes] - 3, lexed, prog, lines, flat, params, out, i = 1, status = 0},
 			(* codes that do not end in three zeros are the stages' to read *)
 			If[n < 0, status = 2, If[pgCodes[[n + 1]] != 0 || pgCodes[[n + 2]] != 0 || pgCodes[[n + 3]] != 0, status = 2]];
 			While[ i <= n,
 				If[pgCodes[[i]] == 92 && i < n && (pgCodes[[i + 1]] == 10 || pgCodes[[i + 1]] == 13), status = 2];
-				i++];
+				i++
+			];
 			lexed = If[status == 0, fastLex[pgCodes, pgClasses, pgOp1, pgOp2, pgOp3, pgLongOps, pgSpecial], Table[0, {2}]];
 			If[status == 0 && lexed[[1]] != 0, status = 1];
 			(* a string's escape that warns leaves no program *)
 			If[status == 0 && fastEscapes[pgCodes, lexed, pgLongOps] != 0, status = 1];
 			prog = If[ status == 0,
 				fastParse[lexed, fastLed[lexed, pgKindSpecs, pgOpSpecs, pgLedParams], pgSpecs, pgPrefix, pgGroups, pgIntegrals, pgSpecialOps, pgHeads, pgKeys,
-					pgCodes, pgClasses],
-				Table[0, {2}]];
+					pgCodes, pgClasses
+				],
+				Table[0, {2}]
+			];
 			If[status == 0 && prog[[1]] == 3, status = 2];
 			If[status == 0 && prog[[1]] != 0, status = 1];
 			lines = If[ status == 0,
 				params = Table[0, {9}];
 				params[[1]] = prog[[2]]; params[[2]] = n + 1; params[[4]] = 1; params[[7]] = n;
 				fastLines[pgCodes, lexed, prog, Table[0, {lexed[[2]] + 1}], pgClasses, pgNewlineNames, Table[0, {1}], params],
-				Table[0, {2}]];
+				Table[0, {2}]
+			];
 			flat = If[status == 0, fastWhole[prog, lexed, lines], Table[0, {3}]];
 			If[status == 0 && flat[[3 + flat[[2]]]] > 0, status = 1];
-			If[status == 0, flat, out = Table[0, {1}]; out[[1]] = status; out]]]]]
+			If[status == 0, flat, out = Table[0, {1}]; out[[1]] = status; out]
+		]]
+	]
+]
 
 (* The program of a source string, typed code that reads its characters' codes, pads them with three
 	zeros and calls fastProgram: the source and the tables fastProgram takes after the codes -> {0,
@@ -1616,10 +1871,13 @@ $fastProgramTextDeclaration = FunctionDeclaration[fastProgramText,
 		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
 		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
 		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1],
-		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} ->
-		"PackedArray"::["MachineInteger", 1]] @
+		"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]
+	} ->
+		"PackedArray"::["MachineInteger", 1]
+	] @
 	Function[{ptText, ptClasses, ptOp1, ptOp2, ptOp3, ptLongOps, ptSpecial, ptKindSpecs, ptOpSpecs, ptLedParams, ptSpecs, ptPrefix,
-			ptGroups, ptIntegrals, ptSpecialOps, ptHeads, ptKeys, ptNewlineNames},
+			ptGroups, ptIntegrals, ptSpecialOps, ptHeads, ptKeys, ptNewlineNames
+	},
 		Native`UncheckedBlock[Module[{codes, n = 0, padded, flat, out, m = 0, i = 1},
 			codes = ToCharacterCode[ptText];
 			n = Length[codes];
@@ -1627,13 +1885,18 @@ $fastProgramTextDeclaration = FunctionDeclaration[fastProgramText,
 			While[i <= n, padded[[i]] = codes[[i]]; i++];
 			padded[[n + 1]] = 0; padded[[n + 2]] = 0; padded[[n + 3]] = 0;
 			flat = fastProgram[padded, ptClasses, ptOp1, ptOp2, ptOp3, ptLongOps, ptSpecial, ptKindSpecs, ptOpSpecs, ptLedParams, ptSpecs, ptPrefix,
-				ptGroups, ptIntegrals, ptSpecialOps, ptHeads, ptKeys, ptNewlineNames];
+				ptGroups, ptIntegrals, ptSpecialOps, ptHeads, ptKeys, ptNewlineNames
+			];
 			If[ flat[[1]] != 0, flat,
 				m = Length[flat];
 				out = Native`UncheckedArray[0, m + n];
 				i = 1; While[i <= m, out[[i]] = flat[[i]]; i++];
 				i = 1; While[i <= n, out[[m + i]] = codes[[i]]; i++];
-				out]]]]]
+				out
+			]
+		]]
+	]
+]
 
 (* the typed program run here: the definition a compiler of typed code gave fastProgramText, where
 	one did; else None, and flatProgram reads by the stages, each compiled on its own *)
@@ -1642,43 +1905,55 @@ fastProgramTextFunction := fastProgramTextFunction = If[DownValues[fastProgramTe
 (* the tables fastProgram takes after the codes, made once *)
 $fastProgramTables := $fastProgramTables = {$fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial, $fastKindSpecIndex, $fastOpSpecIndex,
 	$fastLedParams, $fastSpecTable, $fastPrefixArray, $fastGroupArray, $fastIntegralArray, $fastSpecialArray, $fastHeadCodeArray, $fastKeyCodeArray,
-	$fastNewlineNames}
+	$fastNewlineNames
+}
 
 (* ::Section:: *)
 (*The typed parser's tables*)
 
 (* the heads, each by the position of its name; the chain keys likewise *)
 $fastHeadNames := $fastHeadNames = DeleteDuplicates[Join[{"Minus", "Unset", "Paren", "List", "Association", "NotNot", "Optional"},
-	$fastSpecList[[All, 3]], Values[$fastPrefixTable][[All, 2]], Values[$fastGroupTable][[All, 2]]]]
+	$fastSpecList[[All, 3]], Values[$fastPrefixTable][[All, 2]], Values[$fastGroupTable][[All, 2]]
+]]
 fastHeadCode[name_String] := First[FirstPosition[$fastHeadNames, name, {0}, {1}]]
 $fastKeyNames := $fastKeyNames = DeleteDuplicates[Join[{"Plus", "Relation", "Divisible"},
-	Map[fastChainKey, Select[$fastSpecList, #[[2]] === "InfixN" &]]]]
+	Map[fastChainKey, Select[$fastSpecList, #[[2]] === "InfixN" &]]
+]]
 fastKeyCode[key_String] := First[FirstPosition[$fastKeyNames, key, {0}, {1}]]
 $fastFixityCodes = <|"InfixL" -> 1, "InfixR" -> 2, "InfixN" -> 3, "Postfix" -> 4, "Call" -> 5, "Derivative" -> 6, "Ternary" -> 7,
-	"MessageName" -> 8, "Span" -> 9, "Compound" -> 10, "TagSet" -> 11, "Put" -> 12, "Unset" -> 13, "LongPart" -> 14|>
+	"MessageName" -> 8, "Span" -> 9, "Compound" -> 10, "TagSet" -> 11, "Put" -> 12, "Unset" -> 13, "LongPart" -> 14
+|>
 
 (* each spec: precedence, fixity (15 the product an operand begins), head
 	and chain key *)
 $fastSpecTable := $fastSpecTable = Developer`ToPackedArray[Flatten[Map[{#[[1]], If[Length[#] >= 5, 15, $fastFixityCodes[#[[2]]]], fastHeadCode[#[[3]]],
-	If[#[[2]] === "InfixN", fastKeyCode[fastChainKey[#]], 0]} &, $fastSpecList]]]
+	If[#[[2]] === "InfixN", fastKeyCode[fastChainKey[#]], 0]
+} &, $fastSpecList
+]]]
 (* by operator, from 0: the prefix ones' precedence and head, the
 	brackets' closer and head, and the integral *)
 $fastPrefixArray := $fastPrefixArray = Developer`ToPackedArray[Flatten[Table[
-	If[KeyExistsQ[$fastPrefixTable, o], {$fastPrefixTable[o][[1]], fastHeadCode[$fastPrefixTable[o][[2]]]}, {0, 0}], {o, 0, $fastNotId}]]]
+	If[KeyExistsQ[$fastPrefixTable, o], {$fastPrefixTable[o][[1]], fastHeadCode[$fastPrefixTable[o][[2]]]}, {0, 0}], {o, 0, $fastNotId}
+]]]
 $fastGroupArray := $fastGroupArray = Developer`ToPackedArray[Flatten[Table[
-	If[KeyExistsQ[$fastGroupTable, o], {$fastGroupTable[o][[1]], fastHeadCode[$fastGroupTable[o][[2]]]}, {0, 0}], {o, 0, $fastNotId}]]]
+	If[KeyExistsQ[$fastGroupTable, o], {$fastGroupTable[o][[1]], fastHeadCode[$fastGroupTable[o][[2]]]}, {0, 0}], {o, 0, $fastNotId}
+]]]
 $fastIntegralList := $fastIntegralList = Values[$fastIntegralTable]
 $fastIntegralArray := $fastIntegralArray = Developer`ToPackedArray[Table[
-	If[KeyExistsQ[$fastIntegralTable, o], First[FirstPosition[Keys[$fastIntegralTable], o]], 0], {o, 0, $fastNotId}]]
+	If[KeyExistsQ[$fastIntegralTable, o], First[FirstPosition[Keys[$fastIntegralTable], o]], 0], {o, 0, $fastNotId}
+]]
 (* the operators and precedences the parser names, the heads it emits and
 	the chain keys it tells *)
 $fastSpecialArray := $fastSpecialArray = Developer`ToPackedArray[Join[
 	{$fastColon, $fastSemiSemi, $fastSemi, $fastColonColon, $fastEqual, $fastEqualDot, $fastDot, $fastTilde, $fastGet, $fastColonEqual,
-	$fastMinus, $fastLongMinus, $fastRightDoubleBracket, $fastQuestion},
+	$fastMinus, $fastLongMinus, $fastRightDoubleBracket, $fastQuestion
+	},
 	{$integralPrecedence, $fastPatternColon, $fastSpanOperand, $fastCompoundOperand, $fastTagLeft, $fastTagRight, $fastOptionalColon},
-	{fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}]}]]
+	{fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}]}
+]]
 $fastHeadCodeArray := $fastHeadCodeArray = Developer`ToPackedArray[fastHeadCode /@ {"Minus", "Unset", "Paren", "List", "Association", "NotNot", "Optional",
-	"Times", "DifferentialD", "CapitalDifferentialD"}]
+	"Times", "DifferentialD", "CapitalDifferentialD"
+}]
 $fastKeyCodeArray := $fastKeyCodeArray = Developer`ToPackedArray[fastKeyCode /@ {"Plus", "Relation", "Divisible"}]
 
 (* ::Section:: *)
@@ -1688,7 +1963,8 @@ fastText::usage = "fastText[a, b] gives the text of the codes $fcodes from a to 
 fastText[a_Integer, b_Integer] := FromCharacterCode @ Take[$fcodes, {a, b - 1}]
 
 $fastLeafKinds = <|1 -> "Symbol", 2 -> "Blank", 3 -> "Integer", 4 -> "Real", 5 -> "String", 6 -> "Slot", 7 -> "Out", 8 -> "File", 20 -> "Boxes",
-	21 -> "Freeform", 100 -> "Tag"|>
+	21 -> "Freeform", 100 -> "Tag"
+|>
 
 (* The held values of a postfix program, its instructions {code, a, b} one after another, and the
 	kinds, texts and marks of its leaves, those fastLeafData gives: the statements'. Each instruction
@@ -1949,7 +2225,8 @@ lexedCodes[padded_List] := fastLexFunction[padded, $fastClasses, $fastOp1, $fast
 
 fastParseTokens::usage = "fastParseTokens[lexed, padded] gives the parser's program of the lexer's tokens lexed of the codes padded."
 fastParseTokens[lexed_List, padded_List] := fastParseFunction[lexed, fastLedIndices[lexed], $fastSpecTable, $fastPrefixArray, $fastGroupArray,
-	$fastIntegralArray, $fastSpecialArray, $fastHeadCodeArray, $fastKeyCodeArray, padded, $fastClasses]
+	$fastIntegralArray, $fastSpecialArray, $fastHeadCodeArray, $fastKeyCodeArray, padded, $fastClasses
+]
 
 (* The reading of the codes of a source, or of a segment of one: the codes, padded, the lexer's
 	tokens, each token that is two split, the parser's program of them, and how reading stops. *)
@@ -2158,7 +2435,8 @@ failureAt::usage = "failureAt[failure, position] gives the failure placed at the
 failureAt[Failure[tag_, data_Association], position_Integer] := Failure[tag, Join[data, <|
 	"Position" -> position,
 	"MessageParameters" -> Append[Lookup[data, "MessageParameters", <||>], "Position" -> position]
-|>]]
+|>
+]]
 
 (* The state, the parts of the source read from its character from on appended to its parts and the
 	segment they are read from to its segments. *)
@@ -2210,7 +2488,8 @@ segmentState[state_Association, from_Integer, reading_Association] := With[
 		"Parts" -> parts,
 		"Data" -> stoppedData[state, from, reading, Length[parts]],
 		"Index" -> If[Length[parts] > 8, AssociationThread[rowStarts[parts] -> Range[Length[parts]]], <||>]
-	|>]
+	|>
+	]
 ]
 
 readingSegment::usage = "readingSegment[reading, warns] gives the segment of a reading: <|\"Codes\", \"Lexed\", \"Program\", \"Warning\" -> \

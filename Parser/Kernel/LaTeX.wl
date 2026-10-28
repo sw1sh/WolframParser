@@ -98,7 +98,8 @@ unicodeReservedQ = MemberQ[{
 	",", ";", ":", "+", "-", "=",
 	"<", ">", "*", "/", "?", "!", "#", ".",
 	"`", "'", "\""
-}, #] &
+}, #
+] &
 
 unicodeAtom = ParseAction[
 	token[ParseCharacter[_ ? (! unicodeReservedQ[#] &)]],
@@ -115,7 +116,8 @@ unicodeAtom = ParseAction[
 	on the ASCII path: there every StyleBox[_,"TI"] holds a plain letter.
 	Pre-styled = the two Unicode blocks that already encode their own style. *)
 preStyledLetterQ[c_String] := With[{cc = First @ ToCharacterCode[c]},
-	(16^^1D400 <= cc <= 16^^1D7FF) || (16^^2100 <= cc <= 16^^214F)]
+	(16^^1D400 <= cc <= 16^^1D7FF) || (16^^2100 <= cc <= 16^^214F)
+]
 bareUnicodeAtomQ[c_String] := StringLength[c] == 1 && (! LetterQ[c] || preStyledLetterQ[c])
 uprightUnicodeSymbols[boxes_] := boxes /. StyleBox[s_String, "TI"] /; bareUnicodeAtomQ[s] :> s
 
@@ -257,7 +259,8 @@ cellLeadingOp = ParseAction[
 		"\\in", "\[Element]", "\\notin", "\[NotElement]", "\\mid", "\[VerticalSeparator]",
 		"\\subset", "\[Subset]", "\\subseteq", "\[SubsetEqual]",
 		"\\supset", "\[Superset]", "\\supseteq", "\[SupersetEqual]",
-		_, #1] &
+		_, #1
+	] &
 ]
 
 (* Single-char tokens that can appear bare in a math row, in any
@@ -463,13 +466,19 @@ doubleStruckChars = Association @ Join[
 	Map[Function[c,
 		c -> FromCharacterCode[
 			Lookup[$dblExceptions, c, 16^^1D538 + ToCharacterCode[c][[1]] - 65]
-		]], CharacterRange["A", "Z"]],
+		]
+	], CharacterRange["A", "Z"]
+	],
 	Map[Function[c,
-		c -> FromCharacterCode[16^^1D552 + ToCharacterCode[c][[1]] - 97]],
-		CharacterRange["a", "z"]],
+		c -> FromCharacterCode[16^^1D552 + ToCharacterCode[c][[1]] - 97]
+	],
+		CharacterRange["a", "z"]
+	],
 	Map[Function[c,
-		c -> FromCharacterCode[16^^1D7D8 + ToCharacterCode[c][[1]] - 48]],
-		CharacterRange["0", "9"]]
+		c -> FromCharacterCode[16^^1D7D8 + ToCharacterCode[c][[1]] - 48]
+	],
+		CharacterRange["0", "9"]
+	]
 ]
 
 (* U+1D49C + i is mathematical-script-{A+i}, with exceptions for
@@ -486,11 +495,15 @@ scriptCapitalChars = Association @ Join[
 	Map[Function[c,
 		c -> FromCharacterCode[
 			Lookup[$scrUpperExceptions, c, 16^^1D49C + ToCharacterCode[c][[1]] - 65]
-		]], CharacterRange["A", "Z"]],
+		]
+	], CharacterRange["A", "Z"]
+	],
 	Map[Function[c,
 		c -> FromCharacterCode[
 			Lookup[$scrLowerExceptions, c, 16^^1D4B6 + ToCharacterCode[c][[1]] - 97]
-		]], CharacterRange["a", "z"]]
+		]
+	], CharacterRange["a", "z"]
+	]
 ]
 
 (* U+1D504 + i is fraktur-{A+i}, with exceptions C, H, I, R, Z. *)
@@ -502,10 +515,14 @@ gothicCapitalChars = Association @ Join[
 	Map[Function[c,
 		c -> FromCharacterCode[
 			Lookup[$frkUpperExceptions, c, 16^^1D504 + ToCharacterCode[c][[1]] - 65]
-		]], CharacterRange["A", "Z"]],
+		]
+	], CharacterRange["A", "Z"]
+	],
 	Map[Function[c,
-		c -> FromCharacterCode[16^^1D51E + ToCharacterCode[c][[1]] - 97]],
-		CharacterRange["a", "z"]]
+		c -> FromCharacterCode[16^^1D51E + ToCharacterCode[c][[1]] - 97]
+	],
+		CharacterRange["a", "z"]
+	]
 ]
 
 (* font-style handler: if arg is a single ASCII upper-case letter and we
@@ -797,12 +814,14 @@ commandHandlers["\\atopfrac"] = Function[{opt, req},
 commandHandlers["\\bracefrac"] = Function[{opt, req},
 	If[Length[req] >= 2,
 		RowBox[{"{", GridBox[{{req[[1]]}, {req[[2]]}}], "}"}],
-		"\\bracefrac"]
+		"\\bracefrac"
+	]
 ]
 commandHandlers["\\brackfrac"] = Function[{opt, req},
 	If[Length[req] >= 2,
 		RowBox[{"[", GridBox[{{req[[1]]}, {req[[2]]}}], "]"}],
-		"\\brackfrac"]
+		"\\brackfrac"
+	]
 ]
 
 commandHandlers["\\sqrt"] = Function[{opt, req},
@@ -851,7 +870,8 @@ styleScopeHandler = Function[{opt, req},
 	the scripts back onto the operator in the placement the modifier names. A
 	brace group the greedy command parser consumed is re-emitted after it. *)
 limitsModifierHandler[kind_String] := Function[{opt, req},
-	If[Length[req] === 0, limitsMark[kind], RowBox[Prepend[req, limitsMark[kind]]]]]
+	If[Length[req] === 0, limitsMark[kind], RowBox[Prepend[req, limitsMark[kind]]]]
+]
 commandHandlers["\\limits"] = limitsModifierHandler["limits"]
 commandHandlers["\\nolimits"] = limitsModifierHandler["nolimits"]
 commandHandlers["\\displaylimits"] = limitsModifierHandler["displaylimits"]
@@ -896,7 +916,8 @@ commandHandlers["\\negthickspace"] = Function[{opt, req}, "\[NegativeThickSpace]
 Scan[
 	(commandHandlers[#] = styleScopeHandler) &,
 	{"\\textstyle", "\\displaystyle", "\\scriptstyle", "\\scriptscriptstyle",
-	"\\it", "\\bf", "\\rm", "\\sf", "\\tt", "\\sl", "\\em"}
+	"\\it", "\\bf", "\\rm", "\\sf", "\\tt", "\\sl", "\\em"
+	}
 ]
 
 (* TeX size switches.  The body comes via the greedy `{...}` arg the
@@ -950,7 +971,8 @@ Scan[
 		horizontal advance - r/l/c picks alignment. For doc-math we drop
 		the layout trick and emit the arg unchanged. *)
 	"\\mathrlap", "\\mathllap", "\\mathclap", "\\rlap", "\\llap", "\\clap",
-	"\\underleftarrow", "\\underrightarrow", "\\underleftrightarrow"}
+	"\\underleftarrow", "\\underrightarrow", "\\underleftrightarrow"
+	}
 ]
 
 (* `\boxed{X}` / `\fbox{X}`: KaTeX renders these with an actual visible
@@ -982,7 +1004,8 @@ commandHandlers["\\tag"] = Function[{opt, req},
 texLengthToPt[s_String] := Module[{m},
 	m = StringCases[StringTrim[s],
 		StartOfString ~~ num:NumberString ~~ unit:LetterCharacter.. ~~ EndOfString :> {num, unit},
-		1];
+		1
+	];
 	If[ m === {}, Missing[],
 		With[{n = ToExpression[m[[1, 1]]], u = m[[1, 2]]},
 			n * Switch[u,
@@ -998,14 +1021,16 @@ texLengthToPt[s_String] := Module[{m},
 ]
 commandHandlers["\\rule"] = Function[{opt, req},
 	With[{w = If[Length[req] >= 1, texLengthToPt @ nameOfArg @ req[[1]], Missing[]],
-			h = If[Length[req] >= 2, texLengthToPt @ nameOfArg @ req[[2]], Missing[]]},
+			h = If[Length[req] >= 2, texLengthToPt @ nameOfArg @ req[[2]], Missing[]]
+	},
 		If[ NumberQ[w] && NumberQ[h] && w > 0 && h > 0,
 			(* FrameBox with explicit ImageSize and a Black background
 				renders as a filled rectangle in the FE.  GraphicsBox
 				doesn't render correctly inside an inline math context
 				(the box gets serialised as code, not drawn). *)
 			FrameBox["", ImageSize -> {w, h},
-				Background -> Black, FrameStyle -> None],
+				Background -> Black, FrameStyle -> None
+			],
 			""
 		]
 	]
@@ -1044,7 +1069,8 @@ commandHandlers["\\htmlStyle"] = Function[{opt, req},
 		body = Last[req, ""];
 		cssText = If[Length[req] >= 2, nameOfArg[First[req]], ""];
 		colorMatch = StringCases[cssText,
-			RegularExpression["color\\s*:\\s*([#a-zA-Z0-9]+)"] :> "$1", 1];
+			RegularExpression["color\\s*:\\s*([#a-zA-Z0-9]+)"] :> "$1", 1
+		];
 		If[ colorMatch =!= {},
 			colorBody[body, First[colorMatch]],
 			body
@@ -1132,12 +1158,14 @@ resolveColor[a_] := Module[{n = nameOfArg[a]},
 		StringStartsQ[n, "#"] && StringLength[n] === 7,
 			RGBColor @@ (
 				FromDigits[#, 16] / 255. & /@
-					StringPartition[StringDrop[n, 1], 2]),
+					StringPartition[StringDrop[n, 1], 2]
+			),
 		StringStartsQ[n, "#"] && StringLength[n] === 4,
 			(* shorthand #rgb -> #rrggbb *)
 			RGBColor @@ (
 				FromDigits[# <> #, 16] / 255. & /@
-					Characters[StringDrop[n, 1]]),
+					Characters[StringDrop[n, 1]]
+			),
 		KeyExistsQ[$colorMap, n], $colorMap[n],
 		True, Missing["UnknownColor", n]
 	]
@@ -1185,7 +1213,8 @@ Scan[
 commandHandlers["\\pod"] = Function[{opt, req}, RowBox[{"(", First[req, ""], ")"}]]
 commandHandlers["\\pmod"] = Function[{opt, req},
 	RowBox[{"(", StyleBox["mod", FontSlant -> "Plain"], " ",
-		First[req, ""], ")"}]
+		First[req, ""], ")"
+	}]
 ]
 
 (* `\underbar{X}` is a Plain-TeX alias for `\underline{X}` - same render. *)
@@ -1539,10 +1568,13 @@ Scan[
 				instead of dropping it, so `\langle{X}|` -> ⟨X| -> Bra[X] rather than
 				⟨| with X lost (issue #49). *)
 			If[req === {}, fixedFence[namedSymbolChars[name]],
-				RowBox[Prepend[req, fixedFence[namedSymbolChars[name]]]]]]
+				RowBox[Prepend[req, fixedFence[namedSymbolChars[name]]]]
+			]
+		]
 	],
 	{"\\langle", "\\rangle", "\\lvert", "\\rvert", "\\lVert", "\\rVert",
-	"\\lceil", "\\rceil", "\\lfloor", "\\rfloor"}
+	"\\lceil", "\\rceil", "\\lfloor", "\\rfloor"
+	}
 ]
 
 
@@ -1606,7 +1638,9 @@ textSymbolChars = <|
 Scan[
 	Function[name,
 		commandHandlers[name] = With[{glyph = FromCharacterCode[textSymbolChars[name]]},
-			Function[{opt, req}, glyph]]],
+			Function[{opt, req}, glyph]
+		]
+	],
 	Keys[textSymbolChars]
 ]
 
@@ -1867,17 +1901,22 @@ mulOp = ParseChoice[
 		match the first five characters of \cdots and leave a stray "s". A centered
 		ellipsis joins its neighbours exactly like the product operators here. *)
 	ParseAction[literal["\\cdots"],
-		Function[op, Function[{a, b}, rowJoin[a, "\[CenterEllipsis]", b]]]],
+		Function[op, Function[{a, b}, rowJoin[a, "\[CenterEllipsis]", b]]]
+	],
 	ParseAction[literal["\\cdot"],
-		Function[op, Function[{a, b}, rowJoin[a, "\[CenterDot]", b]]]],
+		Function[op, Function[{a, b}, rowJoin[a, "\[CenterDot]", b]]]
+	],
 	ParseAction[literal["\\times"],
-		Function[op, Function[{a, b}, rowJoin[a, "\[Times]", b]]]],
+		Function[op, Function[{a, b}, rowJoin[a, "\[Times]", b]]]
+	],
 	ParseAction[literal["*"],
-		Function[op, Function[{a, b}, rowJoin[a, "*", b]]]],
+		Function[op, Function[{a, b}, rowJoin[a, "*", b]]]
+	],
 	ParseAction[ParseSucceed[Null], Function[op, Function[{a, b},
 		(* function application gets a thin space (\sin x); other
 			juxtaposition (2x, x_i a) stays tight *)
-		If[funcAtomQ[a], rowJoin[a, "\[ThinSpace]", b], rowJoin[a, b]]]]]
+		If[funcAtomQ[a], rowJoin[a, "\[ThinSpace]", b], rowJoin[a, b]]
+	]]]
 ]
 
 factorChain = ParseChainLeft[factor, mulOp]
@@ -1926,7 +1965,8 @@ relOp = ParseAction[
 			"\\approx", "\[TildeTilde]",
 			"\\mid", "\[VerticalSeparator]",
 			_, op
-		], b]
+		], b
+		]
 	]]
 ]
 
@@ -2202,7 +2242,8 @@ shorthandStep[state : {_, _, at_Integer}, {start_Integer, _Integer}] /; start < 
 shorthandStep[{source : {codes_List, _, _}, pieces_List, at_Integer}, {start_Integer, end_Integer}] := With[
 	{name = codesText[codes, {start + 1, end}], opt = bracketedOpt[source, end + 1]},
 	shorthandApplied[source, pieces, at, start, "\\" <> name <> First[opt],
-		shorthandArguments[source, If[MemberQ[$twoArgShortNames, name], 2, 1], argToken[source, Last[opt]]]]
+		shorthandArguments[source, If[MemberQ[$twoArgShortNames, name], 2, 1], argToken[source, Last[opt]]]
+	]
 ]
 
 shorthandArguments::usage = "shorthandArguments[source, n, first] gives the arguments, {text, the place after it} each, that a command \
@@ -2254,7 +2295,8 @@ textModeSubstitute[s_String] := StringReplace[
 			follows a backslash (then it's the `\ ` command, not a
 			plain inter-word space). *)
 		{a:Except["\\"] ~~ " " :> a <> "~",
-		StartOfString ~~ " " :> "~"}
+		StartOfString ~~ " " :> "~"
+		}
 	],
 	{
 	"---" -> "\[LongDash]",                  (* em-dash U+2014 *)
@@ -2270,7 +2312,8 @@ textModeSubstitute[s_String] := StringReplace[
 	StartOfString ~~ "`"  :> FromCharacterCode[8216],
 	a:Except["\\"] ~~ "'"  :> a <> FromCharacterCode[8217],
 	StartOfString ~~ "'"  :> FromCharacterCode[8217]
-}]
+	}
+]
 
 (* Walk the source, find each `\text{...}` region (with balanced
 	braces), apply textModeSubstitute inside. *)
@@ -2468,7 +2511,8 @@ definitionStep[{source : {codes_List, _, _}, defs_Association, pieces_List, at_I
 	{nameEnd = codesFrom[codes, start + 5, letterCodeQ]},
 	{parameters = parameterCount[codes, nameEnd]},
 	definitionAt[source, defs, pieces, at, start, codesText[codes, {start + 5, nameEnd - 1}], First[parameters],
-		codesFrom[codes, Last[parameters], whitespaceCodeQ]]
+		codesFrom[codes, Last[parameters], whitespaceCodeQ]
+	]
 ]
 
 (* a parameter template #1#2...#N, the numbers in turn, up to 9 *)
@@ -2482,12 +2526,14 @@ parameterCount[codes_List, at_Integer] := NestWhile[
 definitionAt::usage = "definitionAt[source, defs, pieces, at, start, name, arity, open] gives the state after the definition of name, \
 of arity parameters, at start, its body a brace group at open; one without a name or a body keeps its text."
 definitionAt[source : {codes_List, braces_Association, _}, defs_Association, pieces_List, at_Integer, start_Integer, name_String,
-	arity_Integer, open_Integer] /; name =!= "" && open <= Length[codes] && codes[[open]] === 123 := Replace[
+	arity_Integer, open_Integer
+] /; name =!= "" && open <= Length[codes] && codes[[open]] === 123 := Replace[
 	Lookup[braces, open, None],
 	{
 		None :> {source, defs, {codesText[codes, {at, Length[codes]}], pieces}, Length[codes] + 1},
 		close_Integer :> {source, Join[defs, <|name -> {arity, codesText[codes, {open + 1, close - 1}]}|>], {codesText[codes, {at, start - 1}], pieces},
-			close + 1}
+			close + 1
+		}
 	}
 ]
 definitionAt[source : {codes_List, _, _}, defs_Association, pieces_List, at_Integer, _Integer, _String, _Integer, open_Integer] :=
@@ -2803,8 +2849,10 @@ bigOpDisplayLimits[boxes_] := boxes //. {
 limitsSpaceQ[x_] := StringQ[x] && StringMatchQ[x, WhitespaceCharacter ...]
 attachLimitModifiers[boxes_] := (boxes //.
 	RowBox[{pre___, op_ /; ! limitsSpaceQ[op], ws___?limitsSpaceQ,
-			(h : SubsuperscriptBox | SubscriptBox | SuperscriptBox)[limitsMark[k_], s__], post___}] :>
-		RowBox[{pre, limitScripts[k, h, op, s], ws, post}]) /. limitsMark[_] -> ""
+			(h : SubsuperscriptBox | SubscriptBox | SuperscriptBox)[limitsMark[k_], s__], post___
+	}] :>
+		RowBox[{pre, limitScripts[k, h, op, s], ws, post}]
+) /. limitsMark[_] -> ""
 limitScripts["limits", SubsuperscriptBox, op_, lo_, hi_] := UnderoverscriptBox[op, lo, hi, LimitsPositioning -> False]
 limitScripts["limits", SubscriptBox, op_, lo_] := UnderscriptBox[op, lo, LimitsPositioning -> False]
 limitScripts["limits", SuperscriptBox, op_, hi_] := OverscriptBox[op, hi, LimitsPositioning -> False]
@@ -2838,7 +2886,8 @@ bareBigOpQ[c_] := StringQ[c] && MemberQ[$displayBigOpChars, c]
 displaySizeBigOps[boxes_] := boxes //. RowBox[parts_List] /;
 	AnyTrue[parts, bareBigOpQ] :>
 		RowBox[Replace[parts,
-			c_ /; bareBigOpQ[c] :> StyleBox[c, FontSize -> $displayBigOpScale Inherited], {1}]]
+			c_ /; bareBigOpQ[c] :> StyleBox[c, FontSize -> $displayBigOpScale Inherited], {1}
+		]]
 
 (* Math-mode comma is `,` + thin space, which reads as a list/tuple
 	separator (`(a, b, c)`).  But inside a numeric grouping like
@@ -2929,9 +2978,12 @@ $latexDir = DirectoryName[$InputFileName]
 
 compiledLatexAssetPath[] := Module[{p},
 	p = Quiet @ Check[
-		PacletObject["Wolfram/Parser"]["AssetLocation", "CompiledLaTeXParser"], $Failed];
+		PacletObject["Wolfram/Parser"]["AssetLocation", "CompiledLaTeXParser"], $Failed
+	];
 	If[StringQ[p] && FileExistsQ[p], p,
-		FileNameJoin[{ParentDirectory[$latexDir], "Assets", "LaTeXMathParserCompiled.wxf"}]]]
+		FileNameJoin[{ParentDirectory[$latexDir], "Assets", "LaTeXMathParserCompiled.wxf"}]
+	]
+]
 
 (* memoised: the compiled parser when the asset is present and current,
 	else $Failed (interpretive fallback). The asset stores only the grammar
@@ -2947,10 +2999,16 @@ loadCompiledLatexParser[] := (
 				stored = Quiet @ Check[Uncompress[Import[path]], $Failed];
 				If[AssociationQ[stored] && stored["Hash"] === Hash[lpc],
 					ParserCombinator[lpc[[1]], lpc[[2]],
-						Append[lpc[[3]], "Code" -> Wolfram`Parser`Private`pegCodeFn[stored["Data"]]]],
-					$Failed],
-				$Failed]]];
-	$compiledLatexCache)
+						Append[lpc[[3]], "Code" -> Wolfram`Parser`Private`pegCodeFn[stored["Data"]]]
+					],
+					$Failed
+				],
+				$Failed
+			]
+		]
+	];
+	$compiledLatexCache
+)
 
 activeLatexParser[] := With[{c = loadCompiledLatexParser[]}, If[c === $Failed, LaTeXMathParser, c]]
 
@@ -2963,7 +3021,8 @@ BuildLaTeXParserAsset[] := Module[{data, path},
 	If[! DirectoryQ[DirectoryName[path]], CreateDirectory[DirectoryName[path]]];
 	Export[path, Compress[<|"Hash" -> Hash[LaTeXMathParser], "Data" -> data|>], "WXF"];
 	$compiledLatexCache = "unset";   (* reset cache so the next call reloads *)
-	path]
+	path
+]
 
 (* The PEGVM-compiled parser lowers char classes (LetterCharacter, the
 	unicodeReservedQ predicate behind unicodeAtom) to ASCII-only ranges, so a
@@ -3003,9 +3062,11 @@ $diracNoDelim = Except[$diracBarSB | $diracLAngSB | $diracRAngSB | $diracBareBar
 (* a Dirac delimiter, bare or carrying a script (a closing bar/angle picks up a
 	power or label via the #26 grammar fix, e.g. `<1|^2`, `|psi>_{AB}`) *)
 diracSpanAngleQ[e_] := MatchQ[e, $diracLAngSB | $diracRAngSB |
-	(SubscriptBox | SuperscriptBox | SubsuperscriptBox)[$diracLAngSB | $diracRAngSB, ___]]
+	(SubscriptBox | SuperscriptBox | SubsuperscriptBox)[$diracLAngSB | $diracRAngSB, ___]
+]
 diracBarQ[e_] := MatchQ[e, $diracBarSB | $diracBareBar |
-	(SubscriptBox | SuperscriptBox | SubsuperscriptBox)[$diracBarSB, ___]]
+	(SubscriptBox | SuperscriptBox | SubsuperscriptBox)[$diracBarSB, ___]
+]
 diracNormalize[RowBox[{}]] := ""
 diracNormalize[RowBox[{e_}]] := e
 diracNormalize[o_] := o
@@ -3101,7 +3162,8 @@ detectMathFont[] := detectMathFont[] = Which[
 	FileNames["latinmodern-math*" | "lmmath*", $cmFontDirs] =!= {}, "Latin Modern Math",
 	FileNames["lmroman*" | "latinmodern*", $cmFontDirs] =!= {}, "Latin Modern Roman",
 	FileNames["cmun*", $cmFontDirs] =!= {}, "CMU Serif",
-	True, None]
+	True, None
+]
 detectMSBMFont[] := detectMSBMFont[] = If[FileNames["MSBM10.otf", $cmFontDirs] =!= {}, "MSBM10", None]
 
 mathItalicChar[c_String] := With[{cc = First @ ToCharacterCode[c]},
@@ -3110,11 +3172,14 @@ mathItalicChar[c_String] := With[{cc = First @ ToCharacterCode[c]},
 		97 <= cc <= 122, cc + (16^^1D44E - 97),                   (* a-z *)
 		65 <= cc <= 90, cc + (16^^1D434 - 65),                    (* A-Z *)
 		16^^03B1 <= cc <= 16^^03C9, cc + (16^^1D6FC - 16^^03B1),  (* alpha-omega *)
-		True, cc]]
+		True, cc
+	]
+]
 toMathItalicStr[s_String] := StringJoin[mathItalicChar /@ Characters[s]]
 dblStruckCharQ[c_String] := With[{cc = First @ ToCharacterCode[c]},
 	MemberQ[{16^^2102, 16^^210D, 16^^2115, 16^^2119, 16^^211A, 16^^211D, 16^^2124}, cc] ||
-	(16^^1D538 <= cc <= 16^^1D56B) || (16^^1D7D8 <= cc <= 16^^1D7E1)]
+	(16^^1D538 <= cc <= 16^^1D56B) || (16^^1D7D8 <= cc <= 16^^1D7E1)
+]
 
 LaTeXMathStyle[f_Failure, ___] := f
 LaTeXMathStyle[$Failed, ___] := $Failed
@@ -3132,7 +3197,8 @@ LaTeXMathStyle[boxes_, font_String] := Module[
 	};
 	If[msbm =!= None,
 		r = r /. s_String /; s =!= "" && AllTrue[Characters[s], dblStruckCharQ] :>
-			StyleBox[s, FontFamily -> msbm]];
+			StyleBox[s, FontFamily -> msbm]
+	];
 	StyleBox[r, FontFamily -> font]
 ]
 
@@ -3160,12 +3226,16 @@ $mathAlpha = {
 }
 $puaAlphaGlyph = Association @ Flatten @ Table[
 	With[{r = $mathAlpha[[k]]},
-		Table[(r[[1]] + i) -> FromCharacterCode[Lookup[r[[5]], i, r[[4]] + i]], {i, 0, r[[2]] - 1}]],
-	{k, Length[$mathAlpha]}]
+		Table[(r[[1]] + i) -> FromCharacterCode[Lookup[r[[5]], i, r[[4]] + i]], {i, 0, r[[2]] - 1}]
+	],
+	{k, Length[$mathAlpha]}
+]
 $mathAlphaTeX = Association @ Flatten @ Table[
 	With[{r = $mathAlpha[[k]]},
-		Table[FromCharacterCode[Lookup[r[[5]], i, r[[4]] + i]] -> "\\" <> r[[6]] <> "{" <> FromCharacterCode[r[[3]] + i] <> "}", {i, 0, r[[2]] - 1}]],
-	{k, Length[$mathAlpha]}]
+		Table[FromCharacterCode[Lookup[r[[5]], i, r[[4]] + i]] -> "\\" <> r[[6]] <> "{" <> FromCharacterCode[r[[3]] + i] <> "}", {i, 0, r[[2]] - 1}]
+	],
+	{k, Length[$mathAlpha]}
+]
 
 normCharCode[n_Integer] := Which[
 	63488 <= n <= 63513, FromCharacterCode[n - 63488 + 97],
@@ -3232,7 +3302,8 @@ Wolfram`Parser`$mathTeX = Join[<|
 	FromCharacterCode[16^^22C1] -> "\\bigvee ", FromCharacterCode[16^^22C0] -> "\\bigwedge ",
 	FromCharacterCode[16^^2502] -> "|", FromCharacterCode[16^^2225] -> "\\|",
 	FromCharacterCode[16^^200B] -> ""
-|>]
+|>
+]
 
 (* ASCII relational / arrow operators typed literally into TraditionalForm math,
 	longest-first so "=!="/"===" beat "==" and "<->" beats "<="/"->". *)
@@ -3244,7 +3315,8 @@ $mathAsciiOps = {
 	WhitespaceCharacter ... ~~ ">=" ~~ WhitespaceCharacter ... -> " \\ge ",
 	WhitespaceCharacter ... ~~ "!=" ~~ WhitespaceCharacter ... -> " \\ne ",
 	WhitespaceCharacter ... ~~ "->" ~~ WhitespaceCharacter ... -> " \\to ",
-	WhitespaceCharacter ... ~~ "==" ~~ WhitespaceCharacter ... -> " = "}
+	WhitespaceCharacter ... ~~ "==" ~~ WhitespaceCharacter ... -> " = "
+}
 
 (* ::Section:: *)
 (*The serializer (produces the body of a math span, no outer $)*)
@@ -3266,7 +3338,8 @@ ExportLaTeX[b : StyleBox[s_String, ___]] /; plainOpQ[b] := "\\" <> s <> " "
 ExportLaTeX[StyleBox[s_, ___]] := ExportLaTeX[s]
 ExportLaTeX[FractionBox[a_, b_, ___]] := "\\frac{" <> ExportLaTeX[a] <> "}{" <> ExportLaTeX[b] <> "}"
 scriptBase[box_] := Replace[
-	StringReplace[ExportLaTeX[box], ("\\," | " ") .. ~~ EndOfString -> ""], "" -> "{}"]
+	StringReplace[ExportLaTeX[box], ("\\," | " ") .. ~~ EndOfString -> ""], "" -> "{}"
+]
 (* A big operator's script placement, the inverse of attachLimitModifiers.  An
 	integral stacked by \limits carries LimitsPositioning -> False (a plain
 	\int_a^b parses with True), and an n-ary Sum / Product / Coproduct set beside
@@ -3308,7 +3381,8 @@ ExportLaTeX[OverscriptBox[a_, b_, ___]] := "\\overset{" <> ExportLaTeX[b] <> "}{
 ExportLaTeX[UnderoverscriptBox[a_, b_, c_, ___]] := ExportLaTeX[a] <> "_{" <> ExportLaTeX[b] <> "}^{" <> ExportLaTeX[c] <> "}"
 ExportLaTeX[ButtonBox[n_, ___]] := ExportLaTeX[n]
 gridRows[GridBox[rows_List, ___]] := StringRiffle[
-	Function[row, StringRiffle[ExportLaTeX /@ row, " & "]] /@ rows, " \\\\ "]
+	Function[row, StringRiffle[ExportLaTeX /@ row, " & "]] /@ rows, " \\\\ "
+]
 ExportLaTeX[GridBox[{{"\[Piecewise]", inner_GridBox}}, ___]] :=
 	"\\begin{cases}" <> gridRows[inner] <> "\\end{cases}"
 ExportLaTeX[TemplateBox[{g_GridBox}, "Abs"]] := "\\begin{vmatrix}" <> gridRows[g] <> "\\end{vmatrix}"
@@ -3324,12 +3398,15 @@ fenceChar[s_String] := s
 fenceChar[StyleBox[s_String, ___]] := s
 fenceChar[_] := None
 matrixEnvFor[o_, c_] := With[{e = Lookup[$matrixEnv, fenceChar[o], None]},
-	If[MatchQ[e, {_String, _String}] && Last[e] === fenceChar[c], First[e], None]]
+	If[MatchQ[e, {_String, _String}] && Last[e] === fenceChar[c], First[e], None]
+]
 ExportLaTeX[matrixEnvBox[env_String, g_GridBox]] := "\\begin{" <> env <> "}" <> gridRows[g] <> "\\end{" <> env <> "}"
 fuseMatrixFences[xs_List] := SequenceReplace[xs,
-	{o_, g_GridBox, c_} /; StringQ[matrixEnvFor[o, c]] :> matrixEnvBox[matrixEnvFor[o, c], g]]
+	{o_, g_GridBox, c_} /; StringQ[matrixEnvFor[o, c]] :> matrixEnvBox[matrixEnvFor[o, c], g]
+]
 ExportLaTeX[RowBox[xs_List]] := StringJoin[ExportLaTeX /@
-	fuseMatrixFences @ SequenceReplace[xs, {op_?plainOpQ, " " | "\[ThinSpace]" | "\[MediumSpace]" | "\[InvisibleSpace]"} :> op]]
+	fuseMatrixFences @ SequenceReplace[xs, {op_?plainOpQ, " " | "\[ThinSpace]" | "\[MediumSpace]" | "\[InvisibleSpace]"} :> op]
+]
 ExportLaTeX[FormBox[box_, ___]] := ExportLaTeX[box]
 ExportLaTeX[TagBox[x_, ___]] := ExportLaTeX[x]
 ExportLaTeX[InterpretationBox[x_, ___]] := ExportLaTeX[x]

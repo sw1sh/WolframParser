@@ -33,13 +33,15 @@ OpenQASMReadAlgebra::usage = "OpenQASMReadAlgebra is the algebra that reads Open
 
 Begin["`Private`"]
 
-(* ---------- shared helpers ---------- *)
+(* ::Section:: *)
+(*Shared helpers*)
 
 (* whitespace skips spaces AND // line and /* block comments *)
 ws := ParseMany[ParseChoice[
 	ParseSome[ParseCharacter[WhitespaceCharacter]],
 	ParseRegex["//[^\n]*"],
-	ParseRegex["/\\*([^*]|\\*(?!/))*\\*/"]]]
+	ParseRegex["/\\*([^*]|\\*(?!/))*\\*/"]
+]]
 
 tok[p_] := ParseAction[p ~~ ws, #1 &]
 lit[s_] := tok @ ParseLiteral[s]
@@ -49,12 +51,14 @@ identTok := tok @ ParseRegex["[A-Za-z_][A-Za-z0-9_]*"]
 intTok   := tok @ ParseRegex["[0-9]+"]
 strTok   := tok @ ParseRegex["\"[^\"]*\""]
 
-(* ---------- the grammar, over an algebra ---------- *)
+(* ::Section:: *)
+(*The grammar, over an algebra*)
 
 OpenQASMGrammar[alg_] := Module[{expr, exprRef, statement, stmtRef, program,
 	qubitRef, modifier, gateApply, gphase, measureV2, measureV3, gateDef,
 	versionStmt, includeStmt, regDecl, resetStmt, barrierStmt, unsupportedStmt,
-	exprUnit, neg, binop, num, const, qargList, paramList, modifiers, gateBody},
+	exprUnit, neg, binop, num, const, qargList, paramList, modifiers, gateBody
+},
 
 	expr = RecCell[];
 	exprRef = RecRef[expr];
@@ -66,10 +70,12 @@ OpenQASMGrammar[alg_] := Module[{expr, exprRef, statement, stmtRef, program,
 	const = ParseAction[tok @ ParseRegex["(pi|tau|euler)(?![A-Za-z0-9_])"], alg["Const"]];
 	exprUnit = ParseChoice[
 		ParseBetween[lit["("], exprRef, lit[")"]],
-		num, const];
+		num, const
+	];
 	neg[op_]   := ParseAction[lit[op], (Function[x, alg["Neg"][op, x]]) &];
 	binop[op_] := ParseAction[(tok @ ParseLiteral[op]),
-		(Function[{l, r}, alg["BinOp"][op, l, r]]) &];
+		(Function[{l, r}, alg["BinOp"][op, l, r]]) &
+	];
 	SetRec[expr, ParseOperatorTable[exprUnit, {
 		{{"Prefix", neg["-"]}},
 		{{"InfixR", binop["**"]}, {"InfixR", binop["^"]}},
@@ -81,8 +87,10 @@ OpenQASMGrammar[alg_] := Module[{expr, exprRef, statement, stmtRef, program,
 	qubitRef = ParseChoice[
 		ParseAction[tok @ ParseRegex["\\$[0-9]+"], alg["Physical"]],
 		ParseAction[identTok ~~ lit["["] ~~ intTok ~~ lit["]"],
-			(alg["Indexed"][#1, #3]) &],
-		ParseAction[identTok, alg["Whole"]]];
+			(alg["Indexed"][#1, #3]) &
+		],
+		ParseAction[identTok, alg["Whole"]]
+	];
 
 	(* a qubit-argument list: comma- OR whitespace-separated (the QF emitter writes
 		`q[0] q[1]`; standard OpenQASM uses commas) *)
@@ -94,47 +102,62 @@ OpenQASMGrammar[alg_] := Module[{expr, exprRef, statement, stmtRef, program,
 		ParseChoice[
 			ParseAction[kw["inv"], (alg["Mod"]["inv", Missing[]]) &],
 			ParseAction[kw["pow"] ~~ lit["("] ~~ tok @ ParseRegex["-?[0-9]+"] ~~ lit[")"],
-				(alg["Mod"]["pow", #3]) &],
+				(alg["Mod"]["pow", #3]) &
+			],
 			ParseAction[kw["ctrl"] ~~ ParseOptional[ParseBetween[lit["("], intTok, lit[")"]]],
-				(alg["Mod"]["ctrl", #2]) &],
+				(alg["Mod"]["ctrl", #2]) &
+			],
 			ParseAction[kw["negctrl"] ~~ ParseOptional[ParseBetween[lit["("], intTok, lit[")"]]],
-				(alg["Mod"]["negctrl", #2]) &]
-		] ~~ lit["@"], #1 &];
+				(alg["Mod"]["negctrl", #2]) &
+			]
+		] ~~ lit["@"], #1 &
+	];
 	modifiers = ParseMany[modifier];
 
 	(* statements *)
 	versionStmt = ParseAction[kw["OPENQASM"] ~~ tok @ ParseRegex["[0-9]+(\\.[0-9]+)?"] ~~ lit[";"],
-		(alg["Version"][#2]) &];
+		(alg["Version"][#2]) &
+	];
 	includeStmt = ParseAction[kw["include"] ~~ strTok ~~ lit[";"], (alg["Include"][#2]) &];
 
 	regDecl = ParseChoice[
 		ParseAction[kw["qreg"] ~~ identTok ~~ lit["["] ~~ intTok ~~ lit["]"] ~~ lit[";"],
-			(alg["Reg"]["qubit", #2, #4]) &],
+			(alg["Reg"]["qubit", #2, #4]) &
+		],
 		ParseAction[kw["creg"] ~~ identTok ~~ lit["["] ~~ intTok ~~ lit["]"] ~~ lit[";"],
-			(alg["Reg"]["bit", #2, #4]) &],
+			(alg["Reg"]["bit", #2, #4]) &
+		],
 		ParseAction[kw["qubit"] ~~ ParseOptional[ParseBetween[lit["["], intTok, lit["]"]]] ~~ identTok ~~ lit[";"],
-			(alg["Reg"]["qubit", #3, #2]) &],
+			(alg["Reg"]["qubit", #3, #2]) &
+		],
 		ParseAction[kw["bit"] ~~ ParseOptional[ParseBetween[lit["["], intTok, lit["]"]]] ~~ identTok ~~ lit[";"],
-			(alg["Reg"]["bit", #3, #2]) &]];
+			(alg["Reg"]["bit", #3, #2]) &
+		]
+	];
 
 	gateBody = ParseBetween[lit["{"], ParseMany[stmtRef], lit["}"]];
 	gateDef = ParseAction[
 		kw["gate"] ~~ identTok ~~ ParseOptional[ParseBetween[lit["("], ParseSepBy[identTok, lit[","]], lit[")"]]] ~~
 			ParseSepBy[identTok, ParseOptional[lit[","]]] ~~ gateBody,
-		(alg["GateDef"][#2, #3, #4, #5]) &];
+		(alg["GateDef"][#2, #3, #4, #5]) &
+	];
 
 	resetStmt   = ParseAction[kw["reset"] ~~ qargList ~~ lit[";"], (alg["Reset"][#2]) &];
 	barrierStmt = ParseAction[kw["barrier"] ~~ ParseOptional[qargList] ~~ lit[";"], (alg["Barrier"][#2]) &];
 
 	measureV2 = ParseAction[kw["measure"] ~~ qubitRef ~~ lit["->"] ~~ qubitRef ~~ lit[";"],
-		(alg["Measure"][#2, #4]) &];
+		(alg["Measure"][#2, #4]) &
+	];
 	measureV3 = ParseAction[qubitRef ~~ lit["="] ~~ kw["measure"] ~~ qubitRef ~~ lit[";"],
-		(alg["Measure"][#4, #1]) &];
+		(alg["Measure"][#4, #1]) &
+	];
 
 	gphase = ParseAction[modifiers ~~ kw["gphase"] ~~ lit["("] ~~ exprRef ~~ lit[")"] ~~ ParseOptional[qargList] ~~ lit[";"],
-		(alg["GPhase"][#1, #4, #6]) &];
+		(alg["GPhase"][#1, #4, #6]) &
+	];
 	gateApply = ParseAction[modifiers ~~ identTok ~~ ParseOptional[paramList] ~~ qargList ~~ lit[";"],
-		(alg["Gate"][#1, #2, #3, #4]) &];
+		(alg["Gate"][#1, #2, #3, #4]) &
+	];
 
 	(* recognized-but-unsupported constructs: capture the leading keyword and the
 		rest of the statement (to a ; at depth 0, or a balanced { } block) *)
@@ -142,17 +165,21 @@ OpenQASMGrammar[alg_] := Module[{expr, exprRef, statement, stmtRef, program,
 		tok @ ParseRegex["(if|for|while|def|defcal|box|delay|let|input|output|const|int|uint|float|bool|angle|duration|stretch|array|return)(?![A-Za-z0-9_])"] ~~
 			ParseChoice[
 				ParseAction[ParseRegex["[^;{]*"] ~~ ParseBetween[lit["{"], ParseRegex["[^}]*"], lit["}"]], "" &],
-				ParseAction[ParseRegex["[^;]*"] ~~ lit[";"], "" &]],
-		(alg["Unsupported"][#1]) &];
+				ParseAction[ParseRegex["[^;]*"] ~~ lit[";"], "" &]
+			],
+		(alg["Unsupported"][#1]) &
+	];
 
 	SetRec[statement, ParseChoice[versionStmt, includeStmt, regDecl, gateDef,
-		resetStmt, barrierStmt, measureV2, measureV3, gphase, unsupportedStmt, gateApply]];
+		resetStmt, barrierStmt, measureV2, measureV3, gphase, unsupportedStmt, gateApply
+	]];
 
 	program = ParseAction[ws ~~ ParseMany[stmtRef], (alg["Program"][#2]) &];
 	program
 ]
 
-(* ---------- the AST algebra (standard nodes) ---------- *)
+(* ::Section:: *)
+(*The AST algebra (standard nodes)*)
 
 leaf[kind_, s_] := LeafNode[kind, s, <||>]
 
@@ -172,22 +199,29 @@ qasmAstAlgebra = <|
 		CallNode[leaf["Keyword", "gate"], {leaf["Symbol", nm],
 			GroupNode["Params", If[MissingQ[params], {}, leaf["Symbol", #] & /@ params], <||>],
 			GroupNode["Qubits", leaf["Symbol", #] & /@ qubits, <||>],
-			GroupNode["Body", body, <||>]}, <||>]],
+			GroupNode["Body", body, <||>]
+		}, <||>
+		]
+	],
 	"Gate"   -> Function[{mods, nm, params, qubits},
 		modWrap[mods, CallNode[leaf["Gate", nm],
-			Join[If[MissingQ[params], {}, params], qubits], <||>]]],
+			Join[If[MissingQ[params], {}, params], qubits], <||>
+		]]
+	],
 	"Measure" -> Function[{q, c}, CallNode[leaf["Keyword", "measure"], {q, c}, <||>]],
 	"Reset"  -> (CallNode[leaf["Keyword", "reset"], #, <||>] &),
 	"Barrier" -> (CallNode[leaf["Keyword", "barrier"], If[MissingQ[#], {}, #], <||>] &),
 	"GPhase" -> Function[{mods, p, qubits}, modWrap[mods,
-		CallNode[leaf["Keyword", "gphase"], Join[{p}, If[MissingQ[qubits], {}, qubits]], <||>]]],
+		CallNode[leaf["Keyword", "gphase"], Join[{p}, If[MissingQ[qubits], {}, qubits]], <||>]
+	]],
 	"Unsupported" -> (CallNode[leaf["Keyword", "unsupported"], {leaf["Symbol", #]}, <||>] &),
 	"Program" -> (ContainerNode["String", #, <||>] &)
 |>
 
 modWrap[mods_, node_] := Fold[Function[{acc, m}, PrefixNode["@", {m, acc}, <||>]], node, Reverse[mods]]
 
-(* ---------- the Read algebra (neutral circuit IR) ---------- *)
+(* ::Section:: *)
+(*The Read algebra (neutral circuit IR)*)
 
 (* angle expressions evaluate to Wolfram values (pi -> Pi, ...) *)
 constVal["pi"] = Pi
@@ -205,7 +239,8 @@ qasmReadAlgebra = <|
 	"Const"  -> (constVal[#] &),
 	"Neg"    -> ((-#2) &),
 	"BinOp"  -> Function[{op, l, r}, Switch[op,
-		"+", l + r, "-", l - r, "*", l*r, "/", l/r, "^" | "**", l^r]],
+		"+", l + r, "-", l - r, "*", l*r, "/", l/r, "^" | "**", l^r
+	]],
 	"Physical" -> (<|"Physical" -> toInt[StringDrop[#, 1]]|> &),
 	"Indexed"  -> Function[{nm, i}, <|"Register" -> nm, "Index" -> toInt[i]|>],
 	"Whole"    -> (<|"Register" -> #|> &),
@@ -214,9 +249,11 @@ qasmReadAlgebra = <|
 	"Include"  -> (irInclude[StringTake[#, {2, -2}]] &),
 	"Reg"    -> Function[{kind, nm, sz}, irReg[<|"Kind" -> kind, "Name" -> nm, "Size" -> If[MissingQ[sz], 1, toInt[sz]]|>]],
 	"GateDef" -> Function[{nm, params, qubits, body},
-		irGateDef[<|"Name" -> nm, "Params" -> If[MissingQ[params], {}, params], "Qubits" -> qubits, "Body" -> body|>]],
+		irGateDef[<|"Name" -> nm, "Params" -> If[MissingQ[params], {}, params], "Qubits" -> qubits, "Body" -> body|>]
+	],
 	"Gate"   -> Function[{mods, nm, params, qubits},
-		<|"Type" -> "Gate", "Modifiers" -> mods, "Name" -> nm, "Params" -> If[MissingQ[params], {}, params], "Qubits" -> qubits|>],
+		<|"Type" -> "Gate", "Modifiers" -> mods, "Name" -> nm, "Params" -> If[MissingQ[params], {}, params], "Qubits" -> qubits|>
+	],
 	"Measure" -> Function[{q, c}, <|"Type" -> "Measure", "Qubit" -> q, "Target" -> c|>],
 	"Reset"  -> (<|"Type" -> "Reset", "Qubits" -> #|> &),
 	"Barrier" -> (<|"Type" -> "Barrier", "Qubits" -> If[MissingQ[#], All, #]|> &),
@@ -228,10 +265,12 @@ qasmReadAlgebra = <|
 		"Registers" -> Cases[stmts, irReg[r_] :> r],
 		"GateDefs" -> Cases[stmts, irGateDef[d_] :> d],
 		"Statements" -> Cases[stmts, r_Association /; KeyExistsQ[r, "Type"]]
-	|>]
+	|>
+	]
 |>
 
-(* ---------- build parsers once, expose entry points ---------- *)
+(* ::Section:: *)
+(*Build parsers once, expose entry points*)
 
 $astParser  = OpenQASMGrammar[qasmAstAlgebra]
 $readParser = OpenQASMGrammar[qasmReadAlgebra]

@@ -89,7 +89,8 @@ ASTLeafQ[_LeafNode] := True
 ASTLeafQ[_]         := False
 
 $nodeHeads = {LeafNode, CallNode, PrefixNode, PostfixNode, BinaryNode,
-	InfixNode, TernaryNode, GroupNode, ContainerNode, ErrorNode}
+	InfixNode, TernaryNode, GroupNode, ContainerNode, ErrorNode
+}
 ASTNodeQ[node_] := MemberQ[$nodeHeads, Head[node]]
 
 (* The standard algebra: every builder produces the matching node with empty
@@ -121,7 +122,8 @@ stampSource[other_, _]            := other
 
 SpannedToken[token_, ws_, build_] := ParseAction[
 	ParsePosition[] ~~ token ~~ ParsePosition[] ~~ ws,
-	(stampSource[build[#2], {#1, #3}]) &]
+	(stampSource[build[#2], {#1, #3}]) &
+]
 
 (* fill every composite node's Source by spanning its children, bottom-up *)
 fillSpans[n_ ? ASTNodeQ] := Module[{a = fillKids[n[[1]]], b = fillKids[n[[2]]], rebuilt, spans},
@@ -133,21 +135,25 @@ fillSpans[n_ ? ASTNodeQ] := Module[{a = fillKids[n[[1]]], b = fillKids[n[[2]]], 
 			rebuilt,
 			setSource[rebuilt, {Min[spans[[All, 1]]], Max[spans[[All, 2]]]}]
 		]
-	]]
+	]
+]
 fillKids[x_ ? ASTNodeQ] := fillSpans[x]
 fillKids[x_List]        := fillKids /@ x
 fillKids[x_]            := x
 
 (* 1-based {line, column} of a character offset in the source *)
 lineColOf[input_String, off_Integer] := Module[{nls = StringPosition[StringTake[input, {1, off - 1}], "\n"][[All, 1]]},
-	{Length[nls] + 1, off - If[nls === {}, 0, Last[nls]]}]
+	{Length[nls] + 1, off - If[nls === {}, 0, Last[nls]]}
+]
 
 toLineCol[n_ ? ASTNodeQ, input_] := Module[{a = lcKids[n[[1]], input], b = lcKids[n[[2]], input], rebuilt, src},
 	rebuilt = ReplacePart[n, {1 -> a, 2 -> b}];
 	src = sourceOf[rebuilt];
 	If[ MatchQ[src, {_Integer, _Integer}],
 		setSource[rebuilt, {lineColOf[input, src[[1]]], lineColOf[input, src[[2]]]}],
-		rebuilt]]
+		rebuilt
+	]
+]
 lcKids[x_ ? ASTNodeQ, input_] := toLineCol[x, input]
 lcKids[x_List, input_]        := lcKids[#, input] & /@ x
 lcKids[x_, _]                 := x
@@ -164,7 +170,8 @@ opSymbol[opmap_, op_] := Lookup[opmap, op, op]
 
 leafKind[k_String] := Switch[k,
 	"Integer", Integer, "Real", Real, "String", String,
-	"Symbol", Symbol, "Rational", Rational, _, Symbol]
+	"Symbol", Symbol, "Rational", Rational, _, Symbol
+]
 leafKind[k_] := k
 
 ToCodeParser[tree_, opmap_Association : <||>] := tree //. {

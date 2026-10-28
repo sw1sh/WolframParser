@@ -111,7 +111,8 @@ ensureTptpParser[] := Module[{bnf = tptpGrammar[$tptpBnfURL], parsers},
 		"PrimitiveOverrides" -> <|"thf_logic_formula" -> $thfLogicOverride|>,
 		"Actions" -> Join[
 			$tptpTermActions, $tptpConnActions, $tptpThfActions,
-			$tptpQuantActions, $tptpCnfActions, $tptpFileActions]
+			$tptpQuantActions, $tptpCnfActions, $tptpFileActions
+		]
 	];
 	If[ ! AssociationQ[parsers] || ! KeyExistsQ[parsers, "TPTP_file"],
 		Message[TPTPImport::grammar, $tptpBnfURL, "it has no <TPTP_file> rule"];
@@ -144,7 +145,8 @@ binConn[op_String, x_, y_] := Switch[op,
 rightList[args__] := Block[{a = {args}},
 	Switch[Length[a],
 		1, {a[[1]]},
-		3, Prepend[a[[3]], a[[1]]]]
+		3, Prepend[a[[3]], a[[1]]]
+	]
 ]
 
 quant[q_, vs_, body_] := Quiet[
@@ -157,7 +159,8 @@ quant[q_, vs_, body_] := Quiet[
 	reads as a Blank), so we canonicalise to camel-case. *)
 canonName[s_String] := StringJoin @ MapIndexed[
 	If[#2[[1]] === 1, ToLowerCase[#], Capitalize[#]] &,
-	StringSplit[s, "_"]]
+	StringSplit[s, "_"]
+]
 
 varCanonName[s_String] :=
 	StringJoin @ Map[Capitalize, StringSplit[s, "_"]]
@@ -195,10 +198,12 @@ $tptpTermActions = <|
 	"fof_term"                    -> id,
 	"fof_function_term"           -> id,
 	"fof_plain_term"              -> Function[Block[{a = {##}},
-		Switch[Length[a], 1, a[[1]], 4, a[[1]] @@ a[[3]]]]],
+		Switch[Length[a], 1, a[[1]], 4, a[[1]] @@ a[[3]]]
+	]],
 	"fof_defined_term"            -> id,
 	"fof_defined_plain_term"      -> Function[Block[{a = {##}},
-		Switch[Length[a], 1, a[[1]], 4, a[[1]] @@ a[[3]]]]],
+		Switch[Length[a], 1, a[[1]], 4, a[[1]] @@ a[[3]]]
+	]],
 	"fof_arguments"               -> rightList,
 	"fof_atomic_formula"          -> id,
 	"fof_plain_atomic_formula"    -> id,
@@ -220,14 +225,18 @@ $tptpTermActions = <|
 (* Boolean connectives: &, |, ~ lift to And / Or / Not. *)
 $tptpConnActions = <|
 	"nonassoc_connective" -> Function[Block[{a = {##}},
-		If[Length[a] === 1, a[[1]], StringJoin @@ a]]],
+		If[Length[a] === 1, a[[1]], StringJoin @@ a]
+	]],
 	"fof_binary_nonassoc" -> Function[binConn[#2, #1, #3]],
 	"fof_and_formula"     -> Function[Block[{a = {##}},
-		And @@ Join[{a[[1]], a[[3]]}, a[[4]][[All, 2]]]]],
+		And @@ Join[{a[[1]], a[[3]]}, a[[4]][[All, 2]]]
+	]],
 	"fof_or_formula"      -> Function[Block[{a = {##}},
-		Or @@ Join[{a[[1]], a[[3]]}, a[[4]][[All, 2]]]]],
+		Or @@ Join[{a[[1]], a[[3]]}, a[[4]][[All, 2]]]
+	]],
 	"fof_unary_formula"   -> Function[Block[{a = {##}},
-		Switch[Length[a], 1, a[[1]], 2, Not[a[[2]]]]]]
+		Switch[Length[a], 1, a[[1]], 2, Not[a[[2]]]]
+	]]
 |>
 
 (* ===== THF connectives via a Pratt operator table =====
@@ -276,7 +285,9 @@ thfOp[lit_String, fn_] :=
 (* `=` must not swallow the `=` of `=>`; guard with a not-followed-by. *)
 thfOpNF[lit_String, after_String, fn_] := ParseAction[
 	ParseSequence[thfWs, ParseLiteral[lit],
-		ParseNotFollowedBy[ParseLiteral[after]], thfWs], (fn &)]
+		ParseNotFollowedBy[ParseLiteral[after]], thfWs
+	], (fn &)
+]
 
 $thfLogicOverride := ParseOperatorTable[ParseRecursive[thfUnitary$], {
 	{{"InfixL", thfOp["@", thfApply]}},
@@ -302,14 +313,16 @@ $tptpThfActions = <|
 	"thf_formula"            -> id,
 	"thf_unit_formula"       -> id,
 	"thf_unitary_formula"    -> Function[Block[{a = {##}},
-		Switch[Length[a], 1, a[[1]], 3, a[[2]]]]],   (* ( logic ) -> logic *)
+		Switch[Length[a], 1, a[[1]], 3, a[[2]]]
+	]],   (* ( logic ) -> logic *)
 	"thf_atomic_formula"     -> id,
 	"thf_plain_atomic"       -> id,
 	"thf_defined_atomic"     -> id,
 	"thf_system_atomic"      -> id,
 	"thf_defined_term"       -> id,
 	"thf_unitary_term"       -> Function[Block[{a = {##}},
-		Switch[Length[a], 1, a[[1]], 3, a[[2]]]]],
+		Switch[Length[a], 1, a[[1]], 3, a[[2]]]
+	]],
 	"thf_defined_infix"      -> Function[Equal[#1, #3]],
 	"thf_unary_formula"      -> id,
 	"thf_prefix_unary"       -> Function[Not[#2]],
@@ -335,7 +348,8 @@ $tptpQuantActions = <|
 	"fof_logic_formula"      -> id,
 	"fof_unit_formula"       -> id,
 	"fof_unitary_formula"    -> Function[Block[{a = {##}},
-		Switch[Length[a], 1, a[[1]], 3, a[[2]]]]],
+		Switch[Length[a], 1, a[[1]], 3, a[[2]]]
+	]],
 	"fof_formula"            -> id
 |>
 
@@ -346,11 +360,15 @@ $tptpCnfActions = <|
 		Switch[Length[a],
 			1, a[[1]],
 			2, Not[a[[2]]],
-			4, Not[a[[3]]]]]],
+			4, Not[a[[3]]]
+		]
+	]],
 	"cnf_disjunction" -> Function[Block[{a = {##}},
-		If[Length[#2] === 0, #1, Or @@ Prepend[#2[[All, 2]], #1]]]],
+		If[Length[#2] === 0, #1, Or @@ Prepend[#2[[All, 2]], #1]]
+	]],
 	"cnf_formula"     -> Function[Block[{a = {##}},
-		Switch[Length[a], 1, a[[1]], 3, a[[2]]]]]
+		Switch[Length[a], 1, a[[1]], 3, a[[2]]]
+	]]
 |>
 
 (* Tag each annotated clause with {Head, Name, Role, Formula}; tptpFile
@@ -367,7 +385,8 @@ annotated[head_String][args__] := Block[{a = {args}},
 		predicates, sit under a lambda, or nest) - keep them. The
 		top-ForAll strip is for CNF / FOF, where a leading universal is
 		the implicit clause closure. *)
-		"Formula" -> If[head === "thf", a[[7]], stripTopForAll[a[[7]]]]|>
+		"Formula" -> If[head === "thf", a[[7]], stripTopForAll[a[[7]]]]
+	|>
 ]
 
 (* TPTP_file action: partition annotated clauses into includes,
@@ -380,14 +399,18 @@ tptpFile[cs__] := Block[{
 	c = FirstCase[clauses, KeyValuePattern["Role" -> "conjecture"], None];
 	nc = FirstCase[clauses, KeyValuePattern["Role" -> "negated_conjecture"], None];
 	<|"Includes"   -> Cases[clauses,
-						kv : KeyValuePattern["Head" -> "include"] :> kv],
+						kv : KeyValuePattern["Head" -> "include"] :> kv
+	],
 		"Axioms"     -> Cases[clauses,
 						kv : KeyValuePattern["Role" -> "axiom" | "hypothesis"] :>
-							<|"Name" -> kv["Name"], "Formula" -> kv["Formula"]|>],
+							<|"Name" -> kv["Name"], "Formula" -> kv["Formula"]|>
+		],
 		"Conjecture" -> Which[
 			c  =!= None, c["Formula"],
 			nc =!= None, Not[nc["Formula"]],
-			True,        None]|>
+			True,        None
+		]
+	|>
 ]
 
 $tptpFileActions = <|
@@ -402,13 +425,19 @@ $tptpFileActions = <|
 			"File"     -> unquoteSingle[a[[3]]],
 			"Selector" -> If[Length[a] >= 4 && AssociationQ[a[[4]]],
 				a[[4]]["Selector"],
-				All]|>]],
+				All
+			]
+		|>
+	]],
 	"include_optionals" -> Function[Block[{a = {##}},
 		If[Length[a] >= 2,
 			<|"Selector" -> a[[2]]|>,
-			<|"Selector" -> All|>]]],
+			<|"Selector" -> All|>
+		]
+	]],
 	"formula_selection" -> Function[Block[{a = {##}},
-		Switch[Length[a], 3, a[[2]], _, All]]],
+		Switch[Length[a], 3, a[[2]], _, All]
+	]],
 	"name_list"     -> rightList,
 	"TPTP_file"     -> tptpFile,
 	"TPTP_input"    -> id
@@ -431,16 +460,21 @@ resolveIncludePath[path_String, baseDir_String] := Block[{
 		If[absolutePathQ[path], {}, {FileNameJoin[{baseDir, path}]}],
 		If[tptpRoot === $Failed || tptpRoot === None, {},
 			{FileNameJoin[{tptpRoot, path}],
-			FileNameJoin[{tptpRoot, "Problems", path}]}]];
+			FileNameJoin[{tptpRoot, "Problems", path}]
+			}
+		]
+	];
 	SelectFirst[candidates, FileExistsQ, $Failed]
 ]
 
 expandIncludes[parsed_Association, baseDir_String] := Block[{extra},
 	extra = Flatten @ Map[
 		spec |-> includeAxioms[spec, baseDir],
-		Lookup[parsed, "Includes", {}]];
+		Lookup[parsed, "Includes", {}]
+	];
 	<|"Axioms"     -> Join[extra, parsed["Axioms"]],
-		"Conjecture" -> parsed["Conjecture"]|>
+		"Conjecture" -> parsed["Conjecture"]
+	|>
 ]
 
 includeAxioms[spec_Association, baseDir_String] := Block[{
@@ -455,7 +489,8 @@ includeAxioms[spec_Association, baseDir_String] := Block[{
 	If[ !AssociationQ[sub], Return[{}] ];
 	selectByName[
 		expandIncludes[sub, DirectoryName[resolved]]["Axioms"],
-		spec["Selector"]]
+		spec["Selector"]
+	]
 ]
 
 selectByName[axioms_List, All]              := axioms
@@ -477,7 +512,8 @@ stripComments[text_String] := StringReplace[text,
 (* `tff(_, type, ...)` signature declarations are pure type info we
 	drop before parsing so the post-parse partition stays simple. *)
 stripTypeDecls[text_String] := StringReplace[text,
-	RegularExpression["(tff|tcf|thf)\\([^,]*,\\s*type\\s*,[^.]*\\."] -> ""]
+	RegularExpression["(tff|tcf|thf)\\([^,]*,\\s*type\\s*,[^.]*\\."] -> ""
+]
 
 
 (* ::Section:: *)
@@ -520,7 +556,8 @@ TPTPImport[File[path_String]] := Block[{raw = parseFileRaw[path]},
 ]
 
 TPTPImport[s_String] /; FileExistsQ[s] && ! StringContainsQ[s,
-		"cnf(" | "fof(" | "tff(" | "tcf(" | "thf(" | "ncf(" | "tpi("] :=
+		"cnf(" | "fof(" | "tff(" | "tcf(" | "thf(" | "ncf(" | "tpi("
+] :=
 	TPTPImport[File[s]]
 
 TPTPImport[text_String] := Block[{raw = parseTextRaw[text]},
@@ -582,7 +619,9 @@ szsSource[src_String] := Block[{fn, inner, args, statusStr},
 	fn = StringCases[src, StartOfString ~~ f : (WordCharacter ..) ~~ "(" :> f, 1];
 	If[ fn === {},
 		Return[<|"Rule" -> Missing["NoRule"], "Status" -> Missing["NoStatus"],
-			"Parents" -> szsTokens[src], "RawSource" -> src|>]
+			"Parents" -> szsTokens[src], "RawSource" -> src
+		|>
+		]
 	];
 	inner = StringTake[src, {First[First[StringPosition[src, "(", 1]]] + 1, -2}];
 	args = splitTopLevel[inner, {","}];
@@ -594,7 +633,8 @@ szsSource[src_String] := Block[{fn, inner, args, statusStr},
 	<|"Rule"      -> If[fn[[1]] === "inference" && Length[args] >= 1, args[[1]], fn[[1]]],
 		"Status"    -> If[statusStr === {}, Missing["NoStatus"], statusStr[[1]]],
 		"Parents"   -> If[Length[args] >= 3, szsTokens[Last[args]], {}],
-		"RawSource" -> src|>
+		"RawSource" -> src
+	|>
 ]
 
 (* reparse one step's formula text through the grammar (as an axiom so it
@@ -617,7 +657,8 @@ szsClauseRecord[clause_String] := Block[{op, head, inner, fields},
 	If[ Length[fields] < 3, Return[Missing["BadClause"]] ];
 	Join[
 		<|"Head" -> head, "Name" -> fields[[1]], "Role" -> fields[[2]],
-			"Formula" -> szsFormula[fields[[3]]]|>,
+			"Formula" -> szsFormula[fields[[3]]]
+		|>,
 		If[ Length[fields] >= 4, szsSource[fields[[4]]], <||>]
 	]
 ]
@@ -627,14 +668,17 @@ szsClauseRecord[clause_String] := Block[{op, head, inner, fields},
 	derivation body when no output block is present. *)
 szsScan[text_String] := Block[{st, blk},
 	st = StringCases[text,
-		"SZS status " ~~ s : (WordCharacter ..) ~~ " for " ~~ p : (Except[WhitespaceCharacter] ..) :> {s, p}, 1];
+		"SZS status " ~~ s : (WordCharacter ..) ~~ " for " ~~ p : (Except[WhitespaceCharacter] ..) :> {s, p}, 1
+	];
 	blk = StringCases[text,
 		"SZS output start " ~~ f : (WordCharacter ..) ~~ Shortest[___] ~~ "\n" ~~
-			b : Shortest[___] ~~ "SZS output end" :> {f, b}, 1];
+			b : Shortest[___] ~~ "SZS output end" :> {f, b}, 1
+	];
 	<|"Status"     -> If[st === {}, Missing["NoStatus"], st[[1, 1]]],
 		"Problem"    -> If[st === {}, Missing["NoProblem"], st[[1, 2]]],
 		"OutputForm" -> If[blk === {}, Missing["NoOutputBlock"], blk[[1, 1]]],
-		"Body"       -> If[blk === {}, text, blk[[1, 2]]]|>
+		"Body"       -> If[blk === {}, text, blk[[1, 2]]]
+	|>
 ]
 
 szsImport[rawText_String] := Block[{scan, clauseStrs, deriv},
@@ -648,7 +692,8 @@ szsImport[rawText_String] := Block[{scan, clauseStrs, deriv},
 	<|"Status"     -> scan["Status"],
 		"Problem"    -> scan["Problem"],
 		"OutputForm" -> scan["OutputForm"],
-		"Derivation" -> deriv|>
+		"Derivation" -> deriv
+	|>
 ]
 
 TPTPImport[File[path_String], "SZS"] := szsImport[Import[path, "Text"]]
@@ -667,7 +712,8 @@ TPTPImport[s_String, "SZS"] := szsImport[If[FileExistsQ[s], Import[s, "Text"], s
 
 tptpTerm[Verbatim[Pattern][v_Symbol, Verbatim[Blank][]]] := SymbolName[v]
 tptpTerm[(h_String)[args___]] := With[{as = {args}},
-	If[ as === {}, h, h <> "(" <> StringRiffle[tptpTerm /@ as, ", "] <> ")"]]
+	If[ as === {}, h, h <> "(" <> StringRiffle[tptpTerm /@ as, ", "] <> ")"]
+]
 tptpTerm[s_Symbol] := SymbolName[s]
 tptpTerm[x_] := ToString[x]
 

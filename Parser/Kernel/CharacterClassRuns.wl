@@ -19,7 +19,8 @@ $characterClassFile = FileNameJoin[{DirectoryName[$InputFileName], "CharacterCla
 	alone, which a kernel that carries it in its units answers without the disk. *)
 characterClassRuns[] := characterClassRuns[] = Replace[Get[$characterClassFile], {
 	classes_Association :> Map[Replace[#, runs_List :> Developer`ToPackedArray[runs]] &, classes],
-	_ :> <||>}]
+	_ :> <||>
+}]
 characterClassRuns[class_String] := Replace[Lookup[characterClassRuns[], class, regexPropertyRuns[class]], same_String :> characterClassRuns[same]]
 
 (* A general category of a regex, "regex \p{name}": its runs from RegexProperties.wl beside this
@@ -27,9 +28,11 @@ characterClassRuns[class_String] := Replace[Lookup[characterClassRuns[], class, 
 $regexPropertyFile = FileNameJoin[{DirectoryName[$InputFileName], "RegexProperties.wl"}]
 regexProperties[] := regexProperties[] = Replace[Get[$regexPropertyFile], {
 	properties_Association :> Map[Replace[#, runs_List :> Developer`ToPackedArray[runs]] &, properties],
-	_ :> <||>}]
+	_ :> <||>
+}]
 regexPropertyRuns[class_String] := If[StringStartsQ[class, "regex \\p{"],
 	Replace[Lookup[regexProperties[], StringTake[class, {10, -2}], Missing["NotRecorded", class]], same_String :> "regex \\p{" <> same <> "}"],
-	Missing["NotRecorded", class]]
+	Missing["NotRecorded", class]
+]
 
 End[]

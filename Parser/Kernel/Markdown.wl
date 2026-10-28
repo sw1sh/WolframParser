@@ -299,7 +299,8 @@ mergeText[atoms_List] := Block[{step},
 	char.  Code / math / link URLs are untouched - the substitution applies
 	only to Text atoms.  Matches the M2N convention. *)
 applyEllipsis[atoms_List] := Replace[atoms,
-	a_ ? textQ :> text[StringReplace[a["Text"], "..." -> "\[Ellipsis]"]], {1}]
+	a_ ? textQ :> text[StringReplace[a["Text"], "..." -> "\[Ellipsis]"]], {1}
+]
 
 (* Underscore emphasis: CommonMark only opens "_em_" at a word boundary, so
 	"snake_case" in prose is left alone.  The grammar doesn't try to express
@@ -325,7 +326,8 @@ underscoreRender[s_String] := With[{tagged = StringReplace[s, underscoreRules]},
 	]
 ]
 applyUnderscoreEm[atoms_List] := Flatten @ Replace[atoms,
-	a_ ? textQ :> underscoreRender[a["Text"]], {1}]
+	a_ ? textQ :> underscoreRender[a["Text"]], {1}
+]
 
 
 (* ::Section:: *)
@@ -344,7 +346,8 @@ reparseChildren[atoms_List] := Replace[atoms, {
 		Append[a, "Children" -> runInner[a["Children"]]],
 	a_Association /; a["Type"] === "Link" && StringQ[a["Label"]] :>
 		Append[a, "Label" -> runInner[a["Label"]]]
-}, {1}]
+}, {1}
+]
 
 
 (* ::Section:: *)
@@ -477,7 +480,8 @@ fenceContentLine = ParseAction[
 parseFenceOption[ln_String] := With[{
 	m = StringCases[StringTrim[ln],
 		StartOfString ~~ "#|" ~~ Whitespace... ~~ k : Shortest[__] ~~ ":" ~~ v___ ~~ EndOfString :>
-			StringTrim[k] -> StringTrim[v], 1]
+			StringTrim[k] -> StringTrim[v], 1
+	]
 },
 	If[m === {}, Nothing, First[m]]
 ]
@@ -497,7 +501,8 @@ codeFence = ParseAction[
 		<|"Type" -> "Code",
 			"Lang" -> lang,
 			"Code" -> StringRiffle[Last[split], "\n"],
-			"Options" -> First[split]|>
+			"Options" -> First[split]
+		|>
 	] &
 ]
 

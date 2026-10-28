@@ -35,20 +35,25 @@ CalculatorGrammar[alg_] := Module[{ws, tok, number, ident, unit, bin, pre, expr,
 
 	(* SpannedToken records each leaf's source span (and eats trailing ws) *)
 	number = SpannedToken[ParseRegex["[0-9]+\\.[0-9]+|[0-9]+"], ws,
-		Function[s, alg["Leaf"][If[StringContainsQ[s, "."], "Real", "Integer"], s]]];
+		Function[s, alg["Leaf"][If[StringContainsQ[s, "."], "Real", "Integer"], s]]
+	];
 
 	ident = SpannedToken[ParseRegex["[A-Za-z][A-Za-z0-9]*"], ws,
-		Function[s, alg["Leaf"]["Symbol", s]]];
+		Function[s, alg["Leaf"]["Symbol", s]]
+	];
 
 	unit = ParseChoice[
 		ParseBetween[tok @ ParseLiteral["("], RecRef[expr], tok @ ParseLiteral[")"]],
-		number, ident];
+		number, ident
+	];
 
 	(* each operator parser yields the COMBINING FUNCTION the table folds *)
 	bin[op_] := ParseAction[tok @ ParseLiteral[op],
-		(Function[{l, r}, alg["Binary"][op, l, r]]) &];
+		(Function[{l, r}, alg["Binary"][op, l, r]]) &
+	];
 	pre[op_] := ParseAction[tok @ ParseLiteral[op],
-		(Function[x, alg["Prefix"][op, x]]) &];
+		(Function[x, alg["Prefix"][op, x]]) &
+	];
 
 	top = ParseOperatorTable[unit, {
 		{{"Prefix", pre["-"]}},
@@ -66,9 +71,11 @@ CalculatorSemantic = <|
 	"Leaf" -> Function[{kind, src}, Switch[kind,
 		"Integer", FromDigits[src],
 		"Real",    Interpreter["Number"][src],
-		_,         Symbol[src]]],
+		_,         Symbol[src]
+	]],
 	"Binary" -> Function[{op, l, r}, Switch[op,
-		"+", l + r, "-", l - r, "*", l*r, "/", l/r, "^", l^r]],
+		"+", l + r, "-", l - r, "*", l*r, "/", l/r, "^", l^r
+	]],
 	"Prefix" -> Function[{op, x}, If[op === "-", -x, x]]
 |>
 
@@ -78,7 +85,8 @@ $astParser = CalculatorGrammar[ASTAlgebra]
 $semParser = CalculatorGrammar[CalculatorSemantic]
 
 CalculatorAST[s_String] := With[{r = Parse[$astParser, s]},
-	If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]]
+	If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]
+]
 
 CalculatorEval[s_String] := Parse[$semParser, s]
 

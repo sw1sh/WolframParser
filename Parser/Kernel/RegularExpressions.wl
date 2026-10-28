@@ -31,11 +31,14 @@ Begin["Wolfram`Parser`StringPatterns`Private`"]
 									where none does
 	atomic[p]                     p, its first way alone *)
 regexProgram[re_String] := Block[{$re = ToCharacterCode[re], $at = 1, $caseless = False, $multiline = False, $dotAll = False, $extended = False,
-		$groups = 0, $groupNames = <||>, $referenced = <||>},
+		$groups = 0, $groupNames = <||>, $referenced = <||>
+},
 	With[{p = regexAlternation[]},
 		If[$at <= Length[$re], regexFails[]];
 		If[AnyTrue[Keys[$referenced], # > $groups &], regexFails[]];
-		p]]
+		p
+	]
+]
 
 (* no program: a regex Wolfram 15 does not take, or a part no program has *)
 regexFails[] := declined["a regex Wolfram 15 does not take"]
@@ -74,11 +77,13 @@ regexAlternation[] := regexAlternatives[NestWhile[Append[#, ($at++; regexBranch[
 regexAlternatives[{p_}] := p
 regexAlternatives[parts_List] := If[$oneClass && AllTrue[parts, singleCharacterQ],
 	$merged = True; characterClass[codeIn[unionSpec[classSpec /@ parts]]],
-	alternatives[parts]]
+	alternatives[parts]
+]
 
 regexBranch[] := (
 	regexSpace[];
-	regexSequence[NestWhile[Append[#, regexSpacedPiece[]] &, {}, $at <= Length[$re] && ! MemberQ[{124, 41}, $re[[$at]]] &]])
+	regexSequence[NestWhile[Append[#, regexSpacedPiece[]] &, {}, $at <= Length[$re] && ! MemberQ[{124, 41}, $re[[$at]]] &]]
+)
 
 (* a part, its repeats, and the space after them, Nothing for a part that is none, which Append drops *)
 regexSpacedPiece::usage = "regexSpacedPiece[] gives the next part of the regex and its repeats, Nothing for one that is none, past the \
@@ -87,7 +92,8 @@ regexSpacedPiece[] := With[{piece = regexPiece[]}, regexSpace[]; piece]
 
 (* the characters of literals one after another are one literal *)
 regexSequence[parts_List] := With[{joined = SequenceReplace[parts, ls : {literal[_], literal[_] ..} :> literal[Catenate[First /@ ls]]]},
-	Replace[joined, {{} -> literal[{}], {p_} :> p, ps_ :> sequence[ps]}]]
+	Replace[joined, {{} -> literal[{}], {p_} :> p, ps_ :> sequence[ps]}]
+]
 
 (* a part and the repeat after it *)
 regexPiece[] := With[{atom = regexAtom[]}, If[atom === Nothing, Nothing, regexSpace[]; regexRepeated[atom]]]
@@ -117,7 +123,8 @@ regexQuantifier[] := With[{saved = $at},
 	Replace[regexRepeatBounds[], {
 		None :> ($at = saved; None),
 		{min_, max_} :> (If[max < min, regexFails[]]; Which[regexSkip["?"], {min, max, False}, regexSkip["+"], {min, max, "Possessive"}, True, {min, max, True}])
-	}]]
+	}]
+]
 
 (* the least and the most of the repeat here, or None *)
 regexRepeatBounds::usage = "regexRepeatBounds[] gives {least, most} of the repeat at the place of the regex, past it, or None."
@@ -126,18 +133,21 @@ regexRepeatBounds[] := Switch[ regexPeek[],
 	43, $at++; {1, Infinity},
 	63, $at++; {0, 1},
 	123, $at++; regexBraceBounds[regexNumber[]],
-	_, None]
+	_, None
+]
 
 regexBraceBounds::usage = "regexBraceBounds[min] gives {least, most} of a {min}, {min,} or {min,max} repeat whose least min is read, or None."
 regexBraceBounds[None] := None
 regexBraceBounds[min_Integer] := Which[
 	regexSkip["}"], {min, min},
 	regexSkip[","], With[{max = Replace[regexNumber[], None -> Infinity]}, If[regexSkip["}"], {min, max}, None]],
-	True, None]
+	True, None
+]
 
 regexNumber[] := With[{start = $at, end = regexCodesFrom[$at, 48 <= # <= 57 &]},
 	$at = end;
-	If[end === start, None, FromDigits[$re[[start ;; end - 1]] - 48]]]
+	If[end === start, None, FromDigits[$re[[start ;; end - 1]] - 48]]
+]
 
 (* a character, a class, a group, an escape or an anchor *)
 regexAtom[] := With[{c = regexNext[]},
@@ -150,7 +160,9 @@ regexAtom[] := With[{c = regexNext[]},
 		92, regexEscape[],
 		42 | 43 | 63, regexFails[],
 		123, $at--; If[regexQuantifier[] =!= None, regexFails[], $at++; regexCharacter[c]],
-		_, regexCharacter[c]]]
+		_, regexCharacter[c]
+	]
+]
 
 (* a character, of its case and the others in a caseless regex *)
 regexCharacter[c_Integer] := If[$caseless, With[{set = caselessSet[c]}, If[Length[set] > 1, characterClass[codeIn[{"Codes", set}]], literal[{c}]]], literal[{c}]]
@@ -173,7 +185,9 @@ regexGroup[] := Module[{p, n, name, flags},
 			regexCapture[n],
 		regexPeek[] === 63, $at++; regexOptions[],
 		regexPeek[] === 42, regexFails["a verb"],
-		True, n = ++$groups; regexCapture[n]]]
+		True, n = ++$groups; regexCapture[n]
+	]
+]
 
 (* the nth group, open while its parts are read; one that holds a backreference to itself is
 	atomic, as Wolfram 15's matcher makes it, its choices given up once it matches [WL 15.0.0] *)
@@ -187,7 +201,8 @@ regexGrouped[p_] := p
 (* the end of a group: its options last no further *)
 SetAttributes[regexClosed, HoldFirst];
 regexClosed[e_] := Block[{$caseless = $caseless, $multiline = $multiline, $dotAll = $dotAll, $extended = $extended},
-	With[{p = e}, If[regexNext[] =!= 41, regexFails[]]; p]]
+	With[{p = e}, If[regexNext[] =!= 41, regexFails[]]; p]
+]
 
 (* (?imsx-imsx) for the rest of the group, (?imsx-imsx: ...) for its own alone *)
 regexOptions[] := (
@@ -197,8 +212,11 @@ regexOptions[] := (
 				regexFails["recursion"],
 			c1 === 40, regexFails["a conditional group"],
 			c1 === 124, regexFails["a branch reset"],
-			c1 === 67, regexFails["a callout"]]];
-	regexOptionFlags[{$caseless, $multiline, $dotAll, $extended}, True])
+			c1 === 67, regexFails["a callout"]
+		]
+	];
+	regexOptionFlags[{$caseless, $multiline, $dotAll, $extended}, True]
+)
 
 (* the options read so far, {caseless, multiline, dotAll, extended}, on True before a - and False
 	after it: a ) sets them for the rest of the group, a : for the group it opens alone *)
@@ -212,18 +230,23 @@ regexOptionFlags[options_List, on_] := Switch[ regexNext[],
 	45, If[! on, regexFails[]]; regexOptionFlags[options, False],
 	41, {$caseless, $multiline, $dotAll, $extended} = options; Nothing,
 	58, Block[{$caseless = options[[1]], $multiline = options[[2]], $dotAll = options[[3]], $extended = options[[4]]},
-		With[{p = regexGrouped[regexAlternation[]]}, If[regexNext[] =!= 41, regexFails[]]; p]],
-	_, regexFails[]]
+		With[{p = regexGrouped[regexAlternation[]]}, If[regexNext[] =!= 41, regexFails[]]; p]
+	],
+	_, regexFails[]
+]
 
 regexName[ends_List] := With[{start = $at, end = regexCodesFrom[$at, ! MemberQ[ends, #] &]},
 	If[end > Length[$re] || end === start, regexFails[]];
 	$at = end + 1;
-	FromCharacterCode[$re[[start ;; end - 1]]]]
+	FromCharacterCode[$re[[start ;; end - 1]]]
+]
 
 (* A lookbehind's branches each of a fixed number of characters, which may differ from branch to
 	branch [WL 15.0.0] *)
 regexLookbehind[p_, positive_] := lookbehind[Map[Function[branch, With[{len = fixedLength[branch]}, If[len === None, regexFails["a lookbehind of no fixed length"], {len, branch}]]],
-	Replace[p, {alternatives[parts_] :> parts, other_ :> {other}}]], positive]
+	Replace[p, {alternatives[parts_] :> parts, other_ :> {other}}]
+], positive
+]
 
 fixedLength[literal[codes_]] := Length[codes]
 fixedLength[_characterClass] := 1
@@ -252,20 +275,25 @@ regexEscape[] := With[{c = regexNext[]},
 		103, regexReference[regexGroupNumber[]],
 		107, regexReference[regexNamed[]],
 		_?(49 <= # <= 57 &), $at--; regexDigitEscape[],
-		_, regexCharacter[regexEscapedCode[c]]]]
+		_, regexCharacter[regexEscapedCode[c]]
+	]
+]
 
 regexSpecClass[spec_] := characterClass[codeIn[spec]]
 
 (* \Q...\E: the characters between, as they are *)
 regexQuoted[] := With[{start = $at, end = NestWhile[# + 1 &, $at, # <= Length[$re] && ! regexAheadAt[#, "\\E"] &]},
 	$at = end;
-	With[{cs = $re[[start ;; end - 1]]}, If[! regexSkip["\\E"], regexFails[]]; regexSequence[regexCharacter /@ cs]]]
+	With[{cs = $re[[start ;; end - 1]]}, If[! regexSkip["\\E"], regexFails[]]; regexSequence[regexCharacter /@ cs]]
+]
 
 (* \1 to \9 a backreference; \10 and on one where that many groups have opened, else octal *)
 regexDigitEscape[] := Module[{start = $at, n},
 	n = regexNumber[];
 	If[n < 10 || n <= $groups, regexReference[n],
-		$at = start; regexCharacter[regexOctal[3]]]]
+		$at = start; regexCharacter[regexOctal[3]]
+	]
+]
 
 regexReference[n_Integer] := (If[n < 1, regexFails[]]; $referenced[n] = True; If[$caseless, captured[n, True], captured[n]])
 
@@ -276,11 +304,14 @@ regexGroupNumber[] := Module[{braced = regexSkip["{"], negative, n, name},
 	Which[
 		n =!= None, If[braced && ! regexSkip["}"], regexFails[]]; If[negative, $groups - n + 1, n],
 		braced && ! negative, name = regexName[{125}]; Lookup[$groupNames, name, regexFails[]],
-		True, regexFails[]]]
+		True, regexFails[]
+	]
+]
 
 (* \k<name>, \k'name', \k{name} *)
 regexNamed[] := With[{open = regexNext[]},
-	Lookup[$groupNames, regexName[Switch[open, 60, {62}, 39, {39}, 123, {125}, _, regexFails[]]], regexFails[]]]
+	Lookup[$groupNames, regexName[Switch[open, 60, {62}, 39, {39}, 123, {125}, _, regexFails[]]], regexFails[]]
+]
 
 (* the code of an escaped character: \a \e \f \n \r \t, \cX, \x.., \o{..}, \0.., or the character
 	itself if it is not a letter or a digit *)
@@ -292,25 +323,30 @@ regexEscapedCode[c_Integer] := Switch[ c,
 	48, $at--; regexOctal[3],
 	71, regexFails["\\G"], 75, regexFails["\\K"], 67, regexFails["\\C"], 88, regexFails["\\X"],
 	_?(48 <= # <= 57 || 65 <= # <= 90 || 97 <= # <= 122 &), regexFails[],
-	_, c]
+	_, c
+]
 
 regexHex[] := If[regexSkip["{"], With[{v = regexDigits[16, Infinity]}, If[! regexSkip["}"] || v > 1114111, regexFails[]]; v], Replace[regexDigits[16, 2], None -> 0]]
 regexOctal[most_Integer] := Replace[regexDigits[8, most], None -> 0]
 regexDigits[base_Integer, most_] := With[{start = $at},
 	{end = NestWhile[# + 1 &, start, # <= Length[$re] && # - start < most && digitValue[$re[[#]]] < base &]},
 	$at = end;
-	If[end === start, None, FromDigits[digitValue /@ $re[[start ;; end - 1]], base]]]
+	If[end === start, None, FromDigits[digitValue /@ $re[[start ;; end - 1]], base]]
+]
 digitValue[c_Integer] := Which[48 <= c <= 57, c - 48, 65 <= c <= 70, c - 55, 97 <= c <= 102, c - 87, True, 99]
 
 (* \p{name}, \p{^name}, \pL: a general category, as the regex classes record it *)
 regexProperty[] := Module[{name, negated = False},
 	If[ regexSkip["{"],
 		negated = regexSkip["^"]; name = regexName[{125}],
-		name = FromCharacterCode[{regexNext[]}]];
+		name = FromCharacterCode[{regexNext[]}]
+	];
 	If[! MemberQ[$regexProperties, name], regexFails["\\p{" <> name <> "}, a script or no property"]];
-	If[negated, {"Not", {"Named", "regex \\p{" <> name <> "}"}}, {"Named", "regex \\p{" <> name <> "}"}]]
+	If[negated, {"Not", {"Named", "regex \\p{" <> name <> "}"}}, {"Named", "regex \\p{" <> name <> "}"}]
+]
 $regexProperties = {"L", "Lu", "Ll", "Lt", "Lm", "Lo", "L&", "M", "Mn", "Mc", "Me", "N", "Nd", "Nl", "No", "P", "Pc", "Pd", "Ps", "Pe", "Pi", "Pf", "Po",
-	"S", "Sm", "Sc", "Sk", "So", "Z", "Zs", "Zl", "Zp", "C", "Cc", "Cf", "Co", "Cn"}
+	"S", "Sm", "Sc", "Sk", "So", "Z", "Zs", "Zl", "Zp", "C", "Cc", "Cf", "Co", "Cn"
+}
 
 (* [...]: its characters, ranges, escaped classes and POSIX classes, or none of them after ^; in a
 	caseless regex its characters of every case, and those of [:lower:] and [:upper:] *)
@@ -318,7 +354,9 @@ regexClassProgram[] := With[{negated = regexSkip["^"]},
 	{items = NestWhile[Append[#, regexClassEntry[]] &, {regexClassEntry[]}, regexClassOpenQ]},
 	$at++;
 	With[{spec = unionSpec[If[$caseless, Map[Replace[#, s : {"Codes" | "Range", ___} :> {"Fold", s}] &, items], items]]},
-		regexSpecClass[If[negated, {"Not", spec}, spec]]]]
+		regexSpecClass[If[negated, {"Not", spec}, spec]]
+	]
+]
 
 (* a class goes on to its ]; the regex ends in none *)
 regexClassOpenQ::usage = "regexClassOpenQ[items] is True where the class whose items are read goes on past them."
@@ -348,8 +386,12 @@ regexClassItem[] := With[{c = regexNext[]},
 				112, regexProperty[], 80, {"Not", regexProperty[]},
 				98, 8,
 				_?(48 <= # <= 57 &), $at--; regexOctal[3],
-				_, regexEscapedCode[e]]],
-		True, c]]
+				_, regexEscapedCode[e]
+			]
+		],
+		True, c
+	]
+]
 
 regexPosix[] := Module[{negated, name},
 	$at++;
@@ -357,6 +399,8 @@ regexPosix[] := Module[{negated, name},
 	name = regexName[{58}];
 	If[! regexSkip["]"] || ! MemberQ[{"alpha", "digit", "alnum", "upper", "lower", "space", "blank", "punct", "xdigit", "cntrl", "print", "graph", "word"}, name], regexFails[]];
 	With[{spec = If[$caseless && MemberQ[{"upper", "lower"}, name], {"Union", {{"Named", "regex [:upper:]"}, {"Named", "regex [:lower:]"}}}, {"Named", "regex [:" <> name <> ":]"}]},
-		If[negated, {"Not", spec}, spec]]]
+		If[negated, {"Not", spec}, spec]
+	]
+]
 
 End[]

@@ -252,7 +252,8 @@ startsWithSkipQ[_] /; $ebnfSkipChars === None := False
 startsWithSkipQ[Lit[s_String]] := StringLength[s] > 0 && StringMatchQ[StringTake[s, 1], $ebnfSkipChars]
 startsWithSkipQ[CharRange[a_String, b_String]] := AnyTrue[CharacterRange[a, b], StringMatchQ[#, $ebnfSkipChars] &]
 startsWithSkipQ[NonTerm[name_String]] := If[ MemberQ[$ebnfVisiting, name], False,
-	Block[{$ebnfVisiting = Append[$ebnfVisiting, name]}, AnyTrue[Lookup[$ebnfGram, name, {}], altStartsWithSkipQ]]]
+	Block[{$ebnfVisiting = Append[$ebnfVisiting, name]}, AnyTrue[Lookup[$ebnfGram, name, {}], altStartsWithSkipQ]]
+]
 startsWithSkipQ[(Opt | Group)[alts_List] | Rep["ManyAlts", alts_List]] := AnyTrue[alts, altStartsWithSkipQ]
 startsWithSkipQ[Rep["Many", inner_]] := startsWithSkipQ[inner]
 startsWithSkipQ[_] := False
@@ -359,7 +360,8 @@ chooseCombinator[alts_List] :=
 					in fast PEG order when only one alt at each
 					length applies. *)
 					If[ Length[Union[Length /@ alts]] === Length[alts],
-						ParseChoice, ParseChoiceLongest]
+						ParseChoice, ParseChoiceLongest
+					]
 	]
 
 lowerBody[alts_List, symMap_, overrides_] :=
@@ -676,7 +678,8 @@ spanned[parser_, action_] := ParseAction[
 EBNFParse[source_String, OptionsPattern[]] :=
 	Block[{rules, structuredGram, tokenGram, overrides, actions, allNames, symMap, parsers, tokens, spans, contiguous,
 			$choiceMode = OptionValue["ChoiceMode"], $ebnfSkip = $ebnfSkip, $ebnfSkipChars = None, $ebnfGram = <||>,
-			$ebnfTokenText = <||>},
+			$ebnfTokenText = <||>
+	},
 		overrides = OptionValue["PrimitiveOverrides"];
 		actions   = OptionValue["Actions"];
 		tokens    = OptionValue["Tokens"];
@@ -700,9 +703,11 @@ EBNFParse[source_String, OptionsPattern[]] :=
 			For parsing, the syntactic form is the right tree. *)
 		structuredGram = Join[
 			Association @ Cases[rules,
-				EBNFRule[name_, ":==", body_] :> (name -> body)],
+				EBNFRule[name_, ":==", body_] :> (name -> body)
+			],
 			Association @ Cases[rules,
-				EBNFRule[name_, "::=" | "::", body_] :> (name -> body)]
+				EBNFRule[name_, "::=" | "::", body_] :> (name -> body)
+			]
 		];
 		tokenGram = Association @ Cases[rules,
 			EBNFRule[name_, "::-" | ":::", body_] :> (name -> reconstructBody[body])

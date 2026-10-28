@@ -1,19 +1,22 @@
 (* ::Package:: *)
 
 (* Lays Wolfram Language sources out as the v2 kernel's style guide asks
-   (docs/wl-style.md of the kernel), moving no code:
+	(docs/wl-style.md of the kernel), moving no code:
 
-   - tabs indent, one for each four columns of the spaces they replace;
-   - no ; ends a top-level definition;
-   - a section is a package-editor section, (* ::Section:: *) then its title,
-     in place of a (* --- title --- *) or (* === title === *) banner.
+	- tabs indent, one for each four columns of the spaces they replace;
+	- no ; ends a top-level definition;
+	- a section is a package-editor section, (* ::Section:: *) then its title,
+	in place of a (* --- title --- *) or (* === title === *) banner;
+	- a bracket, brace, association or parenthesis that spans lines closes at
+	the start of a line, indented as the line it opens on; the closers of
+	forms that open on one line share a line.
 
 	wl -f dev/tidy.wls [--check] file ...
 
-   A line inside a string that spans lines keeps its whitespace, which is the
-   string's. A file is written only when its held expressions are the same as
-   before, but for the Null after each ; taken away. --check writes nothing and
-   names the files that would change. *)
+	A line inside a string that spans lines keeps its whitespace, which is the
+	string's. A file is written only when its held expressions are the same as
+	before, but for the Null after each ; taken away. --check writes nothing and
+	names the files that would change. *)
 
 Needs["CodeParser`"]
 
@@ -74,8 +77,76 @@ sectionedText[text_String] := StringReplace[text, {
 		"(* ::Section:: *)\n(*" <> Capitalize[title] <> "*)\n\n(* " <> body <> "*)"
 }]
 
+(* The closer of a form that spans lines, its ], }, |> or ), goes at the start of a line, indented as
+	the line its opener is on; after the closer of a form that opens on that same line, it stays on
+	that closer's line. Each edit is the whitespace before a closer, replaced. *)
+closerEdits::usage = "closerEdits[text] gives {{from, to}, whitespace} for each closer of a form of text that spans lines and is not where \
+the style guide puts it: the whitespace from from to to before it, replaced."
+closerEdits[text_String] := With[
+	{
+		groups = Cases[
+			CodeParser`CodeConcreteParse[text, "SourceConvention" -> "SourceCharacterIndex"],
+			CodeParser`GroupNode[
+				_,
+				{
+					CodeParser`LeafNode[Token`OpenSquare | Token`OpenCurly | Token`LessBar | Token`OpenParen, _, KeyValuePattern[CodeParser`Source -> {open_, _}]],
+					___,
+					CodeParser`LeafNode[Token`CloseSquare | Token`CloseCurly | Token`BarGreater | Token`CloseParen, _, KeyValuePattern[CodeParser`Source -> {close_, _}]]
+				},
+				_
+			] :> {open, close},
+			Infinity
+		],
+		lines = Prepend[1 + Accumulate[1 - Unitize[ToCharacterCode[text] - 10]], 1],
+		codes = ToCharacterCode[text]
+	},
+	closersPlaced[text, codes, lines, groups, Association[Map[Last[#] -> lines[[First[#]]] &, groups]]]
+]
+
+closersPlaced::usage = "closersPlaced[text, codes, lines, groups, openedOn] gives closerEdits' edits of the groups {open, close} of text, \
+lines the line of each character and openedOn the line each closer's group opens on, by its closer's place."
+closersPlaced[text_String, codes_List, lines_List, groups_List, openedOn_Association] := Cases[
+	groups,
+	{open_Integer, close_Integer} /; lines[[open]] =!= lines[[close]] :> closerEdit[text, codes, lines, openedOn, open, close]
+]
+
+closerEdit::usage = "closerEdit[text, codes, lines, openedOn, open, close] gives the edit of the whitespace before the closer at close of \
+the group opened at open, or Nothing where it is placed."
+closerEdit[text_String, codes_List, lines_List, openedOn_Association, open_Integer, close_Integer] := With[
+	{
+		before = close - LengthWhile[Reverse[Take[codes, close - 1]], 32 <= # <= 32 || # === 9 &] - 1,
+		indent = lineIndent[codes, lines, lines[[open]]]
+	},
+	Which[
+		before === 0 || codes[[before]] === 10,
+			If[codesText[codes, before + 1, close - 1] === indent, Nothing, {{before + 1, close - 1}, indent}],
+		Lookup[openedOn, before, 0] === lines[[open]],
+			Nothing,
+		True,
+			{{before + 1, close - 1}, "\n" <> indent}
+	]
+]
+
+lineIndent::usage = "lineIndent[codes, lines, line] gives the tabs and spaces that the line of the codes begins with."
+lineIndent[codes_List, lines_List, line_Integer] := With[{start = First[FirstPosition[lines, line]]},
+	FromCharacterCode[TakeWhile[Drop[codes, start - 1], # === 9 || # === 32 &]]
+]
+
+codesText::usage = "codesText[codes, from, to] gives the text of the codes from from to to, \"\" where to is before from."
+codesText[codes_List, from_Integer, to_Integer] := FromCharacterCode[Take[codes, {from, to}]]
+
+(* A closer put on a line of its own can move the line an opener after it is on, so the closers are
+	placed again until none moves. *)
+closedText::usage = "closedText[text] gives text with the closer of each form that spans lines where the style guide puts it."
+closedText[text_String] := FixedPoint[closedOnce, text, 8]
+
+closedOnce::usage = "closedOnce[text] gives text with the closers closerEdits gives edits of placed, once."
+closedOnce[text_String] := With[{edits = closerEdits[text]},
+	If[edits === {}, text, StringReplacePart[text, edits[[All, 2]], edits[[All, 1]]]]
+]
+
 tidyText::usage = "tidyText[text] gives text laid out as the style guide asks."
-tidyText[text_String] := tabbedText @ sectionedText @ withoutDefinitionSemicolons[text]
+tidyText[text_String] := closedText @ tabbedText @ sectionedText @ withoutDefinitionSemicolons[text]
 
 heldStatements::usage = "heldStatements[text] gives the statements of text, each held, a definition and the Null a ; after it leaves as the \
 definition alone."

@@ -48,7 +48,8 @@ ABCBNF := ABCBNF = Import[FileNameJoin[{$abcDirectory, "ABC.bnf"}], "Text"]
 	line takes every newline, and none is left for [<NL> Program]. With the two swapped the rule
 	describes the same programs and reads them all. *)
 $abcPEGGrammar := $abcPEGGrammar = StringReplace[ABCBNF,
-	"[<NL>] <Line> [<NL>] [<NL> Program]" -> "[<NL>] <Line> [<NL> Program] [<NL>]"]
+	"[<NL>] <Line> [<NL>] [<NL> Program]" -> "[<NL>] <Line> [<NL> Program] [<NL>]"
+]
 
 (* The specification: the space <SP> is required in <PrintOp> and ignored everywhere else, and a
 	newline ends a line. So spaces and tabs are skipped between elements, but not before <SP>,
@@ -123,7 +124,8 @@ abcAstAlgebra = Join[ASTAlgebra, <|
 	"Stop"    -> Function[keyword, CallNode[keyword, {}, <||>]],
 	"Define"  -> Function[{n, e}, BinaryNode["=", {n, e}, <||>]],
 	"Program" -> Function[lines, lines]
-|>]
+|>
+]
 
 (* ::Section:: *)
 (*The meaningful algebra: the program as plain data, names lower-cased*)
@@ -142,7 +144,8 @@ $astParser := $astParser = ABCGrammar[abcAstAlgebra]
 $semParser := $semParser = ABCGrammar[ABCSemantic]
 
 ABCAST[s_String] := With[{r = Parse[$astParser, s]},
-	If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]]
+	If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]
+]
 
 (* ::Section:: *)
 (*The machine*)
@@ -163,12 +166,15 @@ paramWalk[{"call", _String, args_List}, defs_] := Scan[paramWalk[#, defs] &, arg
 paramWalk[{_String, l_, r_}, defs_] := (paramWalk[l, defs]; paramWalk[r, defs])
 
 inputList[s_String] := With[{words = StringSplit[s]},
-	If[AllTrue[words, StringMatchQ[#, DigitCharacter ..] &], FromDigits /@ words, $Failed]]
+	If[AllTrue[words, StringMatchQ[#, DigitCharacter ..] &], FromDigits /@ words, $Failed]
+]
 inputList[l_List] /; AllTrue[l, IntegerQ[#] && NonNegative[#] &] := l
 inputList[_] := $Failed
 
 machineFailure[tag_String, message_String, out_List, line_] := Failure[tag, <|
-	"MessageTemplate" -> message, "Output" -> out, "Line" -> line|>]
+	"MessageTemplate" -> message, "Output" -> out, "Line" -> line
+|>
+]
 
 Options[ABCRun] = {"Mode" -> 3, "Calls" -> "Push", "MaxNumber" -> Infinity, "MaxDepth" -> 2000}
 
@@ -180,7 +186,9 @@ ABCRun[s_String, inputs : (_List | _String), opts : OptionsPattern[]] := Module[
 		stack === $Failed, Message[ABCRun::input, inputs]; $Failed,
 		programMode[program] > OptionValue["Mode"],
 			Failure["ABCMode", <|"MessageTemplate" -> "The program needs mode `1`; the machine runs in mode `2`.",
-				"MessageParameters" -> {programMode[program], OptionValue["Mode"]}|>],
+				"MessageParameters" -> {programMode[program], OptionValue["Mode"]}
+			|>
+			],
 		True, runMachine[program, stack, OptionValue["Calls"], OptionValue["MaxNumber"], OptionValue["MaxDepth"]]
 	]
 ]
@@ -204,7 +212,9 @@ runMachine[program_List, inputs_List, calls_, maxNumber_, maxDepth_] := Module[
 	check[v_] := If[v > maxNumber, Throw[machineFailure["ABCOverflow", "A result exceeds the largest number, " <> ToString[maxNumber] <> ".", out, line], "abc"], v];
 	read[offset_] := With[{index = top - offset},
 		If[KeyExistsQ[cells, index], cells[index],
-			Throw[machineFailure["ABCStack", "A parameter reads below the bottom of the stack.", out, line], "abc"]]];
+			Throw[machineFailure["ABCStack", "A parameter reads below the bottom of the stack.", out, line], "abc"]
+		]
+	];
 	ev[n_Integer, _, _] := check[n];
 	ev[x_String, ps_, active_] := If[KeyExistsQ[defs, x], calc[x, active], read[First[FirstPosition[ps, x]] - 1]];
 	ev[{"call", f_String, args_List}, ps_, active_] := Module[{vals, saved, k = Length[args], r},
@@ -230,14 +240,16 @@ runMachine[program_List, inputs_List, calls_, maxNumber_, maxDepth_] := Module[
 				"*", lv rv,
 				"/" | "%", If[rv === 0,
 					Throw[machineFailure["ABCDivision", "A division by zero.", out, line], "abc"],
-					If[op === "/", Quotient[lv, rv], Mod[lv, rv]]]
+					If[op === "/", Quotient[lv, rv], Mod[lv, rv]]
+				]
 			]]
 		]
 	];
 	(* a calculation evaluated again within itself, with no call between, has no value *)
 	calc[f_, active_] := If[MemberQ[active, f],
 		Throw[machineFailure["ABCCycle", "The calculation " <> f <> " depends on itself.", out, line], "abc"],
-		ev[defs[f], params[f], Append[active, f]]];
+		ev[defs[f], params[f], Append[active, f]]
+	];
 	result = Block[{$RecursionLimit = Max[$RecursionLimit, 64 Min[maxDepth, 10^5] + 4096]},
 		Catch[
 			Do[

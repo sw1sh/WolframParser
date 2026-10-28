@@ -70,7 +70,9 @@ $codeParserPrecedence = <|
 levelsAbove[specs_List, min_Integer] :=
 	Map[Last, SortBy[
 		GatherBy[Select[specs, precedenceValue[First[#]] > min &], precedenceValue[First[#]] &],
-		-precedenceValue[#[[1, 1]]] &], {2}]
+		-precedenceValue[#[[1, 1]]] &
+	], {2}
+	]
 
 (* a precedence given by its name in CodeParser's table, or as its value *)
 precedenceValue[name_String] := $codeParserPrecedence[name]
@@ -115,8 +117,13 @@ longest[s_String, all_List, cutQ_] := With[{more = Select[all, StringStartsQ[#, 
 			If[cutQ[s], {ParseLiteral["["]}, {}],
 			Map[If[ cutQ[#],
 				ParseLiteral[StringDrop[#, StringLength[s]]] ~~ ParseNotFollowedBy[ParseLiteral["["]],
-				ParseLiteral[StringDrop[#, StringLength[s]]]] &, more]]], s &]
-	]]
+				ParseLiteral[StringDrop[#, StringLength[s]]]
+			] &, more
+			]
+		]], s &
+		]
+	]
+]
 
 freeformCutQ[s_String] := StringEndsQ[s, "="] && ! MemberQ[{"//=", "^:="}, s]
 
@@ -133,13 +140,16 @@ nameCharacterQ[c_String] := First[ToCharacterCode[c]] > 127 && ! MemberQ[$operat
 	character past ASCII that is no operator's, bracket's, newline's or space's *)
 $letter = ParseChoice[
 	ParseAction[ParseLookahead[ParseLiteral["\\["]] ~~ ParseCondition[ParseRegex["\\\\\\[[A-Za-z0-9]+]"], heldLetterNameQ], #2 &],
-	ParseCharacter[_?heldNameCharacterQ]]
+	ParseCharacter[_?heldNameCharacterQ]
+]
 
 (* a name: letters, digits, $ and ` context marks; not beginning with a
 	digit. The loop after the first run of ASCII is entered only at a
 	letter past ASCII. *)
 $name = ParseCondition[text[ParseChoice[ParseRegex["[A-Za-z$`][A-Za-z0-9$`]*"], $letter] ~~
-	ParseMany[ParseAction[ParseLookahead[ParseCharacter[_?nameContinuesQ]] ~~ ParseChoice[ParseRegex["[A-Za-z0-9$`]+"], $letter], #2 &]]], contextMarksQ]
+	ParseMany[ParseAction[ParseLookahead[ParseCharacter[_?nameContinuesQ]] ~~ ParseChoice[ParseRegex["[A-Za-z0-9$`]+"], $letter], #2 &]]
+], contextMarksQ
+]
 
 (* a name's context marks, as the reader's lexer takes them: none at its end, none before another or
 	before a digit *)
@@ -155,10 +165,14 @@ $number = ParseCondition[text[
 	ParseChoice[
 		$digits ~~ ParseOptional[ParseChoice[
 			ParseLiteral["^^"] ~~ ParseRegex["[0-9a-zA-Z]+(\\.(?!\\.)[0-9a-zA-Z]*)?|\\.[0-9a-zA-Z]+"],
-			ParseLiteral["."] ~~ ParseNotFollowedBy[ParseLiteral["."]] ~~ ParseOptional[$digits]]],
-		ParseLiteral["."] ~~ $digits]
+			ParseLiteral["."] ~~ ParseNotFollowedBy[ParseLiteral["."]] ~~ ParseOptional[$digits]
+		]],
+		ParseLiteral["."] ~~ $digits
+	]
 	~~ ParseOptional[ParseLiteral["`"] ~~ ParseOptional[ParseLiteral["`"]] ~~ ParseOptional[ParseRegex["[-+]?([0-9]+\\.?[0-9]*|\\.[0-9]+)"]]]
-	~~ ParseOptional[ParseLiteral["*^"] ~~ ParseRegex["[-+]?[0-9]+"]]], baseDigitsQ]
+	~~ ParseOptional[ParseLiteral["*^"] ~~ ParseRegex["[-+]?[0-9]+"]]
+], baseDigitsQ
+]
 
 (* whether the file after >> closes its brackets, as a notebook reads x >> b[c: a string's are its
 	characters *)
@@ -167,21 +181,26 @@ closedBracketsQ[s_String] := StringStartsQ[s, "\""] || StringCount[s, "["] <= St
 (* whether a number's text has a base of 2 to 36, if any, and only digits of its base after it *)
 baseDigitsQ[s_String] := StringFreeQ[s, "^^"] || With[{parts = StringSplit[s, "^^", 2]},
 	With[{base = FromDigits[parts[[1]]], digits = ToLowerCase[First[StringCases[parts[[2]], StartOfString ~~ d : RegularExpression["[0-9a-zA-Z.]*"] :> d], ""]]},
-		2 <= base <= 36 && AllTrue[ToCharacterCode[StringDelete[digits, "."]], If[# <= 57, # - 48, # - 87] < base &]]]
+		2 <= base <= 36 && AllTrue[ToCharacterCode[StringDelete[digits, "."]], If[# <= 57, # - 48, # - 87] < base &]
+	]
+]
 
 numberKind[s_String] := If[StringFreeQ[s, "." | "`"], "Integer", "Real"]
 
 (* runs of plain characters, then any escaped one *)
 $string = text[ParseLiteral["\""] ~~ ParseMany[ParseChoice[
 	ParseRegex["[^\"\\\\]+"],
-	ParseLiteral["\\"] ~~ ParseCharacter[_]]] ~~ ParseLiteral["\""]]
+	ParseLiteral["\\"] ~~ ParseCharacter[_]
+]] ~~ ParseLiteral["\""]
+]
 
 (* _, __, ___, then an optional head, or after a single _ a .: after __ or ___ a . is a token of
 	its own, a Dot or the start of a number *)
 $blank = text[ParseChoice[
 	ParseLiteral["___"] ~~ ParseOptional[$name],
 	ParseLiteral["__"] ~~ ParseOptional[$name],
-	ParseLiteral["_"] ~~ ParseOptional[ParseChoice[ParseLiteral["."], $name]]]]
+	ParseLiteral["_"] ~~ ParseOptional[ParseChoice[ParseLiteral["."], $name]]
+]]
 
 $slot = ParseAction[ParseLookahead[ParseLiteral["#"]] ~~ ParseChoice[text[ParseLiteral["#"] ~~ $string], ParseRegex["##[0-9]*|#([0-9]+|[A-Za-z$`][A-Za-z0-9$`]*)?"]], #2 &]
 
@@ -213,8 +232,12 @@ commentParser[escapes_ : False] := With[{comment = RecCell[]},
 		{RecRef[comment]},
 		If[TrueQ[escapes], {ParseRegex["[^(*\\\\]+"], ParseRegex["\\\\\\(?"]}, {ParseRegex["[^(*]+"]}],
 		{ParseLiteral["("] ~~ ParseNotFollowedBy[ParseLiteral["*"]],
-		ParseLiteral["*"] ~~ ParseNotFollowedBy[ParseLiteral[")"]]}]] ~~ ParseLiteral["*)"]];
-	RecRef[comment]]
+		ParseLiteral["*"] ~~ ParseNotFollowedBy[ParseLiteral[")"]]
+		}
+	]] ~~ ParseLiteral["*)"]
+	];
+	RecRef[comment]
+]
 
 (* ::Section:: *)
 (*The grammar, parameterised over an algebra*)
@@ -233,7 +256,8 @@ grammar[alg_] := Module[{space, wsLine, wsAll, nested, top, statement},
 		ParseCharacter[" " | "\t" | "\f"],
 		ParseLiteral["\\\n"], ParseLiteral["\\\r\n"],
 		commentParser[True],
-		ParseChoice @@ (ParseLiteral /@ $heldSpaces)];
+		ParseChoice @@ (ParseLiteral /@ $heldSpaces)
+	];
 	wsLine = ParseMany[space];
 	wsAll = ParseMany[ParseChoice[ParseCharacter["\n" | "\r"], ParseChoice @@ (ParseLiteral /@ $heldNewlines), space]];
 	nested = RecCell[];
@@ -250,7 +274,8 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	items, comma, call, part, messageName, word, messageOperand, messagePattern, derivative, span, spans, bareSpan, bareSpans, spanStart, compound, tagSet, put,
 	binary, prefix, postfix, flat, plus, relation, relationOp, implicit, specs, table, information, dot, setOperator, unset,
 	longOperator, longPostfixOperator, longSpecs, longGroups, longCalls, integrals, integrandOperand, divisible,
-	patternRight, spanOperand, compoundOperand, tagLeft, tagRight, prefixAhead, prefixedTable, putRight},
+	patternRight, spanOperand, compoundOperand, tagLeft, tagRight, prefixAhead, prefixedTable, putRight
+	},
 
 	after[p_, w_] := ParseAction[p ~~ w, #1 &];
 	operator[op_String] := after[ParseChoice @@ (longest /@ spellings[op]), wsAll];
@@ -271,7 +296,8 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	items[close_String] := items[{close}];
 	items[closes_List] := ParseChoice[
 		ParseAction[ParseLookahead[ParseChoice @@ (ParseLiteral /@ closes)], {} &],
-		ParseAction[ParseSepBy[ParseOptional[RecRef[nested]], comma], Function[nullLeaf /@ {##}]]];
+		ParseAction[ParseSepBy[ParseOptional[RecRef[nested]], comma], Function[nullLeaf /@ {##}]]
+	];
 
 	patternRight = RecCell[]; spanOperand = RecCell[]; compoundOperand = RecCell[]; tagLeft = RecCell[]; tagRight = RecCell[];
 	integrandOperand = RecCell[]; spans = RecCell[]; bareSpans = RecCell[]; prefixAhead = RecCell[]; putRight = RecCell[];
@@ -280,10 +306,14 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	(* \[LeftFloor] x \[RightFloor] and the other brackets of long names *)
 	longGroups = Map[Function[g,
 		ParseAction[longOperator[g[[1]]] ~~ items[longNameSpellings[g[[2]]]] ~~ longPostfixOperator[g[[2]]],
-			alg["Group"][SymbolName[g[[3]]], #2] &]], Select[$longNameTable["Groups"], #[[1]] =!= "LeftDoubleBracket" &]];
+			alg["Group"][SymbolName[g[[3]]], #2] &
+		]
+	], Select[$longNameTable["Groups"], #[[1]] =!= "LeftDoubleBracket" &]
+	];
 	(* f \[LeftDoubleBracket] i \[RightDoubleBracket], a part *)
 	longCalls = ParseAction[longOperator["LeftDoubleBracket"] ~~ items[longNameSpellings["RightDoubleBracket"]] ~~ longPostfixOperator["RightDoubleBracket"],
-		Function[{open, indices, close}, Function[e, alg["Infix"]["Part", Prepend[indices, e]]]]];
+		Function[{open, indices, close}, Function[e, alg["Infix"]["Part", Prepend[indices, e]]]]
+	];
 	(* \[Integral] f \[DifferentialD] x: the operand read whole, a differential
 		in it a factor like any other; \[Integral]'s Integrate of a product that
 		ends in one, by integralOf, and an integral round a contour its head of
@@ -291,14 +321,18 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	integrals = Map[Function[row, ParseAction[
 			ParseCondition[
 				ParseAction[ParseSome[longOperator[row[[1]]]] ~~ RecRef[integrandOperand], Function[With[{parts = {##}}, integrand[Length[Flatten[{Most[parts]}]], Last[parts]]]]],
-				integrandQ[#[[1]], #[[2]]] &],
-			Function[r, integralOf[alg, SymbolName[row[[3]]], r[[2]], r[[1]]]]]],
-		$longNameTable["Integrals"]];
+				integrandQ[#[[1]], #[[2]]] &
+			],
+			Function[r, integralOf[alg, SymbolName[row[[3]]], r[[2]], r[[1]]]]
+	]],
+		$longNameTable["Integrals"]
+	];
 
 	(* a name, or n:patt: the name binds its pattern wherever it stands;
 		within the pattern a : is Optional's *)
 	patternUnit = ParseAction[symbolLeaf ~~ ParseOptional[ParseAction[operator[":"] ~~ RecRef[patternRight], #2 &]],
-		Function[{name, pattern}, If[MissingQ[pattern], name, alg["Binary"]["Pattern", name, pattern]]]];
+		Function[{name, pattern}, If[MissingQ[pattern], name, alg["Binary"]["Pattern", name, pattern]]]
+	];
 	(* ;; b and ;; at the start: Span[1, ...] *)
 	spanStart = ParseAction[bareSpan, Function[f, f[alg["Leaf"]["Integer", "1"]]]];
 	(* ?name and ??name, the query Information["name", LongForm -> ...] of
@@ -306,7 +340,9 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	information = ParseAction[ParseChoice[ParseLiteral["??"], ParseLiteral["?"]] ~~ ParseRegex["[ \t]*"] ~~
 			ParseChoice[$string, ParseAction[$informationName, "\"" <> StringReplace[#, "\t" -> " "] <> "\"" &]] ~~ ws,
 		Function[{query, spaces, name, w}, alg["Call"][alg["Leaf"]["Symbol", "Information"], {alg["Leaf"]["String", name],
-			alg["Binary"]["Rule", alg["Leaf"]["Symbol", "LongForm"], alg["Leaf"]["Symbol", If[query === "??", "True", "False"]]]}]]];
+			alg["Binary"]["Rule", alg["Leaf"]["Symbol", "LongForm"], alg["Leaf"]["Symbol", If[query === "??", "True", "False"]]]
+		}]]
+	];
 	otherUnits = ParseChoice[
 		blankLeaf,
 		ParseAction[ParseLookahead[ParseCharacter[DigitCharacter | "."]] ~~ SpannedToken[$number, ws, alg["Leaf"][numberKind[#], #] &], #2 &],
@@ -314,41 +350,55 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 		leaf[$slot, "Slot"],
 		leaf[$out, "Out"],
 		ParseAction[after[ParseLiteral["("], wsAll] ~~ RecRef[nested] ~~ after[ParseLiteral[")"], ws],
-			alg["Group"]["Paren", {#2}] &],
+			alg["Group"]["Paren", {#2}] &
+		],
 		ParseAction[after[ParseLiteral["{"], wsAll] ~~ items["}"] ~~ after[ParseLiteral["}"], ws],
-			alg["Group"]["List", #2] &],
+			alg["Group"]["List", #2] &
+		],
 		ParseAction[after[ParseLiteral["<|"], wsAll] ~~ items["|>"] ~~ after[ParseLiteral["|>"], ws],
-			alg["Group"]["Association", #2] &],
+			alg["Group"]["Association", #2] &
+		],
 		ParseAction[operator["<<"] ~~ leaf[$file, "File"], alg["Prefix"]["Get", #2] &],
 		leaf[$freeform, "Freeform"],
-		spanStart, information, Sequence @@ longGroups, Sequence @@ integrals];
+		spanStart, information, Sequence @@ longGroups, Sequence @@ integrals
+	];
 	plainUnit = ParseChoice[symbolLeaf, otherUnits];
 	unit = ParseChoice[patternUnit, otherUnits];
 
 	(* --- postfix operators that read operands of their own --- *)
 	call = ParseAction[after[longest["["], wsAll] ~~ ParseNotFollowedBy[ParseLiteral["["]] ~~ items["]"] ~~ after[ParseLiteral["]"], ws],
-		Function[{open, look, args, close}, Function[h, alg["Call"][h, args]]]];
+		Function[{open, look, args, close}, Function[h, alg["Call"][h, args]]]
+	];
 	(* e[[i, ...]]: a call whose one argument is a bracket of square
 		brackets, trivia between them too *)
 	part = ParseAction[after[ParseLiteral["["], wsAll] ~~ after[ParseLiteral["["], wsAll] ~~ items["]"] ~~ after[ParseLiteral["]"], wsAll] ~~ after[ParseLiteral["]"], ws],
-		Function[{open, open2, indices, close, close2}, Function[e, alg["Infix"]["Part", Prepend[indices, e]]]]];
+		Function[{open, open2, indices, close, close2}, Function[e, alg["Infix"]["Part", Prepend[indices, e]]]]
+	];
 	(* a word of one token after a ::, a name, a blank, a number, a slot or a %, is its text *)
 	word = leaf[text[ParseChoice[
 			ParseOptional[$name] ~~ $blank,
 			$name,
 			ParseAction[ParseLookahead[ParseCharacter[DigitCharacter | "."]] ~~ $number, #2 &],
-			$slot, $out]], "Tag"];
+			$slot, $out
+	]], "Tag"
+	];
 	messageName = ParseChoice[
 		(* t::[a, ...], a type with parameters *)
 		ParseAction[ParseLiteral["::"] ~~ after[ParseLiteral["["], wsAll] ~~ items["]"] ~~ after[ParseLiteral["]"], ws],
 			Function[{colons, open, args, close}, Function[t,
-				alg["Call"][alg["Call"][alg["Leaf"]["Symbol", "TypeSpecifier"], {t}], args]]]],
+				alg["Call"][alg["Call"][alg["Leaf"]["Symbol", "TypeSpecifier"], {t}], args]
+			]]
+		],
 		(* as a notebook reads it, an operand after each ::, the parts one message name *)
 		ParseAction[ParseSome[ParseAction[after[ParseLiteral["::"], wsAll] ~~ RecRef[messageOperand], #2 &]],
-			Function[With[{parts = {##}}, Function[s, alg["Infix"]["MessageName", Prepend[parts, s]]]]]]];
+			Function[With[{parts = {##}}, Function[s, alg["Infix"]["MessageName", Prepend[parts, s]]]]]
+		]
+	];
 	derivative = ParseAction[ParseLookahead[ParseLiteral["'"]] ~~ ParseRegex["'+"] ~~ ws,
 		Function[{look, primes, w}, Function[f, alg["Call"][
-			alg["Call"][alg["Leaf"]["Symbol", "Derivative"], {alg["Leaf"]["Integer", ToString[StringLength[primes]]]}], {f}]]]];
+			alg["Call"][alg["Leaf"]["Symbol", "Derivative"], {alg["Leaf"]["Integer", ToString[StringLength[primes]]]}], {f}
+		]]]
+	];
 	(* a ;; b ;; c: All where the operand after the first ;; is left out, but for one a prefix
 		operator begins, the ;; after b only with an operand after it, and a ;; after the span the
 		beginning of a span of its own, the spans a product. After a ;;, as a notebook reads it, a
@@ -357,23 +407,31 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	With[{operand = ParseAction[ParseNotFollowedBy[ParseLiteral[";;"]] ~~ RecRef[spanOperand], #2 &],
 			all = alg["Leaf"]["Symbol", "All"], one = alg["Leaf"]["Integer", "1"],
 			semi = after[longest[";;"], wsAll],
-			bareSemi = after[longest[";;"], ParseChoice[ParseAction[wsAll ~~ ParseNotFollowedBy[ParseLiteral[";;"]], Null &], ws]]},
+			bareSemi = after[longest[";;"], ParseChoice[ParseAction[wsAll ~~ ParseNotFollowedBy[ParseLiteral[";;"]], Null &], ws]]
+	},
 		With[{
 				rest = ParseChoice[
 					(* b, then ;; and c; a ;; after either begins a span of its own *)
 					ParseAction[operand ~~ ParseOptional[ParseAction[semi ~~ operand, #2 &]] ~~
 							ParseOptional[ParseAction[ParseLookahead[ParseLiteral[";;"]] ~~ RecRef[spans], #2 &]],
-						Function[{b, c, next}, {b, c, next}]],
+						Function[{b, c, next}, {b, c, next}]
+					],
 					(* b left out, then ;; and c, a ;; after c beginning a span of its own *)
 					ParseAction[bareSemi ~~ operand ~~ ParseOptional[ParseAction[ParseLookahead[ParseLiteral[";;"]] ~~ RecRef[spans], #2 &]],
-						Function[{s, c, next}, {Missing[], c, next}]],
+						Function[{s, c, next}, {Missing[], c, next}]
+					],
 					(* b left out, but where a prefix operator begins it, and a ;; after the first beginning a span of its own *)
 					ParseAction[ParseNotFollowedBy[RecRef[prefixAhead]] ~~ ParseOptional[ParseAction[ParseLookahead[ParseLiteral[";;"]] ~~ RecRef[bareSpans], #2 &]],
-						Function[{look, next}, {Missing[], Missing[], next}]]],
+						Function[{look, next}, {Missing[], Missing[], next}]
+					]
+				],
 				value = Function[{a, b, c, next}, Prepend[If[MissingQ[next], {}, next[one]],
-					alg["Infix"]["Span", Join[{a, If[MissingQ[b], all, b]}, If[MissingQ[c], {}, {c}]]]]]},
+					alg["Infix"]["Span", Join[{a, If[MissingQ[b], all, b]}, If[MissingQ[c], {}, {c}]]]
+				]]
+		},
 			SetRec[spans, ParseAction[semi ~~ rest, Function[{s, r}, Function[a, value[a, r[[1]], r[[2]], r[[3]]]]]]];
-			SetRec[bareSpans, ParseAction[bareSemi ~~ rest, Function[{s, r}, Function[a, value[a, r[[1]], r[[2]], r[[3]]]]]]]];
+			SetRec[bareSpans, ParseAction[bareSemi ~~ rest, Function[{s, r}, Function[a, value[a, r[[1]], r[[2]], r[[3]]]]]]]
+		];
 		span = ParseAction[RecRef[spans], Function[f, Function[a, Replace[f[a], {{s_} :> s, l_ :> alg["Infix"]["Times", l]}]]]];
 		bareSpan = ParseAction[RecRef[bareSpans], Function[f, Function[a, Replace[f[a], {{s_} :> s, l_ :> alg["Infix"]["Times", l]}]]]]
 	];
@@ -382,28 +440,39 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	compound = ParseAction[ParseSome[ParseAction[postfixOperator[";"] ~~
 			ParseChoice[ParseAction[ParseLookahead[RecRef[prefixAhead]] ~~ RecRef[compoundOperand], #2 &],
 				ParseAction[ParseNotFollowedBy[ParseChoice[RecRef[prefixAhead], ParseLiteral["?"], ParseLiteral[";;"]]] ~~ ParseOptional[RecRef[compoundOperand]], #2 &],
-				ParseAction[ParseLookahead[ParseChoice[ParseLiteral["?"], ParseLiteral[";;"]]], Missing[] &]], {#2} &]],
-		Function[With[{parts = nullLeaf /@ Map[First, {##}]}, Function[a, alg["Infix"]["CompoundExpression", Prepend[parts, a]]]]]];
+				ParseAction[ParseLookahead[ParseChoice[ParseLiteral["?"], ParseLiteral[";;"]]], Missing[] &]
+			], {#2} &
+	]],
+		Function[With[{parts = nullLeaf /@ Map[First, {##}]}, Function[a, alg["Infix"]["CompoundExpression", Prepend[parts, a]]]]]
+	];
 	(* the = of a set, before a number its . begins too, not the = of free-form input; and = then
 		a . not a number's, trivia between them, an unset *)
 	setOperator = after[ParseLiteral["="] ~~
 		ParseNotFollowedBy[ParseChoice[ParseLiteral["="] ~~ ParseNotFollowedBy[ParseLiteral["["]], ParseLiteral["!="] ~~ ParseNotFollowedBy[ParseLiteral["["]],
-			ParseLiteral["["], ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]]]], wsAll];
+			ParseLiteral["["], ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]]
+		]], wsAll
+	];
 	unset = after[ParseLiteral["="] ~~ ParseNotFollowedBy[ParseChoice[ParseLiteral["="], ParseLiteral["!="]]] ~~ wsAll ~~
-		ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter | "."]], ws];
+		ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter | "."]], ws
+	];
 	tagSet = ParseAction[operator["/:"] ~~ RecRef[tagLeft] ~~ ParseChoice[
 			ParseAction[unset, {"TagUnset"} &],
 			ParseAction[operator[":="] ~~ RecRef[tagRight], {"TagSetDelayed", #2} &],
-			ParseAction[setOperator ~~ RecRef[tagRight], {"TagSet", #2} &]],
+			ParseAction[setOperator ~~ RecRef[tagRight], {"TagSet", #2} &]
+	],
 		Function[{slash, lhs, rest}, Function[t, If[First[rest] === "TagUnset",
 			alg["Binary"]["TagUnset", t, lhs],
-			alg["Ternary"][First[rest], t, lhs, Last[rest]]]]]];
+			alg["Ternary"][First[rest], t, lhs, Last[rest]]
+		]]]
+	];
 	(* >> or >>> and a file alone, else, as a notebook reads it, the expression after it: a file
 		where the end, a newline, ;, , or a closer follows it *)
 	put = ParseAction[ParseChoice[operator[">>>"], operator[">>"]] ~~ ParseChoice[
 			ParseAction[leaf[ParseCondition[$file, closedBracketsQ], "File"] ~~ ParseLookahead[ParseChoice[ParseRegex["\\z"], ParseRegex["[\\n\\r;,)\\]}]"], ParseLiteral["|>"]]], #1 &],
-			RecRef[putRight]],
-		Function[{o, file}, Function[x, alg["Binary"][If[o === ">>>", "PutAppend", "Put"], x, file]]]];
+			RecRef[putRight]
+	],
+		Function[{o, file}, Function[x, alg["Binary"][If[o === ">>>", "PutAppend", "Put"], x, file]]]
+	];
 
 	(* --- operators whose parser gives the combining function --- *)
 	binary[op_String, head_String] := ParseAction[operator[op], Function[o, Function[{l, r}, alg["Binary"][head, l, r]]]];
@@ -412,7 +481,8 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	flat[head_String] := Function[{operands, ops}, alg["Infix"][head, operands]];
 	(* a + b - c: one sum, each term after a - negated *)
 	plus = Function[{operands, signs}, alg["Infix"]["Plus", Prepend[
-		MapThread[If[#2 === "-", alg["Prefix"]["Minus", #1], #1] &, {Rest[operands], signs}], First[operands]]]];
+		MapThread[If[#2 === "-", alg["Prefix"]["Minus", #1], #1] &, {Rest[operands], signs}], First[operands]
+	]]];
 	(* a < b < c is Less[a, b, c]; a < b <= c is Inequality[a, Less, b, LessEqual, c] *)
 	relation = Function[{operands, heads}, relationValue[alg, operands, heads]];
 	divisible = Function[{operands, ops}, alg["Infix"]["Divisible", Reverse[operands]]];
@@ -423,8 +493,10 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 			ParseLiteral["<|"], ParseLiteral["=["],
 			ParseLiteral["."] ~~ ParseCharacter[DigitCharacter],
 			$letter,
-			ParseLookahead[ParseCharacter[_?prefixOnlyStartQ]] ~~ ParseChoice @@ (ParseLiteral /@ Catenate[longNameSpellings /@ $prefixOnlyNames])]],
-		"*" &];
+			ParseLookahead[ParseCharacter[_?prefixOnlyStartQ]] ~~ ParseChoice @@ (ParseLiteral /@ Catenate[longNameSpellings /@ $prefixOnlyNames])
+	]],
+		"*" &
+	];
 	(* a . not before a digit, which begins a number *)
 	dot = after[ParseAction[longest["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]], #1 &], wsAll];
 
@@ -512,12 +584,16 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 			name === "Divides", {"InfixN", longOperator[name], divisible},
 			name === "InvisibleApplication", {"InfixR", ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Call"][l, {r}]]]]},
 			row[[2]] === "InfixNode", {"InfixN", longOperator[name], flat[head]},
-			True, {If[row[[5]] === "Right", "InfixR", "InfixL"], ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Binary"][head, l, r]]]]}]}]],
-			$heldLongInfix],
+			True, {If[row[[5]] === "Right", "InfixR", "InfixL"], ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Binary"][head, l, r]]]]}
+		]}]],
+			$heldLongInfix
+		],
 		Map[{#[[4]], {"Prefix", With[{head = heldLongHead[#]}, ParseAction[longOperator[#[[1]]], Function[o, Function[x, alg["Prefix"][head, x]]]]]}} &, $heldLongPrefix],
 		Map[{#[[4]], {"Postfix", With[{head = heldLongHead[#]}, ParseAction[longPostfixOperator[#[[1]]], Function[o, Function[x, alg["Postfix"][x, head]]]]]}} &,
-			$longNameTable["Postfix"]],
-		{{"Call", {"Postfix", longCalls}}}];
+			$longNameTable["Postfix"]
+		],
+		{{"Call", {"Postfix", longCalls}}}
+	];
 	specs = Join[specs, longSpecs];
 
 	table[u_, min_Integer] := ParseOperatorTable[u, levelsAbove[specs, min]];
@@ -533,8 +609,11 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 		it [W15 bug] *)
 	With[{lows = Select[specs, #[[2, 1]] === "Prefix" && precedenceValue[First[#]] <= $codeParserPrecedence["SemiSemi"] &]},
 		SetRec[spanOperand, table[ParseChoice[
-				Sequence @@ Map[Function[s, ParseAction[s[[2, 2]] ~~ prefixedTable[unit, precedenceValue[First[s]]], #1[#2] &]], lows], unit],
-			$codeParserPrecedence["SemiSemi"]]]];
+				Sequence @@ Map[Function[s, ParseAction[s[[2, 2]] ~~ prefixedTable[unit, precedenceValue[First[s]]], #1[#2] &]], lows], unit
+		],
+			$codeParserPrecedence["SemiSemi"]
+		]]
+	];
 	(* a message name's operand, as a notebook reads it: a name or a blank with a colon after it the
 		pattern, its default too; a string its value; a word of one token its text; else a group, a
 		<< and its file, a query, or a prefix operator and its operand, all that binds more tightly
@@ -542,14 +621,18 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	SetRec[messagePattern, table[ParseChoice[patternUnit, blankLeaf], $codeParserPrecedence["Fake`OptionalColon"] - 1]];
 	SetRec[messageOperand, ParseChoice[
 		ParseAction[ParseLookahead[ParseChoice[ParseOptional[$name] ~~ $blank, $name] ~~ ParseRegex["[ \t]*"] ~~ ParseLiteral[":"] ~~
-			ParseNotFollowedBy[ParseCharacter[":" | "=" | ">"]]] ~~ RecRef[messagePattern], #2 &],
+			ParseNotFollowedBy[ParseCharacter[":" | "=" | ">"]]
+		] ~~ RecRef[messagePattern], #2 &
+		],
 		leaf[$string, "String"],
 		(* a string not closed, as a notebook reads a::"b: a word of its text to the end of the source *)
 		leaf[ParseRegex["\"(?:[^\"\\\\]|\\\\[\\s\\S])*\\z"], "Tag"],
 		word,
 		ParseAction[ParseLookahead[ParseChoice[ParseLiteral["("], ParseLiteral["{"], ParseLiteral["<|"], ParseLiteral["<<"], ParseLiteral["?"]]] ~~ otherUnits, #2 &],
 		Sequence @@ Map[Function[s, ParseAction[s[[2, 2]] ~~ prefixedTable[unit, precedenceValue[First[s]]], #1[#2] &]],
-			Select[specs, #[[2, 1]] === "Prefix" &]]]];
+			Select[specs, #[[2, 1]] === "Prefix" &]
+		]
+	]];
 	SetRec[compoundOperand, table[unit, $codeParserPrecedence["Semi"]]];
 	SetRec[tagLeft, table[unit, $codeParserPrecedence["Equal"]]];
 	SetRec[tagRight, table[unit, $codeParserPrecedence["Equal"] - 1]];
@@ -626,7 +709,8 @@ slotArgument[rest_String] := HoldComplete @@ {longNamesRead[rest]}
 
 (* a name's text, each long name in it that is a letter its character *)
 longNamesRead[s_String] := If[ StringFreeQ[s, "\\["], s,
-	StringReplace[s, "\\[" ~~ name : (LetterCharacter | DigitCharacter) .. ~~ "]" /; KeyExistsQ[longNameCharacters[], name] :> longNameCharacters[][name]]]
+	StringReplace[s, "\\[" ~~ name : (LetterCharacter | DigitCharacter) .. ~~ "]" /; KeyExistsQ[longNameCharacters[], name] :> longNameCharacters[][name]]
+]
 
 (* %: Out[]; %%: Out[-2]; %3: Out[3] *)
 outExpression::usage = "outExpression[s] gives the Out of the text s, %, %% or %3, held."
@@ -713,7 +797,9 @@ markedValue[base_Integer, exponent_, {text_String, mark_, markText_String}, powe
 signedValue[t_String] := With[{unsigned = StringDelete[t, "+" | "-"]},
 	If[StringStartsQ[t, "-"], -1, 1] * If[StringContainsQ[unsigned, "."],
 		With[{parts = StringSplit[unsigned, ".", All]}, FromDigits[parts[[1]] <> parts[[2]]] / 10^StringLength[parts[[2]]]],
-		FromDigits[unsigned]]]
+		FromDigits[unsigned]
+	]
+]
 
 (* a count of digits of the base, in decimal digits, by the bits they are [WL 15.0.0] *)
 digitsInBase[n_, 10] := n
@@ -722,14 +808,16 @@ digitsInBase[n_, base_Integer] := N[n] Log2[N[base]] Log10[2.]
 (* more digits than a machine real holds: of base b, Floor[53 / Log2[b]] + 2 of them, 17 decimal
 	ones, but the 53 of base 2, and with a power of the base never fewer than 17 [WL 15.0.0] *)
 significantDigits[digits_String, base_Integer, scaled_ : False] := With[{count = StringLength[StringDelete[digits, StartOfString ~~ "0" ..]]},
-	count > If[TrueQ[scaled], Max[17, machineDigits[base]], machineDigits[base]]]
+	count > If[TrueQ[scaled], Max[17, machineDigits[base]], machineDigits[base]]
+]
 machineDigits[base_Integer] := Which[base === 10, 17, base === 2, 53, True, Floor[53 / Log2[base]] + 2]
 
 (* digits times the base to the power scale at the accuracy of a digits of the base: exactly made
 	where the power is small enough to make, else at the precision Wolfram 15 counts in bits, zero
 	at the accuracy where the value is below it [WL 15.0.0] *)
 accurateValue[digits_Integer, base_Integer, scale_Integer, a_] := If[ Abs[scale] <= 10000, SetAccuracy[digits base^scale, digitsInBase[a, base]],
-	With[{p = bitsPrecision[digits, base, scale, a]}, If[p <= 0, SetAccuracy[0, digitsInBase[a, base]], SetPrecision[scaledValue[digits, base, scale, p], p]]]]
+	With[{p = bitsPrecision[digits, base, scale, a]}, If[p <= 0, SetAccuracy[0, digitsInBase[a, base]], SetPrecision[scaledValue[digits, base, scale, p], p]]]
+]
 
 (* a number of no mark with more digits than a machine real holds, digits times the base to the
 	power scale, a digits of the base after its point: at the precision Wolfram 15 counts in bits
@@ -744,7 +832,8 @@ bitsPrecision[digits_Integer, base_Integer, scale_Integer, a_] := (a Log2[N[base
 	at a working precision, wp digits of the value kept through the power. A power past
 	$MaxNumber overflows, as the kernel's reader's does. *)
 scaledValue[digits_Integer, base_Integer, scale_Integer, wp_] := If[ Abs[scale] <= 10000, digits base^scale,
-	N[digits, wp + 10] N[base, wp + 10 + Log10[N[Abs[scale]]]]^scale]
+	N[digits, wp + 10] N[base, wp + 10 + Log10[N[Abs[scale]]]]^scale
+]
 
 (* the decimal exponent of digits times the base to the power scale *)
 magnitude[digits_Integer, base_Integer, scale_Integer] := If[digits === 0, -Infinity, N[Log10[digits]] + scale N[Log10[base]]]
@@ -756,7 +845,9 @@ machineValue[0, _Integer, _Integer] := 0.
 machineValue[digits_Integer, base_Integer, scale_Integer] := If[ Abs[scale] <= 10000, machineReal[digits base^scale],
 	With[{m = magnitude[digits, base, scale]},
 		(* by its difference, as a comparison of machine reals takes ones near each other for equal *)
-		Which[m - N[Log10[$MinNumber]] < 0, Underflow[], m < -400, 0., m <= 400, machineReal[digits base^scale], True, N[scaledValue[digits, base, scale, 20]]]]]
+		Which[m - N[Log10[$MinNumber]] < 0, Underflow[], m < -400, 0., m <= 400, machineReal[digits base^scale], True, N[scaledValue[digits, base, scale, 20]]]
+	]
+]
 
 (* The machine real nearest an exact value, as Wolfram 15's ToExpression and a notebook read one: by
 	the power of 2 at or below it, from the bits of its numerator and denominator, its 53 bits rounded
@@ -768,7 +859,8 @@ machineReal[x_] := Which[
 	x == 0, 0.,
 	Abs[x] > $MaxMachineNumber, N[x],
 	Abs[x] >= 2^-1022, nearestMachineReal[x],
-	True, With[{k = Round[Abs[x] 2^1074]}, If[k === 0, 0., Quiet[N[Sign[x] k / 2^1074], General::munfl]]]]
+	True, With[{k = Round[Abs[x] 2^1074]}, If[k === 0, 0., Quiet[N[Sign[x] k / 2^1074], General::munfl]]]
+]
 
 nearestMachineReal::usage = "nearestMachineReal[x] gives the machine real nearest the exact value x, at least the least normal one."
 nearestMachineReal[x_] := With[{a = Abs[x]},
@@ -788,7 +880,8 @@ roundedMachineReal[m_Integer, e_Integer] := If[m === 2^53, N[2^(e + 1)], N[m 2^(
 	kept as written [WL 15.0.0]. A \ before a return or a newline continues
 	the line, the newline after a return staying. *)
 stringValue[s_String] := With[{inner = StringTake[s, {2, -2}]},
-	If[StringFreeQ[inner, "\\"], inner, StringReplace[inner, $escapes]]]
+	If[StringFreeQ[inner, "\\"], inner, StringReplace[inner, $escapes]]
+]
 
 $escapes = {
 	"\\\r" -> "", "\\\n" -> "", "\\<" -> "", "\\>" -> "",
@@ -1186,26 +1279,31 @@ linearCST[CodeParser`LeafNode[kind_, t_String, _], boxes_] := Which[
 	(MatchQ[kind, Whitespace | Token`Newline | Token`Comment] && StringMatchQ[t, (" " | "\t" | "\n" | "\r") ...]) ||
 		StringStartsQ[ToString[kind], "Token`Fake`"] || t === "", Nothing,
 	KeyExistsQ[boxes, t], boxes[t],
-	True, linearLeaf[t]]
+	True, linearLeaf[t]
+]
 linearCST[CodeParser`CompoundNode[_, children_List, _], boxes_] := With[{parts = linearCST[#, boxes] & /@ children},
-	If[AllTrue[parts, StringQ], StringJoin[parts], RowBox[parts]]]
+	If[AllTrue[parts, StringQ], StringJoin[parts], RowBox[parts]]
+]
 linearCST[CodeParser`CallNode[{head_}, CodeParser`GroupNode[_, children_List, _], _], boxes_] :=
 	RowBox[DeleteCases[Prepend[linearCST[#, boxes] & /@ children, linearCST[head, boxes]], Nothing]]
 linearCST[_[_, children_List, _], boxes_] := With[{items = DeleteCases[linearCST[#, boxes] & /@ children, Nothing]},
-	Which[items === {}, Nothing, Length[items] === 1, items[[1]], True, RowBox[items]]]
+	Which[items === {}, Nothing, Length[items] === 1, items[[1]], True, RowBox[items]]
+]
 
 (* a token's text as a box: its long names their characters, <| and |> theirs *)
 linearLeaf["<|"] = "\[LeftAssociation]"
 linearLeaf["|>"] = "\[RightAssociation]"
 linearLeaf[t_String] := If[StringFreeQ[t, "\\["], t,
-	StringReplace[t, "\\[" ~~ name : (LetterCharacter | DigitCharacter) .. ~~ "]" /; KeyExistsQ[longNameCharacters[], name] :> longNameCharacters[][name]]]
+	StringReplace[t, "\\[" ~~ name : (LetterCharacter | DigitCharacter) .. ~~ "]" /; KeyExistsQ[longNameCharacters[], name] :> longNameCharacters[][name]]
+]
 
 (* the file a name of << or >> gives: its long names and its \: and \.
 	escapes decoded, another \ kept *)
 fileValue[s_String] := If[StringFreeQ[s, "\\"], s, StringReplace[s, {
 	"\\." ~~ digits : Repeated[HexadecimalCharacter, {2}] :> FromCharacterCode[FromDigits[digits, 16]],
 	"\\:" ~~ digits : Repeated[HexadecimalCharacter, {4}] :> FromCharacterCode[FromDigits[digits, 16]],
-	"\\[" ~~ name : (LetterCharacter | DigitCharacter) .. ~~ "]" /; KeyExistsQ[longNameCharacters[], name] :> longNameCharacters[][name]}]]
+	"\\[" ~~ name : (LetterCharacter | DigitCharacter) .. ~~ "]" /; KeyExistsQ[longNameCharacters[], name] :> longNameCharacters[][name]
+}]]
 
 expressions[xs_List] := Map[#["Expr"] &, xs]
 
@@ -1218,7 +1316,8 @@ expressions[xs_List] := Map[#["Expr"] &, xs]
 	integrals, which are units of their own *)
 $heldLongInfix := $heldLongInfix = Select[$longNameTable["Infix"], ! KeyExistsQ[$asciiLongNames, #[[1]]] && #[[3]] =!= CodeParser`Comma &]
 $heldLongPrefix := $heldLongPrefix = Select[$longNameTable["Prefix"],
-	! KeyExistsQ[$asciiLongNames, #[[1]]] && ! MemberQ[$longNameTable["Integrals"][[All, 1]], #[[1]]] &]
+	! KeyExistsQ[$asciiLongNames, #[[1]]] && ! MemberQ[$longNameTable["Integrals"][[All, 1]], #[[1]]] &
+]
 $integralPrecedence := $integralPrecedence = First[Cases[$longNameTable["Prefix"], {"Integral", _, _, p_Integer, _} :> p]]
 
 (* the head the kernel gives a long-name operator: its tag's, a relation's
@@ -1226,9 +1325,11 @@ $integralPrecedence := $integralPrecedence = First[Cases[$longNameTable["Prefix"
 heldLongHead[row_List] := Which[
 	row[[3]] === CodeParser`InfixInequality, Lookup[$relationHeads, row[[1]], row[[1]]],
 	row[[1]] === "HermitianConjugate", "ConjugateTranspose",
-	True, SymbolName[row[[3]]]]
+	True, SymbolName[row[[3]]]
+]
 $relationHeads = <|"NotEqual" -> "Unequal", "LessSlantEqual" -> "LessEqual", "GreaterSlantEqual" -> "GreaterEqual",
-	"Equal" -> "Equal", "LongEqual" -> "Equal"|>
+	"Equal" -> "Equal", "LongEqual" -> "Equal"
+|>
 
 (* An integral as a notebook reads it: k signs of one kind, as \[Integral]\[Integral], and an operand
 	whose factors end in k differentials, \[DifferentialD] x or \[CapitalDifferentialD] x, no other
@@ -1241,20 +1342,25 @@ $relationHeads = <|"NotEqual" -> "Unequal", "LessSlantEqual" -> "LessEqual", "Gr
 integrandQ[k_Integer, f_Association] := Which[
 	MatchQ[f["Expr"], HoldComplete[_?differentialHeadQ[_]]], k === 1,
 	KeyExistsQ[f, "Differentials"], With[{d = f["Differentials"]}, With[{n = LengthWhile[Reverse[d], TrueQ]}, n === k && FreeQ[Drop[d, -n], True]]],
-	True, False]
+	True, False
+]
 integrandQ[_Integer, _] := True
 integralOf[alg_, head_String, f_Association, k_Integer] := held[integralHeld[head, f["Expr"], k]]
 integralOf[alg_, head_String, f_, k_Integer] := Nest[integralNode[alg, head, #] &, f, k]
 integralHeld[head_String, e_HoldComplete, k_Integer] := With[{factors = Replace[e, {
 		HoldComplete[t_[fs___]] /; MatchQ[Unevaluated[t], Times] :> List @@ (HoldComplete /@ HoldComplete[fs]),
-		_ :> {e}}]},
+		_ :> {e}
+}]},
 	With[{rest = Drop[factors, -k], vars = Replace[Take[factors, -k], HoldComplete[_[x_]] :> HoldComplete[x], {1}]},
-		symbolCall[head, Join[{Switch[Length[rest], 0, HoldComplete[1], 1, First[rest], _, symbolCall["Times", rest]]}, Reverse[vars]]]]]
+		symbolCall[head, Join[{Switch[Length[rest], 0, HoldComplete[1], 1, First[rest], _, symbolCall["Times", rest]]}, Reverse[vars]]]
+	]
+]
 integralNode[alg_, head_String, f_] := Replace[f, {
 	PrefixNode["DifferentialD" | "CapitalDifferentialD", _, _] :> alg["Call"][alg["Leaf"]["Symbol", "Integrate"], {alg["Leaf"]["Integer", "1"], f}],
 	InfixNode["Times", {g__, d : PrefixNode["DifferentialD" | "CapitalDifferentialD", _, _]}, _] :>
 		alg["Call"][alg["Leaf"]["Symbol", "Integrate"], {Replace[{g}, {{one_} :> one, factors_ :> alg["Infix"]["Times", factors]}], d}],
-	_ :> alg["Prefix"][If[head === "Integrate", "Integral", head], f]}]
+	_ :> alg["Prefix"][If[head === "Integrate", "Integral", head], f]
+}]
 
 SetAttributes[differentialHeadQ, HoldFirst]
 differentialHeadQ[d_] := MatchQ[Unevaluated[d], DifferentialD | CapitalDifferentialD]
@@ -1294,7 +1400,9 @@ simplifiedRelation[alg_, processed_List, affinity_] := With[{rators = processed[
 		Length[Union[rators]] === 1, alg["Infix"][First[rators], rands],
 		affinity === True,
 			alg["Call"][alg["Leaf"]["Symbol", "Developer`VectorInequality"], Riffle[rands, alg["Leaf"]["Symbol", #] & /@ rators]],
-		True, alg["Infix"]["Inequality", Riffle[rands, alg["Leaf"]["Symbol", #] & /@ rators]]]]
+		True, alg["Infix"]["Inequality", Riffle[rands, alg["Leaf"]["Symbol", #] & /@ rators]]
+	]
+]
 
 (* a/b is Times[a, Power[b, -1]] *)
 binaryHeld["Divide", l_, r_] := symbolCall["Times", {l, symbolCall["Power", {r, HoldComplete[-1]}]}]
@@ -1309,14 +1417,16 @@ WolframLanguageSemantic = <|
 	(* a product marks which of its factors are differentials, none in parentheses, for an integral *)
 	"Infix"   -> Function[{op, xs}, If[op === "Times",
 		Append[held[symbolCall[op, expressions[xs]]], "Differentials" -> Map[! TrueQ[#["Paren"]] && MatchQ[#["Expr"], HoldComplete[_?differentialHeadQ[_]]] &, xs]],
-		held[symbolCall[op, expressions[xs]]]]],
+		held[symbolCall[op, expressions[xs]]]
+	]],
 	"Ternary" -> Function[{op, a, b, c}, held[symbolCall[op, expressions[{a, b, c}]]]],
 	"Call"    -> Function[{h, args}, held[heldCall[h["Expr"], expressions[args]]]],
 	(* parentheses make a number literal no longer one, so that -(2) is Times[-1, 2], as a notebook
 		reads it *)
 	"Group"   -> Function[{kind, xs}, If[kind === "Paren",
 		Append[First[xs], {"Literal" -> False, "Paren" -> True}],
-		held[symbolCall[kind, expressions[xs]]]]]
+		held[symbolCall[kind, expressions[xs]]]
+	]]
 |>
 
 (* ::Section:: *)
@@ -1350,7 +1460,9 @@ concreteNode[head_, tag_, children_List, item[node_, trivia_List]] := item[head[
 stepsItem[head_, tag_, first_item, steps_List] := With[{n = Length[steps]},
 	concreteNode[head, tag,
 		Join[kids[first], Catenate[Table[Join[steps[[i, 1]], steps[[i, 2]], If[i < n, kids[steps[[i, 3]]], {}]], {i, n}]]],
-		steps[[n, 3]]]]
+		steps[[n, 3]]
+	]
+]
 
 concreteLeaf[kind_, s_String] := CodeParser`LeafNode[kind, s, <||>]
 
@@ -1383,7 +1495,8 @@ $tokenCharacterNames = <|
 tokenSymbol[s_String] := tokenSymbol[s] = Symbol["Token`" <> Which[
 	StringStartsQ[s, "\\["], "LongName`" <> StringTake[s, {3, -2}],
 	StringLength[s] === 1 && ! KeyExistsQ[$tokenCharacterNames, s], "LongName`" <> CharacterName[s],
-	True, StringJoin[Lookup[$tokenCharacterNames, Characters[s]]]]]
+	True, StringJoin[Lookup[$tokenCharacterNames, Characters[s]]]
+]]
 
 tokenLeaf[s_String] := concreteLeaf[tokenSymbol[s], s]
 
@@ -1418,9 +1531,13 @@ longNameSpellings[name_String] := DeleteMissing[{"\\[" <> name <> "]", Lookup[$l
 
 $nonLetterNames := $nonLetterNames = AssociationThread[Union[StringTake[$operatorLongNames, {3, -2}],
 	Catenate[Lookup[$longNameTable, {"Infix", "Prefix", "Postfix"}]][[All, 1]], Flatten[$longNameTable["Groups"][[All, {1, 2}]]],
-	$longNameTable["Integrals"][[All, 1]], $longNameTable["Whitespace"], $longNameTable["Newlines"], $longNameTable["Unsupported"]] -> True]
+	$longNameTable["Integrals"][[All, 1]], $longNameTable["Whitespace"], $longNameTable["Newlines"], $longNameTable["Unsupported"]
+] -> True
+]
 $nonLetterCharacters := $nonLetterCharacters = AssociationThread[Union[$operatorCharacters,
-	DeleteMissing[Lookup[$longNameTable["Characters"], Keys[$nonLetterNames], Missing[]]]] -> True]
+	DeleteMissing[Lookup[$longNameTable["Characters"], Keys[$nonLetterNames], Missing[]]]
+] -> True
+]
 
 (* a long name that is a letter: the language's, and none of those *)
 letterNameQ[s_String] := With[{n = StringTake[s, {3, -2}]}, KeyExistsQ[$longNames, n] && ! KeyExistsQ[$nonLetterNames, n]]
@@ -1437,7 +1554,8 @@ heldNameCharacterQ[c_String] := concreteNameCharacterQ[c] && ! KeyExistsQ[$space
 	ASCII that is not an operator's nor whitespace *)
 $concreteLetter = ParseChoice[
 	ParseAction[ParseLookahead[ParseLiteral["\\["]] ~~ ParseCondition[ParseRegex["\\\\\\[[A-Za-z0-9]+]"], letterNameQ], #2 &],
-	ParseCharacter[_?concreteNameCharacterQ]]
+	ParseCharacter[_?concreteNameCharacterQ]
+]
 
 (* A name: parts of letters, digits and $, each beginning with a letter or
 	$, joined by single `s, a ` before the first naming a context relative
@@ -1449,9 +1567,12 @@ $concreteName = text[
 	ParseChoice[
 		ParseRegex["[A-Za-z$][A-Za-z0-9$]*(`[A-Za-z$][A-Za-z0-9$]*)*"],
 		ParseRegex["`[A-Za-z$][A-Za-z0-9$]*(`[A-Za-z$][A-Za-z0-9$]*)*"],
-		ParseOptional[ParseLiteral["`"]] ~~ $concreteLetter ~~ ParseRegex["[A-Za-z0-9$]*"]] ~~
+		ParseOptional[ParseLiteral["`"]] ~~ $concreteLetter ~~ ParseRegex["[A-Za-z0-9$]*"]
+	] ~~
 	ParseMany[ParseAction[ParseLookahead[ParseCharacter[_?nameMoreQ]] ~~
-		ParseChoice[$concreteLetter ~~ ParseRegex["[A-Za-z0-9$]*"], ParseLiteral["`"] ~~ $namePartStart ~~ ParseRegex["[A-Za-z0-9$]*"]], #2 &]]]
+		ParseChoice[$concreteLetter ~~ ParseRegex["[A-Za-z0-9$]*"], ParseLiteral["`"] ~~ $namePartStart ~~ ParseRegex["[A-Za-z0-9$]*"]], #2 &
+	]]
+]
 
 (* a name with a ` after it that no part follows: CodeParser's
 	Token`Error`ExpectedLetterlike, up to the ` *)
@@ -1461,15 +1582,19 @@ $letterlikeError = text[ParseOptional[$concreteName] ~~ ParseLiteral["`"] ~~ Par
 	fraction, then a precision or accuracy and an exponent. *)
 $signedDigits = ParseOptional[ParseCharacter["-" | "+"]] ~~ ParseChoice[
 	$digits ~~ ParseOptional[ParseLiteral["."] ~~ ParseOptional[$digits]],
-	ParseLiteral["."] ~~ $digits]
+	ParseLiteral["."] ~~ $digits
+]
 $numberText = text[
 	ParseChoice[
 		$digits ~~ ParseOptional[ParseChoice[
 			ParseLiteral["^^"] ~~ ParseRegex["[0-9a-zA-Z]*"] ~~ ParseOptional[ParseLiteral["."] ~~ ParseNotFollowedBy[ParseLiteral["."]] ~~ ParseRegex["[0-9a-zA-Z]*"]],
-			ParseLiteral["."] ~~ ParseNotFollowedBy[ParseLiteral["."]] ~~ ParseOptional[$digits]]],
-		ParseLiteral["."] ~~ $digits]
+			ParseLiteral["."] ~~ ParseNotFollowedBy[ParseLiteral["."]] ~~ ParseOptional[$digits]
+		]],
+		ParseLiteral["."] ~~ $digits
+	]
 	~~ ParseOptional[ParseLiteral["`"] ~~ ParseOptional[ParseLiteral["`"]] ~~ ParseOptional[$signedDigits]]
-	~~ ParseOptional[ParseLiteral["*^"] ~~ ParseOptional[ParseOptional[ParseCharacter["-" | "+"]] ~~ $digits]]]
+	~~ ParseOptional[ParseLiteral["*^"] ~~ ParseOptional[ParseOptional[ParseCharacter["-" | "+"]] ~~ $digits]]
+]
 
 (* A number's text is CodeParser's Token`Error`Number where its base is
 	not 2 to 36, a digit is not one of the base's, or a ^^, a `` or a *^ has
@@ -1505,7 +1630,8 @@ $unhandledCharacter = text[ParseChoice[
 	ParseLiteral["\\:"] ~~ ParseRegex["[0-9a-fA-F]{0,3}"] ~~ ParseNotFollowedBy[ParseCharacter[HexadecimalCharacter]],
 	ParseLiteral["\\."] ~~ ParseRegex["[0-9a-fA-F]?"] ~~ ParseNotFollowedBy[ParseCharacter[HexadecimalCharacter]],
 	ParseLiteral["\\|"] ~~ ParseRegex["[0-9a-fA-F]{0,5}"] ~~ ParseNotFollowedBy[ParseCharacter[HexadecimalCharacter]],
-	ParseLiteral["\\"] ~~ ParseNotFollowedBy[ParseCharacter["[" | ":" | "." | "|" | "\n" | "\r"]] ~~ ParseOptional[ParseCharacter[_]]]]
+	ParseLiteral["\\"] ~~ ParseNotFollowedBy[ParseCharacter["[" | ":" | "." | "|" | "\n" | "\r"]] ~~ ParseOptional[ParseCharacter[_]]
+]]
 
 (* a character that can begin a leaf, and one that can begin a name *)
 leafStartQ[c_String] := StringContainsQ["_#%{<(\"`$\\.0123456789", c] || nameStartQ[c] || KeyExistsQ[$prefixOnlyCharacters, c]
@@ -1515,7 +1641,8 @@ nameStartQ[c_String] := c === "$" || c === "`" || c === "\\" || StringMatchQ[c, 
 	prefix operators that are not infix too, the openers of brackets and the
 	integrals; and the characters among their spellings *)
 $prefixOnlyNames := $prefixOnlyNames = Union[
-	Complement[$longNameTable["Prefix"][[All, 1]], $longNameTable["Infix"][[All, 1]]], $longNameTable["Groups"][[All, 1]], $longNameTable["Integrals"][[All, 1]]]
+	Complement[$longNameTable["Prefix"][[All, 1]], $longNameTable["Infix"][[All, 1]]], $longNameTable["Groups"][[All, 1]], $longNameTable["Integrals"][[All, 1]]
+]
 $prefixOnlyCharacters := $prefixOnlyCharacters = AssociationThread[DeleteMissing[Lookup[$longNameTable["Characters"], $prefixOnlyNames, Missing[]]] -> True]
 prefixOnlyStartQ[c_String] := c === "\\" || KeyExistsQ[$prefixOnlyCharacters, c]
 (* a character that can begin a long name: a \ or one past ASCII *)
@@ -1523,7 +1650,8 @@ longNameStartQ[c_String] := c === "\\" || First[ToCharacterCode[c]] > 127
 
 (* the spellings of the closers, each to the label a group it closes has in the scope *)
 $closerLabels := $closerLabels = Join[<|"]" -> "]", ")" -> ")", "}" -> "}", "|>" -> "|>"|>,
-	Association[Catenate[Map[Function[c, Thread[longNameSpellings[c] -> c]], Union[$longNameTable["Groups"][[All, 2]]]]]]]
+	Association[Catenate[Map[Function[c, Thread[longNameSpellings[c] -> c]], Union[$longNameTable["Groups"][[All, 2]]]]]]
+]
 closerStartQ[c_String] := StringContainsQ["])}|\\", c] || KeyExistsQ[$closerLabels, c]
 
 (* whitespace and newlines in long names, and their characters *)
@@ -1551,25 +1679,30 @@ strayCharacterQ[c_String] := With[{n = First[ToCharacterCode[c]]}, (n < 32 && ! 
 
 $blankHeads = <|"_" -> Blank, "__" -> BlankSequence, "___" -> BlankNullSequence|>
 $patternBlankHeads = <|"_" -> CodeParser`PatternBlank, "__" -> CodeParser`PatternBlankSequence,
-	"___" -> CodeParser`PatternBlankNullSequence, "_." -> CodeParser`PatternOptionalDefault|>
+	"___" -> CodeParser`PatternBlankNullSequence, "_." -> CodeParser`PatternOptionalDefault
+|>
 
 (* x_h: the name, the underscores, the head; _. takes no head *)
 blankNode[name_, underscores_String, head_] := With[{blank = If[MissingQ[head],
 		tokenLeaf[underscores],
-		CodeParser`CompoundNode[$blankHeads[underscores], {tokenLeaf[underscores], concreteLeaf[Symbol, head]}, <||>]]},
-	If[MissingQ[name], blank, CodeParser`CompoundNode[$patternBlankHeads[underscores], {concreteLeaf[Symbol, name], blank}, <||>]]]
+		CodeParser`CompoundNode[$blankHeads[underscores], {tokenLeaf[underscores], concreteLeaf[Symbol, head]}, <||>]
+]},
+	If[MissingQ[name], blank, CodeParser`CompoundNode[$patternBlankHeads[underscores], {concreteLeaf[Symbol, name], blank}, <||>]]
+]
 
 (* what a : makes an Optional of: a pattern; after anything else but a
 	name it is a SyntaxErrorNode *)
 patternLikeQ[item[node_, _]] := MatchQ[node,
 	CodeParser`CompoundNode[CodeParser`PatternBlank | CodeParser`PatternBlankSequence | CodeParser`PatternBlankNullSequence | Blank | BlankSequence | BlankNullSequence, _, _] |
 	CodeParser`LeafNode[Token`Under | Token`UnderUnder | Token`UnderUnderUnder, _, _] |
-	CodeParser`BinaryNode[Pattern, _, _]]
+	CodeParser`BinaryNode[Pattern, _, _]
+]
 
 (* #, #2, #name, #"name", ##, ##2 *)
 slotNode[hash_String, _Missing] := tokenLeaf[hash]
 slotNode["#", s_String] := CodeParser`CompoundNode[Slot,
-	{tokenLeaf["#"], concreteLeaf[If[StringMatchQ[s, DigitCharacter ..], Integer, String], s]}, <||>]
+	{tokenLeaf["#"], concreteLeaf[If[StringMatchQ[s, DigitCharacter ..], Integer, String], s]}, <||>
+]
 slotNode["##", s_String] := CodeParser`CompoundNode[SlotSequence, {tokenLeaf["##"], concreteLeaf[Integer, s]}, <||>]
 
 (* %, %3; %% and more are one token *)
@@ -1587,7 +1720,8 @@ groupItem[tag_, open_String, lead_List, children_List, {"Closed", close_String, 
 	item[CodeParser`GroupNode[tag, Join[{tokenLeaf[open]}, lead, Catenate[kids /@ children], {tokenLeaf[close]}], <||>], trivia]
 groupItem[tag_, open_String, lead_List, children_List, {end_String}] :=
 	With[{all = Join[{tokenLeaf[open]}, lead, Catenate[kids /@ children]]}, With[{n = trailingTriviaCount[all]},
-		item[CodeParser`GroupMissingCloserNode[tag, Drop[all, -n], If[end === "End", <|unterminated -> True|>, <||>]], Take[all, -n]]]]
+		item[CodeParser`GroupMissingCloserNode[tag, Drop[all, -n], If[end === "End", <|unterminated -> True|>, <||>]], Take[all, -n]]
+	]]
 
 trailingTriviaCount::usage = "trailingTriviaCount[all] gives how many of the nodes all end in are whitespace, newlines or comments."
 trailingTriviaCount[all_List] := LengthWhile[Reverse[all], triviaLeafQ]
@@ -1599,8 +1733,11 @@ triviaLeafQ[_] := False
 	the two a product, one InfixNode of Times for all the spans *)
 spanItem[a_item, semis_item, middle_, third_, next_] := With[{
 		span = stepsItem[If[MissingQ[third], CodeParser`BinaryNode, CodeParser`TernaryNode], Span, a,
-			Join[{step[{}, kids[semis], If[MissingQ[middle], implicitItem[Token`Fake`ImplicitAll], middle]]}, If[MissingQ[third], {}, {third}]]]},
-	If[MissingQ[next], span, spanProduct[span, next]]]
+			Join[{step[{}, kids[semis], If[MissingQ[middle], implicitItem[Token`Fake`ImplicitAll], middle]]}, If[MissingQ[third], {}, {third}]]
+		]
+},
+	If[MissingQ[next], span, spanProduct[span, next]]
+]
 
 spanProduct[first_item, item[CodeParser`InfixNode[Times, children_List, _], trivia_List]] :=
 	concreteNode[CodeParser`InfixNode, Times, Join[kids[first], {concreteLeaf[Token`Fake`ImplicitTimes, ""]}, Most[children]], item[Last[children], trivia]]
@@ -1623,7 +1760,8 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 	binary, prefix, postfix, optionalColon, chain, flat, dotOperator, implicitTimes, inequality, plus, times, specs, table,
 	expression, gap, patternRight, spanOperand, compoundOperand, tagLeft, tagRight, tildeOperand, spanStartCell,
 	longOp, longPrefix, longPostfix, longBinary, longSpecs, longGroups, longCalls, groupOf, callOf, commaOperator, commaAhead,
-	closerAhead, differentialAhead, integralItem, integrandOperand, implicitTimesFirst, prefixAhead, prefixedTable},
+	closerAhead, differentialAhead, integralItem, integrandOperand, implicitTimesFirst, prefixAhead, prefixedTable
+	},
 
 	patternRight = RecCell[]; spanOperand = RecCell[]; compoundOperand = RecCell[]; tagLeft = RecCell[]; tagRight = RecCell[];
 	tildeOperand = RecCell[]; spanStartCell = RecCell[]; integrandOperand = RecCell[]; prefixAhead = RecCell[];
@@ -1634,38 +1772,48 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 	(* an operator in any of its spellings, then the trivia w: item[token, trivia] *)
 	operatorItem[s_String, w_] := ParseChoice @@ Map[
 		Function[spelling, ParseAction[longest[spelling, $concreteSpellings] ~~ w, item[tokenLeaf[#1], #2] &]],
-		spellings[s]];
+		spellings[s]
+	];
 	op[s_String] := operatorItem[s, wsAll];
 	postOp[s_String] := operatorItem[s, ws];
 	(* a long name, in either spelling, then the trivia w *)
 	longOp[name_String, w_] := ParseChoice @@ Map[
 		Function[spelling, ParseAction[ParseLiteral[spelling] ~~ w, item[tokenLeaf[#1], #2] &]],
-		longNameSpellings[name]];
+		longNameSpellings[name]
+	];
 
 	(* --- operands --- *)
 	symbolItem = ParseAction[$concreteName ~~ ParseNotFollowedBy[ParseCharacter["_" | "`"]] ~~ ws, item[concreteLeaf[Symbol, #1], #3] &];
 	blankItem = ParseAction[ParseOptional[$concreteName] ~~ ParseChoice[
 			ParseAction[ParseLiteral["_."], {"_.", Missing[]} &],
-			ParseAction[ParseChoice[ParseLiteral["___"], ParseLiteral["__"], ParseLiteral["_"]] ~~ ParseOptional[$concreteName], {#1, #2} &]] ~~ ws,
-		Function[{name, blank, t}, item[blankNode[name, blank[[1]], blank[[2]]], t]]];
+			ParseAction[ParseChoice[ParseLiteral["___"], ParseLiteral["__"], ParseLiteral["_"]] ~~ ParseOptional[$concreteName], {#1, #2} &]
+	] ~~ ws,
+		Function[{name, blank, t}, item[blankNode[name, blank[[1]], blank[[2]]], t]]
+	];
 	numberItem = ParseAction[ParseLookahead[ParseCharacter[DigitCharacter | "."]] ~~ $numberText ~~ ws,
-		If[numberTextValidQ[#2], item[concreteLeaf[concreteNumberKind[#2], #2], #3], errorTokenItem[Token`Error`Number, #2, #3]] &];
+		If[numberTextValidQ[#2], item[concreteLeaf[concreteNumberKind[#2], #2], #3], errorTokenItem[Token`Error`Number, #2, #3]] &
+	];
 	stringItem = ParseAction[$string ~~ ws, item[concreteLeaf[String, #1], #2] &];
 	slotItem = ParseAction[ParseChoice[
 			ParseAction[ParseLiteral["##"] ~~ ParseOptional[$digits], slotNode],
-			ParseAction[ParseLiteral["#"] ~~ ParseOptional[ParseChoice[$digits, $string, $concreteName]], slotNode]] ~~ ws,
-		item[#1, #2] &];
+			ParseAction[ParseLiteral["#"] ~~ ParseOptional[ParseChoice[$digits, $string, $concreteName]], slotNode]
+	] ~~ ws,
+		item[#1, #2] &
+	];
 	outItem = ParseAction[ParseChoice[
 			ParseAction[ParseRegex["%%+"], concreteLeaf[Token`PercentPercent, #] &],
-			ParseAction[ParseLiteral["%"] ~~ ParseOptional[$digits], outNode]] ~~ ws,
-		item[#1, #2] &];
+			ParseAction[ParseLiteral["%"] ~~ ParseOptional[$digits], outNode]
+	] ~~ ws,
+		item[#1, #2] &
+	];
 
 	(* --- error tokens, each the whole of an expression it begins --- *)
 	letterlikeItem = ParseAction[$letterlikeError ~~ ws, errorTokenItem[Token`Error`ExpectedLetterlike, #1, #2] &];
 	unterminatedStringItem = ParseAction[ParseNotFollowedBy[$string] ~~ $unterminatedString ~~ ws, errorTokenItem[Token`Error`UnterminatedString, #2, #3] &];
 	unterminatedCommentItem = ParseAction[$unterminatedComment ~~ ws, errorTokenItem[Token`Error`UnterminatedComment, #1, #2] &];
 	unsupportedItem = ParseAction[ParseChoice @@ (ParseLiteral /@ Prepend[Catenate[longNameSpellings /@ $longNameTable["Unsupported"]], "??"]) ~~ ws,
-		errorTokenItem[Token`Error`UnsupportedToken, #1, #2] &];
+		errorTokenItem[Token`Error`UnsupportedToken, #1, #2] &
+	];
 	unhandledItem = ParseAction[$unhandledCharacter ~~ ws, errorTokenItem[Token`Error`UnhandledCharacter, #1, #2] &];
 	strayItem = ParseAction[ParseCharacter[_?strayCharacterQ] ~~ ws, errorTokenItem[Token`Error`UnhandledCharacter, #1, #2] &];
 	errorUnits = ParseChoice[letterlikeItem, unterminatedStringItem, unterminatedCommentItem, unsupportedItem, unhandledItem, strayItem];
@@ -1682,21 +1830,27 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 		ParseLookahead[ParseCharacter[_?nameStartQ]] ~~ $concreteName ~~ ParseNotFollowedBy[ParseLiteral["`"]],
 		ParseLookahead[ParseCharacter[DigitCharacter | "."]] ~~ ParseCondition[$numberText, numberTextValidQ],
 		ParseLookahead[ParseLiteral["\""]] ~~ $string,
-		ParseLookahead[ParseCharacter[_?prefixOnlyStartQ]] ~~ ParseChoice @@ (ParseLiteral /@ Catenate[longNameSpellings /@ $prefixOnlyNames])];
+		ParseLookahead[ParseCharacter[_?prefixOnlyStartQ]] ~~ ParseChoice @@ (ParseLiteral /@ Catenate[longNameSpellings /@ $prefixOnlyNames])
+	];
 	(* what begins an operand: a leaf, a [, a ;; and a prefix operator, a -, + or ! only as one, not
 		as ->, != or += *)
 	operandAhead = ParseLookahead[ParseChoice[leafAhead, ParseCharacter["["], RecRef[prefixAhead], ParseLiteral[";;"],
-		ParseLookahead[ParseCharacter[_?longNameStartQ]] ~~ ParseChoice @@ (ParseLiteral /@ Catenate[longNameSpellings /@ $longNameTable["Prefix"][[All, 1]]])]];
+		ParseLookahead[ParseCharacter[_?longNameStartQ]] ~~ ParseChoice @@ (ParseLiteral /@ Catenate[longNameSpellings /@ $longNameTable["Prefix"][[All, 1]]])
+	]];
 
 	(* --- groups --- *)
 	(* the closer of a group around, or one that closes none:
 		Token`Error`UnexpectedCloser *)
 	closerAhead = ParseLookahead[ParseCharacter[_?closerStartQ]] ~~ ParseChoice @@ (ParseLiteral /@ Keys[$closerLabels]);
 	scopedCloser = ParseLookahead[ParseCharacter[_?closerStartQ]] ~~ ParseChoice @@ KeyValueMap[
-		Function[{c, label}, ParseLiteral[c] ~~ ParseCondition[ParseScope[], MemberQ[#, label] &]], $closerLabels];
+		Function[{c, label}, ParseLiteral[c] ~~ ParseCondition[ParseScope[], MemberQ[#, label] &]], $closerLabels
+	];
 	strayCloser = ParseAction[ParseLookahead[ParseCharacter[_?closerStartQ]] ~~ ParseChoice @@ KeyValueMap[Function[{c, label},
-		ParseAction[ParseLiteral[c] ~~ ParseCondition[ParseScope[], ! MemberQ[#, label] &] ~~ wsAll, errorTokenItem[Token`Error`UnexpectedCloser, #1, #3] &]],
-		$closerLabels], #2 &];
+		ParseAction[ParseLiteral[c] ~~ ParseCondition[ParseScope[], ! MemberQ[#, label] &] ~~ wsAll, errorTokenItem[Token`Error`UnexpectedCloser, #1, #3] &]
+	],
+		$closerLabels
+	], #2 &
+	];
 	(* an expression, or expressions between commas, any of them left out:
 		Token`Error`PrefixImplicitNull first, Token`Error`InfixImplicitNull
 		after a comma; after a comma an expression is all but a closer, a
@@ -1704,40 +1858,48 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 	commaOperator = ParseChoice[op[","], longOp["InvisibleComma", wsAll]];
 	commaAhead = ParseChoice @@ (ParseLiteral /@ Prepend[longNameSpellings["InvisibleComma"], ","]);
 	commaStep[e_] := ParseAction[commaOperator ~~ ParseOptional[ParseAction[ParseLookahead[ParseCharacter[_]] ~~ ParseNotFollowedBy[ParseChoice[closerAhead, commaAhead]] ~~ e, #3 &]],
-		step[{}, kids[#1], If[MissingQ[#2], errorItem[Token`Error`InfixImplicitNull], #2]] &];
+		step[{}, kids[#1], If[MissingQ[#2], errorItem[Token`Error`InfixImplicitNull], #2]] &
+	];
 	commaExpression[e_, g_] := ParseAction[
 		ParseChoice[ParseAction[ParseLookahead[commaAhead], errorItem[Token`Error`PrefixImplicitNull] &], e] ~~
 		ParseOptional[ParseAction[commaStep[e] ~~ ParseMany[ParseAction[g ~~ commaStep[e], ReplacePart[#2, 1 -> #1] &]], Prepend[#2, #1] &]],
-		If[MissingQ[#2], #1, stepsItem[CodeParser`InfixNode, CodeParser`Comma, #1, #2]] &];
+		If[MissingQ[#2], #1, stepsItem[CodeParser`InfixNode, CodeParser`Comma, #1, #2]] &
+	];
 	(* what a group or the source holds between its ends: expressions,
 		closers that close no group around, and an error token that begins
 		an expression alone, no comma after it *)
 	children[e_, g_] := ParseMany[ParseAction[ParseLookahead[ParseCharacter[_]] ~~ ParseNotFollowedBy[scopedCloser] ~~
 		ParseChoice[strayCloser, ParseCondition[commaExpression[e, g], ! commaAfterErrorQ[#] &], errorToken] ~~ wsAll,
-		Function[{at, notCloser, child, trivia}, item[child[[1]], Join[child[[2]], trivia]]]]];
+		Function[{at, notCloser, child, trivia}, item[child[[1]], Join[child[[2]], trivia]]]
+	]];
 	groupEnd[closes_List] := ParseChoice[
 		ParseAction[ParseChoice @@ (ParseLiteral /@ closes) ~~ ws, {"Closed", #1, #2} &],
 		ParseAction[ParseNotFollowedBy[ParseCharacter[_]], {"End"} &],
-		ParseAction[ParseSucceed[Null], {"Closer"} &]];
+		ParseAction[ParseSucceed[Null], {"Closer"} &]
+	];
 	(* a group: an opener, what it holds with its closer's label in the
 		scope, and its closer *)
 	groupOf[opens_List, label_String, closes_List, tag_] := ParseAction[
 		ParseChoice @@ Map[If[# === "(", ParseAction[ParseLiteral["("] ~~ ParseNotFollowedBy[ParseLiteral["*"]], "(" &], ParseLiteral[#]] &, opens] ~~ wsAll ~~
 			ParseScoped[label, children[RecRef[nested], ParseSucceed[{}]]] ~~ groupEnd[closes],
-		Function[{o, lead, cs, end}, groupItem[tag, o, lead, cs, end]]];
+		Function[{o, lead, cs, end}, groupItem[tag, o, lead, cs, end]]
+	];
 	group[open_String, close_String, tag_] := groupOf[{open}, close, {close}, tag];
 	(* a call: the group after an operand, its head *)
 	callOf[opens_List, label_String, closes_List, tag_] := ParseAction[
 		ParseChoice @@ (ParseLiteral /@ opens) ~~ wsAll ~~ ParseScoped[label, children[RecRef[nested], ParseSucceed[{}]]] ~~ groupEnd[closes],
 		Function[{o, lead, cs, end}, Function[h, With[{g = groupItem[tag, o, lead, cs, end]},
-			item[CodeParser`CallNode[kids[h], First[g], <||>], Last[g]]]]]];
+			item[CodeParser`CallNode[kids[h], First[g], <||>], Last[g]]
+		]]]
+	];
 	longGroups = Map[groupOf[longNameSpellings[#[[1]]], #[[2]], longNameSpellings[#[[2]]], #[[3]]] &, $longNameTable["Groups"]];
 	longCalls = Map[{"Call", {"Postfix", callOf[longNameSpellings[#[[1]]], #[[2]], longNameSpellings[#[[2]]], #[[3]]]}} &, $longNameTable["Calls"]];
 	fileItem = ParseChoice[
 		ParseAction[$unterminatedFile ~~ ws, errorTokenItem[Token`Error`UnterminatedFileString, #1, #2] &],
 		ParseAction[$file ~~ ws, item[concreteLeaf[String, #1], #2] &],
 		unterminatedStringItem,
-		ParseAction[ParseSucceed[Null], errorItem[Token`Error`ExpectedFile] &]];
+		ParseAction[ParseSucceed[Null], errorItem[Token`Error`ExpectedFile] &]
+	];
 	getItem = ParseAction[op["<<"] ~~ fileItem, concreteNode[CodeParser`PrefixNode, Get, kids[#1], #2] &];
 
 	(* --- postfix operators that read operands of their own --- *)
@@ -1748,42 +1910,56 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 	tag = ParseChoice[
 		ParseAction[ParseChoice[$string, $concreteName] ~~ ws, item[concreteLeaf[String, #1], #2] &],
 		unterminatedStringItem,
-		ParseAction[ParseSucceed[Null] ~~ ws, errorTokenItem[Token`Error`ExpectedTag, "", #2] &]];
+		ParseAction[ParseSucceed[Null] ~~ ws, errorTokenItem[Token`Error`ExpectedTag, "", #2] &]
+	];
 	colons = ParseAction[ParseLiteral["::"] ~~ ParseNotFollowedBy[ParseLiteral["["]], tokenLeaf["::"] &];
 	messageName = ParseAction[colons ~~ tag ~~ ParseMany[ParseAction[gap ~~ colons ~~ tag, step[#1, {#2}, #3] &]],
-		Function[{c, first, rest}, Function[s, stepsItem[CodeParser`InfixNode, MessageName, s, Prepend[rest, step[{}, {c}, first]]]]]];
+		Function[{c, first, rest}, Function[s, stepsItem[CodeParser`InfixNode, MessageName, s, Prepend[rest, step[{}, {c}, first]]]]]
+	];
 	tilde = ParseAction[op["~"] ~~ RecRef[tildeOperand] ~~ ParseOptional[ParseAction[gap ~~ op["~"] ~~ RecRef[tildeOperand], step[#1, kids[#2], #3] &]],
 		Function[{o1, m, second}, Function[l, If[MissingQ[second],
 			concreteNode[CodeParser`SyntaxErrorNode, SyntaxError`ExpectedTilde, Join[kids[l], kids[o1]], m],
-			stepsItem[CodeParser`TernaryNode, CodeParser`TernaryTilde, l, {step[{}, kids[o1], m], second}]]]]];
+			stepsItem[CodeParser`TernaryNode, CodeParser`TernaryTilde, l, {step[{}, kids[o1], m], second}]
+		]]]
+	];
 	(* a ;; b ;; c: the operand after the first ;; left out but for one a prefix operator begins,
 		the ;; after b only with an operand after it, and a ;; after the span the beginning of a
 		span of its own *)
 	spanOperandItem = ParseAction[ParseNotFollowedBy[ParseLiteral[";;"]] ~~ operandAhead ~~ RecRef[spanOperand], #3 &];
 	spanTail = ParseAction[postOp[";;"] ~~
 			ParseChoice[ParseAction[ParseLookahead[RecRef[prefixAhead]] ~~ spanOperandItem, #2 &],
-				ParseAction[ParseNotFollowedBy[RecRef[prefixAhead]] ~~ ParseOptional[spanOperandItem], #2 &]] ~~
+				ParseAction[ParseNotFollowedBy[RecRef[prefixAhead]] ~~ ParseOptional[spanOperandItem], #2 &]
+			] ~~
 			ParseOptional[ParseAction[postOp[";;"] ~~ spanOperandItem, step[{}, kids[#1], #2] &]] ~~
 			ParseOptional[ParseAction[ParseLookahead[ParseLiteral[";;"]] ~~ RecRef[spanStartCell], #2 &]],
-		Function[{semis, middle, third, next}, Function[a, spanItem[a, semis, middle, third, next]]]];
+		Function[{semis, middle, third, next}, Function[a, spanItem[a, semis, middle, third, next]]]
+	];
 	(* a; b; c: an operand left out is Token`Fake`ImplicitNull *)
 	semiStep = ParseAction[postOp[";"] ~~ ParseOptional[ParseAction[operandAhead ~~ RecRef[compoundOperand], #2 &]],
-		step[{}, kids[#1], If[MissingQ[#2], implicitItem[Token`Fake`ImplicitNull], #2]] &];
+		step[{}, kids[#1], If[MissingQ[#2], implicitItem[Token`Fake`ImplicitNull], #2]] &
+	];
 	compound = ParseAction[semiStep ~~ ParseMany[ParseAction[gap ~~ semiStep, ReplacePart[#2, 1 -> #1] &]],
-		Function[{first, rest}, Function[a, stepsItem[CodeParser`InfixNode, CompoundExpression, a, Prepend[rest, first]]]]];
+		Function[{first, rest}, Function[a, stepsItem[CodeParser`InfixNode, CompoundExpression, a, Prepend[rest, first]]]]
+	];
 	(* =. : the = then the ., trivia between, the . not a number's *)
 	equalDot = ParseAction[op["="] ~~ ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter | "."]] ~~ ws,
-		step[{}, kids[#1], item[tokenLeaf["."], #4]] &];
+		step[{}, kids[#1], item[tokenLeaf["."], #4]] &
+	];
 	unset = ParseAction[equalDot, Function[s, Function[a, stepsItem[CodeParser`BinaryNode, Unset, a, {s}]]]];
 	tagSet = ParseAction[op["/:"] ~~ RecRef[tagLeft] ~~ ParseOptional[ParseAction[gap ~~ ParseChoice[
 			ParseAction[op[":="] ~~ RecRef[tagRight], {TagSetDelayed, step[{}, kids[#1], #2]} &],
 			ParseAction[equalDot, {TagUnset, #} &],
-			ParseAction[op["="] ~~ RecRef[tagRight], {TagSet, step[{}, kids[#1], #2]} &]], {#1, #2} &]],
+			ParseAction[op["="] ~~ RecRef[tagRight], {TagSet, step[{}, kids[#1], #2]} &]
+	], {#1, #2} &
+	]],
 		Function[{slash, lhs, rest}, Function[t, If[MissingQ[rest],
 			concreteNode[CodeParser`SyntaxErrorNode, SyntaxError`ExpectedSet, Join[kids[t], kids[slash]], lhs],
-			stepsItem[CodeParser`TernaryNode, rest[[2, 1]], t, {step[{}, kids[slash], lhs], ReplacePart[rest[[2, 2]], 1 -> rest[[1]]]}]]]]];
+			stepsItem[CodeParser`TernaryNode, rest[[2, 1]], t, {step[{}, kids[slash], lhs], ReplacePart[rest[[2, 2]], 1 -> rest[[1]]]}]
+		]]]
+	];
 	put[s_String, head_] := ParseAction[op[s] ~~ fileItem,
-		Function[{o, file}, Function[x, stepsItem[CodeParser`BinaryNode, head, x, {step[{}, kids[o], file]}]]]];
+		Function[{o, file}, Function[x, stepsItem[CodeParser`BinaryNode, head, x, {step[{}, kids[o], file]}]]]
+	];
 
 	(* an integral: its integrand, then a \[DifferentialD] after it makes
 		a PrefixBinaryNode, as \[Integral] f \[DifferentialD] x does *)
@@ -1793,22 +1969,27 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 				ParseOptional[ParseAction[ParseLookahead[differentialAhead] ~~ RecRef[integrandOperand], #2 &]],
 			Function[{o, f, d}, If[MissingQ[d],
 				concreteNode[CodeParser`PrefixNode, r[[2]], kids[o], f],
-				concreteNode[CodeParser`PrefixBinaryNode, r[[3]], Join[kids[o], kids[f]], d]]]]],
-		$longNameTable["Integrals"]];
+				concreteNode[CodeParser`PrefixBinaryNode, r[[3]], Join[kids[o], kids[f]], d]
+			]]
+	]],
+		$longNameTable["Integrals"]
+	];
 
 	(* --- the operands of the table --- *)
 
 	(* x:patt, the name binding its pattern; within the pattern a : is
 		Optional's *)
 	patternUnit = ParseAction[symbolItem ~~ ParseOptional[ParseAction[op[":"] ~~ RecRef[patternRight], step[{}, kids[#1], #2] &]],
-		Function[{name, s}, If[MissingQ[s], name, stepsItem[CodeParser`BinaryNode, Pattern, name, {s}]]]];
+		Function[{name, s}, If[MissingQ[s], name, stepsItem[CodeParser`BinaryNode, Pattern, name, {s}]]]
+	];
 	(* ;; b and ;; at the start: Token`Fake`ImplicitOne before it *)
 	spanStart = ParseAction[spanTail, #[implicitItem[Token`Fake`ImplicitOne]] &];
 	SetRec[spanStartCell, spanStart];
 	otherUnits = ParseChoice[
 		blankItem, numberItem, stringItem, slotItem, outItem,
 		group["(", ")", CodeParser`GroupParen], group["{", "}", List], group["<|", "|>", Association],
-		group["[", "]", CodeParser`GroupSquare], getItem, spanStart, Sequence @@ longGroups, integralItem];
+		group["[", "]", CodeParser`GroupSquare], getItem, spanStart, Sequence @@ longGroups, integralItem
+	];
 	plainUnit = ParseChoice[symbolItem, otherUnits, errorUnits, expectedOperand];
 	unit = ParseChoice[patternUnit, otherUnits, errorUnits, expectedOperand];
 
@@ -1821,10 +2002,12 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 	longPostfix[name_String, head_] := ParseAction[longOp[name, ws], Function[o, Function[x, concreteNode[CodeParser`PostfixNode, head, kids[x], o]]]];
 	optionalColon = ParseAction[op[":"], Function[o, Function[{l, r}, stepsItem[
 		If[patternLikeQ[l], CodeParser`BinaryNode, CodeParser`SyntaxErrorNode], If[patternLikeQ[l], Optional, SyntaxError`ExpectedSymbol],
-		l, {step[{}, kids[o], r]}]]]];
+		l, {step[{}, kids[o], r]}
+	]]]];
 	(* a chain of one head, its later operators past a newline *)
 	chain[head_] := Function[{operands, operators}, stepsItem[CodeParser`InfixNode, head, First[operands],
-		MapThread[Append, {operators, Rest[operands]}]]];
+		MapThread[Append, {operators, Rest[operands]}]
+	]];
 	flat[operator_, combine_] := {"InfixN", ParseAction[operator, step[{}, kids[#]] &], combine, ParseAction[gap ~~ operator, step[#1, kids[#2]] &]};
 	dotOperator = ParseAction[ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter | "."]] ~~ wsAll, item[tokenLeaf["."], #3] &];
 	(* a b: a product where an operand follows an operand on its line *)
@@ -1832,7 +2015,8 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 	(* in an integrand, a product does not begin at its \[DifferentialD] *)
 	implicitTimesFirst = ParseAction[ParseLookahead[leafAhead] ~~
 			ParseNotFollowedBy[differentialAhead ~~ ParseCondition[ParseScope[], MatchQ[#, {___, "Integrand"}] &]],
-		step[{}, {concreteLeaf[Token`Fake`ImplicitTimes, ""]}] &];
+		step[{}, {concreteLeaf[Token`Fake`ImplicitTimes, ""]}] &
+	];
 	inequality = chain[CodeParser`InfixInequality];
 	plus = chain[Plus];
 	times = chain[Times];
@@ -1918,18 +2102,23 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 	longSpecs = Join[
 		Map[{#[[4]], If[#[[2]] === "InfixNode",
 				flat[longOp[#[[1]], wsAll], chain[#[[3]]]],
-				{If[#[[5]] === "Right", "InfixR", "InfixL"], longBinary[#[[1]], #[[3]]]}]} &,
-			Select[$longNameTable["Infix"], ! KeyExistsQ[$asciiLongNames, #[[1]]] && #[[3]] =!= CodeParser`Comma &]],
+				{If[#[[5]] === "Right", "InfixR", "InfixL"], longBinary[#[[1]], #[[3]]]}
+		]} &,
+			Select[$longNameTable["Infix"], ! KeyExistsQ[$asciiLongNames, #[[1]]] && #[[3]] =!= CodeParser`Comma &]
+		],
 		Map[{#[[4]], {"Prefix", longPrefix[#[[1]], #[[3]]]}} &,
-			Select[$longNameTable["Prefix"], ! KeyExistsQ[$asciiLongNames, #[[1]]] && ! MemberQ[$longNameTable["Integrals"][[All, 1]], #[[1]]] &]],
+			Select[$longNameTable["Prefix"], ! KeyExistsQ[$asciiLongNames, #[[1]]] && ! MemberQ[$longNameTable["Integrals"][[All, 1]], #[[1]]] &]
+		],
 		Map[{#[[4]], {"Postfix", longPostfix[#[[1]], #[[3]]]}} &, $longNameTable["Postfix"]],
-		longCalls];
+		longCalls
+	];
 	specs = Join[specs, longSpecs];
 
 	table[u_, min_Integer] := ParseOperatorTable[u, levelsAbove[specs, min], "FinalOperand" -> finalOperandQ];
 	(* the operators that bind more tightly than min, and the prefix ones of any precedence *)
 	prefixedTable[u_, min_Integer] := ParseOperatorTable[u,
-		levelsAbove[Select[specs, #[[2, 1]] === "Prefix" || precedenceValue[First[#]] > min &], -1], "FinalOperand" -> finalOperandQ];
+		levelsAbove[Select[specs, #[[2, 1]] === "Prefix" || precedenceValue[First[#]] > min &], -1], "FinalOperand" -> finalOperandQ
+	];
 	(* what begins an operand with an operator: a prefix operator, a << or an integral *)
 	SetRec[prefixAhead, ParseChoice @@ Join[Cases[specs, {_, {"Prefix", p_}} :> p], {op["<<"]}, longOp[#, wsAll] & /@ $longNameTable["Integrals"][[All, 1]]]];
 	SetRec[patternRight, table[plainUnit, $codeParserPrecedence["Fake`PatternColon"]]];
@@ -1938,8 +2127,11 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 		it [W15 bug] *)
 	With[{lows = Select[specs, #[[2, 1]] === "Prefix" && precedenceValue[First[#]] <= $codeParserPrecedence["SemiSemi"] &]},
 		SetRec[spanOperand, table[ParseChoice[
-				Sequence @@ Map[Function[s, ParseAction[s[[2, 2]] ~~ prefixedTable[unit, precedenceValue[First[s]]], #1[#2] &]], lows], unit],
-			$codeParserPrecedence["SemiSemi"]]]];
+				Sequence @@ Map[Function[s, ParseAction[s[[2, 2]] ~~ prefixedTable[unit, precedenceValue[First[s]]], #1[#2] &]], lows], unit
+		],
+			$codeParserPrecedence["SemiSemi"]
+		]]
+	];
 	SetRec[compoundOperand, table[unit, $codeParserPrecedence["Semi"]]];
 	SetRec[tagLeft, table[unit, $codeParserPrecedence["Equal"]]];
 	SetRec[tagRight, table[unit, $codeParserPrecedence["Equal"] - 1]];
@@ -1964,22 +2156,28 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 	of the source, in no leaf, is listed where the source ends. *)
 withSource[CodeParser`ContainerNode[kind_, children_List, meta_], continuedAtEnd_ : False] := Module[
 	{at = {1, 1}, marks = <|"SimpleLineContinuations" -> {}, "ComplexLineContinuations" -> {}, "EmbeddedNewlines" -> {}, "EmbeddedTabs" -> {}|>,
-	placed, leaf, placedChildren},
+	placed, leaf, placedChildren
+	},
 	leaf[head_, k_, s_String, m_] := With[{start = at},
 		at = advanced[at, s];
 		Scan[(marks[#] = Append[marks[#], start]) &, Union[tokenMarks[k, StringDrop[s, Lookup[m, continuedBy, 0]]],
-			If[KeyExistsQ[m, continuedBy], {"SimpleLineContinuations"}, {}]]];
-		head[k, s, Append[KeyDrop[m, continuedBy], CodeParser`Source -> {start, at}]]];
+			If[KeyExistsQ[m, continuedBy], {"SimpleLineContinuations"}, {}]
+		]];
+		head[k, s, Append[KeyDrop[m, continuedBy], CodeParser`Source -> {start, at}]]
+	];
 	placed[CodeParser`LeafNode[k_, s_String, m_]] := leaf[CodeParser`LeafNode, k, s, m];
 	placed[CodeParser`ErrorNode[k_, s_String, m_]] := leaf[CodeParser`ErrorNode, k, s, m];
 	placed[CodeParser`CallNode[head_List, group_, m_]] := With[{h = placed /@ head, g = placed[group]},
-		CodeParser`CallNode[h, g, Append[m, CodeParser`Source -> {sourceOf[First[h]][[1]], sourceOf[g][[2]]}]]];
+		CodeParser`CallNode[h, g, Append[m, CodeParser`Source -> {sourceOf[First[h]][[1]], sourceOf[g][[2]]}]]
+	];
 	placed[node_[tag_, kids_List, m_]] := With[{c = placed /@ kids},
-		node[tag, c, Append[m, CodeParser`Source -> {sourceOf[First[c]][[1]], sourceOf[Last[c]][[2]]}]]];
+		node[tag, c, Append[m, CodeParser`Source -> {sourceOf[First[c]][[1]], sourceOf[Last[c]][[2]]}]]
+	];
 	placedChildren = placed /@ children;
 	If[continuedAtEnd, marks["SimpleLineContinuations"] = Append[marks["SimpleLineContinuations"], at]];
 	CodeParser`ContainerNode[kind, placedChildren, Join[meta, Select[marks, # =!= {} &],
-		If[placedChildren === {}, <||>, <|CodeParser`Source -> {{1, 1}, at}|>]]]
+		If[placedChildren === {}, <||>, <|CodeParser`Source -> {{1, 1}, at}|>]
+	]]
 ]
 
 sourceOf[node_] := node[[-1, Key[CodeParser`Source]]]
@@ -1988,7 +2186,9 @@ sourceOf[node_] := node[[-1, Key[CodeParser`Source]]]
 advanced[{line_, column_}, s_String] := With[{breaks = StringCount[s, "\r\n" | "\n" | "\r"]},
 	If[ breaks === 0,
 		{line, column + StringLength[s]},
-		{line + breaks, 1 + StringLength[Last[StringSplit[s, "\r\n" | "\n" | "\r", All]]]}]]
+		{line + breaks, 1 + StringLength[Last[StringSplit[s, "\r\n" | "\n" | "\r", All]]]}
+	]
+]
 
 (* the container's lists a token's own text puts it in: a string's
 	escaped newline is a complex line continuation, its newline not
@@ -1997,10 +2197,13 @@ tokenMarks[String | Token`Error`UnterminatedString, s_String] := With[{plain = S
 	Join[
 		If[StringContainsQ[s, "\\\n" | "\\\r"] && MemberQ[StringCases[s, "\\" ~~ c_ :> c], "\n" | "\r"], {"ComplexLineContinuations"}, {}],
 		If[StringContainsQ[plain, "\n" | "\r"], {"EmbeddedNewlines"}, {}],
-		If[StringContainsQ[s, "\t"], {"EmbeddedTabs"}, {}]]]
+		If[StringContainsQ[s, "\t"], {"EmbeddedTabs"}, {}]
+	]
+]
 tokenMarks[Token`Comment | Token`Error`UnterminatedComment, s_String] := Join[
 	If[StringContainsQ[s, "\n" | "\r"], {"EmbeddedNewlines"}, {}],
-	If[StringContainsQ[s, "\t"], {"EmbeddedTabs"}, {}]]
+	If[StringContainsQ[s, "\t"], {"EmbeddedTabs"}, {}]
+]
 tokenMarks[_, _String] := {}
 
 (* ::Section:: *)
@@ -2178,21 +2381,29 @@ readSource[s_String] := With[{spans = lineContinuations[s], escapes = characterE
 	If[ spans === {} && escapes === {}, {s, None},
 		With[{edits = SortBy[Join[Thread[{spans, ""}], escapes], #[[1, 1]] &]},
 			{StringReplacePart[s, edits[[All, 2]], edits[[All, 1]]],
-			Complement[Range[StringLength[s]], Catenate[Range @@@ Join[spans, Map[{#[[1]] + 1, #[[2]]} &, escapes[[All, 1]]]]]]}]]]
+			Complement[Range[StringLength[s]], Catenate[Range @@@ Join[spans, Map[{#[[1]] + 1, #[[2]]} &, escapes[[All, 1]]]]]]
+			}
+		]
+	]
+]
 
 (* offsets into the source read without its line continuations made
 	offsets into the source: a node begins where the continuations before
 	its first character do, and ends past its last character *)
 continuedOffsets[tree_, kept_List] := With[{at = Function[o, If[o === 1, 1, kept[[o - 1]] + 1]]},
-	tree /. (a_Association /; MatchQ[Lookup[a, "Source"], {_Integer, _Integer}]) :> Append[a, "Source" -> Map[at, a["Source"]]]]
+	tree /. (a_Association /; MatchQ[Lookup[a, "Source"], {_Integer, _Integer}]) :> Append[a, "Source" -> Map[at, a["Source"]]]
+]
 
 (* a failure at a character of the source read without its line
 	continuations, placed at that character of the source *)
 continuedFailure[f_Failure, kept_List, s_String] := With[{at = f["Position"]},
 	If[ IntegerQ[at],
 		With[{p = If[at <= Length[kept], kept[[at]], StringLength[s] + 1]},
-			Failure[f[[1]], Join[f[[2]], <|"Position" -> p, "MessageParameters" -> Append[Lookup[f[[2]], "MessageParameters", <||>], "Position" -> p]|>]]],
-		f]]
+			Failure[f[[1]], Join[f[[2]], <|"Position" -> p, "MessageParameters" -> Append[Lookup[f[[2]], "MessageParameters", <||>], "Position" -> p]|>]]
+		],
+		f
+	]
+]
 
 (* the leaves of a tree read from s without its line continuations, each
 	given its text in s: kept is the positions in s of the characters read *)
@@ -2234,18 +2445,22 @@ continuedLeaf[(head : CodeParser`LeafNode | CodeParser`ErrorNode)[k_, t_String, 
 	CodeParser paclet, MIT). *)
 $chunkPattern = RegularExpression["(?m)(" <> "^\\(\\* *:.*$" <> ")|(" <>
 	"^(BeginPackage|Begin|Needs|End|EndPackage|Clear|ClearAll|SetOptions|SetAttributes|System`Private`NewContextPath|System`Private`RestoreContextPath|Protect|Unprotect|Package|PackageImport|PackageScope|PackageExport|Get|SetDelayed|UpSetDelayed|TagSetDelayed)\\[.*$" <>
-	")|(" <> "^[a-zA-Z$].*(:?\\=).*$" <> ")"]
+	")|(" <> "^[a-zA-Z$].*(:?\\=).*$" <> ")"
+]
 
 reparsed[tree_, s_String] := If[
 	FreeQ[tree, Token`Error`UnterminatedString | Token`Error`UnterminatedComment] &&
 		! MemberQ[tree, CodeParser`GroupMissingCloserNode[_, _, m_ /; TrueQ[m[unterminated]]], Infinity],
 	tree,
-	readAgain[tree, StringSplit[s, "\r\n" | "\n" | "\r", All]]]
+	readAgain[tree, StringSplit[s, "\r\n" | "\n" | "\r", All]]
+]
 
 readAgain[CodeParser`ErrorNode[tok : Token`Error`UnterminatedString | Token`Error`UnterminatedComment, _, meta_], lines_] :=
 	With[{b = chunkEnd[meta[CodeParser`Source], lines]},
 		CodeParser`ErrorNode[tok, StringRiffle[Prepend[Rest[b[[2]]], StringDrop[First[b[[2]]], b[[1, 1, 2]] - 1]], "\n"],
-			<|CodeParser`Source -> First[b]|>]]
+			<|CodeParser`Source -> First[b]|>
+		]
+	]
 readAgain[n : (CodeParser`LeafNode | CodeParser`ErrorNode)[_, _String, _], _] := n
 readAgain[CodeParser`CallNode[head_List, group_, meta_], lines_] :=
 	CodeParser`CallNode[readAgain[#, lines] & /@ head, readAgain[group, lines], meta]
@@ -2253,8 +2468,12 @@ readAgain[node_[tag_, children_List, meta_], lines_] := With[{c = readAgain[#, l
 	If[ TrueQ[meta[unterminated]],
 		With[{b = First[chunkEnd[meta[CodeParser`Source], lines]]},
 			node[tag, Cases[c, (CodeParser`LeafNode | CodeParser`ErrorNode)[_, _, m_ /; sourceWithinQ[b, m[CodeParser`Source]]], Infinity],
-				<|CodeParser`Source -> b|>]],
-		node[tag, c, meta]]]
+				<|CodeParser`Source -> b|>
+			]
+		],
+		node[tag, c, meta]
+	]
+]
 readAgain[CodeParser`ContainerNode[kind_, children_List, meta_], lines_] := CodeParser`ContainerNode[kind, readAgain[#, lines] & /@ children, meta]
 
 (* {the span from where the source begins to the end of its chunk's last
@@ -2273,7 +2492,8 @@ positionWithinQ[{{l1_, c1_}, {l2_, c2_}}, {l_, c_}] := Which[
 	l == l1 == l2, c1 <= c <= c2,
 	l == l1, c1 <= c,
 	l == l2, c <= c2,
-	True, True]
+	True, True
+]
 
 (* <|"Program" -> the parser of a whole source, the children of its
 	ContainerNode, "Statement" -> that of the source's children|> *)
@@ -2281,21 +2501,26 @@ concreteGrammar[] := Module[{comment, spaces, newline, lineTrivia, allTrivia, ne
 	comment = ParseAction[text[commentParser[]], {concreteLeaf[Token`Comment, #]} &];
 	spaces = ParseChoice[
 		ParseAction[ParseRegex["[ \t]+"], Function[s, concreteLeaf[Whitespace, #] & /@ Characters[s]]],
-		ParseAction[ParseChoice @@ (ParseLiteral /@ $longWhitespace), {concreteLeaf[Whitespace, #]} &]];
+		ParseAction[ParseChoice @@ (ParseLiteral /@ $longWhitespace), {concreteLeaf[Whitespace, #]} &]
+	];
 	newline = ParseChoice[
 		ParseAction[ParseRegex["\r\n|\n|\r"], {concreteLeaf[Token`Newline, #]} &],
-		ParseAction[ParseChoice @@ (ParseLiteral /@ $longNewlines), {concreteLeaf[Token`Newline, #]} &]];
+		ParseAction[ParseChoice @@ (ParseLiteral /@ $longNewlines), {concreteLeaf[Token`Newline, #]} &]
+	];
 	(* each looked for only at a character that can begin it *)
 	lineTrivia = ParseAction[ParseMany[ParseAction[ParseLookahead[ParseCharacter[_?lineTriviaStartQ]] ~~ ParseChoice[spaces, comment], #2 &]],
-		Function[Catenate[{##}]]];
+		Function[Catenate[{##}]]
+	];
 	allTrivia = ParseAction[ParseMany[ParseAction[ParseLookahead[ParseCharacter[_?allTriviaStartQ]] ~~ ParseChoice[spaces, newline, comment], #2 &]],
-		Function[Catenate[{##}]]];
+		Function[Catenate[{##}]]
+	];
 	nested = RecCell[];
 	SetRec[nested, concreteParser[allTrivia, allTrivia, nested]["Expression"]];
 	top = concreteParser[lineTrivia, allTrivia, nested]["Children"];
 	statement = ParseAction[top, Function[Catenate[kids /@ {##}]]];
 	<|"Program" -> ParseAction[allTrivia ~~ top, Function[{lead, items}, Join[lead, Catenate[kids /@ items]]]],
-		"Statement" -> statement|>
+		"Statement" -> statement
+	|>
 ]
 
 (* ::Section:: *)
@@ -2314,7 +2539,10 @@ WolframLanguageAST[s_String] := With[{read = readSource[s]},
 	If[ read[[2]] === None,
 		With[{r = parsed[$astGrammar, s]}, If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]],
 		With[{r = parsed[$astGrammar, read[[1]]], kept = read[[2]]},
-			If[FailureQ[r], continuedFailure[r, kept, s], ASTAddSource[continuedOffsets[ASTContainer[r], kept], s]]]]]
+			If[FailureQ[r], continuedFailure[r, kept, s], ASTAddSource[continuedOffsets[ASTContainer[r], kept], s]]
+		]
+	]
+]
 
 (* The held expressions, read by the reader of WolframLanguageFast.wl, which
 	reads the source in one pass over its tokens and fails where the
@@ -2329,7 +2557,12 @@ WolframLanguageHeld[s_String] := With[{read = readSource[s]},
 				ListQ[fast], DeleteCases[fast, HoldComplete[Null]],
 				FailureQ[fast], If[kept === None, fast, continuedFailure[fast, kept, s]],
 				True, With[{r = grammarFailure[parsed[$heldGrammar, clean], StringLength[clean]]},
-					Which[! FailureQ[r], DeleteCases[expressions[r], HoldComplete[Null]], kept === None, r, True, continuedFailure[r, kept, s]]]]]]]
+					Which[! FailureQ[r], DeleteCases[expressions[r], HoldComplete[Null]], kept === None, r, True, continuedFailure[r, kept, s]]
+				]
+			]
+		]
+	]
+]
 
 (* a failure of the grammar, which reads only the source the fast reader does not take: the
 	source ending too early where it stops past its end *)
@@ -2341,29 +2574,40 @@ $concreteGrammar := $concreteGrammar = concreteGrammar[]
 WolframLanguageConcrete[s_String] := With[{spans = lineContinuations[s]},
 	If[ spans === {},
 		With[{r = parsed[$concreteGrammar, s]},
-			If[FailureQ[r], r, reparsed[withSource[CodeParser`ContainerNode[String, r, <||>]], s]]],
+			If[FailureQ[r], r, reparsed[withSource[CodeParser`ContainerNode[String, r, <||>]], s]]
+		],
 		With[{r = parsed[$concreteGrammar, StringReplacePart[s, "", spans]], kept = keptPositions[s, spans]},
 			If[ FailureQ[r],
 				continuedFailure[r, kept, s],
-				reparsed[withSource[CodeParser`ContainerNode[String, continuedLeaves[r, s, kept], <||>], spans[[-1, 2]] === StringLength[s]], s]]]]]
+				reparsed[withSource[CodeParser`ContainerNode[String, continuedLeaves[r, s, kept], <||>], spans[[-1, 2]] === StringLength[s]], s]
+			]
+		]
+	]
+]
 
 (* a file's text read as UTF-8, its container a File one naming it *)
 WolframLanguageConcrete[File[f_String]] := With[{bytes = ReadByteArray[f]},
 	With[{r = WolframLanguageConcrete[If[ByteArrayQ[bytes], ByteArrayToString[bytes, "UTF-8"], ""]]},
-		If[FailureQ[r], r, CodeParser`ContainerNode[File, r[[2]], Append[r[[3]], "FileName" -> ExpandFileName[f]]]]]]
+		If[FailureQ[r], r, CodeParser`ContainerNode[File, r[[2]], Append[r[[3]], "FileName" -> ExpandFileName[f]]]]
+	]
+]
 
 (* A source stops being read at the first statement that cannot be; that
 	statement read alone says where and why, which the source's own failure
 	(the end of input expected at the statement's start) does not. *)
 parsed[g_Association, s_String] := With[{r = Parse[g["Program"], s]},
-	If[FailureQ[r] && r["Expected"] === "<end of input>", statementFailure[g, s, r["Position"]], r]]
+	If[FailureQ[r] && r["Expected"] === "<end of input>", statementFailure[g, s, r["Position"]], r]
+]
 
 statementFailure[g_Association, s_String, start_Integer] := With[{r = ParsePartial[g["Statement"], StringDrop[s, start - 1]]},
 	If[FailureQ[r],
 		parseFailure[r["Position"] + start - 1, expectedLabel[r["Expected"]], r["Found"]],
 		(* the statement is read, then something that cannot follow it *)
 		With[{at = StringLength[s] - StringLength[Last[r]] + 1},
-			parseFailure[at, "<operator, newline or end of input>", StringTake[s, {at}]]]]]
+			parseFailure[at, "<operator, newline or end of input>", StringTake[s, {at}]]
+		]
+	]
+]
 
 (* where an operand was expected, the alternatives that could begin one are
 	named as that *)
@@ -2373,7 +2617,9 @@ expectedLabel[e_] := e
 parseFailure[pos_Integer, expected_, found_] := Failure["ParseError", <|
 	"MessageTemplate" -> "Parse failed at position `Position`: expected `Expected`, found `Found`.",
 	"MessageParameters" -> <|"Position" -> pos, "Expected" -> expected, "Found" -> found|>,
-	"Position" -> pos, "Expected" -> expected, "Found" -> found|>]
+	"Position" -> pos, "Expected" -> expected, "Found" -> found
+|>
+]
 
 End[]
 

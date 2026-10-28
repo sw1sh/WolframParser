@@ -38,7 +38,8 @@ bfStep["-"] := Function[m, setCell[m, cell[m] - 1]]
 bfStep["."] := Function[m, <|m, "out" -> Append[m["out"], cell[m]]|>]
 bfStep[","] := Function[m, If[m["in"] === {},
 	setCell[m, 0],
-	<|setCell[m, First[m["in"]]], "in" -> Rest[m["in"]]|>]]
+	<|setCell[m, First[m["in"]]], "in" -> Rest[m["in"]]|>
+]]
 
 bfLoop[body_] := Function[m, NestWhile[body, m, cell[#] != 0 &]]
 
@@ -49,7 +50,8 @@ BrainfuckGrammar[alg_] := Module[{junk, tok, simple, loop, item},
 	simple = SpannedToken[ParseRegex["[-><+.,]"], junk, alg["Op"]];
 	loop   = ParseAction[
 		tok @ ParseLiteral["["] ~~ ParseMany[RecRef[item]] ~~ tok @ ParseLiteral["]"],
-		(alg["Loop"][#2]) &];
+		(alg["Loop"][#2]) &
+	];
 	SetRec[item, ParseChoice[simple, loop]];
 	ParseAction[junk ~~ ParseMany[RecRef[item]], (alg["Seq"][#2]) &]
 ]
@@ -70,13 +72,17 @@ $astParser = BrainfuckGrammar[brainfuckAstAlgebra]
 $semParser = BrainfuckGrammar[BrainfuckSemantic]
 
 BrainfuckAST[s_String] := With[{r = Parse[$astParser, s]},
-	If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]]
+	If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]
+]
 
 BrainfuckRun[code_String, input_String : ""] := With[{fn = Parse[$semParser, code]},
 	If[FailureQ[fn], fn,
 		FromCharacterCode @ Lookup[
 			fn[<|"tape" -> <||>, "ptr" -> 0, "in" -> ToCharacterCode[input], "out" -> {}|>],
-			"out"]]]
+			"out"
+		]
+	]
+]
 
 End[]
 
