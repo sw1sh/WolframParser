@@ -2841,16 +2841,29 @@ tokenWarning[codes_List, lexed_List, from_Integer, to_Integer, stop_Integer, t_I
 stringTokenWarnings::usage = "stringTokenWarnings[codes, lexed, from, t] gives the warnings of the escapes of the string of token t, of \
 the statement from token from."
 stringTokenWarnings[codes_List, lexed_List, from_Integer, t_Integer] := With[
-	{string = Take[codes, {tokenStart[lexed, t], Min[tokenEnd[lexed, t] - 1, Length[codes]]}]},
-	If[MemberQ[string, 92],
-		Replace[
-			stringWarnings[FromCharacterCode[string], lexerStatus[lexed] === 3 && t === tokenCount[lexed]],
-			{"sntmsng"} :> {"sntmsng", statementText[codes, lexed, from]},
-			{1}
-		],
-		{}
+	{
+		string = Take[codes, {tokenStart[lexed, t], Min[tokenEnd[lexed, t] - 1, Length[codes]]}],
+		unclosed = lexerStatus[lexed] === 3 && t === tokenCount[lexed]
+	},
+	Which[
+		! MemberQ[string, 92],
+			{},
+		! unclosed && ! tokenEscapeWarnedQ[codes, lexed, t],
+			{},
+		True,
+			Replace[stringWarnings[FromCharacterCode[string], unclosed], {"sntmsng"} :> {"sntmsng", statementText[codes, lexed, from]}, {1}]
 	]
 ]
+
+(* whether the escapes of the closed string of token t warn, as the typed escape scan reads them,
+	which the rules of stringWarnings then name *)
+tokenEscapeWarnedQ::usage = "tokenEscapeWarnedQ[codes, lexed, t] is True where the escapes of the closed string of token t of the \
+lexer's tokens lexed warn."
+tokenEscapeWarnedQ[codes_List, lexed_List, t_Integer] := fastEscapesFunction[
+	Developer`ToPackedArray[codes],
+	Developer`ToPackedArray[{0, 1, $tkString, 0, tokenStart[lexed, t], tokenEnd[lexed, t], 0}],
+	$fastLongOpTable
+] =!= 0
 
 statementText::usage = "statementText[codes, lexed, from] gives the text of the source from token from on."
 statementText[codes_List, lexed_List, from_Integer] := FromCharacterCode @ Drop[codes, tokenStart[lexed, from] - 1]
