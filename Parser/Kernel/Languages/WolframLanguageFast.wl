@@ -1646,36 +1646,42 @@ $fastKeyCodeArray := $fastKeyCodeArray = Developer`ToPackedArray[fastKeyCode /@ 
 (* ::Section:: *)
 (*The build pass*)
 
-fastText[a_Integer, b_Integer] := FromCharacterCode[$fcodes[[a ;; b - 1]]]
+fastText::usage = "fastText[a, b] gives the text of the codes $fcodes from a to the one before b."
+fastText[a_Integer, b_Integer] := FromCharacterCode @ Take[$fcodes, {a, b - 1}]
 
-$fastLeafKinds = <|1 -> "Symbol", 2 -> "Blank", 3 -> "Integer", 4 -> "Real", 5 -> "String", 6 -> "Slot", 7 -> "Out", 8 -> "File", 20 -> "Boxes", 21 -> "Freeform", 100 -> "Tag"|>
+$fastLeafKinds = <|1 -> "Symbol", 2 -> "Blank", 3 -> "Integer", 4 -> "Real", 5 -> "String", 6 -> "Slot", 7 -> "Out", 8 -> "File", 20 -> "Boxes",
+	21 -> "Freeform", 100 -> "Tag"|>
 
-(* the held values of a postfix program, its instructions {code, a, b} one after another, and the
-	kinds, texts and marks of its leaves, those fastLeafData gives: the statements'. A value on the
-	stack is its expression, held, and its mark: 1 a number literal written right after where a
-	minus may stand, into which the minus folds, 0 anything else, a product and a number in
-	parentheses too, as a notebook reads -(2). The values wait in an association by their place on the stack, which a write does not
-	copy, as it does a list of them, and the marks in a packed array. A leaf's value is made once for
-	each kind and text, before the instructions run, as nothing is evaluated while the program is
-	built. The names are Block's,
-	not Module's, which would rewrite the body at every call, and each instruction is the rule of
-	its code, a call or an operator of one or two operands its own rule. *)
-fastBuild[steps_List, kinds_List, texts_List, marks_List] := Block[{vals = <||>, mk = ConstantArray[0, Length[steps] / 3 + 1], sp = 0,
-		heads = <||>, hp = 0, statements = <||>, ns = 0, leafValues = fastLeafValues[kinds, texts], leafMarks = marks,
-		leafIndex = 0, xs, spec},
-	fastStep @@@ Partition[steps, 3];
-	Values[statements]]
+(* The held values of a postfix program, its instructions {code, a, b} one after another, and the
+	kinds, texts and marks of its leaves, those fastLeafData gives: the statements'. Each instruction
+	is a step of a Fold over the state {stack, heads, leaf, statements, leaves, marks}: the stack of
+	values, each held with its mark, 1 a number literal written right after where a minus may stand,
+	into which the minus folds, 0 anything else, a product and a number in parentheses too, as a
+	notebook reads -(2); the heads of the chain of relations being read; how many leaves are read;
+	the statements read; and the values and marks of the leaves. The stack, the heads and the
+	statements are linked lists, {top, below}, so that a step neither copies one nor writes over it.
+	The leaves ride in the state, not in a pure function's body, which Wolfram 15 would walk at
+	every step. A leaf's value is made once for each kind and text, before the instructions run, as
+	nothing is evaluated while the program is built. *)
+fastBuild::usage = "fastBuild[steps, kinds, texts, marks] gives the statements of the postfix program steps, each held, its leaves of the \
+kinds, texts and marks."
+fastBuild[steps_List, kinds_List, texts_List, marks_List] := Reverse @ linkedItems @ builtStatements @ Fold[
+	buildStep,
+	{{}, {}, 0, {}, fastLeafValues[kinds, texts], marks},
+	Partition[steps, 3]
+]
+
+builtStatements::usage = "builtStatements[state] gives the statements of fastBuild's state, a linked list, the last first."
+builtStatements[{_List, _List, _Integer, statements_List, _List, _List}] := statements
 
 (* the values of the leaves of the kinds and texts: up to four each made, where a repeat costs less
 	than looking for one, as nothing is evaluated while the program is built; else each kind and
-	text made once, a statement's few one at a time, more by their distinct pairs *)
-fastLeafValues[kinds_List, texts_List] := Which[
-	Length[texts] <= 4, Table[fastLeafValue[kinds[[i]], texts[[i]]], {i, Length[texts]}],
-	Length[texts] <= 64, Block[{seen = <||>}, Table[fastLeafOnce[kinds[[i]], texts[[i]]], {i, Length[texts]}]],
-	True, With[{keys = Transpose[{kinds, texts}]}, With[{u = DeleteDuplicates[keys]}, Lookup[AssociationThread[u, fastLeafValue @@@ u], keys]]]]
-
-(* a leaf's value, made at its first kind and text among those seen *)
-fastLeafOnce[kind_Integer, text_String] := With[{key = {kind, text}}, If[KeyExistsQ[seen, key], seen[key], seen[key] = fastLeafValue[kind, text]]]
+	text made once *)
+fastLeafValues::usage = "fastLeafValues[kinds, texts] gives the value of each leaf of the kinds and texts, held."
+fastLeafValues[kinds_List, texts_List] /; Length[texts] <= 4 := Table[fastLeafValue[kinds[[i]], texts[[i]]], {i, Length[texts]}]
+fastLeafValues[kinds_List, texts_List] := With[{keys = Transpose[{kinds, texts}]},
+	Lookup[AssociationMap[Apply[fastLeafValue], DeleteDuplicates[keys]], keys]
+]
 
 (* The leaves of a program, its instructions of code 1, in order, by fastLeafCodes: their kinds,
 	their texts, a few one at a time, more cut from the codes in one pass where their tokens come in
@@ -1727,43 +1733,134 @@ fastLeafValue[3 | 4, s_String] := HoldComplete @@ {numberValue[s]}
 fastLeafValue[5, s_String] := HoldComplete @@ {stringValue[s]}
 fastLeafValue[kind_Integer, s_String] := heldLeafValue[$fastLeafKinds[kind], s]
 
-(* an instruction {code, a, b} of the program on the stack of fastBuild, the codes of fastParse's *)
-fastStep[1, _, _] := (sp++; leafIndex++; vals[sp] = leafValues[[leafIndex]]; mk[[sp]] = leafMarks[[leafIndex]])
-fastStep[8, 1, _] := (sp--; vals[sp] = heldCall[vals[sp], {vals[sp + 1]}]; mk[[sp]] = 0)
-fastStep[8, 2, _] := (sp -= 2; vals[sp] = heldCall[vals[sp], {vals[sp + 1], vals[sp + 2]}]; mk[[sp]] = 0)
-fastStep[8, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = heldCall[vals[sp], xs]; mk[[sp]] = 0)
-fastStep[4, a_, _] := (sp--; fastBinary[a, vals[sp + 1]])
-fastStep[25, _, _] := (ns++; statements[ns] = vals[sp]; sp--)
-fastStep[5, a_, 2] := (sp--; vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp], vals[sp + 1]}]; mk[[sp]] = 0)
-fastStep[5, a_, b_] := (xs = Lookup[vals, Range[sp - b + 1, sp]]; sp -= b - 1; vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], xs]; mk[[sp]] = 0)
-fastStep[9, a_, b_] := If[ a === $fastParenHead, mk[[sp]] = 0,
-	xs = Lookup[vals, Range[sp - b + 1, sp]]; sp -= b - 1; vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], xs]; mk[[sp]] = 0]
-fastStep[19, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = symbolCall["CompoundExpression", xs]; mk[[sp]] = 0)
-fastStep[2, a_, _] := (vals[sp] = If[a === $fastMinusHead, negatedHeld[vals[sp], mk[[sp]]], heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp]}]]; mk[[sp]] = 0)
-fastStep[3, a_, _] := (vals[sp] = heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp]}]; mk[[sp]] = 0)
-fastStep[23, _, _] := (sp--; vals[sp] = symbolCall["Pattern", {vals[sp], vals[sp + 1]}]; mk[[sp]] = 0)
-fastStep[11, _, _] := (sp++; vals[sp] = heldSymbol["Null"]; mk[[sp]] = 0)
-fastStep[14, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = symbolCall["MessageName", xs]; mk[[sp]] = 0)
-fastStep[6, a_, _] := (hp++; heads[hp] = a)
-fastStep[7, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1;
-	vals[sp] = relationHeld[xs, $fastHeadNames[[Lookup[heads, Range[hp - a + 2, hp]]]]]; mk[[sp]] = 0; hp -= a - 1)
-fastStep[10, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = symbolCall["Part", Prepend[xs, vals[sp]]]; mk[[sp]] = 0)
-fastStep[12, _, _] := (sp++; vals[sp] = heldSymbol["All"]; mk[[sp]] = 0)
-fastStep[13, _, _] := (sp++; vals[sp] = HoldComplete[1]; mk[[sp]] = 1)
-fastStep[15, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a; vals[sp] = heldCall[symbolCall["TypeSpecifier", {vals[sp]}], xs]; mk[[sp]] = 0)
-fastStep[16, a_, _] := (vals[sp] = heldCall[symbolCall["Derivative", {HoldComplete @@ {a}}], {vals[sp]}]; mk[[sp]] = 0)
-fastStep[17, _, _] := (sp -= 2; vals[sp] = heldCall[vals[sp + 1], {vals[sp], vals[sp + 2]}]; mk[[sp]] = 0)
-fastStep[18, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = symbolCall["Span", xs]; mk[[sp]] = 0)
-fastStep[20, 3, _] := (sp--; vals[sp] = symbolCall["TagUnset", {vals[sp], vals[sp + 1]}]; mk[[sp]] = 0)
-fastStep[20, a_, _] := (sp -= 2; vals[sp] = symbolCall[If[a === 1, "TagSetDelayed", "TagSet"], {vals[sp], vals[sp + 1], vals[sp + 2]}]; mk[[sp]] = 0)
-fastStep[21, a_, _] := (sp--; vals[sp] = binaryHeld[$fastHeadNames[[a]], vals[sp], vals[sp + 1]]; mk[[sp]] = 0)
-fastStep[22, _, _] := (vals[sp] = symbolCall["Get", {vals[sp]}]; mk[[sp]] = 0)
-fastStep[24, a_, b_] := (vals[sp] = integralHeld[SymbolName[$fastIntegralList[[a, 2]]], vals[sp], b]; mk[[sp]] = 0)
-fastStep[26, a_, _] := (xs = Lookup[vals, Range[sp - a + 1, sp]]; sp -= a - 1; vals[sp] = symbolCall["Divisible", Reverse[xs]]; mk[[sp]] = 0)
-fastStep[27, _, _] := (vals[sp] = symbolCall["Not", {symbolCall["Not", {vals[sp]}]}]; mk[[sp]] = 0)
-fastStep[28, a_, b_] := (sp++; vals[sp] = heldLeafValue["String", "\"" <> StringReplace[fastText[a, b], "\t" -> " "] <> "\""]; mk[[sp]] = 0)
-fastStep[29, a_, _] := (vals[sp] = symbolCall["Information", {vals[sp], symbolCall["Rule", {heldSymbol["LongForm"], heldSymbol[If[a === 1, "True", "False"]]}]}];
-	mk[[sp]] = 0)
+(* One instruction {code, a, b} of the program, a step of fastBuild's Fold over its state {stack,
+	heads, leaf, statements}, the codes of fastParse's: 1 reads the next leaf, 25 ends a statement, 6
+	reads the head of a relation of a chain and 7 the chain; every other code is a step of the stack
+	alone. *)
+buildStep::usage = "buildStep[{stack, heads, leaf, statements, leaves, marks}, {code, a, b}] gives the state after the instruction, the \
+values of the leaves and their marks the leaves and marks."
+buildStep[{stack_List, heads_List, leaf_Integer, statements_List, leaves_List, marks_List}, {1, _Integer, _Integer}] :=
+	{pushed[stack, leaves[[leaf + 1]], marks[[leaf + 1]]], heads, leaf + 1, statements, leaves, marks}
+buildStep[{stack_List, heads_List, leaf_Integer, statements_List, leaves_List, marks_List}, {25, _Integer, _Integer}] :=
+	{Last[stack], heads, leaf, {topValue[stack], statements}, leaves, marks}
+buildStep[{stack_List, heads_List, leaf_Integer, statements_List, leaves_List, marks_List}, {6, a_Integer, _Integer}] :=
+	{stack, {a, heads}, leaf, statements, leaves, marks}
+buildStep[{stack_List, heads_List, leaf_Integer, statements_List, leaves_List, marks_List}, {7, a_Integer, _Integer}] := With[
+	{chain = linkedTop[heads, a - 1]},
+	{relationPushed[popped[stack, a], First[chain]], Last[chain], leaf, statements, leaves, marks}
+]
+buildStep[{stack_List, heads_List, leaf_Integer, statements_List, leaves_List, marks_List}, {code_Integer, a_Integer, b_Integer}] :=
+	{stackStep[code, a, b, stack], heads, leaf, statements, leaves, marks}
+
+(* The stack is a linked list of cells {{value, mark}, below}, {} when empty. *)
+pushed::usage = "pushed[stack, value, mark] gives the stack with the value and its mark on top."
+pushed[stack_List, value_, mark_Integer] := {{value, mark}, stack}
+
+topValue::usage = "topValue[stack] gives the value on top of the stack."
+topValue[{{value_, _Integer}, _List}] := value
+
+topMark::usage = "topMark[stack] gives the mark of the value on top of the stack."
+topMark[{{_, mark_Integer}, _List}] := mark
+
+replacedTop::usage = "replacedTop[stack, value] gives the stack with the value on top in place of the one there, its mark 0."
+replacedTop[{_List, below_List}, value_] := {{value, 0}, below}
+
+linkedTop::usage = "linkedTop[list, n] gives {the first n items of the linked list, in the order they were put on, the list after them}."
+linkedTop[list_List, n_Integer] := With[{cells = NestList[Last, list, n]}, {Reverse[First /@ Most[cells]], Last[cells]}]
+
+popped::usage = "popped[stack, n] gives {the n values on top of the stack, in the order they were pushed, the stack below them}."
+popped[stack_List, n_Integer] := With[{top = linkedTop[stack, n]}, {First /@ First[top], Last[top]}]
+
+(* The step of the stack of each code but 1, 25, 6 and 7. A call, an operator and a bracket replace
+	the values they take with their value, its mark 0. *)
+stackStep::usage = "stackStep[code, a, b, stack] gives the stack after the instruction {code, a, b}."
+(* the call of the value below a arguments *)
+stackStep[8, a_Integer, _Integer, stack_List] := calledPushed[popped[stack, a]]
+(* a binary operator of head a; f @ x and x // f are calls, a/b a Divide *)
+stackStep[4, a_Integer, _Integer, {{y_, _Integer}, {{x_, _Integer}, below_List}}] := pushed[below, binaryValue[a, x, y], 0]
+(* the call of head a of the b values on top *)
+stackStep[5, a_Integer, b_Integer, stack_List] := headPushed[a, popped[stack, b]]
+(* a bracket of head a of b values; a parenthesis the value in it, its mark 0 *)
+stackStep[9, a_Integer, b_Integer, stack_List] := If[a === $fastParenHead, replacedTop[stack, topValue[stack]], headPushed[a, popped[stack, b]]]
+stackStep[19, a_Integer, _Integer, stack_List] := symbolPushed["CompoundExpression", popped[stack, a]]
+(* a prefix operator of head a; a minus folds into a number literal *)
+stackStep[2, a_Integer, _Integer, stack_List] := replacedTop[stack, prefixValue[a, topValue[stack], topMark[stack]]]
+(* a postfix operator of head a *)
+stackStep[3, a_Integer, _Integer, stack_List] := replacedTop[stack, headValue[a, {topValue[stack]}]]
+stackStep[23, _Integer, _Integer, {{y_, _Integer}, {{x_, _Integer}, below_List}}] := pushed[below, symbolCall["Pattern", {x, y}], 0]
+stackStep[11, _Integer, _Integer, stack_List] := pushed[stack, heldSymbol["Null"], 0]
+stackStep[14, a_Integer, _Integer, stack_List] := symbolPushed["MessageName", popped[stack, a]]
+(* the a parts of the value below them *)
+stackStep[10, a_Integer, _Integer, stack_List] := partPushed[popped[stack, a]]
+stackStep[12, _Integer, _Integer, stack_List] := pushed[stack, heldSymbol["All"], 0]
+(* the 1 an increment or a decrement leaves, a number literal *)
+stackStep[13, _Integer, _Integer, stack_List] := pushed[stack, HoldComplete[1], 1]
+(* the type specifier of the value below a arguments *)
+stackStep[15, a_Integer, _Integer, stack_List] := typedPushed[popped[stack, a]]
+stackStep[16, a_Integer, _Integer, stack_List] := replacedTop[stack, heldCall[symbolCall["Derivative", {HoldComplete @@ {a}}], {topValue[stack]}]]
+(* x ~ f ~ y, the call of f *)
+stackStep[17, _Integer, _Integer, {{y_, _Integer}, {{f_, _Integer}, {{x_, _Integer}, below_List}}}] := pushed[below, heldCall[f, {x, y}], 0]
+stackStep[18, a_Integer, _Integer, stack_List] := symbolPushed["Span", popped[stack, a]]
+(* t /: lhs =., or t /: lhs := rhs for a 1, t /: lhs = rhs else *)
+stackStep[20, a_Integer, _Integer, stack_List] := Switch[a,
+	3,
+		symbolPushed["TagUnset", popped[stack, 2]],
+	1,
+		symbolPushed["TagSetDelayed", popped[stack, 3]],
+	_,
+		symbolPushed["TagSet", popped[stack, 3]]
+]
+stackStep[21, a_Integer, _Integer, {{y_, _Integer}, {{x_, _Integer}, below_List}}] := pushed[below, binaryHeld[$fastHeadNames[[a]], x, y], 0]
+stackStep[22, _Integer, _Integer, stack_List] := replacedTop[stack, symbolCall["Get", {topValue[stack]}]]
+stackStep[24, a_Integer, b_Integer, stack_List] := replacedTop[stack, integralHeld[SymbolName[$fastIntegralList[[a, 2]]], topValue[stack], b]]
+stackStep[26, a_Integer, _Integer, stack_List] := divisiblePushed[popped[stack, a]]
+stackStep[27, _Integer, _Integer, stack_List] := replacedTop[stack, symbolCall["Not", {symbolCall["Not", {topValue[stack]}]}]]
+(* free-form input's text, a string, its tabs spaces *)
+stackStep[28, a_Integer, b_Integer, stack_List] := pushed[stack, heldLeafValue["String", "\"" <> StringReplace[fastText[a, b], "\t" -> " "] <> "\""], 0]
+(* a query: ? for a 1, ?? else *)
+stackStep[29, a_Integer, _Integer, stack_List] := replacedTop[
+	stack,
+	symbolCall["Information", {topValue[stack], symbolCall["Rule", {heldSymbol["LongForm"], heldSymbol[If[a === 1, "True", "False"]]}]}]
+]
+
+headValue::usage = "headValue[a, values] gives the call of the head of code a of the values, held."
+headValue[a_Integer, values_List] := heldCall[heldSymbol[$fastHeadNames[[a]]], values]
+
+prefixValue::usage = "prefixValue[a, value, mark] gives the prefix operator of head a of the value, a minus folded into a number literal, \
+of mark 1."
+prefixValue[a_Integer, value_, mark_Integer] := If[a === $fastMinusHead, negatedHeld[value, mark], headValue[a, {value}]]
+
+(* the binary operator of code 4 of head a: f @ x the call of f; x // f the call of f; a/b
+	Times[a, Power[b, -1]]; the rest the call of its head *)
+binaryValue::usage = "binaryValue[a, x, y] gives the binary operator of head a of x and y, held."
+binaryValue[a_Integer, x_, y_] := Which[
+	a === $fastAtHead,
+		heldCall[x, {y}],
+	a === $fastSlashSlashHead,
+		heldCall[y, {x}],
+	a === $fastDivideHead,
+		binaryHeld["Divide", x, y],
+	True,
+		headValue[a, {x, y}]
+]
+
+calledPushed::usage = "calledPushed[{values, stack}] gives the stack with the call of the value on its top of the values in place of it."
+calledPushed[{values_List, stack_List}] := replacedTop[stack, heldCall[topValue[stack], values]]
+
+headPushed::usage = "headPushed[a, {values, stack}] gives the stack with the call of head a of the values on top."
+headPushed[a_Integer, {values_List, stack_List}] := pushed[stack, headValue[a, values], 0]
+
+symbolPushed::usage = "symbolPushed[name, {values, stack}] gives the stack with the call of the System` symbol name of the values on top."
+symbolPushed[name_String, {values_List, stack_List}] := pushed[stack, symbolCall[name, values], 0]
+
+partPushed::usage = "partPushed[{parts, stack}] gives the stack with the value on its top taken at the parts."
+partPushed[{parts_List, stack_List}] := replacedTop[stack, symbolCall["Part", Prepend[parts, topValue[stack]]]]
+
+typedPushed::usage = "typedPushed[{values, stack}] gives the stack with the type specifier of the value on its top called on the values."
+typedPushed[{values_List, stack_List}] := replacedTop[stack, heldCall[symbolCall["TypeSpecifier", {topValue[stack]}], values]]
+
+divisiblePushed::usage = "divisiblePushed[{values, stack}] gives the stack with the Divisible of the values, the last first, on top."
+divisiblePushed[{values_List, stack_List}] := pushed[stack, symbolCall["Divisible", Reverse[values]], 0]
 
 (* the head codes the build pass reads apart *)
 $fastMinusHead := $fastMinusHead = fastHeadCode["Minus"]
@@ -1772,18 +1869,15 @@ $fastAtHead := $fastAtHead = fastHeadCode["At"]
 $fastSlashSlashHead := $fastSlashSlashHead = fastHeadCode["SlashSlash"]
 $fastDivideHead := $fastDivideHead = fastHeadCode["Divide"]
 
-(* the binary operator of code 4 on the value at the top and y: f @ x the call of f; x // f the call
-	of f; a/b Times[a, Power[b, -1]]; the rest the call of its head *)
-fastBinary[a_Integer, y_] := (vals[sp] = Which[
-	a === $fastAtHead, heldCall[vals[sp], {y}],
-	a === $fastSlashSlashHead, heldCall[y, {vals[sp]}],
-	a === $fastDivideHead, binaryHeld["Divide", vals[sp], y],
-	True, heldCall[heldSymbol[$fastHeadNames[[a]]], {vals[sp], y}]]; mk[[sp]] = 0)
-
 (* a chain of relations: of one kind, not a vector one, the call of its head; else as the held
 	algebra reads it *)
-relationHeld[xs_List, {h_String ..}] /; ! KeyExistsQ[$vectorRelations, h] := symbolCall[h, xs]
-relationHeld[xs_List, heads_List] := relationValue[WolframLanguageSemantic, held /@ xs, heads]["Expr"]
+relationPushed::usage = "relationPushed[{values, stack}, heads] gives the stack with the chain of relations of the head codes heads of the \
+values on top."
+relationPushed[{values_List, stack_List}, heads_List] := pushed[stack, relationHeld[values, $fastHeadNames[[heads]]], 0]
+
+relationHeld::usage = "relationHeld[values, heads] gives the chain of relations of the heads of the values, held."
+relationHeld[values_List, {head_String ..}] /; !KeyExistsQ[$vectorRelations, head] := symbolCall[head, values]
+relationHeld[values_List, heads_List] := relationValue[WolframLanguageSemantic, held /@ values, heads]["Expr"]
 
 
 (* ::Section:: *)
