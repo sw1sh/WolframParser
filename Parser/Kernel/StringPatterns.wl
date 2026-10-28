@@ -708,7 +708,7 @@ matchesAt["Overlapping", programs_List, z_subject, i_Integer] := (
 (* every way: a match is sown where the program ends and taken for none there, so that its parts
 	try their next ways *)
 matchesAt["All", programs_List, z_subject, i_Integer] := (
-	Do[With[{k = k}, matched[Extract[programs, k], z, i, <||>, Function[{j, b}, Sow[{i, j, k, b}, matchesAt]; $noMatch]]], {k, Length[programs]}];
+	Scan[Function[k, matched[Extract[programs, k], z, i, <||>, Function[{j, b}, Sow[{i, j, k, b}, matchesAt]; $noMatch]]], Range[Length[programs]]];
 	i + 1
 )
 
@@ -759,23 +759,33 @@ vmBytecode[programs_List] := Lookup[$vmBytecodes, Key[programs],
 $vmBytecodes = <||>
 
 bytecodeOf[programs_List] := Block[
-	{$ins = <||>, $pc = 0, $pool = {}, $specs = {}, $specIndex = <||>, $tests = {}, $conditions = {}, $registers = 0, $nameIndex = <||>, $foldTable = 0,
-	table = {}, allNames = {}, maxNames = 0, registers = 1},
-	Do[
-		With[{p = programs[[k]], names = programNames[programs[[k]]]},
-			$nameIndex = AssociationThread[Keys[names] -> Range[Length[names]]];
-			$registers = 3 Length[names];
-			With[{entry = $pc},
-				generate[p]; vmEmit[8];
-				AppendTo[table, {entry, Length[names], If[nullableQ[p], 0, Replace[firstSpec[p], {None -> 0, spec_ :> vmClassIndex[spec]}]], 0}]];
-			maxNames = Max[maxNames, Length[names]]; registers = Max[registers, $registers];
-			AppendTo[allNames, names]],
-		{k, Length[programs]}];
-	With[{tableAt = vmPoolAdd[Flatten[table]]},
-		With[{bc = <|"Code" -> Developer`ToPackedArray[Flatten[Values[$ins]]], "Pool" -> Developer`ToPackedArray[Join[$pool, {0}]], "Specs" -> $specs,
-				"Tests" -> $tests, "Conditions" -> $conditions, "Table" -> tableAt, "MaxNames" -> maxNames, "Registers" -> registers,
-				"Names" -> allNames, "Sides" -> Map[nameSides, allNames]|>},
-			If[$tests === {}, Append[bc, "Classes" -> specsClasses[$specs]], bc]]]]
+	{$ins = <||>, $pc = 0, $pool = {}, $specs = {}, $specIndex = <||>, $tests = {}, $conditions = {}, $registers = 0, $nameIndex = <||>, $foldTable = 0},
+	bytecodeAssembled[Map[programCode, programs]]
+]
+
+(* a program's code, at the next place of the bytecode being made: {its row of the table, its names,
+	the registers it needs} *)
+programCode::usage = "programCode[p] gives {the row of the table of the program p, its names, the registers it needs}, its code made at \
+the next place of the bytecode being made."
+programCode[p_] := With[{names = programNames[p]},
+	$nameIndex = AssociationThread[Keys[names] -> Range[Length[names]]];
+	$registers = 3 Length[names];
+	With[{entry = $pc},
+		generate[p]; vmEmit[8];
+		{{entry, Length[names], If[nullableQ[p], 0, Replace[firstSpec[p], {None -> 0, spec_ :> vmClassIndex[spec]}]], 0}, names, $registers}
+	]
+]
+
+(* the bytecode made, of the programs' codes, each {its row of the table, its names, its registers} *)
+bytecodeAssembled::usage = "bytecodeAssembled[codes] gives the bytecode made, of the programs' codes, each {its row of the table, its names, its \
+registers}."
+bytecodeAssembled[codes_List] := With[{tableAt = vmPoolAdd[Flatten[codes[[All, 1]]]], allNames = codes[[All, 2]]},
+	With[{bc = <|"Code" -> Developer`ToPackedArray[Flatten[Values[$ins]]], "Pool" -> Developer`ToPackedArray[Join[$pool, {0}]], "Specs" -> $specs,
+			"Tests" -> $tests, "Conditions" -> $conditions, "Table" -> tableAt, "MaxNames" -> Max[0, Length /@ allNames], "Registers" -> Max[1, codes[[All, 3]]],
+			"Names" -> allNames, "Sides" -> Map[nameSides, allNames]|>},
+		If[$tests === {}, Append[bc, "Classes" -> specsClasses[$specs]], bc]
+	]
+]
 
 (* the assembler, on the bytecode being made: an instruction, at the next position, so that the
 	instructions are in the order of their positions; an operand set later, constants, a class's index *)
@@ -794,14 +804,17 @@ generate[characterClass[codeIn[spec_]]] := vmEmit[3, vmClassIndex[spec]]
 generate[sequence[parts_List]] := Scan[generate, parts]
 generate[alternatives[{}]] := vmEmit[7]
 generate[alternatives[{p_}]] := generate[p]
-generate[alternatives[parts_List]] := Module[{jumps = {}, split},
-	Do[ If[ j < Length[parts],
-			split = vmEmit[5]; vmOperand[split, 1, $pc];
-			generate[parts[[j]]]; AppendTo[jumps, vmEmit[6]];
-			vmOperand[split, 2, $pc],
-			generate[parts[[j]]]],
-		{j, Length[parts]}];
+generate[alternatives[parts_List]] := With[{jumps = Map[alternativeBranch, Most[parts]]},
+	generate[Last[parts]];
 	Scan[vmOperand[#, 1, $pc] &, jumps]]
+(* a branch of alternatives but the last: a split to it and to the next branch, its code, and a jump
+	past the last branch, whose place it gives *)
+alternativeBranch::usage = "alternativeBranch[p] gives the place of the jump past the last branch after the code of the branch p of \
+alternatives, a split to it and to the next branch before it."
+alternativeBranch[p_] := With[{split = vmEmit[5]},
+	vmOperand[split, 1, $pc];
+	generate[p];
+	With[{jump = vmEmit[6]}, vmOperand[split, 2, $pc]; jump]]
 generate[repeat[p : _characterClass | literal[{_}], min_, max_, longest_]] :=
 	vmEmit[4, vmClassIndex[classSpec[p]], min, If[max === Infinity, -1, max], Boole[longest]]
 generate[repeat[p : captured[n_, ___], min_, max_, longest_]] := With[{check = vmEmit[25, vmNameBase[group[n]], min]},
@@ -846,9 +859,8 @@ generate[atomic[p_]] := assertionCode[5, p]
 (* the class of the characters a match of a program may begin with, or None if any *)
 firstSpec[literal[{c_, ___}]] := {"Codes", {c}}
 firstSpec[characterClass[codeIn[spec_]]] := spec
-firstSpec[sequence[parts_List]] := Module[{specs = {}, done = False},
-	Do[If[! done, With[{f = firstSpec[part]}, If[f === None, Return[None, Module]]; AppendTo[specs, f]; If[! nullableQ[part], done = True]]], {part, parts}];
-	If[done, unionSpec[specs], None]]
+firstSpec[sequence[parts_List]] := With[{upTo = LengthWhile[parts, nullableQ] + 1},
+	If[upTo > Length[parts], None, With[{specs = firstSpec /@ Take[parts, upTo]}, If[MemberQ[specs, None], None, unionSpec[specs]]]]]
 firstSpec[alternatives[parts_List]] := With[{fs = firstSpec /@ parts}, If[parts === {} || MemberQ[fs, None], None, unionSpec[fs]]]
 firstSpec[repeat[p_, min_, _, _]] := If[min === 0, None, firstSpec[p]]
 firstSpec[(named | builtIn)[_, p_]] := firstSpec[p]
@@ -900,20 +912,41 @@ $vmModes = <|"First" -> 1, "Each" -> 2, "Overlapping" -> 3, "All" -> 4|>
 (* The matches of the programs in s by the typed matcher, {bytecode, records}, the records each
 	{start, end, k, then the start and end of each name} in a packed array: each condition the
 	matcher stops at evaluated here, the matcher then called again from its state. *)
-vmRecords[s_String, programs_List, mode_String] := Module[{bc = vmBytecode[programs], codes = Developer`ToPackedArray[ToCharacterCode[s]], classes, params, out, state = {}, records = {},
-		z, width, rest, condition, k, spans, st, maxNames},
-	z = subject[codes, Length[codes], s]; classes = vmClasses[bc, codes]; maxNames = bc["MaxNames"];
-	params = Developer`ToPackedArray[{$vmModes[mode], 0, Length[programs], maxNames, bc["Registers"], bc["Table"]}];
-	While[ True,
-		out = vmFunction[bc["Code"], bc["Pool"], classes, codes, params, Developer`ToPackedArray[state]];
-		width = out[[3]];
-		records = If[records === {}, Partition[out[[4 ;; 3 + out[[2]] width]], width], Join[records, Partition[out[[4 ;; 3 + out[[2]] width]], width]]];
-		If[out[[1]] =!= 2, Break[]];
-		rest = Drop[out, 3 + out[[2]] width];
-		condition = rest[[1]]; k = rest[[2]]; spans = Partition[rest[[3 ;; 2 + 2 maxNames]], 2];
-		st = rest[[4 + 2 maxNames ;; 3 + 2 maxNames + rest[[3 + 2 maxNames]]]];
-		state = Append[st, Boole[TrueQ[conditionValue[bc, k, condition, spans, z]]]]];
-	{bc, Developer`ToPackedArray[records]}]
+vmRecords[s_String, programs_List, mode_String] := With[{bc = vmBytecode[programs], codes = Developer`ToPackedArray[ToCharacterCode[s]]},
+	{bc, Developer`ToPackedArray[matcherRecords[NestWhile[
+		matcherRun,
+		{bc, vmClasses[bc, codes], codes, Developer`ToPackedArray[{$vmModes[mode], 0, Length[programs], bc["MaxNames"], bc["Registers"], bc["Table"]}],
+			subject[codes, Length[codes], s], {}, {}, True},
+		matcherGoesOnQ
+	]]]}
+]
+
+(* A run of the typed matcher from the state {bytecode, classes, codes, params, subject, matcher's
+	state, records, going on}: its records taken, and where it stops at a condition, the condition's
+	value put in the matcher's state it gives, to go on from. *)
+matcherRun::usage = "matcherRun[state] gives the state after a run of the typed matcher from the state's matcher state: its records taken, and \
+where it stops at a condition, the matcher's state to go on from with the condition's value."
+matcherRun[{bc_Association, classes_, codes_List, params_List, z_subject, vmState_List, records_List, True}] := With[
+	{out = vmFunction[bc["Code"], bc["Pool"], classes, codes, params, Developer`ToPackedArray[vmState]]},
+	matcherRunEnd[{bc, classes, codes, params, z, vmState, Join[records, Partition[out[[4 ;; 3 + out[[2]] out[[3]]]], out[[3]]]], True}, out]
+]
+
+matcherRunEnd::usage = "matcherRunEnd[state, out] gives the state after the matcher's run out: done where it did not stop at a condition, else \
+the matcher's state to go on from, the condition's value put in it."
+matcherRunEnd[{bc_, classes_, codes_, params_, z_, vmState_, records_, True}, out_List] /; out[[1]] =!= 2 := {bc, classes, codes, params, z, vmState, records, False}
+matcherRunEnd[{bc_, classes_, codes_, params_, z_, _, records_, True}, out_List] := With[
+	{rest = Drop[out, 3 + out[[2]] out[[3]]], maxNames = bc["MaxNames"]},
+	{bc, classes, codes, params, z,
+		Append[rest[[4 + 2 maxNames ;; 3 + 2 maxNames + rest[[3 + 2 maxNames]]]],
+			Boole[TrueQ[conditionValue[bc, rest[[2]], rest[[1]], Partition[rest[[3 ;; 2 + 2 maxNames]], 2], z]]]],
+		records, True}
+]
+
+matcherGoesOnQ::usage = "matcherGoesOnQ[state] is True where the matcher's runs go on from the state."
+matcherGoesOnQ[state_List] := Last[state]
+
+matcherRecords::usage = "matcherRecords[state] gives the records of the matcher's runs that ended in the state."
+matcherRecords[{_, _, _, _, _, _, records_List, False}] := records
 
 (* the matches of the programs in s by the typed matcher, as programMatches gives them, each
 	name's rule made from its record *)
