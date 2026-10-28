@@ -958,6 +958,30 @@ VerificationTest[
      WolframLanguageHeld /@ {"x >> b[c]", "x >> b[c].m", "<<b[c"}},
     {{{False, False}, {False, False}, {False, False}}, {{HoldComplete[Put[x, "b[c]"]]}, {HoldComplete[Put[x, "b[c].m"]]}, {HoldComplete[Get["b[c"]]}}},
     TestID -> "wl: after >> a file's [ is closed, as a notebook reads x >> b[c; a string not closed after :: runs to the end"]
+(* a query that begins its statement reads as Wolfram 15's kernel reads it, which a notebook answers
+   itself: after a name's letter the words, to an operator, an operator that is a prefix one too
+   beginning a factor after them; after anything else the rest of the line *)
+VerificationTest[
+    WolframLanguageHeld /@ {"?*)a", "?<<a", "?}a", "?@@%3", "?*a b+c", "?`a+b", "?  [a", "?*a ", "?a+b", "?a-b", "?a b+c", "?$a+b", "?a*=b", "?a//b"},
+    List /@ {HoldComplete[Information["*)a", Rule[LongForm, False]]],
+        HoldComplete[Information["<<a", Rule[LongForm, False]]],
+        HoldComplete[Information["}a", Rule[LongForm, False]]],
+        HoldComplete[Information["@@%3", Rule[LongForm, False]]],
+        HoldComplete[Information["*a b+c", Rule[LongForm, False]]],
+        HoldComplete[Information["`a+b", Rule[LongForm, False]]],
+        HoldComplete[Information["[a", Rule[LongForm, False]]],
+        HoldComplete[Information["*a", Rule[LongForm, False]]],
+        HoldComplete[Times[Information["a", Rule[LongForm, False]], Plus[b]]],
+        HoldComplete[Times[Information["a", Rule[LongForm, False]], Times[-1, b]]],
+        HoldComplete[Times[Information["a b", Rule[LongForm, False]], Plus[c]]],
+        HoldComplete[Times[Information["$a", Rule[LongForm, False]], Plus[b]]],
+        HoldComplete[Set[Information["a*", Rule[LongForm, False]], b]],
+        HoldComplete[b[Information["a", Rule[LongForm, False]]]]},
+    TestID -> "wl query: one that begins its statement reads as Wolfram 15's kernel reads it"]
+VerificationTest[
+    {WolframLanguageSyntaxQ["?a!"], WolframLanguageHeld /@ {"16^^ff..", "16^^ff..;;", "16^^ff.f", "16^^ff."}},
+    {False, {{HoldComplete[Repeated[255]]}, {HoldComplete[Span[Repeated[255], All]]}, {HoldComplete[255.9375]}, {HoldComplete[255.]}}},
+    TestID -> "wl: a factorial after a query that begins its statement is none; a based number's point is not before another"]
 VerificationTest[
     WolframLanguageSyntaxQ /@ {"f[??a b]", "f[?a*]", "a?b?c", "a ? b ? c", "(a?b)?c"},
     {False, False, False, False, True},

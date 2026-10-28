@@ -421,7 +421,8 @@ $lexNumberDeclaration = FunctionDeclaration[lexNumber,
                         While[m < j, If[a <= 36, a = 10 a + nmCodes[[m]] - 48]; m++];
                         j += 2;
                         While[j <= nmN && ((48 <= nmCodes[[j]] <= 57) || (65 <= nmCodes[[j]] <= 90) || (97 <= nmCodes[[j]] <= 122)), j++];
-                        If[ j <= nmN && nmCodes[[j]] == 46,
+                        (* a point, not before another, as a notebook reads 16^^ff.. as Repeated[255] *)
+                        If[ j <= nmN && nmCodes[[j]] == 46 && ! (j + 1 <= nmN && nmCodes[[j + 1]] == 46),
                             j++; While[j <= nmN && ((48 <= nmCodes[[j]] <= 57) || (65 <= nmCodes[[j]] <= 90) || (97 <= nmCodes[[j]] <= 122)), j++]];
                         If[a < 2 || a > 36, status = 1];
                         m = nmAt;
@@ -726,7 +727,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
         Native`UncheckedBlock[Module[{n = pTok[[2]], out, fr, maxFrames, sp = 0, on = 0, t = 1, brackets = 0, status = 0, mode = 0,
                 pMin = 0, pRbp = 0, pPlain = 0, base = 0, k = 0, o = 0, i = 0, bp = 0, fx = 0, hd = 0, ky = 0, mn = 0, rb = 0, pl = 0,
                 ft = 0, cnt = 0, bt = 0, colons = 0, ok = 0, x = 0, lg = 0, e = 0, we = 0, c = 0, cl = 0, tt = 0, far = 0, stmt = 1, se = 0,
-                nls, ps = 0, ol = 0, pe = 0, nst = 0, q = 0, nf = 0, kk = 0, trail = 0, need = 0},
+                nls, ps = 0, ol = 0, pe = 0, nst = 0, q = 0, nf = 0, kk = 0, trail = 0, need = 0, wq = 0},
             out = Native`UncheckedArray[0, 3 (8 n + 16) + 2];
             maxFrames = 4 n + 64;
             fr = Native`UncheckedArray[0, 8 maxFrames];
@@ -821,27 +822,33 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                     If[ pTok[[5 t - 2]] != 5 || pTok[[5 t]] != e, mode = 5,
                                         on++; out[[3 on]] = 1; out[[3 on + 1]] = 5; out[[3 on + 2]] = t; t++;
                                         on++; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; mode = 3],
+                                    (* words after a name's letter, to an operator; after anything else, as Wolfram 15's
+                                       kernel reads ?[a and ?@@%3, the rest of the line, its spaces at the end left out *)
                                     x = e; we = e; ok = 1; tt = t;
-                                    While[ ok == 1,
-                                        c = pCodes[[x]]; cl = If[c > 65535, 5, pClasses[[c + 1]]];
-                                        Which[
-                                            cl == 1 || cl == 2 || cl == 5 || c == 42 || c == 64, x++; we = x,
-                                            (* a letter's long name, in a name's token *)
-                                            c == 92,
-                                                While[tt < pTok[[2]] && pTok[[5 tt + 1]] <= x, tt++];
-                                                If[ pTok[[5 tt - 2]] == 1 && pTok[[5 tt]] <= x && pCodes[[x + 1]] == 91,
-                                                    x += 2;
-                                                    While[(48 <= pCodes[[x]] && pCodes[[x]] <= 57) || (65 <= pCodes[[x]] && pCodes[[x]] <= 90) || (97 <= pCodes[[x]] && pCodes[[x]] <= 122), x++];
-                                                    If[pCodes[[x]] == 93, x++; we = x, ok = 0],
-                                                    ok = 0],
-                                            c == 32 || c == 9, x++,
-                                            True, ok = 0]];
+                                    c = pCodes[[e]]; cl = If[c > 65535, 5, pClasses[[c + 1]]];
+                                    If[ (cl == 1 && c != 96) || cl == 5 || (c == 92 && pTok[[5 t]] == e && (pTok[[5 t - 2]] == 1 || pTok[[5 t - 2]] == 2)),
+                                        While[ ok == 1,
+                                            c = pCodes[[x]]; cl = If[c > 65535, 5, pClasses[[c + 1]]];
+                                            Which[
+                                                cl == 1 || cl == 2 || cl == 5 || c == 42 || c == 64, x++; we = x,
+                                                (* a letter's long name, in a name's token *)
+                                                c == 92,
+                                                    While[tt < pTok[[2]] && pTok[[5 tt + 1]] <= x, tt++];
+                                                    If[ pTok[[5 tt - 2]] == 1 && pTok[[5 tt]] <= x && pCodes[[x + 1]] == 91,
+                                                        x += 2;
+                                                        While[(48 <= pCodes[[x]] && pCodes[[x]] <= 57) || (65 <= pCodes[[x]] && pCodes[[x]] <= 90) || (97 <= pCodes[[x]] && pCodes[[x]] <= 122), x++];
+                                                        If[pCodes[[x]] == 93, x++; we = x, ok = 0],
+                                                        ok = 0],
+                                                c == 32 || c == 9, x++,
+                                                True, ok = 0]],
+                                        While[pCodes[[we]] != 0 && pCodes[[we]] != 10 && pCodes[[we]] != 13, we++];
+                                        While[we > e && (pCodes[[we - 1]] == 32 || pCodes[[we - 1]] == 9), we--]];
                                     If[ we == e, mode = 5,
                                         While[pTok[[5 t - 2]] != 0 && pTok[[5 t]] < we, t++];
                                         (* words that end inside a token, as ?a*=b: the token is split there, status 3 *)
                                         If[ pTok[[5 t - 4]] != we, status = 3; far = we; mode = 99,
                                             on++; out[[3 on]] = 28; out[[3 on + 1]] = e; out[[3 on + 2]] = we;
-                                            on++; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; mode = 3]]],
+                                            on++; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; wq = t; mode = 3]]],
                             (* an integral, the same signs right after it one integral of as many differentials, as a
                                notebook reads \[Integral]\[Integral] f \[DifferentialD]x \[DifferentialD]y *)
                             k == 9 && pIntegrals[[o + 1]] > 0,
@@ -857,6 +864,9 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                         i = pLed[[t]];
                         (* a ;; right where a span ends begins a span of its own, the two a product *)
                         If[se == t && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]], i = pSpecial[[22]]];
+                        (* right after the words of a query that begins its statement, an operator that is a prefix one
+                           too begins a factor, as Wolfram 15's kernel reads ?a+b as Information["a"]*(+b) *)
+                        If[wq == t && pTok[[5 t - 2]] == 9 && pPrefix[[2 pTok[[5 t - 1]] + 1]] > 0, i = pSpecial[[22]]];
                         If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && nls[[t]] == 1) &&
                                 ((out[[3 on]] == 1 && out[[3 on + 1]] == 2 && pCodes[[pTok[[5 out[[3 on + 2]] + 1]] - 1]] != 46) || out[[3 on]] == 23),
                             t++; sp++; base = 8 (sp - 1); fr[[base + 1]] = 3; fr[[base + 2]] = pHeads[[7]];

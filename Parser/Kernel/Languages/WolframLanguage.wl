@@ -151,7 +151,7 @@ $digits = ParseRegex["[0-9]+"]
 $number = ParseCondition[text[
     ParseChoice[
         $digits ~~ ParseOptional[ParseChoice[
-            ParseLiteral["^^"] ~~ ParseRegex["[0-9a-zA-Z]+(\\.[0-9a-zA-Z]*)?|\\.[0-9a-zA-Z]+"],
+            ParseLiteral["^^"] ~~ ParseRegex["[0-9a-zA-Z]+(\\.(?!\\.)[0-9a-zA-Z]*)?|\\.[0-9a-zA-Z]+"],
             ParseLiteral["."] ~~ ParseNotFollowedBy[ParseLiteral["."]] ~~ ParseOptional[$digits]]],
         ParseLiteral["."] ~~ $digits]
     ~~ ParseOptional[ParseLiteral["`"] ~~ ParseOptional[ParseLiteral["`"]] ~~ ParseOptional[ParseRegex["[-+]?([0-9]+\\.?[0-9]*|\\.[0-9]+)"]]]
