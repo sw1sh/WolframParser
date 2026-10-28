@@ -435,6 +435,13 @@ inputTake[input_String, a_Integer, b_Integer] :=
 	If[ $inputCodes === None, StringTake[input, {a, b}], FromCharacterCode[$inputCodes[[a ;; b]]] ]
 
 
+(* === linked lists === *)
+
+(* A linked list is {first, rest}, the empty one {}: a step of a loop that puts an item on one
+	neither copies it nor writes over it. *)
+linkedItems::usage = "linkedItems[list] gives the items of the linked list {first, {second, ... {}}}, the first first."
+linkedItems[list_List] := First /@ Most[NestWhileList[Last, list, # =!= {} &]]
+
 (* === interpretive engine ===
 	The internal contract: interpret[pc, input, pos] returns either
 		parseOk[result, newPos]    - success
@@ -563,60 +570,88 @@ regexFailureFinalQ[r_String, input_String, pos_Integer, window_Integer] :=
 	first atom, with r's leading flags - or None where that cannot be told: an
 	alternation at the top, a group, an anchor, or a first atom that may match
 	nothing. *)
-regexFirstAtom[r_String] := regexFirstAtom[r] = Module[{flags = "", rest = r, atom, after},
-	If[ StringStartsQ[rest, "(?" ~~ ("i" | "m" | "s" | "x") .. ~~ ")"],
-		flags = First[StringCases[rest, StartOfString ~~ f : ("(?" ~~ ("i" | "m" | "s" | "x") .. ~~ ")") :> f, 1]];
-		rest = StringDrop[rest, StringLength[flags]]
-	];
-	atom = Which[
-		regexTopLevelAlternationQ[rest] || rest === "", None,
-		StringStartsQ[rest, "["], regexBracketExpression[rest],
-		StringStartsQ[rest, "\\"],
-			If[ StringLength[rest] >= 2 && StringMatchQ[StringTake[rest, {2}], Except[DigitCharacter | Alternatives @@ Characters["bBAzZGKXRxupPNQEkgco"]]],
-				StringTake[rest, 2], None],
-		StringContainsQ["()|*+?{}^$", StringTake[rest, 1]], None,
-		True, StringTake[rest, 1]
-	];
-	If[ ! StringQ[atom], Return[None, Module]];
-	after = StringDrop[rest, StringLength[atom]];
-	If[ StringStartsQ[after, "?" | "*" | "{0"], None, flags <> atom]
+regexFirstAtom::usage = "regexFirstAtom[r] gives the regex of the one character a match of r begins with, r's leading flags its own, or \
+None where that cannot be told."
+regexFirstAtom[r_String] := regexFirstAtom[r] = With[{flags = First[StringCases[r, StartOfString ~~ f : ("(?" ~~ ("i" | "m" | "s" | "x") .. ~~ ")") :> f, 1], ""]},
+	{rest = StringDrop[r, StringLength[flags]]},
+	flaggedAtom[flags, rest, regexAtomOf[rest]]
 ]
 
-(* the bracket expression r begins with, [...] or [^...] with escapes and POSIX
-	classes inside, or None *)
-regexBracketExpression[r_String] := Module[{chars = Characters[r], i = 2, n},
-	n = Length[chars];
-	If[ i <= n && chars[[i]] === "^", i++];
-	If[ i <= n && chars[[i]] === "]", i++];
-	While[ i <= n,
-		Which[
-			chars[[i]] === "\\", i += 2,
-			chars[[i]] === "[" && i < n && chars[[i + 1]] === ":",
-				With[{close = StringPosition[StringDrop[r, i], ":]", 1]},
-					If[ close === {}, Return[None, Module]];
-					i += close[[1, 2]] + 1],
-			chars[[i]] === "]", Return[StringTake[r, i], Module],
-			True, i++
-		]
-	];
-	None
+regexAtomOf::usage = "regexAtomOf[rest] gives the first atom of the regex rest, or None for an alternation at the top, a group, an anchor \
+or a repeat."
+regexAtomOf[rest_String] := Which[
+	regexTopLevelAlternationQ[rest] || rest === "",
+		None,
+	StringStartsQ[rest, "["],
+		regexBracketExpression[rest],
+	StringStartsQ[rest, "\\"],
+		If[StringLength[rest] >= 2 && StringMatchQ[StringTake[rest, {2}], Except[DigitCharacter | Alternatives @@ Characters["bBAzZGKXRxupPNQEkgco"]]],
+			StringTake[rest, 2],
+			None
+		],
+	StringContainsQ["()|*+?{}^$", StringTake[rest, 1]],
+		None,
+	True,
+		StringTake[rest, 1]
 ]
 
-(* whether r has a | outside its groups and bracket expressions *)
-regexTopLevelAlternationQ[r_String] := Module[{chars = Characters[r], i = 1, depth = 0, n},
-	n = Length[chars];
-	While[ i <= n,
-		Which[
-			chars[[i]] === "\\", i += 2,
-			chars[[i]] === "[", With[{b = regexBracketExpression[StringDrop[r, i - 1]]},
-				i += If[ StringQ[b], StringLength[b], 1]],
-			chars[[i]] === "(", depth++; i++,
-			chars[[i]] === ")", depth--; i++,
-			chars[[i]] === "|" && depth === 0, Return[True, Module],
-			True, i++
-		]
-	];
-	False
+flaggedAtom::usage = "flaggedAtom[flags, rest, atom] gives the atom with the flags, or None where none is, or where it may match nothing."
+flaggedAtom[_String, _String, None] := None
+flaggedAtom[flags_String, rest_String, atom_String] := If[StringStartsQ[StringDrop[rest, StringLength[atom]], "?" | "*" | "{0"], None, flags <> atom]
+
+(* the bracket expression r begins with, [...] or [^...] with escapes and POSIX classes inside, or
+	None: a scan over the state {r, its characters, where it goes on, its end, Missing[] while it
+	scans} *)
+regexBracketExpression::usage = "regexBracketExpression[r] gives the bracket expression r begins with, or None."
+regexBracketExpression[r_String] := With[{characters = Characters[r]},
+	{start = 2 + Boole[Length[characters] >= 2 && characters[[2]] === "^"]},
+	{first = start + Boole[start <= Length[characters] && characters[[start]] === "]"]},
+	Replace[Last @ NestWhile[bracketScan, {r, characters, first, Missing[]}, bracketScanGoesOnQ], {end_Integer :> StringTake[r, end], _ :> None}]
+]
+
+bracketScanGoesOnQ::usage = "bracketScanGoesOnQ[state] is True while the scan of a bracket expression has found neither its end nor a \
+POSIX class not closed, and has characters left."
+bracketScanGoesOnQ[{_String, characters_List, at_Integer, Missing[]}] := at <= Length[characters]
+bracketScanGoesOnQ[_List] := False
+
+bracketScan::usage = "bracketScan[state] gives the scan's state after the character, the escape or the POSIX class at its place."
+bracketScan[{r_String, characters_List, at_Integer, Missing[]}] := Which[
+	characters[[at]] === "\\",
+		{r, characters, at + 2, Missing[]},
+	characters[[at]] === "[" && at < Length[characters] && characters[[at + 1]] === ":",
+		Replace[StringPosition[StringDrop[r, at], ":]", 1], {
+			{} :> {r, characters, at, None},
+			{{_Integer, close_Integer}} :> {r, characters, at + close + 1, Missing[]}
+		}],
+	characters[[at]] === "]",
+		{r, characters, at, at},
+	True,
+		{r, characters, at + 1, Missing[]}
+]
+
+(* whether r has a | outside its groups and bracket expressions: a scan over the state {r, its
+	characters, where it goes on, the depth of its groups, whether one is found} *)
+regexTopLevelAlternationQ::usage = "regexTopLevelAlternationQ[r] is True where r has a | outside its groups and bracket expressions."
+regexTopLevelAlternationQ[r_String] := Last @ NestWhile[alternationScan, {r, Characters[r], 1, 0, False}, alternationScanGoesOnQ]
+
+alternationScanGoesOnQ::usage = "alternationScanGoesOnQ[state] is True while no top-level | is found and characters are left."
+alternationScanGoesOnQ[{_String, characters_List, at_Integer, _Integer, found_}] := !found && at <= Length[characters]
+
+alternationScan::usage = "alternationScan[state] gives the scan's state after the character, the escape or the bracket expression at its \
+place."
+alternationScan[{r_String, characters_List, at_Integer, depth_Integer, _}] := Switch[characters[[at]],
+	"\\",
+		{r, characters, at + 2, depth, False},
+	"[",
+		{r, characters, at + Replace[regexBracketExpression[StringDrop[r, at - 1]], {b_String :> StringLength[b], _ :> 1}], depth, False},
+	"(",
+		{r, characters, at + 1, depth + 1, False},
+	")",
+		{r, characters, at + 1, depth - 1, False},
+	"|",
+		{r, characters, at + 1, depth, depth === 0},
+	_,
+		{r, characters, at + 1, depth, False}
 ]
 
 (* A bound on the length of a match of r, Infinity for an unbounded repeat or a
@@ -687,43 +722,48 @@ interpretDispatch[ParserCombinator["Position", _, _], _, pos_] :=
 interpretDispatch[ParserCombinator["Fail", msg_, _], _, pos_] :=
 	parseErr[pos, msg, ""]
 
-interpretDispatch[ParserCombinator["Sequence", pcs_List, _], input_, pos_] :=
-	Catch[
-		Block[{final},
-			final = Fold[
-				Function[{state, p},
-					With[{r = interpret[p, input, state[[2]]]},
-						If[ MatchQ[r, _parseErr], Throw[r] ];
-						{Append[state[[1]], r[[1]]], r[[2]]}
-					]
-				],
-				{{}, pos},
-				pcs
-			];
-			parseOk[final[[1]], final[[2]]]
-		]
-	]
+(* A sequence reads its parsers in turn, the first failure its own: a Fold over {the values read, a
+	linked list, where it goes on}, left at a failure by a tagged Throw. *)
+interpretDispatch[ParserCombinator["Sequence", pcs_List, _], input_, pos_] := Catch[
+	sequenceResult @ Fold[sequenceStep[input, #1, #2] &, {{}, pos}, pcs],
+	sequenceStep
+]
 
-interpretDispatch[ParserCombinator["Choice", pcs_List, _], input_, pos_] :=
-	Catch[
-		Block[{errs, maxPos, atMax},
-			errs = Map[
-				Function[p,
-					With[{r = interpret[p, input, pos]},
-						If[MatchQ[r, _parseOk], Throw[r], r]
-					]
-				],
-				pcs
-			];
-			maxPos = Max[errs[[All, 1]]];
-			atMax = Select[errs, #[[1]] === maxPos &];
-			parseErr[
-				maxPos,
-				Flatten[atMax[[All, 2]]],
-				First[atMax][[3]]
-			]
-		]
-	]
+sequenceStep::usage = "sequenceStep[input, {values, cur}, p] gives the values read with p's at cur, and where it goes on, or Throws p's \
+failure."
+sequenceStep[input_, {values_List, cur_}, p_] := Replace[interpret[p, input, cur], {
+	failure_parseErr :> Throw[failure, sequenceStep],
+	parseOk[value_, next_] :> {{value, values}, next}
+}]
+
+sequenceResult::usage = "sequenceResult[{values, cur}] gives the values a sequence read, in order, and where it goes on."
+sequenceResult[{values_List, cur_}] := parseOk[Reverse[linkedItems[values]], cur]
+
+(* A choice reads its parsers in turn, the first match its own, left by a tagged Throw; where none
+	matches, the failure that reached furthest. *)
+interpretDispatch[ParserCombinator["Choice", pcs_List, _], input_, pos_] := Catch[
+	furthestFailure[choiceAttempt[input, pos, #] & /@ pcs],
+	choiceAttempt
+]
+
+choiceAttempt::usage = "choiceAttempt[input, pos, p] gives p's failure at pos, or Throws its match."
+choiceAttempt[input_, pos_, p_] := Replace[interpret[p, input, pos], success_parseOk :> Throw[success, choiceAttempt]]
+
+errorPosition::usage = "errorPosition[failure] gives where a parse failure is."
+errorPosition[parseErr[position_, _, _]] := position
+
+errorExpected::usage = "errorExpected[failure] gives what a parse failure expected."
+errorExpected[parseErr[_, expected_, _]] := expected
+
+errorFound::usage = "errorFound[failure] gives what a parse failure found."
+errorFound[parseErr[_, _, found_]] := found
+
+furthestFailure::usage = "furthestFailure[failures] gives the failure at the furthest place of the failures, what they all expected there \
+joined."
+furthestFailure[failures_List] := With[{furthest = Max[errorPosition /@ failures]},
+	{atFurthest = Select[failures, errorPosition[#] === furthest &]},
+	parseErr[furthest, Flatten[errorExpected /@ atFurthest], errorFound[First[atFurthest]]]
+]
 
 (* Run every alternative, then commit to the one that consumed the
 	most input. The Choice combinator above stops at the first match -
@@ -732,163 +772,122 @@ interpretDispatch[ParserCombinator["Choice", pcs_List, _], input_, pos_] :=
 	(TPTP's atomic-formula / cnf-literal rules are the canonical
 	example). Ties between equal-length successes resolve to the first
 	listed alternative, mirroring PEG's left-bias. *)
-interpretDispatch[ParserCombinator["ChoiceLongest", pcs_List, _], input_, pos_] :=
-	Block[{results, oks, errs, maxPos, atMax},
-		results = interpret[#, input, pos] & /@ pcs;
-		oks = Cases[results, _parseOk];
-		If[ Length[oks] > 0,
-			First @ MaximalBy[oks, #[[2]] &],
-			errs = Cases[results, _parseErr];
-			maxPos = Max[errs[[All, 1]]];
-			atMax = Select[errs, #[[1]] === maxPos &];
-			parseErr[
-				maxPos,
-				Flatten[atMax[[All, 2]]],
-				First[atMax][[3]]
-			]
-		]
-	]
+interpretDispatch[ParserCombinator["ChoiceLongest", pcs_List, _], input_, pos_] := longestResult[interpret[#, input, pos] & /@ pcs]
 
-interpretDispatch[ParserCombinator["Many", p_, _], input_, pos_] :=
-	Block[{cur = pos, lastSawn, results},
-		lastSawn = pos - 1;
-		results = Last @ Reap[
-			While[
-				Block[{r = interpret[p, input, cur]},
-					If[ MatchQ[r, _parseOk] && r[[2]] > lastSawn,
-						Sow[r[[1]]]; lastSawn = cur; cur = r[[2]]; True,
-						False
-					]
-				]
-			]
-		];
-		parseOk[If[results === {}, {}, results[[1]]], cur]
-	]
+longestResult::usage = "longestResult[results] gives the match of the results that reaches furthest, the first of them, else the \
+furthest failure."
+longestResult[results_List] /; MemberQ[results, _parseOk] := First @ MaximalBy[Cases[results, _parseOk], parsedEnd]
+longestResult[results_List] := furthestFailure[Cases[results, _parseErr]]
 
-interpretDispatch[ParserCombinator["Some", p_, _], input_, pos_] :=
-	Block[{first = interpret[p, input, pos]},
-		If[ MatchQ[first, _parseErr],
-			first,
-			Block[{cur = first[[2]], lastSawn = pos, rest},
-				rest = Last @ Reap[
-					While[
-						Block[{r = interpret[p, input, cur]},
-							If[ MatchQ[r, _parseOk] && r[[2]] > lastSawn,
-								Sow[r[[1]]]; lastSawn = cur; cur = r[[2]]; True,
-								False
-							]
-						]
-					]
-				];
-				parseOk[
-					Prepend[If[rest === {}, {}, rest[[1]]], first[[1]]],
-					cur
-				]
-			]
-		]
-	]
+parsedEnd::usage = "parsedEnd[match] gives where a parse match ends."
+parsedEnd[parseOk[_, end_]] := end
 
-interpretDispatch[ParserCombinator["Optional", p_, _], input_, pos_] :=
-	Block[{r = interpret[p, input, pos]},
-		If[ MatchQ[r, _parseOk], r, parseOk[Missing["NoMatch"], pos] ]
-	]
+(* Many, Some and SepBy repeat a parser while it matches and goes past where the match before it
+	began: a match of nothing is taken once, after one of something. Each is a NestWhile over the
+	state {parser, separator, input, where it goes on, where the last match began, the values
+	matched, a linked list, the next attempt}, the parsers and the input in the state, where Wolfram
+	15 does not walk them at each step. *)
+interpretDispatch[ParserCombinator["Many", p_, _], input_, pos_] := repeatedResult @ NestWhile[
+	repeatedStep,
+	{p, None, input, pos, pos - 1, {}, interpret[p, input, pos]},
+	repeatedGoesOnQ
+]
 
-interpretDispatch[ParserCombinator["Between", {open_, p_, close_}, _], input_, pos_] :=
-	Catch[
-		Block[{r1, r2, r3},
-			r1 = interpret[open, input, pos];
-			If[MatchQ[r1, _parseErr], Throw[r1]];
-			r2 = interpret[p, input, r1[[2]]];
-			If[MatchQ[r2, _parseErr], Throw[r2]];
-			r3 = interpret[close, input, r2[[2]]];
-			If[MatchQ[r3, _parseErr], Throw[r3]];
-			parseOk[r2[[1]], r3[[2]]]
-		]
-	]
+interpretDispatch[ParserCombinator["Some", p_, _], input_, pos_] := someResult[p, input, pos, interpret[p, input, pos]]
+
+someResult::usage = "someResult[p, input, pos, first] gives the matches of p from pos on, at least one, first the first attempt's result."
+someResult[_, _, _, failure_parseErr] := failure
+someResult[p_, input_, pos_Integer, parseOk[value_, next_Integer]] := repeatedResult[
+	NestWhile[repeatedStep, {p, None, input, next, pos, {value, {}}, interpret[p, input, next]}, repeatedGoesOnQ]
+]
+
+
+interpretDispatch[ParserCombinator["Optional", p_, _], input_, pos_] := Replace[interpret[p, input, pos], _parseErr :> parseOk[Missing["NoMatch"], pos]]
+
+interpretDispatch[ParserCombinator["Between", {open_, p_, close_}, _], input_, pos_] := betweenResult[
+	interpret[open, input, pos],
+	Function[after, interpret[p, input, after]],
+	Function[after, interpret[close, input, after]]
+]
+
+betweenResult::usage = "betweenResult[opened, inner, closer] gives the value inside a match of open, p and close, or the failure of the \
+first of them that fails, opened the result of open and inner and closer the attempts of p and close at a place."
+betweenResult[failure_parseErr, _, _] := failure
+betweenResult[parseOk[_, after_Integer], inner_, closer_] := Replace[inner[after], {
+	parseOk[value_, next_Integer] :> Replace[closer[next], parseOk[_, end_Integer] :> parseOk[value, end]],
+	failure_parseErr :> failure
+}]
 
 interpretDispatch[ParserCombinator["Action", {p_, f_}, _], input_, pos_] :=
-	Block[{r = interpret[p, input, pos]},
-		If[ MatchQ[r, _parseErr],
-			r,
-			parseOk[If[ListQ[r[[1]]], f @@ r[[1]], f[r[[1]]]], r[[2]]]
-		]
-	]
+	Replace[interpret[p, input, pos], parseOk[value_, next_] :> parseOk[If[ListQ[value], f @@ value, f[value]], next]]
 
-(* SepBy / SepBy1: zero/one or more of p separated by sep. Same loop
-	shape as Many / Some, but each iteration eats a sep before the
-	next p. *)
-interpretDispatch[ParserCombinator["SepBy", {p_, sep_}, _], input_, pos_] :=
-	Block[{first = interpret[p, input, pos], cur, lastSawn, rest},
-		If[ MatchQ[first, _parseErr],
-			parseOk[{}, pos],
-			cur = first[[2]];
-			lastSawn = pos;
-			rest = Last @ Reap[
-				While[
-					Block[{rSep = interpret[sep, input, cur]},
-						If[ MatchQ[rSep, _parseOk],
-							Block[{rP = interpret[p, input, rSep[[2]]]},
-								If[ MatchQ[rP, _parseOk] && rP[[2]] > lastSawn,
-									Sow[rP[[1]]]; lastSawn = cur; cur = rP[[2]]; True,
-									False
-								]
-							],
-							False
-						]
-					]
-				]
-			];
-			parseOk[Prepend[If[rest === {}, {}, rest[[1]]], first[[1]]], cur]
-		]
-	]
+(* SepBy and SepBy1: zero or one or more of p separated by sep, each step a sep and then p. *)
+interpretDispatch[ParserCombinator["SepBy", {p_, sep_}, _], input_, pos_] := sepByResult[p, sep, input, pos, interpret[p, input, pos]]
 
-interpretDispatch[ParserCombinator["SepBy1", {p_, sep_}, _], input_, pos_] :=
-	Block[{r = interpret[ParserCombinator["SepBy", {p, sep}, <||>], input, pos]},
-		If[ MatchQ[r, _parseOk] && r[[1]] === {},
-			parseErr[pos, "at least one occurrence", safeChar[input, pos]],
-			r
-		]
-	]
+sepByResult::usage = "sepByResult[p, sep, input, pos, first] gives the matches of p separated by sep from pos on, none where first, the \
+first attempt's result, failed."
+sepByResult[_, _, _, pos_Integer, _parseErr] := parseOk[{}, pos]
+sepByResult[p_, sep_, input_, pos_Integer, parseOk[value_, next_Integer]] := repeatedResult[
+	NestWhile[repeatedStep, {p, sep, input, next, pos, {value, {}}, separatedAttempt[p, sep, input, next]}, repeatedGoesOnQ]
+]
 
-(* ChainLeft / ChainRight: operator-precedence helpers. ChainLeft folds
-	leftward as `op(prev, next)`; ChainRight folds rightward. The op
-	parser is expected to return a 2-arg-binary head (a function or
-	symbol) which is applied to the operands. *)
-interpretDispatch[ParserCombinator["ChainLeft", {p_, op_}, _], input_, pos_] :=
-	Block[{first = interpret[p, input, pos], cur, acc, rOp, rNext},
-		If[ MatchQ[first, _parseErr], Return[first, Block] ];
-		acc = first[[1]];
-		cur = first[[2]];
-		While[
-			rOp = interpret[op, input, cur];
-			MatchQ[rOp, _parseOk] && (rNext = interpret[p, input, rOp[[2]]]; MatchQ[rNext, _parseOk]),
-			acc = rOp[[1]][acc, rNext[[1]]];
-			cur = rNext[[2]]
-		];
-		parseOk[acc, cur]
-	]
+separatedAttempt::usage = "separatedAttempt[p, sep, input, cur] gives the match of sep and then p at cur, or the failure of either."
+separatedAttempt[p_, sep_, input_, cur_Integer] := Replace[interpret[sep, input, cur], parseOk[_, after_Integer] :> interpret[p, input, after]]
 
-interpretDispatch[ParserCombinator["ChainRight", {p_, op_}, _], input_, pos_] :=
-	Block[{first = interpret[p, input, pos], cur, ops = {}, vals, rOp, rNext},
-		If[ MatchQ[first, _parseErr], Return[first, Block] ];
-		vals = {first[[1]]};
-		cur = first[[2]];
-		While[
-			rOp = interpret[op, input, cur];
-			MatchQ[rOp, _parseOk] && (rNext = interpret[p, input, rOp[[2]]]; MatchQ[rNext, _parseOk]),
-			AppendTo[ops, rOp[[1]]];
-			AppendTo[vals, rNext[[1]]];
-			cur = rNext[[2]]
-		];
-		parseOk[
-			Fold[
-				Function[{acc, idx}, ops[[idx]][vals[[idx]], acc]],
-				Last[vals],
-				Reverse @ Range[Length[ops]]
-			],
-			cur
-		]
-	]
+repeatedGoesOnQ::usage = "repeatedGoesOnQ[state] is True where the state's next attempt matched and ends past where the last match began."
+repeatedGoesOnQ[{_, _, _, _, lastSawn_Integer, _, parseOk[_, next_Integer]}] := next > lastSawn
+repeatedGoesOnQ[_List] := False
+
+repeatedStep::usage = "repeatedStep[state] gives the state with its next attempt's value taken, and the attempt after it."
+repeatedStep[{p_, None, input_, cur_Integer, _Integer, values_List, parseOk[value_, next_Integer]}] :=
+	{p, None, input, next, cur, {value, values}, interpret[p, input, next]}
+repeatedStep[{p_, sep_, input_, cur_Integer, _Integer, values_List, parseOk[value_, next_Integer]}] :=
+	{p, sep, input, next, cur, {value, values}, separatedAttempt[p, sep, input, next]}
+
+repeatedResult::usage = "repeatedResult[state] gives the values a repetition matched, in order, and where it goes on."
+repeatedResult[{_, _, _, cur_Integer, _Integer, values_List, _}] := parseOk[Reverse[linkedItems[values]], cur]
+
+interpretDispatch[ParserCombinator["SepBy1", {p_, sep_}, _], input_, pos_] := Replace[
+	interpret[ParserCombinator["SepBy", {p, sep}, <||>], input, pos],
+	parseOk[{}, _] :> parseErr[pos, "at least one occurrence", safeChar[input, pos]]
+]
+
+(* ChainLeft and ChainRight read p, then an operator and p while both match; the operator's result
+	is the binary function that combines the operands, folded to the left or to the right. *)
+interpretDispatch[ParserCombinator["ChainLeft", {p_, op_}, _], input_, pos_] := chainResult["Left", p, op, input, interpret[p, input, pos]]
+
+interpretDispatch[ParserCombinator["ChainRight", {p_, op_}, _], input_, pos_] := chainResult["Right", p, op, input, interpret[p, input, pos]]
+
+chainResult::usage = "chainResult[side, p, op, input, first] gives the chain of p and op from the first attempt's match on, folded to the \
+side, or the first attempt's failure."
+chainResult[_String, _, _, _, failure_parseErr] := failure
+chainResult[side_String, p_, op_, input_, parseOk[value_, next_Integer]] := chainFolded[side, NestWhile[
+	chainStep,
+	{p, op, input, next, {value, {}}, {}, chainAttempt[p, op, input, next]},
+	chainGoesOnQ
+]]
+
+chainAttempt::usage = "chainAttempt[p, op, input, cur] gives {the operator's result, p's result} of an operator and p at cur, or None."
+chainAttempt[p_, op_, input_, cur_Integer] := Replace[interpret[op, input, cur], {
+	parseOk[f_, after_Integer] :> Replace[interpret[p, input, after], {r_parseOk :> {f, r}, _ :> None}],
+	_ :> None
+}]
+
+chainGoesOnQ::usage = "chainGoesOnQ[state] is True where the chain's next attempt matched."
+chainGoesOnQ[{_, _, _, _, _, _, attempt_}] := attempt =!= None
+
+chainStep::usage = "chainStep[state] gives the chain's state with the next operator and operand taken, and the attempt after them."
+chainStep[{p_, op_, input_, _Integer, values_List, operators_List, {f_, parseOk[value_, next_Integer]}}] :=
+	{p, op, input, next, {value, values}, {f, operators}, chainAttempt[p, op, input, next]}
+
+chainFolded::usage = "chainFolded[side, state] gives the chain's operands combined by its operators, to the left or to the right, and \
+where it goes on."
+chainFolded["Left", {_, _, _, cur_Integer, values_List, operators_List, _}] := With[{operands = Reverse[linkedItems[values]]},
+	parseOk[Fold[#2[[1]][#1, #2[[2]]] &, First[operands], Transpose[{Reverse[linkedItems[operators]], Rest[operands]}]], cur]
+]
+chainFolded["Right", {_, _, _, cur_Integer, values_List, operators_List, _}] := With[{operands = Reverse[linkedItems[values]]},
+	parseOk[Fold[#2[[1]][#2[[2]], #1] &, Last[operands], Reverse[Transpose[{Reverse[linkedItems[operators]], Most[operands]}]]], cur]
+]
 
 (* OperatorTable: Pratt / precedence-climbing dispatch.
 	args = {unit, levels}. levels is tightest-first; each level is a list of
@@ -920,65 +919,64 @@ interpretDispatch[ParserCombinator["OperatorTable", {unit_, levels_List}, opts_]
 opSpecsAt[kind_, p_] := With[{d = $opDispatch[kind]},
 	If[ p > $opLength, d[[2]], Lookup[d[[1]], inputTake[$opInput, p, p], d[[2]]] ]]
 
+(* the first of the specs whose operator matches at p: {its spec, the operator's result}, or
+	noOperator *)
+firstOperatorAt::usage = "firstOperatorAt[specs, p] gives {the first spec of specs whose operator matches at p, its result}, or noOperator."
+firstOperatorAt[specs_List, p_] := Catch[
+	Scan[With[{r = interpret[#[[3]], $opInput, p]}, If[MatchQ[r, _parseOk], Throw[{#, r}, firstOperatorAt]]] &, specs];
+	noOperator,
+	firstOperatorAt
+]
+
 (* null denotation: try the prefix operators (table order), else fall
 	through to the operand parser. *)
-opNud[p_] := Module[{hit = noOperator, r, fn, opEnd, operand},
-	Do[
-		r = interpret[s[[3]], $opInput, p];
-		If[ MatchQ[r, _parseOk], hit = {s, r}; Break[] ],
-		{s, opSpecsAt["Prefix", p]}
-	];
-	If[ hit === noOperator,
-		interpret[$opUnit, $opInput, p],
-		( fn = hit[[2, 1]]; opEnd = hit[[2, 2]];
-			operand = opClimb[hit[[1, 1]], opEnd];
-			If[ MatchQ[operand, _parseErr], operand,
-				parseOk[fn[operand[[1]]], operand[[2]]] ] )
-	]
-]
+opNud::usage = "opNud[p] gives the operand of the table at p: a prefix operator and its operand, or the table's unit."
+opNud[p_] := prefixResult[firstOperatorAt[opSpecsAt["Prefix", p], p], p]
+
+prefixResult::usage = "prefixResult[hit, p] gives the prefix operator's hit and its operand, or the table's unit at p where there is none."
+prefixResult[noOperator, p_] := interpret[$opUnit, $opInput, p]
+prefixResult[{spec_List, parseOk[fn_, opEnd_]}, _] := Replace[opClimb[First[spec], opEnd], parseOk[operand_, end_] :> parseOk[fn[operand], end]]
 
 (* leftmost led operator whose binding power beats rbp, if any. *)
-opTryOps[rbp_, p_] := Module[{found = noOperator, r},
-	Do[
-		If[ s[[1]] > rbp,
-			r = interpret[s[[3]], $opInput, p];
-			If[ MatchQ[r, _parseOk], found = {s, r}; Break[] ]
-		],
-		{s, opSpecsAt["Led", p]}
-	];
-	found
+opTryOps::usage = "opTryOps[rbp, p] gives {the first led spec whose binding power beats rbp and whose operator matches at p, its result}, \
+or noOperator."
+opTryOps[rbp_, p_] := firstOperatorAt[Select[opSpecsAt["Led", p], First[#] > rbp &], p]
+
+(* The climb from p: the operand there, then each led operator whose binding power beats rbp, and
+	its right side, as a NestWhile over {the left side read, the next operator, rbp}. *)
+opClimb::usage = "opClimb[rbp, p] gives the expression of the table from p on, its operators binding tighter than rbp."
+opClimb[rbp_, p_] := Block[{$parseDepth = $parseDepth + 1},
+	If[$parseDepth > $maxParseDepth,
+		parseErr[p, "<input within nesting limit>", safeChar[$opInput, p]],
+		climbFrom[rbp, opNud[p]]
+	]
 ]
 
-opClimb[rbp_, p_] := Block[{$parseDepth = $parseDepth + 1},
-	If[ $parseDepth > $maxParseDepth,
-		parseErr[p, "<input within nesting limit>", safeChar[$opInput, p]],
-		Module[{leftR = opNud[p], left, cur, opHit, s, fn, opEnd, rightRbp, rightR},
-			If[ MatchQ[leftR, _parseErr], Return[leftR, Module] ];
-			If[ $opFinal =!= None && TrueQ[$opFinal[leftR[[1]]]], Return[leftR, Module] ];
-			left = leftR[[1]]; cur = leftR[[2]];
-			While[ (opHit = opTryOps[rbp, cur]) =!= noOperator,
-				s = opHit[[1]]; fn = opHit[[2, 1]]; opEnd = opHit[[2, 2]];
-				Switch[ s[[2]],
-					"Postfix",
-						left = fn[left]; cur = opEnd,
-					"InfixN",
-						rightR = opChain[s, left, fn, opEnd];
-						If[ MatchQ[rightR, _parseErr], Return[rightR, Module] ];
-						left = rightR[[1]]; cur = rightR[[2]],
-					"Ternary" | "TernaryR",
-						rightR = opTernary[s, left, opEnd];
-						If[ MatchQ[rightR, _parseErr], Return[rightR, Module] ];
-						left = rightR[[1]]; cur = rightR[[2]],
-					_,
-						rightRbp = If[ s[[2]] === "InfixR", s[[1]] - 1, s[[1]] ];
-						rightR = opClimb[rightRbp, opEnd];
-						If[ MatchQ[rightR, _parseErr], Return[rightR, Module] ];
-						left = fn[left, rightR[[1]]]; cur = rightR[[2]]
-				]
-			];
-			parseOk[left, cur]
-		]
-	]
+climbFrom::usage = "climbFrom[rbp, left] gives the left side left with the led operators after it that bind tighter than rbp."
+climbFrom[_, failure_parseErr] := failure
+climbFrom[_, left_parseOk] /; $opFinal =!= None && TrueQ[$opFinal[First[left]]] := left
+climbFrom[rbp_, left : parseOk[_, cur_]] := First @ NestWhile[climbStep, {left, opTryOps[rbp, cur], rbp}, climbGoesOnQ]
+
+climbGoesOnQ::usage = "climbGoesOnQ[{left, hit, rbp}] is True where the left side was read and an operator follows it."
+climbGoesOnQ[{_parseOk, hit_, _}] := hit =!= noOperator
+climbGoesOnQ[_List] := False
+
+climbStep::usage = "climbStep[{left, hit, rbp}] gives the left side with the operator of hit and its right side, and the next operator."
+climbStep[{parseOk[left_, _], {spec_List, parseOk[fn_, opEnd_]}, rbp_}] := With[{next = ledResult[spec, left, fn, opEnd]},
+	{next, Replace[next, {parseOk[_, end_] :> opTryOps[rbp, end], _ :> noOperator}], rbp}
+]
+
+ledResult::usage = "ledResult[spec, left, fn, opEnd] gives the left side left with the led operator of spec, its result fn, and the right \
+side from opEnd on."
+ledResult[spec_List, left_, fn_, opEnd_] := Switch[spec[[2]],
+	"Postfix",
+		parseOk[fn[left], opEnd],
+	"InfixN",
+		opChain[spec, left, fn, opEnd],
+	"Ternary" | "TernaryR",
+		opTernary[spec, left, opEnd],
+	_,
+		Replace[opClimb[If[spec[[2]] === "InfixR", First[spec] - 1, First[spec]], opEnd], parseOk[right_, end_] :> parseOk[fn[left, right], end]]
 ]
 
 (* An n-ary chain: an "InfixN" operator, then its operand, then each
@@ -987,62 +985,92 @@ opClimb[rbp_, p_] := Block[{$parseDepth = $parseDepth + 1},
 	operand; combine[operands, operatorResults] builds the node, or the
 	first operator's result applied to the operands when the spec has no
 	combine. A chain whose first spec has a parser for its later operators
-	reads each of them with that parser of its spec. Its locals are Block's,
-	as its arguments hold parsed values. *)
-opChain[s_, left_, first_, opEnd_] := Catch[Block[
-	{key = If[ Length[s] >= 4, {"Combine", s[[4]]}, {"Operator", s[[3]]}],
-	operands = {left}, results = {first}, cur = opEnd, r, next, more = True},
-	r = opClimb[s[[1]], cur];
-	If[ MatchQ[r, _parseErr], Throw[r, opChain] ];
-	operands = Append[operands, r[[1]]]; cur = r[[2]];
-	While[ more,
-		next = noOperator;
-		Do[
-			If[ t[[1]] === s[[1]] && t[[2]] === "InfixN" &&
-				If[ Length[t] >= 4, {"Combine", t[[4]]}, {"Operator", t[[3]]}] === key,
-				r = interpret[If[ Length[t] >= 5, t[[5]], t[[3]] ], $opInput, cur];
-				If[ MatchQ[r, _parseOk], next = r; Break[] ]
-			],
-			{t, If[ Length[s] >= 5, $opDispatch["Next"], opSpecsAt["Led", cur] ]}
+	reads each of them with that parser of its spec. The chain is a
+	NestWhile over {the operands read, the operators' results, both linked
+	lists, where it goes on, the next operator and its operand}. *)
+opChain::usage = "opChain[s, left, first, opEnd] gives the chain of the InfixN spec s from left, its first operator's result first, its \
+operand from opEnd on."
+opChain[s_, left_, first_, opEnd_] := chainOf[s, left, first, opClimb[First[s], opEnd]]
+
+chainOf::usage = "chainOf[s, left, first, right] gives the chain of the spec s from left, its first operator's result first and its \
+first right operand's result right."
+chainOf[_, _, _, failure_parseErr] := failure
+chainOf[s_, left_, first_, parseOk[right_, cur_]] := chainNode @ NestWhile[
+	chainLinkStep,
+	{s, {right, {left, {}}}, {first, {}}, cur, chainLinkAt[s, cur]},
+	chainLinkGoesOnQ
+]
+
+chainKey::usage = "chainKey[spec] gives what tells the operators of one chain: its combining function, or its operator."
+chainKey[spec_List] := If[Length[spec] >= 4, {"Combine", spec[[4]]}, {"Operator", spec[[3]]}]
+
+chainLinkAt::usage = "chainLinkAt[s, cur] gives {the next operator's result, its operand's result} of the chain of s at cur, or None \
+where none goes on."
+chainLinkAt[s_, cur_] := Replace[
+	Catch[
+		Scan[
+			With[{r = interpret[chainOperatorParser[#], $opInput, cur]}, If[MatchQ[r, _parseOk], Throw[r, chainLinkAt]]] &,
+			Select[If[Length[s] >= 5, $opDispatch["Next"], opSpecsAt["Led", cur]], chainMemberQ[s, #] &]
 		];
-		If[ next === noOperator,
-			more = False,
-			r = opClimb[s[[1]], next[[2]]];
-			If[ MatchQ[r, _parseErr], Throw[r, opChain] ];
-			results = Append[results, next[[1]]];
-			operands = Append[operands, r[[1]]]; cur = r[[2]]
-		]
-	];
-	parseOk[If[ Length[s] >= 4, s[[4]][operands, results], First[results] @@ operands], cur]
-], opChain]
+		None,
+		chainLinkAt
+	],
+	r_parseOk :> linkWith[s, r]
+]
+
+chainOperatorParser::usage = "chainOperatorParser[t] gives the parser of the operators after the first of a chain of the spec t: its \
+fifth part, else its operator."
+chainOperatorParser[t_List] := If[Length[t] >= 5, t[[5]], t[[3]]]
+
+chainMemberQ::usage = "chainMemberQ[s, t] is True where the spec t continues the chain of the spec s: of its level, InfixN and of its \
+key."
+chainMemberQ[s_List, t_List] := First[t] === First[s] && t[[2]] === "InfixN" && chainKey[t] === chainKey[s]
+
+linkWith::usage = "linkWith[s, operator] gives {the operator's result, the operand after it} of the chain of s."
+linkWith[s_, parseOk[result_, after_]] := {result, opClimb[First[s], after]}
+
+chainLinkGoesOnQ::usage = "chainLinkGoesOnQ[state] is True where the chain's next link was read, or failed in its operand."
+chainLinkGoesOnQ[{_, _, _, _, None}] := False
+chainLinkGoesOnQ[{_, _, _, _, {_, _parseErr}}] := True
+chainLinkGoesOnQ[{_, _, _, _, {_, _parseOk}}] := True
+
+chainLinkStep::usage = "chainLinkStep[state] gives the chain's state with its next link taken, or its operand's failure."
+chainLinkStep[{s_, operands_List, results_List, _, {_, failure_parseErr}}] := {s, operands, results, failure, None}
+chainLinkStep[{s_, operands_List, results_List, _, {result_, parseOk[operand_, next_]}}] :=
+	{s, {operand, operands}, {result, results}, next, chainLinkAt[s, next]}
+
+chainNode::usage = "chainNode[state] gives the chain's node and where it goes on, or the failure of one of its operands."
+chainNode[{_, _, _, failure_parseErr, _}] := failure
+chainNode[{s_, operands_List, results_List, cur_, _}] := With[{values = Reverse[linkedItems[operands]], combined = Reverse[linkedItems[results]]},
+	parseOk[If[Length[s] >= 4, s[[4]][values, combined], First[combined] @@ values], cur]
+]
 
 (* left op1 middle op2 right: the middle binds as an operand of the level,
 	the right too ("Ternary") or one level looser ("TernaryR"); op2's
 	result combines the three. *)
-opTernary[s_, left_, opEnd_] := Catch[Block[{middle, second, right},
-	middle = opClimb[s[[1]], opEnd];
-	If[ MatchQ[middle, _parseErr], Throw[middle, opTernary] ];
-	second = interpret[s[[4]], $opInput, middle[[2]]];
-	If[ MatchQ[second, _parseErr], Throw[second, opTernary] ];
-	right = opClimb[If[ s[[2]] === "TernaryR", s[[1]] - 1, s[[1]] ], second[[2]]];
-	If[ MatchQ[right, _parseErr], Throw[right, opTernary] ];
-	parseOk[second[[1]][left, middle[[1]], right[[1]]], right[[2]]]
-], opTernary]
+opTernary::usage = "opTernary[s, left, opEnd] gives the ternary of the spec s from left, its middle from opEnd on."
+opTernary[s_, left_, opEnd_] := ternaryMiddle[s, left, opClimb[First[s], opEnd]]
+
+ternaryMiddle::usage = "ternaryMiddle[s, left, middle] gives the ternary of s from left and its middle, or the middle's failure."
+ternaryMiddle[_, _, failure_parseErr] := failure
+ternaryMiddle[s_, left_, middle : parseOk[_, after_]] := ternarySecond[s, left, middle, interpret[s[[4]], $opInput, after]]
+
+ternarySecond::usage = "ternarySecond[s, left, middle, second] gives the ternary of s from left, its middle and its second operator, or \
+the second operator's failure."
+ternarySecond[_, _, _, failure_parseErr] := failure
+ternarySecond[s_, left_, parseOk[middle_, _], parseOk[combine_, after_]] := Replace[
+	opClimb[If[s[[2]] === "TernaryR", First[s] - 1, First[s]], after],
+	parseOk[right_, end_] :> parseOk[combine[left, middle, right], end]
+]
 
 (* Lookahead: succeed iff p matches, but reset position. *)
-interpretDispatch[ParserCombinator["Lookahead", p_, _], input_, pos_] :=
-	Block[{r = interpret[p, input, pos]},
-		If[ MatchQ[r, _parseOk], parseOk[Null, pos], r ]
-	]
+interpretDispatch[ParserCombinator["Lookahead", p_, _], input_, pos_] := Replace[interpret[p, input, pos], _parseOk :> parseOk[Null, pos]]
 
 (* NotFollowedBy: succeed iff p does NOT match. *)
-interpretDispatch[ParserCombinator["NotFollowedBy", p_, _], input_, pos_] :=
-	Block[{r = interpret[p, input, pos]},
-		If[ MatchQ[r, _parseOk],
-			parseErr[pos, "<not followed by parser>", safeChar[input, pos]],
-			parseOk[Null, pos]
-		]
-	]
+interpretDispatch[ParserCombinator["NotFollowedBy", p_, _], input_, pos_] := Replace[interpret[p, input, pos], {
+	_parseOk :> parseErr[pos, "<not followed by parser>", safeChar[input, pos]],
+	_ :> parseOk[Null, pos]
+}]
 
 (* Try: identical to interpret[p, ...] in the interpretive path -
 	there is no committed-input distinction to roll back, since the
@@ -1065,14 +1093,10 @@ interpretDispatch[ParserCombinator["Scoped", {label_, p_}, _], input_, pos_] :=
 interpretDispatch[ParserCombinator["Scope", _, _], _, pos_] :=
 	parseOk[$parseScope, pos]
 
-interpretDispatch[ParserCombinator["Condition", {p_, test_}, _], input_, pos_] :=
-	Block[{r = interpret[p, input, pos]},
-		Which[
-			MatchQ[r, _parseErr], r,
-			TrueQ[test[r[[1]]]], r,
-			True, parseErr[pos, "<condition>", safeChar[input, pos]]
-		]
-	]
+interpretDispatch[ParserCombinator["Condition", {p_, test_}, _], input_, pos_] := Replace[
+	interpret[p, input, pos],
+	match : parseOk[value_, _] :> If[TrueQ[test[value]], match, parseErr[pos, "<condition>", safeChar[input, pos]]]
+]
 
 (* Recursive: look up the held symbol's current value and interpret it.
 	When packrat memoisation is on, cache the result by {rule-symbol, pos,
