@@ -19,7 +19,7 @@ result = PublishPacletPage[$pacletDirectory, "WolframParser",
     "DryRun" -> MemberQ[$ScriptCommandLine, "--dry-run"],
     "Monitor" -> True,
     "BuildOptions" -> $documentationOptions,
-    "SiteOptions" -> {"FeedbackOptions" -> {"Domains" -> {"wolframinstitute.org", "wolfram.com"}}}
+    "SiteOptions" -> {"FeedbackOptions" -> {"Domains" -> {"wolframinstitute.org", "wolfram.com"}}, "VersionLabel" -> True, "Footer" -> True}
 ]
 If[ ! AssociationQ[result], Exit[1]]
 Print["documentation: ", Length[result["Build"]["Notebooks"]], " pages, failed ", result["Build"]["Failed"]]
