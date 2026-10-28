@@ -361,7 +361,7 @@
         "Application" -> "\[Application]",
         "AutoLeftMatch" -> "\[AutoLeftMatch]",
         "AutoRightMatch" -> "\[AutoRightMatch]",
-        "AutoSpace" -> "\[AutoSpace]",
+        "AutoSpace" -> "\:f3ad",
         "Backslash" -> "\[Backslash]",
         "Because" -> "\[Because]",
         "Cap" -> "\[Cap]",

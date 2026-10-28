@@ -101,7 +101,18 @@ characters = Association[Cases[Map[# -> CodeParser`FromNode[CodeParser`CodeParse
 shown[e_] := Block[{$ContextPath = {}, $Context = "Shown`"}, ToString[e, InputForm, CharacterEncoding -> "ASCII"]];
 (* one entry a line *)
 entriesText[l_List] := "{\n" <> StringRiffle[Map["        " <> shown[#] &, l], ",\n"] <> "\n    }";
-entriesText[a_Association] := "<|\n" <> StringRiffle[KeyValueMap["        " <> shown[#1] <> " -> " <> shown[#2] &, a], ",\n"] <> "\n    |>";
+entriesText[a_Association] := "<|\n" <> StringRiffle[KeyValueMap["        " <> shown[#1] <> " -> " <> shownValue[#2] &, a], ",\n"] <> "\n    |>";
+(* the character the front end reads for each long name, recorded by
+   dev/freeze-longname-characters.wls *)
+frontEndCodes = Get[FileNameJoin[{root, "Parser", "Kernel", "Languages", "LongNameCharacters.wl"}]];
+(* a character as its long name, as the kernel writes it, but where the front
+   end reads that long name as another character, by its code, which every
+   reader reads alike *)
+shownValue[c_String] /; StringLength[c] === 1 := With[{text = shown[c], code = First[ToCharacterCode[c]]},
+    If[StringMatchQ[text, "\"\\[" ~~ WordCharacter .. ~~ "]\""] && Lookup[frontEndCodes, StringTake[text, {4, -3}], None] =!= code,
+        "\"" <> If[code > 65535, "\\|" <> IntegerString[code, 16, 6], "\\:" <> IntegerString[code, 16, 4]] <> "\"",
+        text]];
+shownValue[e_] := shown[e];
 table = Append[operators, "Characters" -> KeyTake[characters, Union[Flatten[{Values[operators[[{"Infix", "Prefix", "Postfix"}]]][[All, All, 1]],
     operators["Groups"][[All, {1, 2}]], operators["Whitespace"], operators["Newlines"], operators["Unsupported"]}]]]];
 text = StringJoin[

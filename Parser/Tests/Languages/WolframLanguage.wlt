@@ -209,6 +209,15 @@ $wlCases = {
     {"\"\\[NotAName]\"", List[HoldComplete["\\[NotAName]"]]},
     {"\"\\[LeftAngleBracket]\\[Intersection]\\[RawSpace]\"", List[HoldComplete["\[LeftAngleBracket]\[Intersection] "]]},
     {"\"\\[CJKUnifiedIdeograph4E00]\"", List[HoldComplete["\\[CJKUnifiedIdeograph4E00]"]]},
+    (* the long names of characters past U+FFFF, and those the front end reads that the kernel does not *)
+    {"\"\\[FormalScriptA]\\[FormalScriptCapitalZ]\"", List[HoldComplete["\[FormalScriptA]\[FormalScriptCapitalZ]"]]},
+    {"\"\\[COMPATIBILITYNoBreak]\\[COMPATIBILITYKanjiSpace]\\[AutoSpace]\"", List[HoldComplete["\:f3a2\:3000\:f35f"]]},
+    (* a space past ASCII that no long name has is a letter; the ideographic space, the front end's
+       \[AutoSpace], \[COMPATIBILITYNoBreak]'s character and the discretionary separators are spaces *)
+    {"x\:2000y\:202fz\:0085w", List[HoldComplete[x\:2000y\:202fz\:0085w]]},
+    {"x\:3000y\:f3a2z\:f35fw\:f76ev", List[HoldComplete[x y z w v]]},
+    {"x\\[COMPATIBILITYKanjiSpace]y\\[DiscretionaryLineSeparator]z", List[HoldComplete[x y z]]},
+    {"f[x\\[COMPATIBILITYKanjiSpace],\\[COMPATIBILITYNoBreak]y]", List[HoldComplete[f[x, y]]]},
     {"\"\\777\"", List[HoldComplete["\:01ff"]]},
     {"\"x\\\\\"", List[HoldComplete["x\\"]]},
     {"f::\"tag\"", List[HoldComplete[MessageName[f, "tag"]]]},
@@ -605,7 +614,6 @@ VerificationTest[
 (* === failures === *)
 wlStop[f_Failure] := {f["Position"], f["Incomplete"]};
 VerificationTest[FailureQ[WolframLanguageHeld["a = 1\nb = (c"]], True, TestID -> "wl: an unclosed bracket fails"]
-VerificationTest[FailureQ[WolframLanguageHeld["a\\[DiscretionaryLineSeparator]b"]], True, TestID -> "wl: a discretionary separator is no newline, nor whitespace"]
 VerificationTest[
     WolframLanguageHeld["a = 1\nb c)\nd"]["Position"],
     11,
@@ -805,6 +813,7 @@ $wlWarningCases = {
     {"\"a\\[Foo]b\"", {{"sntufn", "Foo"}}},
     {"\"\\[Al-pha]\"", {{"sntufn", "Al"}}},
     {"\"\\[Foo\"", {{"sntunc", "Foo"}}},
+    {"\"\\[FormalScriptA]\\[COMPATIBILITYKanjiSpace]\"", {}},
     {"x = \"a\\[Foo", {{"sntufn", "Foo"}}},
     {"x = 1; \"\\[\"", {{"sntmsng", "x = 1; \"\\[\""}}},
     {"{\"\\q\",}", {{"stresc", "q"}, {"com"}}},

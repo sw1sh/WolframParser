@@ -125,14 +125,15 @@ spellings[op_String] := Prepend[Lookup[$longNameOperators, op, {}], op]
 (* a parser's pieces joined into the text it read *)
 text[p_] := ParseAction[p, Function[StringJoin[Cases[Flatten[{##}], _String]]]]
 
-nameCharacterQ[c_String] := First[ToCharacterCode[c]] > 127 && ! MemberQ[$operatorCharacters, c] && ! StringMatchQ[c, WhitespaceCharacter]
+(* a character past ASCII that is no operator's: a space past ASCII that no long name has, U+2000
+	and the rest, is a letter *)
+nameCharacterQ[c_String] := First[ToCharacterCode[c]] > 127 && ! MemberQ[$operatorCharacters, c]
 
-(* a letter past ASCII: a long name that is a letter of the language, or
-	a character past ASCII that is no operator's, bracket's or
-	whitespace's *)
+(* a letter past ASCII, as a notebook reads it: a long name that is a letter of the language, or a
+	character past ASCII that is no operator's, bracket's, newline's or space's *)
 $letter = ParseChoice[
-	ParseAction[ParseLookahead[ParseLiteral["\\["]] ~~ ParseCondition[ParseRegex["\\\\\\[[A-Za-z0-9]+]"], letterNameQ], #2 &],
-	ParseCharacter[_?concreteNameCharacterQ]]
+	ParseAction[ParseLookahead[ParseLiteral["\\["]] ~~ ParseCondition[ParseRegex["\\\\\\[[A-Za-z0-9]+]"], heldLetterNameQ], #2 &],
+	ParseCharacter[_?heldNameCharacterQ]]
 
 (* a name: letters, digits, $ and ` context marks; not beginning with a
 	digit. The loop after the first run of ASCII is entered only at a
@@ -232,7 +233,7 @@ grammar[alg_] := Module[{space, wsLine, wsAll, nested, top, statement},
 		ParseCharacter[" " | "\t" | "\f"],
 		ParseLiteral["\\\n"], ParseLiteral["\\\r\n"],
 		commentParser[True],
-		ParseChoice @@ (ParseLiteral /@ $longWhitespace)];
+		ParseChoice @@ (ParseLiteral /@ $heldSpaces)];
 	wsLine = ParseMany[space];
 	wsAll = ParseMany[ParseChoice[ParseCharacter["\n" | "\r"], ParseChoice @@ (ParseLiteral /@ $heldNewlines), space]];
 	nested = RecCell[];
@@ -803,9 +804,9 @@ $escapes = {
 }
 
 (* the character of each long name, "Alpha" -> the letter alpha, as
-	Wolfram 15 reads it (Languages/LongNameCharacters.wl, recorded by
-	dev/freeze-longname-characters.wls), read at the first long name a
-	string holds *)
+	Wolfram 15's front end reads it (Languages/LongNameCharacters.wl,
+	recorded by dev/freeze-longname-characters.wls), read at the first long
+	name a string holds *)
 longNameCharacters[] := longNameCharacters[] = Map[FromCharacterCode, Get[FileNameJoin[{$languagesDirectory, "LongNameCharacters.wl"}]]]
 
 (* a leaf's expression, held *)
@@ -1427,6 +1428,11 @@ letterNameQ[s_String] := With[{n = StringTake[s, {3, -2}]}, KeyExistsQ[$longName
 (* a character past ASCII that is a letter: no operator's, bracket's or whitespace's *)
 concreteNameCharacterQ[c_String] := nameCharacterQ[c] && ! KeyExistsQ[$nonLetterCharacters, c]
 
+(* a long name, and a character past ASCII, that a notebook reads as a letter: one CodeParser reads
+	as a letter, and no space *)
+heldLetterNameQ[s_String] := letterNameQ[s] && ! MemberQ[$spaceNames, StringTake[s, {3, -2}]]
+heldNameCharacterQ[c_String] := concreteNameCharacterQ[c] && ! KeyExistsQ[$spaceCharacters, c]
+
 (* a letter past ASCII: a long name that is one, or a character past
 	ASCII that is not an operator's nor whitespace *)
 $concreteLetter = ParseChoice[
@@ -1523,11 +1529,18 @@ closerStartQ[c_String] := StringContainsQ["])}|\\", c] || KeyExistsQ[$closerLabe
 (* whitespace and newlines in long names, and their characters *)
 $longWhitespace := $longWhitespace = Catenate[longNameSpellings /@ $longNameTable["Whitespace"]]
 $longNewlines := $longNewlines = Catenate[longNameSpellings /@ $longNameTable["Newlines"]]
-(* the long names the kernel reads as newlines, written out or as their characters: those
-	CodeParser calls newlines but the two discretionary separators, which the kernel reads as
-	no token *)
+(* the long names a notebook reads as newlines, written out or as their characters: those
+	CodeParser calls newlines but the two discretionary separators, which it reads as spaces *)
 $heldNewlineNames := $heldNewlineNames = DeleteCases[$longNameTable["Newlines"], "DiscretionaryLineSeparator" | "DiscretionaryParagraphSeparator"]
 $heldNewlines := $heldNewlines = Catenate[longNameSpellings /@ $heldNewlineNames]
+(* The long names a notebook reads as spaces, written out or as their characters: CodeParser's
+	whitespace, \[COMPATIBILITYKanjiSpace] and the two discretionary separators, each character
+	CodeParser gives one and the one the front end reads, \[AutoSpace]'s two among them. *)
+$spaceNames := $spaceNames = Union[$longNameTable["Whitespace"], {"COMPATIBILITYKanjiSpace", "DiscretionaryLineSeparator", "DiscretionaryParagraphSeparator"}]
+$spaceCharacters := $spaceCharacters = AssociationThread[
+	Union[Lookup[$longNameTable["Characters"], $spaceNames, Nothing], Lookup[longNameCharacters[], $spaceNames, Nothing]] -> True
+]
+$heldSpaces := $heldSpaces = Join[Map["\\[" <> # <> "]" &, $spaceNames], Keys[$spaceCharacters]]
 $lineTriviaStarts := $lineTriviaStarts = AssociationThread[Union[{" ", "\t", "(", "\\"}, Select[$longWhitespace, StringLength[#] === 1 &]] -> True]
 $allTriviaStarts := $allTriviaStarts = Join[$lineTriviaStarts, AssociationThread[Union[{"\n", "\r"}, Select[$longNewlines, StringLength[#] === 1 &]] -> True]]
 lineTriviaStartQ[c_String] := KeyExistsQ[$lineTriviaStarts, c]

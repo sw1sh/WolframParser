@@ -49,8 +49,7 @@ fastClassesComputed[] := With[{high = Range[128, 65535]},
 		{{10, 13}, 4},
 		{high, 5},
 		{ToCharacterCode[StringJoin[Keys[$nonLetterCharacters]]], 0},
-		{Pick[high, StringMatchQ[Characters[FromCharacterCode[high]], WhitespaceCharacter]], 0},
-		{ToCharacterCode[StringJoin[Lookup[$longNameTable["Characters"], $longNameTable["Whitespace"], Nothing]]], 3},
+		{ToCharacterCode[StringJoin[Keys[$spaceCharacters]]], 3},
 		{ToCharacterCode[StringJoin[Lookup[$longNameTable["Characters"], $heldNewlineNames, Nothing]]], 4}
 	}]
 ]
@@ -75,7 +74,7 @@ fastOp[name_String] := $fastOperatorIds[name]
 	an operator after those, read at their first use; the whitespace ones
 	one more, the invisible comma, a comma, one after it, and the newline
 	ones one after \[Not]'s *)
-$fastLongNames := $fastLongNames = Complement[Keys[$nonLetterNames], Keys[$asciiLongNames], $longNameTable["Whitespace"], $heldNewlineNames, {"InvisibleComma"}]
+$fastLongNames := $fastLongNames = Complement[Keys[$nonLetterNames], Keys[$asciiLongNames], $spaceNames, $heldNewlineNames, {"InvisibleComma"}]
 $fastLongIds := $fastLongIds = AssociationThread[$fastLongNames -> Length[$fastOperators] + Range[Length[$fastLongNames]]]
 $fastSpaceId := $fastSpaceId = Length[$fastOperators] + Length[$fastLongNames] + 1
 $fastInvisibleCommaId := $fastInvisibleCommaId = $fastSpaceId + 1
@@ -84,7 +83,7 @@ $fastNotId := $fastNotId = $fastSpaceId + 2
 $fastNewlineId := $fastNewlineId = $fastSpaceId + 3
 fastLongOp[name_String] := Which[
 	KeyExistsQ[$fastLongIds, name], $fastLongIds[name],
-	MemberQ[$longNameTable["Whitespace"], name], $fastSpaceId,
+	MemberQ[$spaceNames, name], $fastSpaceId,
 	MemberQ[$heldNewlineNames, name], $fastNewlineId,
 	name === "InvisibleComma", $fastInvisibleCommaId,
 	True, 0]
@@ -113,7 +112,7 @@ $fastOp2 := $fastOp2 = Developer`ToPackedArray @ ReplacePart[
 $fastOp3 = Association[Map[ToCharacterCode[#] -> fastOp[#] &, Select[$operatorSpellings, StringLength[#] === 3 &]]]
 (* each long name of the language: -1 a letter, else its operator *)
 $fastLongNameOps := $fastLongNameOps = Join[
-	AssociationMap[If[KeyExistsQ[$nonLetterNames, #], fastLongOp[#], -1] &, Keys[$longNames]],
+	AssociationMap[If[KeyExistsQ[$nonLetterNames, #] || MemberQ[$spaceNames, #], fastLongOp[#], -1] &, Keys[$longNames]],
 	Association[Catenate[KeyValueMap[Function[{op, spellings},
 		Map[StringTake[#, {3, -2}] -> fastOp[op] &, Select[spellings, StringStartsQ[#, "\\["] &]]], $longNameOperators]]],
 	<|"Not" -> $fastNotId|>]

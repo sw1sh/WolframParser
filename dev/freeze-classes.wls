@@ -1,6 +1,6 @@
 #!/usr/bin/env wolframscript
 (* Records the class of each character code below 65536 that the Wolfram Language reader lexes
-   by, as Wolfram 15's WhitespaceCharacter and the reader's tables give it, into
+   by, as the reader's tables of operators, long names and their characters give it, into
    Parser/Kernel/Languages/WolframLanguageClasses.wl: the runs {class, length} of the table from
    code 0 up. The reader reads them in place of computing the table, so every kernel lexes by
    exactly Wolfram 15's classes. Run it with Wolfram 15 after a change to the reader's character
