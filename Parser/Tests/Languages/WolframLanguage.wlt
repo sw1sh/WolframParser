@@ -981,9 +981,9 @@ VerificationTest[
     {HoldComplete[a Get["b"]], 6, <|"Warnings" -> {}|>},
     TestID -> "wl next: << after an operand is a factor"]
 
-(* a real is the machine real nearest its digits, as a notebook reads it, where Wolfram 15's
-   ToExpression can be a bit away; the digits of FullForm tell machine reals apart that SameQ takes
-   for one *)
+(* a real is the machine real nearest its digits, as Wolfram 15's ToExpression and a notebook read
+   it, where N of the exact value can be a bit away; the digits of FullForm tell machine reals apart
+   that SameQ takes for one *)
 VerificationTest[
     Map[ToString[FullForm[First[First[WolframLanguageHeld[#]]]]] &, {"0.00000000000000000001234", "1.234*^-20", "2.2250738585072014*^-308", "0.3", "7.*^-300", "0.000000001234"}],
     {"1.234`*^-20", "1.234`*^-20", "2.2250738585072014`*^-308", "0.3`", "7.`*^-300", "1.234`*^-9"},

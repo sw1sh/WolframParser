@@ -708,10 +708,10 @@ machineValue[digits_Integer, base_Integer, scale_Integer] := If[ Abs[scale] <= 1
         (* by its difference, as a comparison of machine reals takes ones near each other for equal *)
         Which[m - N[Log10[$MinNumber]] < 0, Underflow[], m < -400, 0., m <= 400, machineReal[digits base^scale], True, N[scaledValue[digits, base, scale, 20]]]]]
 
-(* The machine real nearest an exact value, as a notebook reads one: by the power of 2 at or below
-   it, from the bits of its numerator and denominator, its 53 bits rounded to the nearest, halves to
-   even, where N, which Wolfram 15's ToExpression reads 1.234*^-20 and 0.1*^-299 by, can be a bit
-   away. Below the least normal one the subnormal nearest it, by its multiple of the least
+(* The machine real nearest an exact value, as Wolfram 15's ToExpression and a notebook read one: by
+   the power of 2 at or below it, from the bits of its numerator and denominator, its 53 bits rounded
+   to the nearest, halves to even, where N of the exact value can be a bit away, as N[1234/10^23]
+   is. Below the least normal one the subnormal nearest it, by its multiple of the least
    subnormal, zero where that is nearer, and past the greatest the value at machine precision
    [WL 15.0.0]. *)
 machineReal[x_] := Which[
