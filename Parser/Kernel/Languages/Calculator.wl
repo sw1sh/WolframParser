@@ -4,17 +4,17 @@
 (* :Context: Wolfram`Parser`Languages`Calculator` *)
 (* :Author: Nikolay Murzin, Claude (Anthropic) *)
 (* :Summary:
-    A four-function calculator with ^, unary minus, parentheses and bare
-    identifiers. It is the canonical example of the zoo's design: one grammar
-    (`CalculatorGrammar`) written over an abstract algebra, run two ways -
+	A four-function calculator with ^, unary minus, parentheses and bare
+	identifiers. It is the canonical example of the zoo's design: one grammar
+	(`CalculatorGrammar`) written over an abstract algebra, run two ways -
 
-      CalculatorAST["1 + 2*3"]  -> standard AST  (ASTAlgebra)
-      CalculatorEval["1 + 2*3"] -> 7             (CalculatorSemantic)
+		CalculatorAST["1 + 2*3"]  -> standard AST  (ASTAlgebra)
+		CalculatorEval["1 + 2*3"] -> 7             (CalculatorSemantic)
 
-    Precedence (tightest first): parentheses, unary -, ^ (right assoc),
-    * /, + -. Built with ParseOperatorTable, the library's Pratt /
-    precedence-climbing combinator, so left-nested input stays linear where
-    an ordered-choice PEG tower would backtrack.
+	Precedence (tightest first): parentheses, unary -, ^ (right assoc),
+	* /, + -. Built with ParseOperatorTable, the library's Pratt /
+	precedence-climbing combinator, so left-nested input stays linear where
+	an ordered-choice PEG tower would backtrack.
 *)
 
 BeginPackage["Wolfram`Parser`Languages`Calculator`", {"Wolfram`Parser`"}]
@@ -26,56 +26,59 @@ CalculatorSemantic::usage   = "CalculatorSemantic is the algebra that folds the 
 
 Begin["`Private`"]
 
-(* --- the grammar, parameterised over an algebra --- *)
+(* ::Section:: *)
+(*The grammar, parameterised over an algebra*)
 CalculatorGrammar[alg_] := Module[{ws, tok, number, ident, unit, bin, pre, expr, top},
-    expr = RecCell[];
-    ws = ParseMany[ParseCharacter[WhitespaceCharacter]];
-    tok[p_] := ParseAction[p ~~ ws, #1 &];
+	expr = RecCell[];
+	ws = ParseMany[ParseCharacter[WhitespaceCharacter]];
+	tok[p_] := ParseAction[p ~~ ws, #1 &];
 
-    (* SpannedToken records each leaf's source span (and eats trailing ws) *)
-    number = SpannedToken[ParseRegex["[0-9]+\\.[0-9]+|[0-9]+"], ws,
-        Function[s, alg["Leaf"][If[StringContainsQ[s, "."], "Real", "Integer"], s]]];
+	(* SpannedToken records each leaf's source span (and eats trailing ws) *)
+	number = SpannedToken[ParseRegex["[0-9]+\\.[0-9]+|[0-9]+"], ws,
+		Function[s, alg["Leaf"][If[StringContainsQ[s, "."], "Real", "Integer"], s]]];
 
-    ident = SpannedToken[ParseRegex["[A-Za-z][A-Za-z0-9]*"], ws,
-        Function[s, alg["Leaf"]["Symbol", s]]];
+	ident = SpannedToken[ParseRegex["[A-Za-z][A-Za-z0-9]*"], ws,
+		Function[s, alg["Leaf"]["Symbol", s]]];
 
-    unit = ParseChoice[
-        ParseBetween[tok @ ParseLiteral["("], RecRef[expr], tok @ ParseLiteral[")"]],
-        number, ident];
+	unit = ParseChoice[
+		ParseBetween[tok @ ParseLiteral["("], RecRef[expr], tok @ ParseLiteral[")"]],
+		number, ident];
 
-    (* each operator parser yields the COMBINING FUNCTION the table folds *)
-    bin[op_] := ParseAction[tok @ ParseLiteral[op],
-        (Function[{l, r}, alg["Binary"][op, l, r]]) &];
-    pre[op_] := ParseAction[tok @ ParseLiteral[op],
-        (Function[x, alg["Prefix"][op, x]]) &];
+	(* each operator parser yields the COMBINING FUNCTION the table folds *)
+	bin[op_] := ParseAction[tok @ ParseLiteral[op],
+		(Function[{l, r}, alg["Binary"][op, l, r]]) &];
+	pre[op_] := ParseAction[tok @ ParseLiteral[op],
+		(Function[x, alg["Prefix"][op, x]]) &];
 
-    top = ParseOperatorTable[unit, {
-        {{"Prefix", pre["-"]}},
-        {{"InfixR", bin["^"]}},
-        {{"InfixL", bin["*"]}, {"InfixL", bin["/"]}},
-        {{"InfixL", bin["+"]}, {"InfixL", bin["-"]}}
-    }];
-    SetRec[expr, top];
-    top
+	top = ParseOperatorTable[unit, {
+		{{"Prefix", pre["-"]}},
+		{{"InfixR", bin["^"]}},
+		{{"InfixL", bin["*"]}, {"InfixL", bin["/"]}},
+		{{"InfixL", bin["+"]}, {"InfixL", bin["-"]}}
+	}];
+	SetRec[expr, top];
+	top
 ]
 
-(* --- the meaningful (language-specific) algebra --- *)
+(* ::Section:: *)
+(*The meaningful (language-specific) algebra*)
 CalculatorSemantic = <|
-    "Leaf" -> Function[{kind, src}, Switch[kind,
-        "Integer", FromDigits[src],
-        "Real",    Interpreter["Number"][src],
-        _,         Symbol[src]]],
-    "Binary" -> Function[{op, l, r}, Switch[op,
-        "+", l + r, "-", l - r, "*", l*r, "/", l/r, "^", l^r]],
-    "Prefix" -> Function[{op, x}, If[op === "-", -x, x]]
+	"Leaf" -> Function[{kind, src}, Switch[kind,
+		"Integer", FromDigits[src],
+		"Real",    Interpreter["Number"][src],
+		_,         Symbol[src]]],
+	"Binary" -> Function[{op, l, r}, Switch[op,
+		"+", l + r, "-", l - r, "*", l*r, "/", l/r, "^", l^r]],
+	"Prefix" -> Function[{op, x}, If[op === "-", -x, x]]
 |>
 
-(* --- build each parser once at load --- *)
+(* ::Section:: *)
+(*Build each parser once at load*)
 $astParser = CalculatorGrammar[ASTAlgebra]
 $semParser = CalculatorGrammar[CalculatorSemantic]
 
 CalculatorAST[s_String] := With[{r = Parse[$astParser, s]},
-    If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]]
+	If[FailureQ[r], r, ASTAddSource[ASTContainer[r], s]]]
 
 CalculatorEval[s_String] := Parse[$semParser, s]
 
