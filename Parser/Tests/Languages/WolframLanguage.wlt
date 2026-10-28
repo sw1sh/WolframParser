@@ -863,6 +863,14 @@ VerificationTest[
     True,
     TestID -> "wl program: the lexer's long names are those a string decodes, as the typed escape scan reads them by the lexer's table"]
 VerificationTest[
+    With[{private = "Wolfram`Parser`Languages`WolframLanguage`Private`",
+            texts = {"a\\nb\\tc", "\\101\\1018\\10\\8", "\\.41\\.4\\:03b1\\:03B\\|01F600", "\\:d800", "\\[Alpha]\\[NoSuchName]\\[]\\[Alpha",
+                "\\\r\nx\\\ny", "\\<\\>\\\\\\\"\\ \\b\\f\\r", "\\!\\(\\)\\*\\@\\^\\_\\%\\&\\+\\/\\`", "x\\", "\\q\\9", "caf\[EAcute]\\n",
+                "\\[ExponentialE]\\[DoubleStruckCapitalR]"}},
+        Map[Symbol[private <> "escapedText"], texts] === Map[StringReplace[#, Symbol[private <> "$escapes"]] &, texts]],
+    True,
+    TestID -> "wl strings: the typed decoding of a string's escapes gives what the rules give"]
+VerificationTest[
     WolframLanguageProgram["x = 1\n\ny = x + 1"][[3]],
     {0, 5, 2, 1, 3, 1, 1, 3, 0, 1, 0, 0, 1, 1, 5, 8, 12, 16, 2, 6, 9, 13, 17, 1, 4, 1, 2, 5, 10, 3, 5},
     TestID -> "wl program: the leaves' kinds, marks, starts and ends, and a row for each statement"]

@@ -891,7 +891,17 @@ roundedMachineReal[m_Integer, e_Integer] := If[m === 2^53, N[2^(e + 1)], N[m 2^(
 	kept as written [WL 15.0.0]. A \ before a return or a newline continues
 	the line, the newline after a return staying. *)
 stringValue[s_String] := With[{inner = StringTake[s, {2, -2}]},
-	If[StringFreeQ[inner, "\\"], inner, StringReplace[inner, $escapes]]
+	If[StringFreeQ[inner, "\\"], inner, escapedText[inner]]
+]
+
+(* A text's escapes decoded by the typed code, or by the rules where it leaves them to them. Code
+	that Compile made, which takes longer for each character than the rules, leaves a text of more
+	than 128 characters to them. *)
+escapedText[text_String] := If[ StringLength[text] > 128 && Head[fastStringValueFunction] === CompiledFunction,
+	StringReplace[text, $escapes],
+	With[{decoded = fastStringValueFunction[Developer`ToPackedArray[ToCharacterCode[text]], $fastEscapeTable, $fastLongCharTable]},
+		If[First[decoded] === 0, FromCharacterCode[Rest[decoded]], StringReplace[text, $escapes]]
+	]
 ]
 
 $escapes = {

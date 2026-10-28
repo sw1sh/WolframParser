@@ -137,10 +137,23 @@ $fastOp2Flat := $fastOp2Flat = Developer`ToPackedArray @ Flatten[
 	$fastOp2 + 4096 ReplacePart[ConstantArray[0, {128, 128}], Map[(Take[#, 2] + 1) -> 1 &, Keys[$fastOp3]]]
 ]
 $fastOp3Table = Developer`ToPackedArray[Flatten[KeyValueMap[Append[#1, #2] &, $fastOp3]]]
-$fastLongOpTable := $fastLongOpTable = With[
-	{entries = Map[Join[{Length[#[[1]]]}, #[[1]], {#[[2]]}] &, SortBy[KeyValueMap[{ToCharacterCode[#1], #2} &, $fastLongNameOps], {Length[#[[1]]] &, First}]]},
+$fastLongOpTable := $fastLongOpTable = longNameTable[$fastLongNameOps]
+
+(* a table of long names, packed, from an association of each name with an integer: {how many,
+	where each begins, then each, by length and then by codes, its length, its codes and its
+	integer} *)
+longNameTable[values_Association] := With[
+	{entries = Map[Join[{Length[#[[1]]]}, #[[1]], {#[[2]]}] &, SortBy[KeyValueMap[{ToCharacterCode[#1], #2} &, values], {Length[#[[1]]] &, First}]]},
 	Developer`ToPackedArray[Join[{Length[entries]}, 1 + Length[entries] + Most[FoldList[Plus, 1, Length /@ entries]], Flatten[entries]]]
 ]
+
+(* the tables of a string's escapes, packed: for each character code below 128, the code of the
+	character a backslash before it gives, -2 for none, as for a line continuation, and -1 where
+	no escape of two characters begins with it; and the long names by their characters' codes *)
+$fastEscapeTable := $fastEscapeTable = Developer`ToPackedArray @ ReplacePart[ConstantArray[-1, 128],
+	Cases[$escapes, Verbatim[Rule][e_String /; StringLength[e] === 2, c_String] :> (Last[ToCharacterCode[e]] + 1 -> Replace[ToCharacterCode[c], {{} -> -2, {code_} :> code}])]
+]
+$fastLongCharTable := $fastLongCharTable = longNameTable[Map[First[ToCharacterCode[#]] &, longNameCharacters[]]]
 $fastOpenAssociation = fastOp["<|"]; $fastCloseAssociation = fastOp["|>"]
 $fastGet = fastOp["<<"]; $fastPut = fastOp[">>"]; $fastPutAppend = fastOp[">>>"]
 $fastSpecial := $fastSpecial = Developer`ToPackedArray[{$fastOpenAssociation, $fastCloseAssociation, $fastGet, $fastPut, $fastPutAppend, fastOp["=."], fastOp["="],
@@ -1882,6 +1895,74 @@ $fastEscapesDeclaration = FunctionDeclaration[fastEscapes,
 
 (* the typed escape scan run here, fixed at its first use *)
 fastEscapesFunction := fastEscapesFunction = typedFunction[fastEscapes, $fastEscapesDeclaration, {$lexLongNameDeclaration}]
+
+(* The characters of a string's text, its escapes decoded as $escapes decodes them, typed code over
+	packed integers: the codes of the text between its quotes and the tables of $fastEscapeTable and
+	$fastLongCharTable -> {0, then the codes of its characters}, or {1} for a text with an escape
+	whose code no character has, or half of a surrogate pair, which the rules decode. An escape of
+	two characters is the table's; \ooo, \.hh, \:hhhh and \|hhhhhh give the character of their code,
+	a long name the table has its character, and a backslash before anything else stays. *)
+$fastStringValueDeclaration = FunctionDeclaration[fastStringValue,
+	Typed[{"PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1], "PackedArray"::["MachineInteger", 1]} ->
+		"PackedArray"::["MachineInteger", 1]
+	] @
+	Function[{svCodes, svEscapes, svLongs},
+		Native`UncheckedBlock[Module[{n = Length[svCodes], out, k = 1, p = 1, c = 0, d = 0, v = 0, w = 0, h = 0, q = 0, j = 0, size = 0,
+				lo = 1, hi = 0, mid = 0, a = 0, len = 0, cmp = 0, failed = 0
+		},
+			out = Native`UncheckedArray[0, n + 1];
+			While[ p <= n && failed == 0,
+				c = svCodes[[p]];
+				If[ c != 92 || p == n,
+					k++; out[[k]] = c; p++,
+					d = svCodes[[p + 1]]; v = If[d < 128, svEscapes[[d + 1]], -1]; w = 2;
+					If[ v == -1,
+						Which[
+							48 <= d <= 55,
+								If[ p + 3 <= n && 48 <= svCodes[[p + 2]] <= 55 && 48 <= svCodes[[p + 3]] <= 55,
+									v = 64 (d - 48) + 8 (svCodes[[p + 2]] - 48) + svCodes[[p + 3]] - 48; w = 4
+								],
+							d == 46 || d == 58 || d == 124,
+								h = If[d == 46, 2, If[d == 58, 4, 6]]; q = p + 2; a = 0;
+								While[ q < p + 2 + h && q <= n && (48 <= svCodes[[q]] <= 57 || 65 <= svCodes[[q]] <= 70 || 97 <= svCodes[[q]] <= 102),
+									a = 16 a + If[svCodes[[q]] <= 57, svCodes[[q]] - 48, If[svCodes[[q]] <= 70, svCodes[[q]] - 55, svCodes[[q]] - 87]]; q++
+								];
+								If[ q == p + 2 + h,
+									v = a; w = 2 + h;
+									If[v > 1114111 || 55296 <= v <= 57343, failed = 1]
+								],
+							d == 91,
+								j = p + 2;
+								While[j <= n && (48 <= svCodes[[j]] <= 57 || 65 <= svCodes[[j]] <= 90 || 97 <= svCodes[[j]] <= 122), j++];
+								If[ j > p + 2 && j <= n && svCodes[[j]] == 93,
+									size = j - p - 2; lo = 1; hi = svLongs[[1]];
+									While[ v == -1 && lo <= hi,
+										mid = Quotient[lo + hi, 2]; a = svLongs[[1 + mid]]; len = svLongs[[a]];
+										cmp = len - size; q = 1;
+										While[cmp == 0 && q <= len, cmp = svLongs[[a + q]] - svCodes[[p + 1 + q]]; q++];
+										Which[cmp < 0, lo = mid + 1, cmp > 0, hi = mid - 1, True, v = svLongs[[a + len + 1]]; w = j + 1 - p]
+									]
+								]
+						]
+					];
+					Which[
+						v >= 0,
+							k++; out[[k]] = v; p += w,
+						v == -2,
+							p += w,
+						True,
+							k++; out[[k]] = 92; p++
+					]
+				]
+			];
+			out[[1]] = failed;
+			Take[out, If[failed == 1, 1, k]]
+		]]
+	]
+]
+
+(* the typed decoding of a string's escapes run here, fixed at its first use *)
+fastStringValueFunction := fastStringValueFunction = typedFunction[fastStringValue, $fastStringValueDeclaration]
 
 (* The program of a source read whole, typed code over packed integers that calls the lexer, the
 	parser, the lines and the parts each once, with nothing between them: the codes and three zeros
