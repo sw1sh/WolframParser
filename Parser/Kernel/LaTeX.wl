@@ -379,9 +379,7 @@ buildEnv[name_String, rowsIn_List] :=
 			and render NO extra row, so drop trailing all-empty rows -
 			but never drop the last surviving row (an all-empty matrix
 			should still be a 1x1 empty grid, not nothing). *)
-		While[Length[rows] > 1 && emptyMatrixRowQ[Last[rows]],
-			rows = Most[rows]
-		];
+		rows = trailingDropped[rows, emptyMatrixRowQ];
 		width = Max[Length /@ rows, 1];
 		padded = Map[PadRight[#, width, ""] &, rows];
 		grid = GridBox[padded];
@@ -2021,45 +2019,106 @@ LaTeXMathParser := ParseAction[ws ~~ outerRow, #2 &]
 	AND the delimiter together (the next char or \macro). This loses the
 	visual but keeps the input parseable. The negative lookahead
 	(?![a-zA-Z]) keeps `\bigcup` etc. from being mangled. *)
-(* Walk forward from `pos` (1-indexed) skipping whitespace, then read
-	one TeX argument: either a balanced `{...}` group (handles nested
-	braces), a `\command` token, or a single non-brace character.
-	Returns {argString, newPos}, or Missing[] if at end of input. *)
-readArgToken[s_String, pos0_Integer] := Module[{
-	n = StringLength[s], pos = pos0, ch, depth, start
-},
-	While[pos <= n && StringMatchQ[StringTake[s, {pos, pos}], WhitespaceCharacter],
-		pos++
-	];
-	If[pos > n, Return[Missing[]]];
-	ch = StringTake[s, {pos, pos}];
-	Which[
-		(* balanced brace group *)
-		ch === "{",
-			depth = 1; start = pos; pos++;
-			While[pos <= n && depth > 0,
-				Switch[StringTake[s, {pos, pos}],
-					"{", depth++,
-					"}", depth--
-				];
-				pos++
-			];
-			If[depth =!= 0, Missing[], {StringTake[s, {start, pos - 1}], pos}],
-		(* `\command` (letters) or single-char escape *)
-		ch === "\\",
-			start = pos; pos++;
-			If[pos <= n && StringMatchQ[StringTake[s, {pos, pos}], LetterCharacter],
-				While[pos <= n && StringMatchQ[StringTake[s, {pos, pos}], LetterCharacter],
-					pos++
-				],
-				pos++
-			];
-			{StringTake[s, {start, pos - 1}], pos},
-		(* single non-brace character *)
-		True,
-			{ch, pos + 1}
+(* ::Subsection:: *)
+(*Brackets and text of a source*)
+
+(* Each opening bracket of the codes of a source by the closing one that closes it, as a walk that
+	counts them from the opening one reads it: a closer with none open before it closes nothing, and
+	an opener nothing closes has none. *)
+pairClosers::usage = "pairClosers[codes, open, close] gives an association of the place of each code open among the codes to the \
+place of the code close that closes it."
+pairClosers[codes_List, open_Integer, close_Integer] := Association @ Flatten @ Last @ Fold[
+	closerStep,
+	{{}, {}},
+	With[{at = Flatten[Position[codes, open | close, {1}]]}, Transpose[{at, Unitize[codes[[at]] - close]}]]
+]
+
+closerStep::usage = "closerStep[{open, pairs}, {at, opener}] gives the brackets left open and the pairs, linked lists, after the \
+bracket at at, an opener for opener 1."
+closerStep[{open_List, pairs_List}, {at_Integer, 1}] := {{at, open}, pairs}
+closerStep[{{}, pairs_List}, {_Integer, 0}] := {{}, pairs}
+closerStep[{{last_Integer, below_List}, pairs_List}, {at_Integer, 0}] := {below, {last -> at, pairs}}
+
+braceClosers::usage = "braceClosers[codes] gives an association of the place of each { of the codes to that of the } that closes it."
+braceClosers[codes_List] := pairClosers[codes, 123, 125]
+
+braceDepths::usage = "braceDepths[codes] gives how many braces are open after each of the codes."
+braceDepths[codes_List] := Accumulate[Unitize[codes - 125] - Unitize[codes - 123]]
+
+codesFrom::usage = "codesFrom[codes, at, test] gives the first place from at on whose code test does not take, past the codes where it \
+takes all."
+codesFrom[codes_List, at_Integer, test_] := NestWhile[# + 1 &, at, # <= Length[codes] && test[codes[[#]]] &]
+
+whitespaceCodeQ::usage = "whitespaceCodeQ[c] is True where the character of the code c is whitespace."
+whitespaceCodeQ[c_Integer] := StringMatchQ[FromCharacterCode[c], WhitespaceCharacter]
+
+letterCodeQ::usage = "letterCodeQ[c] is True where the character of the code c is a letter."
+letterCodeQ[c_Integer] := StringMatchQ[FromCharacterCode[c], LetterCharacter]
+
+codesText::usage = "codesText[codes, {a, b}] gives the text of the codes from a to b, \"\" where b is before a."
+codesText[codes_List, {a_Integer, b_Integer}] := FromCharacterCode[Take[codes, {a, b}]]
+
+(* A pass over a source keeps the pieces of its text it has made, last first, a linked list, and
+	the place it has read to. *)
+piecesText::usage = "piecesText[{source, pieces, at}] gives the text of the pieces, a linked list, last first, and of the codes of the \
+source from at on."
+piecesText[{{codes_List, __}, pieces_List, at_Integer}] := StringJoin[Reverse[Flatten[{codesText[codes, {at, Length[codes]}], pieces}]]]
+
+(* The top-level pieces of a source, in order: {"Text", text} for its text outside every group, a }
+	no { opens among it, and {"Group", contents} for each balanced {...}; from a { no } closes, the
+	rest is text. *)
+bracePieces::usage = "bracePieces[s] gives the top-level pieces of s, {\"Text\", text} and {\"Group\", contents} in order, the rest from \
+a { no } closes text."
+bracePieces[s_String] := With[{codes = ToCharacterCode[s]},
+	piecesOfGroups[codes, Fold[groupStep, {0, 0, {}}, With[{at = Flatten[Position[codes, 123 | 125, {1}]]}, Transpose[{at, codes[[at]]}]]]]
+]
+
+groupStep::usage = "groupStep[{depth, open, spans}, {at, code}] gives how many braces are open, where the outer group opened and the \
+spans of the top-level groups, a linked list, after the brace of the code at at."
+groupStep[{0, _Integer, spans_List}, {at_Integer, 123}] := {1, at, spans}
+groupStep[{depth_Integer, open_Integer, spans_List}, {_Integer, 123}] := {depth + 1, open, spans}
+groupStep[{0, open_Integer, spans_List}, {_Integer, 125}] := {0, open, spans}
+groupStep[{1, open_Integer, spans_List}, {at_Integer, 125}] := {0, open, {{open, at}, spans}}
+groupStep[{depth_Integer, open_Integer, spans_List}, {_Integer, 125}] := {depth - 1, open, spans}
+
+piecesOfGroups::usage = "piecesOfGroups[codes, {depth, open, spans}] gives the top-level pieces of the codes from the spans of their \
+top-level groups, the rest from open text where depth is not 0."
+piecesOfGroups[codes_List, {depth_Integer, open_Integer, linked_List}] := With[
+	{spans = Reverse[Partition[Flatten[linked], 2]], end = If[depth === 0, Length[codes] + 1, open]},
+	Join[
+		Riffle[
+			Map[{"Text", codesText[codes, #]} &, Transpose[{Prepend[spans[[All, 2]] + 1, 1], Append[spans[[All, 1]] - 1, end - 1]}]],
+			Map[{"Group", codesText[codes, {#[[1]] + 1, #[[2]] - 1}]} &, spans]
+		],
+		If[depth === 0, {}, {{"Text", codesText[codes, {open, Length[codes]}]}}]
 	]
 ]
+
+groupsRewritten::usage = "groupsRewritten[s, f] gives s with the contents c of each top-level brace group f[c]."
+groupsRewritten[s_String, f_] := StringJoin[Replace[bracePieces[s], {{"Text", t_String} :> t, {"Group", c_String} :> "{" <> f[c] <> "}"}, {1}]]
+
+trailingDropped::usage = "trailingDropped[rows, test] gives the rows without those test takes at their end, the first kept."
+trailingDropped[rows_List, test_] := Drop[rows, -Max[0, Min[LengthWhile[Reverse[rows], test], Length[rows] - 1]]]
+
+(* One TeX argument of a source from its place at on, past the whitespace before it: a balanced
+	{...} group, braces nested in it, a \command of letters, a \ and the character after it, or a
+	single character: {its text, the place after it}, or Missing[] at the end of the source, at a \
+	that ends it or at a { no } closes. The source is {codes, braces, brackets}, its codes and the closers of its braces
+	and of its brackets. *)
+argToken::usage = "argToken[source, at] gives {the text of the TeX argument of the source from at on, past whitespace, the place after \
+it}, or Missing[]."
+argToken[source : {codes_List, _, _}, from_Integer] := argTokenAt[source, codesFrom[codes, from, whitespaceCodeQ]]
+
+argTokenAt::usage = "argTokenAt[source, at] gives {the text of the TeX argument of the source that begins at at, the place after it}, \
+or Missing[]."
+argTokenAt[{codes_List, _, _}, at_Integer] /; at > Length[codes] || at === Length[codes] && codes[[at]] === 92 := Missing[]
+argTokenAt[{codes_List, braces_Association, _}, at_Integer] /; codes[[at]] === 123 :=
+	Replace[Lookup[braces, at, None], {None -> Missing[], close_Integer :> {codesText[codes, {at, close}], close + 1}}]
+argTokenAt[{codes_List, _, _}, at_Integer] /; codes[[at]] === 92 := With[
+	{end = If[letterCodeQ[codes[[at + 1]]], codesFrom[codes, at + 1, letterCodeQ], at + 2]},
+	{codesText[codes, {at, end - 1}], end}
+]
+argTokenAt[{codes_List, _, _}, at_Integer] := {codesText[codes, {at, at}], at + 1}
 
 (* `\frac{a}{b}` already has braces; wrap the unbraced shape. *)
 ensureBraced[a_String] :=
@@ -2118,80 +2177,49 @@ $shortNameRegex = RegularExpression[
 	")(?![a-zA-Z])"
 ]
 
-(* Skip past an optional `[...]` bracketed arg (with balanced-bracket
-	awareness for nested cases like `\sqrt[\sqrt[2]{4}]{16}`).  Returns
-	`{"[...]", newPos}`, or `{"", pos}` if no `[` is next. *)
-skipBracketedOpt[s_String, pos0_Integer] := Module[{
-	n = StringLength[s], pos = pos0, depth, start
-},
-	While[pos <= n && StringMatchQ[StringTake[s, {pos, pos}], WhitespaceCharacter],
-		pos++
-	];
-	If[pos > n || StringTake[s, {pos, pos}] =!= "[",
-		Return[{"", pos0}]
-	];
-	depth = 1; start = pos; pos++;
-	While[pos <= n && depth > 0,
-		Switch[StringTake[s, {pos, pos}],
-			"[", depth++,
-			"]", depth--
-		];
-		pos++
-	];
-	{StringTake[s, {start, pos - 1}], pos}
+(* An optional [...] argument of a source at at, past whitespace, its brackets balanced, as in
+	\sqrt[\sqrt[2]{4}]{16}: {its text, the place after it}, a [ no ] closes taking the rest of the
+	source; {"", at} where no [ is there. *)
+bracketedOpt::usage = "bracketedOpt[source, at] gives {the text of the optional [...] argument of the source at at, past whitespace, \
+the place after it}, or {\"\", at}."
+bracketedOpt[{codes_List, _, brackets_Association}, from_Integer] := With[{at = codesFrom[codes, from, whitespaceCodeQ]},
+	If[ at <= Length[codes] && codes[[at]] === 91,
+		With[{close = Lookup[brackets, at, Length[codes]]}, {codesText[codes, {at, close}], close + 1}],
+		{"", from}
+	]
 ]
 
-expandShorthand[s_String] := Module[{
-	n = StringLength[s], pos = 1, out = "",
-	rel, abs, name, after, opt, a1, a2
-},
-	While[pos <= n,
-		(* StringPosition[s, patt, 1] returns the FIRST occurrence in
-			the whole string, not the first one at-or-after `pos`. Search
-			the remainder explicitly so the loop advances past earlier
-			matches we already processed. *)
-		rel = StringPosition[StringTake[s, {pos, n}], $shortNameRegex,
-			1, IgnoreCase -> False];
-		If[ rel === {},
-			out = out <> StringTake[s, {pos, n}]; pos = n + 1,
-			Module[{p = First[rel]},
-				abs = {p[[1]] + pos - 1, p[[2]] + pos - 1};
-				out = out <> StringTake[s, {pos, abs[[1]] - 1}];
-				name = StringTake[s, {abs[[1]] + 1, abs[[2]]}];   (* strip leading \ *)
-				(* Preserve a `[...]` optional arg (e.g. `\sqrt[3]{27}`)
-					- the parser still reads it via `Optional[bracketedArgRef]`,
-					so we just skip past it without brace-wrapping. *)
-				{opt, after} = skipBracketedOpt[s, abs[[2]] + 1];
-				Which[
-					MemberQ[$twoArgShortNames, name],
-						a1 = readArgToken[s, after];
-						If[ a1 === Missing[],
-							out = out <> StringTake[s, {abs[[1]], n}]; pos = n + 1,
-							a2 = readArgToken[s, a1[[2]]];
-							If[ a2 === Missing[],
-								out = out <> "\\" <> name <> opt <>
-									expandShorthandInArg @ ensureBraced[a1[[1]]];
-								pos = a1[[2]],
-								out = out <> "\\" <> name <> opt <>
-									expandShorthandInArg @ ensureBraced[a1[[1]]] <>
-									expandShorthandInArg @ ensureBraced[a2[[1]]];
-								pos = a2[[2]]
-							]
-						],
-					MemberQ[$oneArgShortNames, name],
-						a1 = readArgToken[s, after];
-						If[ a1 === Missing[],
-							out = out <> StringTake[s, {abs[[1]], n}]; pos = n + 1,
-							out = out <> "\\" <> name <> opt <>
-								expandShorthandInArg @ ensureBraced[a1[[1]]];
-							pos = a1[[2]]
-						]
-				]
-			]
-		]
-	];
-	out
+(* Each registered short-arg command, its optional [...] argument kept as it is, which the parser
+	reads by Optional[bracketedArgRef], takes its arguments, each braced; a command whose arguments
+	run past the source keeps the rest of the source as it is. *)
+expandShorthand[s_String] := With[{codes = ToCharacterCode[s]},
+	piecesText @ Fold[shorthandStep, {{codes, braceClosers[codes], pairClosers[codes, 91, 93]}, {}, 1}, StringPosition[s, $shortNameRegex]]
 ]
+
+shorthandStep::usage = "shorthandStep[{source, pieces, at}, {start, end}] gives the state after the short-arg command from start to end, \
+where it begins at at or past it."
+shorthandStep[state : {_, _, at_Integer}, {start_Integer, _Integer}] /; start < at := state
+shorthandStep[{source : {codes_List, _, _}, pieces_List, at_Integer}, {start_Integer, end_Integer}] := With[
+	{name = codesText[codes, {start + 1, end}], opt = bracketedOpt[source, end + 1]},
+	shorthandApplied[source, pieces, at, start, "\\" <> name <> First[opt],
+		shorthandArguments[source, If[MemberQ[$twoArgShortNames, name], 2, 1], argToken[source, Last[opt]]]]
+]
+
+shorthandArguments::usage = "shorthandArguments[source, n, first] gives the arguments, {text, the place after it} each, that a command \
+of n arguments takes from the source, first its first, Missing[] where it has none."
+shorthandArguments[_List, _Integer, Missing[]] := Missing[]
+shorthandArguments[_List, 1, first_List] := {first}
+shorthandArguments[source_List, 2, first_List] := Replace[argToken[source, Last[first]], {Missing[] -> {first}, second_List :> {first, second}}]
+
+shorthandApplied::usage = "shorthandApplied[source, pieces, at, start, command, arguments] gives the state after the command at start, \
+the text from at to it before it, its arguments braced, or the rest of the source where it has none."
+shorthandApplied[source : {codes_List, _, _}, pieces_List, at_Integer, _Integer, _String, Missing[]] :=
+	{source, {codesText[codes, {at, Length[codes]}], pieces}, Length[codes] + 1}
+shorthandApplied[source : {codes_List, _, _}, pieces_List, at_Integer, start_Integer, command_String, arguments_List] := {
+	source,
+	{StringJoin[codesText[codes, {at, start - 1}], command, Map[expandShorthandInArg[ensureBraced[First[#]]] &, arguments]], pieces},
+	Last[Last[arguments]]
+}
 
 (* TeX text-mode accents: `\'a`, `\"a`, `\.a`, `\`a`, `\=a`, `\~a`,
 	`\^a` (and `\H{a}`, `\r{a}`, `\u{a}`, `\v{a}` letter variants
@@ -2246,37 +2274,23 @@ textModeSubstitute[s_String] := StringReplace[
 
 (* Walk the source, find each `\text{...}` region (with balanced
 	braces), apply textModeSubstitute inside. *)
-applyTextModeSubstitutions[s_String] := Module[{
-	n = StringLength[s], pos = 1, out = "", match, inner, after, depth, start
-},
-	While[pos <= n,
-		match = StringPosition[StringTake[s, {pos, n}],
-			RegularExpression["\\\\text(?:bf|it|tt|sf|rm|normal)?\\s*\\{"],
-			1, IgnoreCase -> False];
-		If[ match === {},
-			out = out <> StringTake[s, {pos, n}]; pos = n + 1,
-			Module[{p = First[match], absStart, braceStart},
-				absStart = p[[1]] + pos - 1;
-				braceStart = p[[2]] + pos - 1;   (* the `{` *)
-				out = out <> StringTake[s, {pos, braceStart}];
-				(* find matching close brace *)
-				depth = 1; start = braceStart + 1; pos = start;
-				While[pos <= n && depth > 0,
-					Switch[StringTake[s, {pos, pos}],
-						"{", depth++,
-						"}", depth--
-					];
-					pos++
-				];
-				If[depth =!= 0,
-					out = out <> StringTake[s, {start, n}]; pos = n + 1,
-					inner = StringTake[s, {start, pos - 2}];
-					out = out <> textModeSubstitute[inner] <> "}";
-				]
-			]
-		]
-	];
-	out
+applyTextModeSubstitutions[s_String] := With[{codes = ToCharacterCode[s]},
+	piecesText @ Fold[
+		textModeStep,
+		{{codes, braceClosers[codes], <||>}, {}, 1},
+		StringPosition[s, RegularExpression["\\\\text(?:bf|it|tt|sf|rm|normal)?\\s*\\{"]]
+	]
+]
+
+textModeStep::usage = "textModeStep[{source, pieces, at}, {start, open}] gives the state after the \\text region whose command begins at \
+start and whose { is at open, where it begins at at or past it; one no } closes keeps the rest of the source."
+textModeStep[state : {_, _, at_Integer}, {start_Integer, _Integer}] /; start < at := state
+textModeStep[{source : {codes_List, braces_Association, _}, pieces_List, at_Integer}, {_Integer, open_Integer}] := Replace[
+	Lookup[braces, open, None],
+	{
+		None :> {source, {codesText[codes, {at, Length[codes]}], pieces}, Length[codes] + 1},
+		close_Integer :> {source, {codesText[codes, {at, open}] <> textModeSubstitute[codesText[codes, {open + 1, close - 1}]] <> "}", pieces}, close + 1}
+	}
 ]
 
 (* Plain-TeX infix fractions: `{a \over b}` = `\frac{a}{b}`,
@@ -2306,73 +2320,26 @@ $infixFracMap = <|
 	contains an infix-fraction token at TOP level (not nested in
 	another `{...}`), and rewrite if so. Recurse so nested groups
 	inside numerator / denominator get their own pass. *)
-rewriteInfixFractions[s_String] := Module[{
-	n = StringLength[s], pos = 1, out = "",
-	depth, start, contents, infixPos, infixName, num, den, j, recursed
-},
-	While[pos <= n,
-		If[ StringTake[s, {pos, pos}] =!= "{",
-			out = out <> StringTake[s, {pos, pos}]; pos++,
-			(* find matching close brace at the same depth *)
-			depth = 1; start = pos + 1; j = start;
-			While[j <= n && depth > 0,
-				Switch[StringTake[s, {j, j}],
-					"{", depth++, "}", depth--
-				];
-				j++
-			];
-			If[depth =!= 0,  (* unbalanced - emit rest as-is and stop *)
-				out = out <> StringTake[s, {pos, n}]; pos = n + 1,
-				contents = StringTake[s, {start, j - 2}];
-				(* find an infix token at TOP-level of `contents`
-					(depth tracker over `contents`). Use first hit only. *)
-				Module[{cd = 0, ci = 1, cn = StringLength[contents], hit = Missing[]},
-					While[ci <= cn && MissingQ[hit],
-						Switch[StringTake[contents, {ci, ci}],
-							"{", cd++,
-							"}", cd--
-						];
-						If[ cd === 0,
-							KeyValueMap[
-								Function[{key, fn},
-									If[ MissingQ[hit] &&
-											StringLength[contents] - ci + 1 >= StringLength[key] &&
-											StringTake[contents, {ci, ci + StringLength[key] - 1}] === key &&
-											(* boundary check: next char isn't a letter
-												(so \overrightarrow isn't matched as \over) *)
-											With[{afterPos = ci + StringLength[key]},
-												afterPos > cn ||
-												! StringMatchQ[StringTake[contents, {afterPos, afterPos}], LetterCharacter]
-											],
-										hit = {ci, key, fn}
-									]
-								],
-								$infixFracMap
-							]
-						];
-						ci++
-					];
-					If[ MissingQ[hit],
-						(* no infix - recurse into contents and emit *)
-						recursed = rewriteInfixFractions[contents];
-						out = out <> "{" <> recursed <> "}";
-						pos = j,
-						(* found infix - split, recurse each side *)
-						infixPos = hit[[1]];
-						infixName = hit[[2]];
-						num = StringTrim @ StringTake[contents, {1, infixPos - 1}];
-						den = StringTrim @ StringTake[contents,
-							{infixPos + StringLength[infixName], cn}];
-						out = out <> "{" <>
-							hit[[3]][rewriteInfixFractions[num], rewriteInfixFractions[den]] <>
-							"}";
-						pos = j
-					]
-				]
-			]
-		]
-	];
-	out
+rewriteInfixFractions[s_String] := groupsRewritten[s, infixFraction]
+
+infixFraction::usage = "infixFraction[contents] gives the contents of a brace group, the first infix-fraction token at its top level \
+made the fraction of the two sides, each rewritten so, or the contents rewritten so where it has none."
+infixFraction[contents_String] := With[{codes = ToCharacterCode[contents]},
+	{depths = braceDepths[codes]},
+	infixSplit[codes, SelectFirst[StringPosition[contents, Keys[$infixFracMap]], infixTokenQ[codes, depths, #] &, None]]
+]
+
+(* a token at the top level of the codes, no letter after it, so that \overrightarrow is no \over *)
+infixTokenQ::usage = "infixTokenQ[codes, depths, {start, end}] is True where the token from start to end is at the top level of the \
+codes, no letter after it."
+infixTokenQ[codes_List, depths_List, {start_Integer, end_Integer}] := depths[[start]] === 0 && (end === Length[codes] || !letterCodeQ[codes[[end + 1]]])
+
+infixSplit::usage = "infixSplit[codes, token] gives the fraction of the two sides of the infix-fraction token {start, end} of the codes, \
+each rewritten so, or the codes rewritten so for None."
+infixSplit[codes_List, None] := rewriteInfixFractions[FromCharacterCode[codes]]
+infixSplit[codes_List, {start_Integer, end_Integer}] := $infixFracMap[codesText[codes, {start, end}]][
+	rewriteInfixFractions[StringTrim[codesText[codes, {1, start - 1}]]],
+	rewriteInfixFractions[StringTrim[codesText[codes, {end + 1, Length[codes]}]]]
 ]
 
 (* Plain-TeX font switches `\rm`/`\it`/`\bf`/`\sf`/`\tt` were
@@ -2487,115 +2454,92 @@ rewriteAboveAtopVariants[s_String] :=
 	with no inter-parameter delimiters (the common KaTeX-corpus form).
 
 	defs[name] = {arity, body}; body holds literal `#1`/`#2`/... slots. *)
-extractDefs[s_String] := Module[
-	{n = StringLength[s], pos = 1, defs = <||>, out = "",
-	j, depth, name, start, body, k, end, arity, ch},
-	While[pos <= n,
-		If[ StringTake[s, {pos, Min[pos + 4, n]}] === "\\def\\",
-			j = pos + 5;
-			start = j;
-			While[j <= n && StringMatchQ[StringTake[s, {j, j}], LetterCharacter], j++];
-			name = StringTake[s, {start, j - 1}];
-			(* Parameter template: count `#1#2...#N` (must be sequential). *)
-			arity = 0;
-			While[ j + 1 <= n && StringTake[s, {j, j}] === "#" &&
-					StringTake[s, {j + 1, j + 1}] === ToString[arity + 1],
-				arity++; j += 2
-			];
-			While[j <= n && StringMatchQ[StringTake[s, {j, j}], WhitespaceCharacter], j++];
-			If[j <= n && StringTake[s, {j, j}] === "{" && name =!= "",
-				depth = 1; k = j + 1; end = k;
-				While[end <= n && depth > 0,
-					ch = StringTake[s, {end, end}];
-					Switch[ch, "{", depth++, "}", depth--];
-					end++
-				];
-				If[ depth === 0,
-					body = StringTake[s, {k, end - 2}];
-					defs[name] = {arity, body};
-					pos = end,
-					out = out <> StringTake[s, {pos, n}]; pos = n + 1
-				],
-				out = out <> StringTake[s, {pos, j - 1}];
-				pos = j
-			],
-			out = out <> StringTake[s, {pos, pos}]; pos++
-		]
-	];
-	{defs, out}
+extractDefs[s_String] := With[{codes = ToCharacterCode[s]},
+	definitionsOf @ Fold[definitionStep, {{codes, braceClosers[codes], <||>}, <||>, {}, 1}, StringPosition[s, "\\def\\"]]
 ]
 
-(* Substitute `#i` placeholders in body with the corresponding arg. *)
-substituteMacroBody[body_String, args_List] := Module[{out = body},
-	Do[
-		out = StringReplace[out, "#" <> ToString[i] -> args[[i]]],
-		{i, Length[args]}
-	];
-	out
+definitionsOf::usage = "definitionsOf[{source, defs, pieces, at}] gives {defs, the text of the source without its definitions}."
+definitionsOf[{source_List, defs_Association, pieces_List, at_Integer}] := {defs, piecesText[{source, pieces, at}]}
+
+definitionStep::usage = "definitionStep[{source, defs, pieces, at}, {start, end}] gives the state after the \\def\\ at start, where it \
+begins at at or past it."
+definitionStep[state : {_, _, _, at_Integer}, {start_Integer, _Integer}] /; start < at := state
+definitionStep[{source : {codes_List, _, _}, defs_Association, pieces_List, at_Integer}, {start_Integer, _Integer}] := With[
+	{nameEnd = codesFrom[codes, start + 5, letterCodeQ]},
+	{parameters = parameterCount[codes, nameEnd]},
+	definitionAt[source, defs, pieces, at, start, codesText[codes, {start + 5, nameEnd - 1}], First[parameters],
+		codesFrom[codes, Last[parameters], whitespaceCodeQ]]
 ]
 
-(* One-shot expansion of a single macro by name through the whole string.
-	Hand-walked so we can pull `arity` balanced `{...}` arguments after
-	each `\NAME` call site.  For arity-0 macros this degenerates to
-	pure replacement; for parametric ones it grabs the args, substitutes,
-	and emits the expanded text. *)
-expandOneMacro[s_String, name_String, arity_Integer, body_String] := Module[
-	{n = StringLength[s], pos = 1, out = "", nameLen = StringLength[name],
-	after, j, k, depth, args, argStart, expanded, ch, abort},
-	While[pos <= n,
-		If[ pos + nameLen <= n &&
-			StringTake[s, {pos, pos + nameLen}] === "\\" <> name &&
-			(pos + nameLen + 1 > n ||
-			!StringMatchQ[StringTake[s, {pos + nameLen + 1, pos + nameLen + 1}], LetterCharacter]),
-			after = pos + nameLen + 1;
-			j = after; args = {}; abort = False;
-			Do[
-				While[j <= n && StringMatchQ[StringTake[s, {j, j}], WhitespaceCharacter], j++];
-				If[ j > n || StringTake[s, {j, j}] =!= "{",
-					abort = True; Break[]
-				];
-				depth = 1; k = j + 1; argStart = k;
-				While[k <= n && depth > 0,
-					ch = StringTake[s, {k, k}];
-					Switch[ch, "{", depth++, "}", depth--];
-					k++
-				];
-				If[ depth =!= 0, abort = True; Break[]];
-				AppendTo[args, StringTake[s, {argStart, k - 2}]];
-				j = k,
-				{arity}
-			];
-			If[ abort,
-				out = out <> StringTake[s, {pos, pos}]; pos++,
-				expanded = If[arity === 0, body, substituteMacroBody[body, args]];
-				out = out <> expanded;
-				pos = j
-			],
-			out = out <> StringTake[s, {pos, pos}]; pos++
-		]
-	];
-	out
+(* a parameter template #1#2...#N, the numbers in turn, up to 9 *)
+parameterCount::usage = "parameterCount[codes, at] gives {how many parameters #1#2... the codes have from at on, the place after them}."
+parameterCount[codes_List, at_Integer] := NestWhile[
+	{First[#] + 1, Last[#] + 2} &,
+	{0, at},
+	Last[#] + 1 <= Length[codes] && First[#] < 9 && codes[[Last[#]]] === 35 && codes[[Last[#] + 1]] === 49 + First[#] &
 ]
 
-(* Iterate macro expansion to a small fixed point. *)
-expandUserMacros[s_String, defs_Association] := Module[{cur = s, prev, n = 8},
-	While[n > 0,
-		prev = cur;
-		KeyValueMap[
-			Function[{name, spec},
-				cur = expandOneMacro[cur, name, spec[[1]], spec[[2]]]
-			],
-			defs
-		];
-		If[cur === prev, n = 0, n--]
-	];
-	cur
+definitionAt::usage = "definitionAt[source, defs, pieces, at, start, name, arity, open] gives the state after the definition of name, \
+of arity parameters, at start, its body a brace group at open; one without a name or a body keeps its text."
+definitionAt[source : {codes_List, braces_Association, _}, defs_Association, pieces_List, at_Integer, start_Integer, name_String,
+	arity_Integer, open_Integer] /; name =!= "" && open <= Length[codes] && codes[[open]] === 123 := Replace[
+	Lookup[braces, open, None],
+	{
+		None :> {source, defs, {codesText[codes, {at, Length[codes]}], pieces}, Length[codes] + 1},
+		close_Integer :> {source, Join[defs, <|name -> {arity, codesText[codes, {open + 1, close - 1}]}|>], {codesText[codes, {at, start - 1}], pieces},
+			close + 1}
+	}
+]
+definitionAt[source : {codes_List, _, _}, defs_Association, pieces_List, at_Integer, _Integer, _String, _Integer, open_Integer] :=
+	{source, defs, {codesText[codes, {at, open - 1}], pieces}, open}
+
+(* Substitute `#i` placeholders in body with the corresponding arg, #1 first. *)
+substituteMacroBody[body_String, args_List] := Fold[StringReplace[#1, "#" <> ToString[#2] -> args[[#2]]] &, body, Range[Length[args]]]
+
+(* One round of expansion of a single macro by name through the whole string: each \NAME, no letter
+	after it, with its arity of balanced {...} arguments after it, whitespace before each, is its
+	body with the arguments in it; one without them keeps its text. The expanded text is not read
+	again in the round. *)
+expandOneMacro[s_String, name_String, arity_Integer, body_String] := With[{codes = ToCharacterCode[s]},
+	piecesText @ Fold[
+		macroStep[arity, body],
+		{{codes, braceClosers[codes], <||>}, {}, 1},
+		Select[StringPosition[s, "\\" <> name], #[[2]] === Length[codes] || !letterCodeQ[codes[[#[[2]] + 1]]] &]
+	]
 ]
 
-applyUserDefs[s_String] := Module[{defs, stripped},
-	{defs, stripped} = extractDefs[s];
-	expandUserMacros[stripped, defs]
+macroStep::usage = "macroStep[arity, body][{source, pieces, at}, {start, end}] gives the state after the call of the macro from start to \
+end, where it begins at at or past it."
+macroStep[_Integer, _String][state : {_, _, at_Integer}, {start_Integer, _Integer}] /; start < at := state
+macroStep[arity_Integer, body_String][{source : {codes_List, braces_Association, _}, pieces_List, at_Integer}, {start_Integer, end_Integer}] := Replace[
+	macroArguments[codes, braces, end + 1, arity],
+	{
+		None -> {source, pieces, at},
+		{arguments_List, next_Integer} :> {source, {codesText[codes, {at, start - 1}] <> If[arity === 0, body, substituteMacroBody[body, arguments]], pieces}, next}
+	}
 ]
+
+macroArguments::usage = "macroArguments[codes, braces, at, n] gives {the contents of the n brace arguments from at on, whitespace before \
+each, the place after them}, or None where one is not there."
+macroArguments[codes_List, braces_Association, at_Integer, n_Integer] := Fold[macroArgument[codes, braces], {{}, at}, Range[n]]
+
+macroArgument::usage = "macroArgument[codes, braces][{arguments, at}, i] gives the arguments with that of the brace group at at, past \
+whitespace, and the place after it, or None."
+macroArgument[_List, _Association][None, _Integer] := None
+macroArgument[codes_List, braces_Association][{arguments_List, at_Integer}, _Integer] := With[{open = codesFrom[codes, at, whitespaceCodeQ]},
+	If[ open <= Length[codes] && codes[[open]] === 123 && KeyExistsQ[braces, open],
+		{Append[arguments, codesText[codes, {open + 1, braces[open] - 1}]], braces[open] + 1},
+		None
+	]
+]
+
+(* Macro expansion to a fixed point, of at most 8 rounds, each macro expanded once in each. *)
+expandUserMacros[s_String, defs_Association] := NestWhile[macroRound[defs], s, UnsameQ, 2, 8]
+
+macroRound::usage = "macroRound[defs][s] gives s with each macro of defs expanded once through it, in turn."
+macroRound[defs_Association][s_String] := Fold[expandOneMacro[#1, First[#2], #2[[2, 1]], #2[[2, 2]]] &, s, Normal[defs]]
+
+applyUserDefs[s_String] := Apply[expandUserMacros[#2, #1] &, extractDefs[s]]
 
 (* TeX `\color{X}` switches the current group's color for the
 	REST of the group - it's a scoping switch, not a 2-arg command.
@@ -2607,67 +2551,27 @@ applyUserDefs[s_String] := Module[{defs, stripped},
 	suffix so multiple `\color` switches in the same group chain
 	correctly (`\color{red}red\color{blue}blue` -> red text then
 	blue text). *)
-rewriteScopedColor[s_String] := Module[{
-	n = StringLength[s], pos = 1, out = "",
-	depth, start, contents, j, ch, rewritten, colorPos, colorEnd, colorArg,
-	argStart, argDepth, k, prefix, suffix
-},
-	While[pos <= n,
-		If[ StringTake[s, {pos, pos}] =!= "{",
-			out = out <> StringTake[s, {pos, pos}]; pos++,
-			depth = 1; start = pos + 1; j = start;
-			While[j <= n && depth > 0,
-				Switch[StringTake[s, {j, j}], "{", depth++, "}", depth--];
-				j++
-			];
-			If[ depth =!= 0,
-				out = out <> StringTake[s, {pos, n}]; pos = n + 1,
-				contents = StringTake[s, {start, j - 2}];
-				(* Look for the leftmost top-level `\color{...}` inside
-					contents.  Top-level means depth-0 (not nested in
-					another `{...}`). *)
-				colorPos = 0;
-				Module[{cd = 0, ci = 1, cn = StringLength[contents], hit = 0},
-					While[ci <= cn && hit === 0,
-						ch = StringTake[contents, {ci, ci}];
-						Switch[ch, "{", cd++, "}", cd--];
-						If[ cd === 0 && ci + 6 <= cn &&
-							StringTake[contents, {ci, ci + 6}] === "\\color{",
-							hit = ci
-						];
-						ci++
-					];
-					colorPos = hit
-				];
-				If[ colorPos === 0,
-					out = out <> "{" <> rewriteScopedColor[contents] <> "}";
-					pos = j,
-					(* find matching } of the `\color{...}` arg *)
-					argStart = colorPos + 7; (* after `\color{` *)
-					argDepth = 1; k = argStart;
-					While[k <= StringLength[contents] && argDepth > 0,
-						ch = StringTake[contents, {k, k}];
-						Switch[ch, "{", argDepth++, "}", argDepth--];
-						k++
-					];
-					If[ argDepth =!= 0,
-						(* malformed; emit as-is *)
-						out = out <> "{" <> rewriteScopedColor[contents] <> "}";
-						pos = j,
-						colorArg = StringTake[contents, {argStart, k - 2}];
-						prefix = StringTake[contents, {1, colorPos - 1}];
-						suffix = StringTake[contents,
-							{k, StringLength[contents]}];
-						rewritten = prefix <> "\\textcolor{" <> colorArg <>
-							"}{" <> rewriteScopedColor[suffix] <> "}";
-						out = out <> "{" <> rewriteScopedColor[rewritten] <> "}";
-						pos = j
-					]
-				]
-			]
-		]
-	];
-	out
+rewriteScopedColor[s_String] := groupsRewritten[s, scopedColor]
+
+scopedColor::usage = "scopedColor[contents] gives the contents of a brace group, its first top-level \\color{X} made \\textcolor{X} of \
+the rest of the group, the colors after it so in turn, all rewritten so."
+scopedColor[contents_String] := With[{codes = ToCharacterCode[contents]},
+	{depths = braceDepths[codes]},
+	scopedColorAt[codes, SelectFirst[StringPosition[contents, "\\color{"][[All, 1]], depths[[#]] === 0 &, None]]
+]
+
+scopedColorAt::usage = "scopedColorAt[codes, at] gives the contents of a brace group, its codes, rewritten with the \\color{ at at scoped \
+to the rest of the group, or rewritten so as they are for None."
+scopedColorAt[codes_List, None] := rewriteScopedColor[FromCharacterCode[codes]]
+scopedColorAt[codes_List, at_Integer] := Replace[
+	Lookup[braceClosers[codes], at + 6, None],
+	{
+		None :> rewriteScopedColor[FromCharacterCode[codes]],
+		close_Integer :> rewriteScopedColor[StringJoin[
+			codesText[codes, {1, at - 1}], "\\textcolor{", codesText[codes, {at + 7, close - 1}], "}{",
+			rewriteScopedColor[codesText[codes, {close + 1, Length[codes]}]], "}"
+		]]
+	}
 ]
 
 (* TeX scopes size and style switches (\Huge, \rm, \displaystyle, ...)
@@ -2688,49 +2592,20 @@ $scopedSwitchNames = {
 $scopedSwitchRegex = RegularExpression[
 	"\\\\(" <> StringRiffle[$scopedSwitchNames, "|"] <> ")(?![a-zA-Z])"
 ]
-rewriteGroupScopedSwitches[s_String] := Module[{
-	n = StringLength[s], pos = 1, out = "",
-	depth, start, contents, j, m, sname, before, after, inner
-},
-	While[pos <= n,
-		If[ StringTake[s, {pos, pos}] =!= "{",
-			out = out <> StringTake[s, {pos, pos}]; pos++,
-			depth = 1; start = pos + 1; j = start;
-			While[j <= n && depth > 0,
-				Switch[StringTake[s, {j, j}], "{", depth++, "}", depth--];
-				j++
-			];
-			If[ depth =!= 0,
-				out = out <> StringTake[s, {pos, n}]; pos = n + 1,
-				contents = StringTake[s, {start, j - 2}];
-				m = Null;
-				Module[{
-					trimmed = StringDelete[contents,
-						StartOfString ~~ WhitespaceCharacter ...],
-					hit, restPos
-				},
-					hit = StringPosition[trimmed, $scopedSwitchRegex, 1];
-					If[ hit =!= {} && First[hit][[1]] === 1,
-						sname = StringTake[trimmed, First[hit]];
-						restPos = First[hit][[2]] + 1;
-						inner = StringTrim @ StringDrop[trimmed, First[hit][[2]]];
-						If[ inner === "",
-							(* nothing to wrap; leave alone *)
-							out = out <> "{" <> rewriteGroupScopedSwitches[contents] <> "}";
-							pos = j,
-							out = out <> "{" <> sname <> "{" <>
-								rewriteGroupScopedSwitches[inner] <> "}}";
-							pos = j
-						],
-						out = out <> "{" <> rewriteGroupScopedSwitches[contents] <> "}";
-						pos = j
-					]
-				]
-			]
-		]
-	];
-	out
+rewriteGroupScopedSwitches[s_String] := groupsRewritten[s, scopedSwitch]
+
+scopedSwitch::usage = "scopedSwitch[contents] gives the contents of a brace group that begins with a size or style switch, past \
+whitespace, as the switch of a group of the rest, rewritten so, or the contents rewritten so."
+scopedSwitch[contents_String] := With[{trimmed = StringDelete[contents, StartOfString ~~ WhitespaceCharacter ...]},
+	scopedSwitchOf[contents, trimmed, StringPosition[trimmed, $scopedSwitchRegex, 1]]
 ]
+
+scopedSwitchOf::usage = "scopedSwitchOf[contents, trimmed, hit] gives the contents of a brace group whose text past its whitespace, \
+trimmed, begins with the switch of hit, made the switch of a group of the rest, rewritten so; else the contents rewritten so."
+scopedSwitchOf[contents_String, trimmed_String, {{1, end_Integer}}] := With[{inner = StringTrim[StringDrop[trimmed, end]]},
+	If[inner === "", rewriteGroupScopedSwitches[contents], StringTake[trimmed, {1, end}] <> "{" <> rewriteGroupScopedSwitches[inner] <> "}"]
+]
+scopedSwitchOf[contents_String, _String, _List] := rewriteGroupScopedSwitches[contents]
 
 preprocessLaTeX[s_String] :=
 	expandShorthand @
@@ -3002,30 +2877,9 @@ stripEmptyRowChildren[boxes_] := boxes //. {
 	"1,000,000". Done as one string because the FE inserts visible
 	gaps around standalone "," tokens in math context (it treats them
 	as list punctuation), even if our string has no embedded space. *)
-collapseDigitCommaRun[parts_List] := Module[
-	{n = Length[parts], i = 1, out = {}, start, joined, k},
-	While[i <= n,
-		If[ StringQ[parts[[i]]] && bareDigitRunQ[parts[[i]]],
-			(* try to grow a digit, "," <thin>, digit, ... run *)
-			start = i; k = i;
-			While[ k + 2 <= n &&
-					parts[[k + 1]] === $commaThinSpace &&
-					StringQ[parts[[k + 2]]] && bareDigitRunQ[parts[[k + 2]]],
-				k += 2
-			];
-			If[ k > start,
-				joined = StringJoin @ Table[
-					If[ OddQ[m - start + 1], parts[[m]], "," ],
-					{m, start, k}
-				];
-				AppendTo[out, joined],
-				AppendTo[out, parts[[i]]]
-			];
-			i = k + 1,
-			AppendTo[out, parts[[i]]]; i++
-		]
-	];
-	out
+collapseDigitCommaRun[parts_List] := SequenceReplace[
+	parts,
+	run : {_?bareDigitRunQ, PatternSequence[$commaThinSpace, _?bareDigitRunQ] ..} :> StringRiffle[run[[1 ;; -1 ;; 2]], ","]
 ]
 
 suppressCommaSpaceBetweenDigits[boxes_] := boxes //. {
@@ -3058,10 +2912,7 @@ bareCommas[boxes_] := boxes /. $commaThinSpace -> ","
 	separator), mirroring buildEnv's trailing-row handling. *)
 applyLineBreaks[boxes_] := boxes //. {
 	RowBox[parts_List] /; MemberQ[parts, $lineBreakMark] :>
-		Module[{rows = lineBreakSegments[RowBox[parts]]},
-			While[Length[rows] > 1 && MatchQ[Last[rows], "" | " "],
-				rows = Most[rows]
-			];
+		With[{rows = trailingDropped[lineBreakSegments[RowBox[parts]], MatchQ["" | " "]]},
 			If[Length[rows] === 1, First[rows], GridBox[List /@ rows]]
 		]
 }
