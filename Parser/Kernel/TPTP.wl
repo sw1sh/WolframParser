@@ -80,7 +80,8 @@ TPTPImport::badinclude =
 Begin["`Private`"]
 
 
-(* ===== BNF + parser construction (memoized once per kernel) ===== *)
+(* ::Section:: *)
+(*BNF + parser construction (memoized once per kernel)*)
 
 (* The grammar the action maps below are written against, v9.2.1.4, at the
 	commit that last carried it: the repository keeps one version at a time
@@ -126,7 +127,8 @@ ensureTptpParser[] := Module[{bnf = tptpGrammar[$tptpBnfURL], parsers},
 ]
 
 
-(* ===== shared action helpers ===== *)
+(* ::Section:: *)
+(*Shared action helpers*)
 
 id = Function[#]
 
@@ -178,7 +180,8 @@ dollarAtom[s_String] := Switch[s,
 ]
 
 
-(* ===== action maps ===== *)
+(* ::Section:: *)
+(*Action maps*)
 
 (* Terms: terms lift to themselves; `f(args)` becomes "f"[args];
 	`=`/`!=` become Equal / Unequal.  Numbers + distinct objects come
@@ -412,7 +415,8 @@ $tptpFileActions = <|
 |>
 
 
-(* ===== include resolution ===== *)
+(* ::Section:: *)
+(*Include resolution*)
 
 absolutePathQ[path_String] :=
 	StringStartsQ[path, "/"] ||
@@ -460,7 +464,8 @@ selectByName[axioms_List, names_List]       :=
 selectByName[axioms_List, _]                := axioms
 
 
-(* ===== preprocessing: strip TPTP comments + tff type decls ===== *)
+(* ::Section:: *)
+(*Preprocessing: strip TPTP comments + tff type decls*)
 
 stripComments[text_String] := StringReplace[text,
 	{
@@ -475,7 +480,8 @@ stripTypeDecls[text_String] := StringReplace[text,
 	RegularExpression["(tff|tcf|thf)\\([^,]*,\\s*type\\s*,[^.]*\\."] -> ""]
 
 
-(* ===== entry points ===== *)
+(* ::Section:: *)
+(*Entry points*)
 
 parseFileRaw[path_String] := Block[{text, parsed},
 	If[ FailureQ[ensureTptpParser[]], Return[$Failed]];
@@ -505,7 +511,8 @@ flattenAxioms[parsed_Association] := <|
 |>
 
 
-(* ===== public entry points ===== *)
+(* ::Section:: *)
+(*Public entry points*)
 
 TPTPImport[File[path_String]] := Block[{raw = parseFileRaw[path]},
 	If[ !AssociationQ[raw], Return[$Failed] ];
@@ -522,7 +529,8 @@ TPTPImport[text_String] := Block[{raw = parseTextRaw[text]},
 ]
 
 
-(* ===== SZS-output / derivation parsing ===== *)
+(* ::Section:: *)
+(*SZS-output / derivation parsing*)
 
 (* The SZS status / output markers are TPTP *comments*, not part of the
 	BNF, so the default importer's stripComments deletes them; the
@@ -648,7 +656,8 @@ TPTPImport[File[path_String], "SZS"] := szsImport[Import[path, "Text"]]
 TPTPImport[s_String, "SZS"] := szsImport[If[FileExistsQ[s], Import[s, "Text"], s]]
 
 
-(* ===== SZS-output / derivation emission ===== *)
+(* ::Section:: *)
+(*SZS-output / derivation emission*)
 
 (* The inverse of TPTPImport[..., "SZS"]: render a derivation (the
 	association that mode returns) back to SZS-framed TPTP text.

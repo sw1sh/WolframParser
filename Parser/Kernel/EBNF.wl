@@ -42,7 +42,8 @@ EBNFRules::usage =
 Begin["`EBNFPrivate`"]
 
 
-(* ===== the BNF grammar, expressed in our own combinators ===== *)
+(* ::Section:: *)
+(*The BNF grammar, expressed in our own combinators*)
 
 space          = ParseCharacter[" " | "\t" | "\n" | "\r"]
 ws             = ParseMany[space]
@@ -228,7 +229,8 @@ classicRuleP = ParseAction[
 classicGrammarP = ParseAction[classicWs ~~ ParseMany[ParseAction[classicRuleP ~~ classicWs, #1 &]], #2 &]
 
 
-(* ===== Lowering ===== *)
+(* ::Section:: *)
+(*Lowering*)
 
 (* What the lowering skips between elements, and what is set while lowering one
 	rule: the characters the skip matches (None when the default whitespace
@@ -429,7 +431,8 @@ rewriteLeftRecursive[name_String, alts_List] :=
 sortAltsLongestFirst[alts_List] := alts[[Ordering[-Length /@ alts]]]
 
 
-(* ===== Public entry points ===== *)
+(* ::Section:: *)
+(*Public entry points*)
 
 (* ===== Token / char-class rule compilation =====
 
@@ -640,7 +643,8 @@ regexCompile[body_String, sm_Association, ov_Association] :=
 	]
 
 
-(* ===== Public entry points ===== *)
+(* ::Section:: *)
+(*Public entry points*)
 
 (* Parse the BNF source via the combinator grammar above and return the
 	raw rule list. Useful for tests and inspection. *)

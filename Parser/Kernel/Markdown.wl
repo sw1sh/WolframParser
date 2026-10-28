@@ -63,7 +63,8 @@ MarkdownParser::usage =
 Begin["`MarkdownPrivate`"]
 
 
-(* ===== atom constructors (shape conventions in one place) ===== *)
+(* ::Section:: *)
+(*Atom constructors (shape conventions in one place)*)
 
 text[s_]        := <|"Type" -> "Text",        "Text" -> s|>
 codeAtom[s_]    := <|"Type" -> "Code",        "Code" -> s|>
@@ -81,19 +82,22 @@ boldItalic[c_]  := <|"Type" -> "BoldItalic",  "Children" -> c|>
 strike[c_]      := <|"Type" -> "Strike",      "Children" -> c|>
 
 
-(* ===== character predicates ===== *)
+(* ::Section:: *)
+(*Character predicates*)
 
 asciiPunct = (StringMatchQ[#, PunctuationCharacter] || # === "!") &
 
 
-(* ===== primitive combinators ===== *)
+(* ::Section:: *)
+(*Primitive combinators*)
 
 anyChar = ParseCharacter[_]
 
 charSat[pred_] := ParseCharacter[_ ? pred]
 
 
-(* ===== terminator-bounded content ===== *)
+(* ::Section:: *)
+(*Terminator-bounded content*)
 
 (* content[term] parses any single character that is NOT the start of `term`,
 	joined into a single String.  Used as the body of every paired-delimiter
@@ -106,7 +110,8 @@ content[term_] := ParseAction[
 ]
 
 
-(* ===== escapes ===== *)
+(* ::Section:: *)
+(*Escapes*)
 
 (* "\x" where x is an ASCII punctuation char becomes that single character as
 	a Text atom.  Lets authors write a literal "*" inside prose with "\*"
@@ -117,7 +122,8 @@ escape = ParseAction[
 ]
 
 
-(* ===== code spans ===== *)
+(* ::Section:: *)
+(*Code spans*)
 
 (* Order is significant: HTML <code> before backticks, double backtick before
 	single backtick. *)
@@ -137,7 +143,8 @@ code = ParseAction[
 ]
 
 
-(* ===== math ===== *)
+(* ::Section:: *)
+(*Math*)
 
 displayMath = ParseAction[
 	ParseLiteral["$$"] ~~ content[ParseLiteral["$$"]] ~~ ParseLiteral["$$"],
@@ -150,7 +157,8 @@ inlineMath = ParseAction[
 ]
 
 
-(* ===== link / image ===== *)
+(* ::Section:: *)
+(*Link / image*)
 
 (* The body is everything up to the next "]"; the URL is everything up to
 	the next ")".  Inline markdown inside the label is recursively re-parsed
@@ -176,7 +184,8 @@ linkP = ParseAction[
 ]
 
 
-(* ===== sub / sup ===== *)
+(* ::Section:: *)
+(*Sub / sup*)
 
 htmlSub = ParseAction[
 	ParseLiteral["<sub>"] ~~ content[ParseLiteral["</sub>"]] ~~ ParseLiteral["</sub>"],
@@ -209,7 +218,8 @@ pandocSup = ParseAction[
 ]
 
 
-(* ===== strike ===== *)
+(* ::Section:: *)
+(*Strike*)
 
 strikeP = ParseAction[
 	ParseLiteral["~~"] ~~ content[ParseLiteral["~~"]] ~~ ParseLiteral["~~"],
@@ -217,7 +227,8 @@ strikeP = ParseAction[
 ]
 
 
-(* ===== emphasis ===== *)
+(* ::Section:: *)
+(*Emphasis*)
 
 boldItalicP = ParseAction[
 	ParseLiteral["***"] ~~ content[ParseLiteral["***"]] ~~ ParseLiteral["***"],
@@ -239,12 +250,14 @@ italicAst = ParseAction[
 ]
 
 
-(* ===== plain character (catch-all) ===== *)
+(* ::Section:: *)
+(*Plain character (catch-all)*)
 
 plainChar = ParseAction[anyChar, text[#1] &]
 
 
-(* ===== the inline grammar ===== *)
+(* ::Section:: *)
+(*The inline grammar*)
 
 (* PEG order: more-specific / longer prefixes first.  Double-backtick before
 	single-backtick; "***" before "**" before "*"; HTML tags before their
@@ -265,7 +278,8 @@ inlineAtom = ParseChoice[
 MarkdownInlineParser := ParseAction[ParseMany[inlineAtom], {##} &]
 
 
-(* ===== post-process: type-discriminated dispatch ===== *)
+(* ::Section:: *)
+(*Post-process: type-discriminated dispatch*)
 
 textQ[a_] := AssociationQ[a] && a["Type"] === "Text"
 
@@ -314,7 +328,8 @@ applyUnderscoreEm[atoms_List] := Flatten @ Replace[atoms,
 	a_ ? textQ :> underscoreRender[a["Text"]], {1}]
 
 
-(* ===== recursive children ===== *)
+(* ::Section:: *)
+(*Recursive children*)
 
 (* Children of bold / italic / sub / sup / strike / boldItalic and the
 	label of a link are the *raw inner string* captured by `content`.
@@ -332,7 +347,8 @@ reparseChildren[atoms_List] := Replace[atoms, {
 }, {1}]
 
 
-(* ===== public entry point ===== *)
+(* ::Section:: *)
+(*Public entry point*)
 
 MarkdownInlineParse[source_String] := With[{r = Parse[MarkdownInlineParser, source]},
 	If[ FailureQ[r], r,
@@ -360,7 +376,8 @@ MarkdownInlineParse[source_String] := With[{r = Parse[MarkdownInlineParser, sour
 	into the Prose catch-all. *)
 
 
-(* ===== line-level primitives ===== *)
+(* ::Section:: *)
+(*Line-level primitives*)
 
 newline       = ParseLiteral["\n"]
 notNewline    = charSat[# =!= "\n" &]
@@ -502,7 +519,8 @@ prose = ParseAction[
 ]
 
 
-(* ===== block grammar ===== *)
+(* ::Section:: *)
+(*Block grammar*)
 
 block = ParseChoice[heading, codeFence, separatorLine, prose]
 
