@@ -860,26 +860,24 @@ linearGroup[s_String] := With[{pieces = linearPieces[s]},
 
 (* the pieces of a group's text: {"Text", t}, {"Box", boxes}, {"Op", o} for a box operator, and
 	{"Form"}; a newline or a tab in the text is whitespace, and \  \t \n are their boxes. The text is
-	read an escape or a character at a time, the state {where it goes on, the pieces read, a linked
-	list, the text not yet a piece}. *)
+	read an escape or a character at a time, the state {its characters, where it goes on, the pieces
+	read, a linked list, the text not yet a piece}. A scan's data rides in its state, not in a pure
+	function's body, which Wolfram 15 would walk at every step. *)
 linearPieces::usage = "linearPieces[s] gives the pieces of the text s of a group of linear syntax."
-linearPieces[s_String] := With[{characters = Characters[s]},
-	Reverse @ linkedItems @ textFlushed @ NestWhile[
-		linearPieceStep[characters, #] &,
-		{1, {}, ""},
-		First[#] <= Length[characters] &
-	]
-]
+linearPieces[s_String] := Reverse @ linkedItems @ textFlushed @ Rest @ NestWhile[linearPieceStep, {Characters[s], 1, {}, ""}, scanOnQ]
+
+scanOnQ::usage = "scanOnQ[{characters, at, ...}] is True where the scan's place at is still among its characters."
+scanOnQ[{characters_List, at_Integer, ___}] := at <= Length[characters]
 
 textFlushed::usage = "textFlushed[{at, pieces, text}] gives the pieces with the text as a piece of its own, where there is any."
 textFlushed[{_Integer, pieces_List, ""}] := pieces
 textFlushed[{_Integer, pieces_List, text_String}] := {{"Text", text}, pieces}
 
-linearPieceStep::usage = "linearPieceStep[characters, {at, pieces, text}] gives the state after the escape or the character at at."
-linearPieceStep[characters_List, {at_Integer, pieces_List, text_String}] /; characters[[at]] === "\\" && at < Length[characters] :=
-	linearEscapeStep[characters, at, characters[[at + 1]], pieces, text]
-linearPieceStep[characters_List, {at_Integer, pieces_List, text_String}] :=
-	{at + 1, pieces, text <> If[MemberQ[{"\n", "\r", "\t"}, characters[[at]]], " ", characters[[at]]]}
+linearPieceStep::usage = "linearPieceStep[{characters, at, pieces, text}] gives the state after the escape or the character at at."
+linearPieceStep[{characters_List, at_Integer, pieces_List, text_String}] /; characters[[at]] === "\\" && at < Length[characters] :=
+	Prepend[linearEscapeStep[characters, at, characters[[at + 1]], pieces, text], characters]
+linearPieceStep[{characters_List, at_Integer, pieces_List, text_String}] :=
+	{characters, at + 1, pieces, text <> If[MemberQ[{"\n", "\r", "\t"}, characters[[at]]], " ", characters[[at]]]}
 
 linearEscapeStep::usage = "linearEscapeStep[characters, at, c, pieces, text] gives the state after the escape \\c at at."
 linearEscapeStep[characters_List, at_Integer, "(", pieces_List, text_String] := With[{close = groupClose[characters, at + 2]},
@@ -904,13 +902,13 @@ linearEscapeStep[_List, at_Integer, c_String, pieces_List, text_String] := {at +
 (* where the group whose text begins at from closes: {past its \), how many \( are left open} *)
 groupClose::usage = "groupClose[characters, from] gives {where reading goes on after the \\) that closes the group from from on, how \
 many groups are left open there}."
-groupClose[characters_List, from_Integer] := NestWhile[groupScanStep[characters, #] &, {from, 1}, First[#] <= Length[characters] && Last[#] > 0 &]
+groupClose[characters_List, from_Integer] := Rest @ NestWhile[groupScanStep, {characters, from, 1}, scanOnQ[#] && Last[#] > 0 &]
 
-groupScanStep::usage = "groupScanStep[characters, {at, depth}] gives the scan's place and the depth of the groups after the character, or \
+groupScanStep::usage = "groupScanStep[{characters, at, depth}] gives the scan's place and the depth of the groups after the character, or \
 the escape, at at."
-groupScanStep[characters_List, {at_Integer, depth_Integer}] /; characters[[at]] === "\\" && at < Length[characters] :=
-	{at + 2, depth + Switch[characters[[at + 1]], "(", 1, ")", -1, _, 0]}
-groupScanStep[_List, {at_Integer, depth_Integer}] := {at + 1, depth}
+groupScanStep[{characters_List, at_Integer, depth_Integer}] /; characters[[at]] === "\\" && at < Length[characters] :=
+	{characters, at + 2, depth + Switch[characters[[at + 1]], "(", 1, ")", -1, _, 0]}
+groupScanStep[{characters_List, at_Integer, depth_Integer}] := {characters, at + 1, depth}
 
 (* \* and the input after it, a string or a name and its brackets: the boxes it gives, held where
 	they are no string, and where the text goes on *)
@@ -922,36 +920,36 @@ linearStar[characters_List, start_Integer] := With[{from = start + LengthWhile[D
 
 starEnd::usage = "starEnd[characters, from] gives where the input of a \\* from from on ends: past a string, or past a name and its \
 brackets."
-starEnd[characters_List, from_Integer] /; from <= Length[characters] && characters[[from]] === "\"" := 1 + NestWhile[
-	If[characters[[#]] === "\\", # + 2, # + 1] &,
-	from + 1,
-	# <= Length[characters] && characters[[#]] =!= "\"" &
+starEnd[characters_List, from_Integer] /; from <= Length[characters] && characters[[from]] === "\"" :=
+	1 + Last @ NestWhile[stringScanStep, {characters, from + 1}, scanOnQ[#] && First[#][[Last[#]]] =!= "\"" &]
+starEnd[characters_List, from_Integer] := Last @ NestWhile[
+	{First[#], bracketsEnd[First[#], Last[#]]} &,
+	{characters, from + LengthWhile[Drop[characters, from - 1], LetterQ[#] || DigitQ[#] || # === "$" || # === "`" &]},
+	scanOnQ[#] && First[#][[Last[#]]] === "[" &
 ]
-starEnd[characters_List, from_Integer] := NestWhile[
-	bracketsEnd[characters, #] &,
-	from + LengthWhile[Drop[characters, from - 1], LetterQ[#] || DigitQ[#] || # === "$" || # === "`" &],
-	# <= Length[characters] && characters[[#]] === "[" &
-]
+
+stringScanStep::usage = "stringScanStep[{characters, at}] gives the scan's place past the character at at of a string, or the escape there."
+stringScanStep[{characters_List, at_Integer}] := {characters, at + If[characters[[at]] === "\\", 2, 1]}
 
 bracketsEnd::usage = "bracketsEnd[characters, from] gives where the brackets that open at from close, strings in them read whole."
-bracketsEnd[characters_List, from_Integer] := First @ NestWhile[
-	bracketScanStep[characters, #] &,
-	bracketScanStep[characters, {from, 0, False}],
-	First[#] <= Length[characters] && (Last[#] || #[[2]] =!= 0) &
+bracketsEnd[characters_List, from_Integer] := Part[
+	NestWhile[bracketScanStep, bracketScanStep[{characters, from, 0, False}], scanOnQ[#] && (Last[#] || #[[3]] =!= 0) &],
+	2
 ]
 
-bracketScanStep::usage = "bracketScanStep[characters, {at, depth, quoted}] gives the scan's place, the depth of the brackets and whether \
+bracketScanStep::usage = "bracketScanStep[{characters, at, depth, quoted}] gives the scan's place, the depth of the brackets and whether \
 it is in a string, after the character at at."
-bracketScanStep[characters_List, {at_Integer, depth_Integer, True}] := {at + If[characters[[at]] === "\\", 2, 1], depth, characters[[at]] =!= "\""}
-bracketScanStep[characters_List, {at_Integer, depth_Integer, False}] := Switch[characters[[at]],
+bracketScanStep[{characters_List, at_Integer, depth_Integer, True}] :=
+	{characters, at + If[characters[[at]] === "\\", 2, 1], depth, characters[[at]] =!= "\""}
+bracketScanStep[{characters_List, at_Integer, depth_Integer, False}] := Switch[characters[[at]],
 	"\"",
-		{at + 1, depth, True},
+		{characters, at + 1, depth, True},
 	"[",
-		{at + 1, depth + 1, False},
+		{characters, at + 1, depth + 1, False},
 	"]",
-		{at + 1, depth - 1, False},
+		{characters, at + 1, depth - 1, False},
 	_,
-		{at + 1, depth, False}
+		{characters, at + 1, depth, False}
 ]
 
 starBoxes::usage = "starBoxes[text] gives the boxes of the input text of a \\*: a string it reads as, held input, else the text."
@@ -1036,39 +1034,34 @@ None."
 linearOperandEnd[ts_List, i_Integer] /; i > Length[ts] := None
 linearOperandEnd[ts_List, i_Integer] /; MatchQ[ts[[i]], {"Box", _}] := i
 linearOperandEnd[ts_List, i_Integer] /; MatchQ[ts[[i]], {"Tok", _String, kind_Integer /; MemberQ[$linearAtomKinds, kind], _String}] :=
-	NestWhile[# + 1 &, i, atomGoesOnQ[ts, #] &]
+	Last @ NestWhile[{First[#], Last[#] + 1} &, {ts, i}, atomGoesOnQ]
 linearOperandEnd[ts_List, i_Integer] /; MatchQ[ts[[i]], {"Tok", _String, 10 | 14 | 16, _String}] := linearClose[ts, i]
 linearOperandEnd[_List, _Integer] := None
 
-atomGoesOnQ::usage = "atomGoesOnQ[ts, i] is True where the atom that token i of ts ends goes on with the name or the blank that touches it."
-atomGoesOnQ[ts_List, i_Integer] := And[
+atomGoesOnQ::usage = "atomGoesOnQ[{ts, i}] is True where the atom that token i of ts ends goes on with the name or the blank that touches it."
+atomGoesOnQ[{ts_List, i_Integer}] := And[
 	i < Length[ts],
 	MatchQ[ts[[i + 1]], {"Tok", _String, 1 | 2, ""}],
 	!MatchQ[ts[[i]], {"Tok", _String, 3 | 4, _String}]
 ]
 
 linearCallsEnd::usage = "linearCallsEnd[ts, end] gives the last token of the brackets of the calls after token end of ts, or end."
-linearCallsEnd[ts_List, end_Integer] := NestWhile[
-	linearClose[ts, # + 1] &,
-	end,
-	# < Length[ts] && MatchQ[ts[[# + 1]], {"Tok", _String, 12, _String}] &
-]
+linearCallsEnd[ts_List, end_Integer] := Last @ NestWhile[{First[#], linearClose[First[#], Last[#] + 1]} &, {ts, end}, callGoesOnQ]
+
+callGoesOnQ::usage = "callGoesOnQ[{ts, end}] is True where the brackets of a call open after token end of ts."
+callGoesOnQ[{ts_List, end_Integer}] := end < Length[ts] && MatchQ[ts[[end + 1]], {"Tok", _String, 12, _String}]
 
 (* the box operators inside each bracket folded, then those around them *)
 linearFoldBrackets::usage = "linearFoldBrackets[ts] gives the tokens and boxes of ts, the box operators inside each bracket folded, then \
 those around them."
-linearFoldBrackets[ts_List] := linearFold @ Catenate @ Reverse @ linkedItems @ Last @ NestWhile[
-	bracketsStep[ts, #] &,
-	{1, {}},
-	First[#] <= Length[ts] &
-]
+linearFoldBrackets[ts_List] := linearFold @ Catenate @ Reverse @ linkedItems @ Last @ NestWhile[bracketsStep, {ts, 1, {}}, scanOnQ]
 
-bracketsStep::usage = "bracketsStep[ts, {i, parts}] gives the place after token i of ts, a bracket's whole, and the parts read, a linked \
+bracketsStep::usage = "bracketsStep[{ts, i, parts}] gives the place after token i of ts, a bracket's whole, and the parts read, a linked \
 list, with its own."
-bracketsStep[ts_List, {i_Integer, parts_List}] /; linearOpenerQ[ts[[i]]] := With[{j = linearClose[ts, i]},
-	{j + 1, {Prepend[bracketInside[ts, i, j], ts[[i]]], parts}}
+bracketsStep[{ts_List, i_Integer, parts_List}] /; linearOpenerQ[ts[[i]]] := With[{j = linearClose[ts, i]},
+	{ts, j + 1, {Prepend[bracketInside[ts, i, j], ts[[i]]], parts}}
 ]
-bracketsStep[ts_List, {i_Integer, parts_List}] := {i + 1, {{ts[[i]]}, parts}}
+bracketsStep[{ts_List, i_Integer, parts_List}] := {ts, i + 1, {{ts[[i]]}, parts}}
 
 bracketInside::usage = "bracketInside[ts, i, j] gives the tokens of the bracket from token i to token j of ts after its opener, folded."
 bracketInside[ts_List, i_Integer, j_Integer] /; j > i && linearCloserQ[ts[[j]]] := Append[linearFoldBrackets[Take[ts, {i + 1, j - 1}]], ts[[j]]]
@@ -1079,14 +1072,14 @@ bracketInside[ts_List, i_Integer, j_Integer] := linearFoldBrackets[Take[ts, {i +
 	right, \/ to the left; \% gives the third box of the script or root before it. Each reader takes
 	the tokens and a place and gives {the boxes it reads, the place after them}. *)
 linearFold::usage = "linearFold[ts] gives the tokens and boxes of the row ts, its box operators folded into the boxes they build."
-linearFold[ts_List] := Reverse @ linkedItems @ Last @ NestWhile[foldStep[ts, #] &, {1, {}}, First[#] <= Length[ts] &]
+linearFold[ts_List] := Reverse @ linkedItems @ Last @ NestWhile[foldStep, {ts, 1, {}}, scanOnQ]
 
-foldStep::usage = "foldStep[ts, {i, items}] gives the place after the token, or the boxes of the operators, at token i of ts, and the \
+foldStep::usage = "foldStep[{ts, i, items}] gives the place after the token, or the boxes of the operators, at token i of ts, and the \
 items read, a linked list, with them."
-foldStep[ts_List, {i_Integer, items_List}] /; boxOperatorAtQ[ts, i] := With[{read = linearFraction[ts, i]},
-	{Max[Last[read], i + 1], {{"Box", First[read]}, items}}
+foldStep[{ts_List, i_Integer, items_List}] /; boxOperatorAtQ[ts, i] := With[{read = linearFraction[ts, i]},
+	{ts, Max[Last[read], i + 1], {{"Box", First[read]}, items}}
 ]
-foldStep[ts_List, {i_Integer, items_List}] := {i + 1, {ts[[i]], items}}
+foldStep[{ts_List, i_Integer, items_List}] := {ts, i + 1, {ts[[i]], items}}
 
 boxOperatorAtQ::usage = "boxOperatorAtQ[ts, i] is True where a box operator's boxes begin at token i of ts."
 boxOperatorAtQ[ts_List, i_Integer] := Or[
@@ -1152,10 +1145,13 @@ rootAfter[ts_List, {x_, i_Integer}] /; linearOpQ[ts, i, "%"] := With[{index = li
 rootAfter[_List, {x_, i_Integer}] := {SqrtBox[x], i}
 
 linearFraction::usage = "linearFraction[ts, i] gives the roots from token i of ts, each \\/ between them a fraction, read to the left."
-linearFraction[ts_List, i_Integer] := NestWhile[fractionStep[ts, #] &, linearRoot[ts, i], linearOpQ[ts, Last[#], "/"] &]
+linearFraction[ts_List, i_Integer] := Rest @ NestWhile[fractionStep, Prepend[linearRoot[ts, i], ts], fractionGoesOnQ]
 
-fractionStep::usage = "fractionStep[ts, {b, i}] gives the fraction of b over the root after the \\/ at token i of ts."
-fractionStep[ts_List, {b_, i_Integer}] := With[{denominator = linearRoot[ts, i + 1]}, {FractionBox[b, First[denominator]], Last[denominator]}]
+fractionGoesOnQ::usage = "fractionGoesOnQ[{ts, b, i}] is True where a \\/ is token i of ts."
+fractionGoesOnQ[{ts_List, _, i_Integer}] := linearOpQ[ts, i, "/"]
+
+fractionStep::usage = "fractionStep[{ts, b, i}] gives the fraction of b over the root after the \\/ at token i of ts."
+fractionStep[{ts_List, b_, i_Integer}] := With[{denominator = linearRoot[ts, i + 1]}, {ts, FractionBox[b, First[denominator]], Last[denominator]}]
 
 (* the boxes of a row with no box operator left: its concrete syntax tree, the box of each name
 	that stands for one in its place *)
@@ -1990,44 +1986,85 @@ tokenMarks[_, _String] := {}
 	the \, the newline and the spaces and tabs after it were not there.
 	Their text is in the token they fall in, else in the token after them,
 	and at the end of the source in none, there a string's too. The spans
-	{first, last} of them in s, those that follow one another one. *)
-continuationSpans[s_String] := Module[{c = ToCharacterCode[s], n, i = 1, depth = 0, inString = False, spans = {}, runEnd},
-	n = Length[c];
-	(* the last character of the continuations from j on, j - 1 if none begins there *)
-	runEnd[j_Integer] := Module[{k = j},
-		While[k < n && c[[k]] === 92 && (c[[k + 1]] === 10 || c[[k + 1]] === 13),
-			k += If[c[[k + 1]] === 13 && k + 2 <= n && c[[k + 2]] === 10, 3, 2];
-			While[k <= n && MemberQ[{32, 9, 11, 12}, c[[k]]], k++]];
-		k - 1];
-	While[i <= n,
-		Which[
-			inString, Which[
-				c[[i]] === 92 && runEnd[i] === n, AppendTo[spans, {i, n}]; i = n + 1,
-				c[[i]] === 92, i += 2,
-				c[[i]] === 34, inString = False; i++,
-				True, i++],
-			depth > 0, Which[
-				c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth++; i += 2,
-				c[[i]] === 42 && i < n && c[[i + 1]] === 41, depth--; i += 2,
-				c[[i]] === 92 && i < n && c[[i + 1]] === 40, i += 2,
-				True, i++],
-			c[[i]] === 34, inString = True; i++,
-			c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth = 1; i += 2,
-			c[[i]] === 60 && i < n && c[[i + 1]] === 60, i = fileNameEnd[c, i + 2] + 1,
-			c[[i]] === 62 && i < n && c[[i + 1]] === 62, i = fileNameEnd[c, If[i + 2 <= n && c[[i + 2]] === 62, i + 3, i + 2]] + 1,
-			c[[i]] === 92 && runEnd[i] >= i, AppendTo[spans, {i, runEnd[i]}]; i = spans[[-1, 2]] + 1,
-			(* a \ and the character it escapes *)
-			c[[i]] === 92, i += 2,
-			True, i++]];
-	spans]
+	{first, last} of them in s, those that follow one another one. The scan
+	reads a character or an escape at a time, its state {the codes, where it
+	goes on, its mode, the spans found, a linked list}, the mode 0 in code,
+	-1 in a string and the depth of the comments in one. *)
+continuationSpans::usage = "continuationSpans[s] gives the spans {first, last} of the line continuations of s, those that follow one \
+another one."
+continuationSpans[s_String] := Reverse @ linkedItems @ Last @ NestWhile[continuationStep, {ToCharacterCode[s], 1, 0, {}}, scanOnQ]
+
+continuationStep::usage = "continuationStep[{codes, at, mode, spans}] gives the scan's state after the character, or the escape, at at."
+continuationStep[{codes_List, at_Integer, -1, spans_List}] := Which[
+	codes[[at]] === 92 && continuationEnd[codes, at] === Length[codes],
+		{codes, Length[codes] + 1, -1, {{at, Length[codes]}, spans}},
+	codes[[at]] === 92,
+		{codes, at + 2, -1, spans},
+	codes[[at]] === 34,
+		{codes, at + 1, 0, spans},
+	True,
+		{codes, at + 1, -1, spans}
+]
+continuationStep[{codes_List, at_Integer, depth_Integer, spans_List}] /; depth > 0 := Append[inCommentStep[codes, at, depth], spans]
+continuationStep[{codes_List, at_Integer, 0, spans_List}] := Which[
+	codes[[at]] === 34,
+		{codes, at + 1, -1, spans},
+	pairAtQ[codes, at, 40, 42],
+		{codes, at + 2, 1, spans},
+	pairAtQ[codes, at, 60, 60],
+		{codes, fileNameEnd[codes, at + 2] + 1, 0, spans},
+	pairAtQ[codes, at, 62, 62],
+		{codes, fileNameEnd[codes, If[at + 2 <= Length[codes] && codes[[at + 2]] === 62, at + 3, at + 2]] + 1, 0, spans},
+	codes[[at]] === 92 && continuationEnd[codes, at] >= at,
+		{codes, continuationEnd[codes, at] + 1, 0, {{at, continuationEnd[codes, at]}, spans}},
+	(* a \ and the character it escapes *)
+	codes[[at]] === 92,
+		{codes, at + 2, 0, spans},
+	True,
+		{codes, at + 1, 0, spans}
+]
+
+pairAtQ::usage = "pairAtQ[codes, at, a, b] is True where the codes a and b are the codes at at and after it."
+pairAtQ[codes_List, at_Integer, a_Integer, b_Integer] := codes[[at]] === a && at < Length[codes] && codes[[at + 1]] === b
+
+(* in a comment, a (* and a *) nest, and a \( escapes its parenthesis *)
+inCommentStep::usage = "inCommentStep[codes, at, depth] gives {codes, the place after the character, or the pair, at at, the depth of the \
+comments after it}, inside depth comments."
+inCommentStep[codes_List, at_Integer, depth_Integer] := Which[
+	pairAtQ[codes, at, 40, 42],
+		{codes, at + 2, depth + 1},
+	pairAtQ[codes, at, 42, 41],
+		{codes, at + 2, depth - 1},
+	pairAtQ[codes, at, 92, 40],
+		{codes, at + 2, depth},
+	True,
+		{codes, at + 1, depth}
+]
+
+(* the last character of the continuations from at on, at - 1 if none begins there: each a \, a
+	newline, a return or both, and the spaces and tabs after it *)
+continuationEnd::usage = "continuationEnd[codes, at] gives the last character of the line continuations from at on, at - 1 if none \
+begins there."
+continuationEnd[codes_List, at_Integer] := Last[NestWhile[continuationRunStep, {codes, at}, continuationAtQ]] - 1
+
+continuationAtQ::usage = "continuationAtQ[{codes, at}] is True where a line continuation begins at at."
+continuationAtQ[{codes_List, at_Integer}] := at < Length[codes] && codes[[at]] === 92 && (codes[[at + 1]] === 10 || codes[[at + 1]] === 13)
+
+continuationRunStep::usage = "continuationRunStep[{codes, at}] gives the place after the line continuation at at, and the spaces and tabs \
+after it."
+continuationRunStep[{codes_List, at_Integer}] := With[{after = at + If[codes[[at + 1]] === 13 && at + 2 <= Length[codes] && codes[[at + 2]] === 10, 3, 2]},
+	{codes, after + LengthWhile[Drop[codes, after - 1], MemberQ[{32, 9, 11, 12}, #] &]}
+]
 
 $alphanumericCodes = AssociationThread[Join[Range[48, 57], Range[65, 90], Range[97, 122]] -> True]
 (* the characters of a file name but its \ *)
 $fileCharacterCodes = Join[$alphanumericCodes, AssociationThread[ToCharacterCode["$`_./~:!*?-"] -> True]]
 
+lineContinuations::usage = "lineContinuations[s] gives the spans of the line continuations of s, {} for none."
 lineContinuations[s_String] := If[StringContainsQ[s, "\\\n" | "\\\r"], continuationSpans[s], {}]
 
 (* the positions in s of the characters read without its line continuations *)
+keptPositions::usage = "keptPositions[s, spans] gives the positions in s of its characters outside the spans."
 keptPositions[s_String, spans_List] := Complement[Range[StringLength[s]], Catenate[Range @@@ spans]]
 
 (* ::Section:: *)
@@ -2035,41 +2072,79 @@ keptPositions[s_String, spans_List] := Complement[Range[StringLength[s]], Catena
 
 (* A \:xxxx, \.xx or \|xxxxxx outside a string and a comment is the character its hexadecimal
 	digits name, as Wolfram 15's reader reads it before it reads tokens: a letter of a name or of a
-	file, an operator, a bracket. The spans {first, last} of them in s, each with its character. *)
-escapeSpans[s_String] := Module[{c = ToCharacterCode[s], n, i = 1, depth = 0, inString = False, escapes = {}, width = 0, code = 0},
-	n = Length[c];
-	While[i <= n,
-		Which[
-			inString, Which[c[[i]] === 92, i += 2, c[[i]] === 34, inString = False; i++, True, i++],
-			depth > 0, Which[
-				c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth++; i += 2,
-				c[[i]] === 42 && i < n && c[[i + 1]] === 41, depth--; i += 2,
-				c[[i]] === 92 && i < n && c[[i + 1]] === 40, i += 2,
-				True, i++],
-			c[[i]] === 34, inString = True; i++,
-			c[[i]] === 40 && i < n && c[[i + 1]] === 42, depth = 1; i += 2,
-			c[[i]] === 92 && i < n && (width = Switch[c[[i + 1]], 58, 4, 46, 2, 124, 6, _, 0]) > 0 && i + 1 + width <= n &&
-				AllTrue[c[[i + 2 ;; i + 1 + width]], KeyExistsQ[$hexadecimalCodes, #] &] &&
-				(code = FromDigits[FromCharacterCode[c[[i + 2 ;; i + 1 + width]]], 16]) <= 1114111,
-				AppendTo[escapes, {{i, i + 1 + width}, FromCharacterCode[code]}]; i += 2 + width,
-			(* a \ and the character it escapes *)
-			c[[i]] === 92, i += 2,
-			True, i++]];
-	escapes]
+	file, an operator, a bracket. The spans {first, last} of them in s, each with its character. The
+	scan's state is continuationSpans's, its found the escapes. *)
+escapeSpans::usage = "escapeSpans[s] gives {{first, last}, character} for each character escape of s outside its strings and comments."
+escapeSpans[s_String] := Reverse @ linkedItems @ Last @ NestWhile[escapeStep, {ToCharacterCode[s], 1, 0, {}}, scanOnQ]
+
+escapeStep::usage = "escapeStep[{codes, at, mode, escapes}] gives the scan's state after the character, or the escape, at at."
+escapeStep[{codes_List, at_Integer, -1, escapes_List}] := Which[
+	codes[[at]] === 92,
+		{codes, at + 2, -1, escapes},
+	codes[[at]] === 34,
+		{codes, at + 1, 0, escapes},
+	True,
+		{codes, at + 1, -1, escapes}
+]
+escapeStep[{codes_List, at_Integer, depth_Integer, escapes_List}] /; depth > 0 := Append[inCommentStep[codes, at, depth], escapes]
+escapeStep[{codes_List, at_Integer, 0, escapes_List}] := Which[
+	codes[[at]] === 34,
+		{codes, at + 1, -1, escapes},
+	pairAtQ[codes, at, 40, 42],
+		{codes, at + 2, 1, escapes},
+	codes[[at]] === 92 && escapeWidth[codes, at] > 0,
+		{codes, at + 2 + escapeWidth[codes, at], 0, {escapeOf[codes, at, escapeWidth[codes, at]], escapes}},
+	(* a \ and the character it escapes *)
+	codes[[at]] === 92,
+		{codes, at + 2, 0, escapes},
+	True,
+		{codes, at + 1, 0, escapes}
+]
+
+(* the digits of a \:, \. or \| escape at at: their count where they are all hexadecimal digits and
+	name a character, else 0 *)
+escapeWidth::usage = "escapeWidth[codes, at] gives the count of the hexadecimal digits of the character escape at at, 0 where none is \
+there."
+escapeWidth[codes_List, at_Integer] := With[{width = If[at < Length[codes], Switch[codes[[at + 1]], 58, 4, 46, 2, 124, 6, _, 0], 0]},
+	If[width > 0 && at + 1 + width <= Length[codes] && hexadecimalCodeQ[Take[codes, {at + 2, at + 1 + width}]], width, 0]
+]
+
+hexadecimalCodeQ::usage = "hexadecimalCodeQ[codes] is True where the codes are hexadecimal digits that name a character."
+hexadecimalCodeQ[codes_List] := AllTrue[codes, KeyExistsQ[$hexadecimalCodes, #] &] && FromDigits[FromCharacterCode[codes], 16] <= 1114111
+
+escapeOf::usage = "escapeOf[codes, at, width] gives {{at, its last code}, the character} of the character escape at at of width digits."
+escapeOf[codes_List, at_Integer, width_Integer] :=
+	{{at, at + 1 + width}, FromCharacterCode[FromDigits[FromCharacterCode[Take[codes, {at + 2, at + 1 + width}]], 16]]}
 
 $hexadecimalCodes = AssociationThread[Join[Range[48, 57], Range[65, 70], Range[97, 102]] -> True]
 
-(* the last character of the spaces and the file name of << or >> from j0 on in the codes c, a
-	letter past ASCII one of its characters *)
-fileNameEnd[c_List, j0_Integer] := Module[{j = j0, n = Length[c]},
-	While[j <= n && (c[[j]] === 32 || c[[j]] === 9), j++];
-	While[j <= n && (KeyExistsQ[$fileCharacterCodes, c[[j]]] || c[[j]] === 92 || (c[[j]] > 127 && LetterQ[FromCharacterCode[c[[j]]]])),
-		If[ c[[j]] === 92 && j < n && c[[j + 1]] === 91,
-			j += 2; While[j <= n && KeyExistsQ[$alphanumericCodes, c[[j]]], j++]; If[j <= n && c[[j]] === 93, j++, Break[]],
-			j++]];
-	j - 1]
+(* the last character of the spaces and the file name of << or >> from start on in the codes, a
+	letter past ASCII one of its characters and a long name one of its characters *)
+fileNameEnd::usage = "fileNameEnd[codes, start] gives the last character of the spaces and the file name of << or >> from start on."
+fileNameEnd[codes_List, start_Integer] := Part[
+	NestWhile[fileNameStep, {codes, start + LengthWhile[Drop[codes, start - 1], # === 32 || # === 9 &], True}, fileNameGoesOnQ],
+	2
+] - 1
 
+fileNameGoesOnQ::usage = "fileNameGoesOnQ[{codes, at, going}] is True where the file name goes on at at."
+fileNameGoesOnQ[{codes_List, at_Integer, going_}] := going && at <= Length[codes] && fileNameCodeQ[codes[[at]]]
+
+fileNameCodeQ::usage = "fileNameCodeQ[code] is True for a code a file name holds: a file character, a \\ or a letter past ASCII."
+fileNameCodeQ[code_Integer] := KeyExistsQ[$fileCharacterCodes, code] || code === 92 || code > 127 && LetterQ[FromCharacterCode[code]]
+
+fileNameStep::usage = "fileNameStep[{codes, at, going}] gives the place after the character, or the long name, of the file name at at, \
+and whether it goes on, False after a long name not closed."
+fileNameStep[{codes_List, at_Integer, _}] /; pairAtQ[codes, at, 92, 91] :=
+	longNameEnd[codes, at + 2 + LengthWhile[Drop[codes, at + 1], KeyExistsQ[$alphanumericCodes, #] &]]
+fileNameStep[{codes_List, at_Integer, _}] := {codes, at + 1, True}
+
+longNameEnd::usage = "longNameEnd[codes, at] gives the place after the ] of a long name at at and True, or at and False where none is \
+there."
+longNameEnd[codes_List, at_Integer] := If[at <= Length[codes] && codes[[at]] === 93, {codes, at + 1, True}, {codes, at, False}]
+
+characterEscapes::usage = "characterEscapes[s] gives the character escapes of s outside its strings and comments, {} for none."
 characterEscapes[s_String] := If[StringContainsQ[s, "\\:" | "\\." | "\\|"], escapeSpans[s], {}]
+
 
 (* s as the readers read it, without its line continuations and with each character escape its
 	character, and the positions in s of its characters, None where they are all of s's *)
