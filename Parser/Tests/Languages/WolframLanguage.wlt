@@ -634,7 +634,6 @@ $wlFailures = {
     {"a ~ b ~", {8, True}},
     {"a \"b c", {7, True}},
     {"a (* note", {10, True}},
-    {"a::\"b", {6, True}},
     {"a[[1]&]", {7, False}},
     {"a[[1, 2]", {9, True}},
     {"(a + b", {7, True}},
@@ -954,6 +953,12 @@ VerificationTest[
     {{HoldComplete[x_ | (y_ : 1)]}, {HoldComplete[x_ : (y_ : 1)]}, {HoldComplete[f[x_ : 1]]}},
     TestID -> "wl: a colon after a pattern is its default"]
 VerificationTest[
+    {Map[{WolframLanguageSyntaxQ[#], Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$fastHeldReader = False}, WolframLanguageSyntaxQ[#]]} &,
+        {"x >> b[c", "x >>> b[c", "f[a::\"b]"}],
+     WolframLanguageHeld /@ {"x >> b[c]", "x >> b[c].m", "<<b[c"}},
+    {{{False, False}, {False, False}, {False, False}}, {{HoldComplete[Put[x, "b[c]"]]}, {HoldComplete[Put[x, "b[c].m"]]}, {HoldComplete[Get["b[c"]]}}},
+    TestID -> "wl: after >> a file's [ is closed, as a notebook reads x >> b[c; a string not closed after :: runs to the end"]
+VerificationTest[
     WolframLanguageSyntaxQ /@ {"f[??a b]", "f[?a*]", "a?b?c", "a ? b ? c", "(a?b)?c"},
     {False, False, False, False, True},
     TestID -> "wl: a ?? that does not begin its statement takes a word alone; a ? after a pattern test is no Wolfram Language"]
@@ -1181,7 +1186,12 @@ $wlMessageNames = {
     {"a::b c::d", List[HoldComplete[Times[MessageName[a, "b"], MessageName[c, "d"]]]]},
     {"a::b[[1]]", List[HoldComplete[Part[MessageName[a, "b"], 1]]]},
     {"a::b!", List[HoldComplete[Factorial[MessageName[a, "b"]]]]},
-    {"a::b~c~d", List[HoldComplete[c[MessageName[a, "b"], d]]]}
+    {"a::b~c~d", List[HoldComplete[c[MessageName[a, "b"], d]]]},
+    (* a string not closed right after a ::: a word of its text to the end of the source *)
+    {"a::\"b", List[HoldComplete[MessageName[a, "\"b"]]]},
+    {"a::\"b c", List[HoldComplete[MessageName[a, "\"b c"]]]},
+    {"a::b::\"c", List[HoldComplete[MessageName[a, "b", "\"c"]]]},
+    {"x = a::\"b", List[HoldComplete[Set[x, MessageName[a, "\"b"]]]]}
 };
 Scan[
     Function[c, VerificationTest[

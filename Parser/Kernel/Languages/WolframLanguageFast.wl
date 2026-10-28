@@ -119,7 +119,7 @@ $fastSpecial := $fastSpecial = Developer`ToPackedArray[{$fastOpenAssociation, $f
 (* token kinds *)
 $tkEnd = 0; $tkName = 1; $tkBlank = 2; $tkInteger = 3; $tkReal = 4; $tkString = 5; $tkSlot = 6; $tkOut = 7; $tkFile = 8;
 $tkOperator = 9; $tkOpenParen = 10; $tkCloseParen = 11; $tkOpenSquare = 12; $tkCloseSquare = 13; $tkOpenCurly = 14;
-$tkCloseCurly = 15; $tkOpenAssociation = 16; $tkCloseAssociation = 17; $tkComma = 18; $tkPrimes = 19; $tkBoxes = 20; $tkFreeform = 21
+$tkCloseCurly = 15; $tkOpenAssociation = 16; $tkCloseAssociation = 17; $tkComma = 18; $tkPrimes = 19; $tkBoxes = 20; $tkFreeform = 21; $tkWord = 22
 
 (* the source is no Wolfram Language: the character where reading stops, as
    the kernel's reader stops there, and whether the source ends before its
@@ -206,7 +206,12 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                                 True, scanning = 0]];
                         c2 = If[pk > n, 0, lexCodes[[pk]]];
                         file = If[ pk > n || c2 == 10 || c2 == 13 || c2 == 59 || c2 == 44 || c2 == 41 || c2 == 93 || c2 == 125 ||
-                            (c2 == 124 && lexCodes[[pk + 1]] == 62), 1, 0]];
+                            (c2 == 124 && lexCodes[[pk + 1]] == 62), 1, 0];
+                        (* a name whose [ is not closed is no file after >>, as a notebook reads x >> b[c *)
+                        If[ file == 1 && lexCodes[[i]] != 34,
+                            m = i; a = 0;
+                            While[m < Quotient[r, 4], If[lexCodes[[m]] == 91, a++]; If[lexCodes[[m]] == 93, a--]; m++];
+                            If[a > 0, file = 0]]];
                     Which[
                         (* the file of << or >>: a string, or the characters of a path *)
                         file == 1,
@@ -238,8 +243,14 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
                             r = lexNumber[lexCodes, i, n]; j = Quotient[r, 4]; kind = 3 + Quotient[Mod[r, 4], 2]; status = Mod[r, 2],
                         (* a string, a slot of one *)
                         c == 34 || (c == 35 && i < n && lexCodes[[i + 1]] == 34),
-                            r = lexQuoted[lexCodes, If[c == 35, i + 2, i + 1], n]; j = Quotient[r, 2]; If[Mod[r, 2] == 1, status = 3];
-                            kind = If[c == 35, 6, 5],
+                            r = lexQuoted[lexCodes, If[c == 35, i + 2, i + 1], n]; j = Quotient[r, 2]; kind = If[c == 35, 6, 5];
+                            (* a string not closed right after a ::, as a notebook reads a::"b: a word of its text to the
+                               end of the source, kind 22; any other not closed, the source ending in it *)
+                            If[ Mod[r, 2] == 1,
+                                If[ c == 34 && k > 1 && out[[base - 4]] == 9 && out[[base - 1]] - out[[base - 2]] == 2 &&
+                                        lexCodes[[out[[base - 2]]]] == 58 && lexCodes[[out[[base - 2]] + 1]] == 58,
+                                    kind = 22,
+                                    status = 3]],
                         (* a slot: ## and its digits, or # and its digits or a name, read as a name's
                            token reads one, a name malformed making no slot *)
                         c == 35,
@@ -654,10 +665,10 @@ fastSpecIndex[spec_] := First[FirstPosition[$fastSpecList, spec, {0}, {1}, Heads
 $fastOpSpecIndex := $fastOpSpecIndex = With[{n = $fastNotId + 1}, Developer`ToPackedArray[
     Table[Which[KeyExistsQ[$fastLedTable, k], fastSpecIndex[$fastLedTable[k]],
         KeyExistsQ[$fastPrefixOnly, k], fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}], True, 0], {k, 0, n}]]]
-$fastKindSpecIndex := $fastKindSpecIndex = Developer`ToPackedArray[ReplacePart[ConstantArray[0, 22], Join[
+$fastKindSpecIndex := $fastKindSpecIndex = Developer`ToPackedArray[ReplacePart[ConstantArray[0, $tkWord + 1], Join[
     {($tkOpenSquare + 1) -> fastSpecIndex[{176, "Call", "Call"}], ($tkPrimes + 1) -> fastSpecIndex[{154, "Derivative", "Derivative"}]},
     Map[(# + 1) -> fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}] &,
-        {$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation, $tkBoxes, $tkFreeform}]]]]
+        {$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation, $tkBoxes, $tkFreeform, $tkWord}]]]]
 fastLedIndices[lexed_List] := fastLedFunction[lexed, $fastKindSpecIndex, $fastOpSpecIndex, $fastLedParams]
 $fastLedParams := $fastLedParams = Developer`ToPackedArray[{$tkOperator, $fastEqual, $fastDot, $fastUnsetSpecIndex}]
 $fastUnsetSpecIndex := $fastUnsetSpecIndex = fastSpecIndex[{9, "Unset", "Unset"}]
@@ -767,8 +778,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
                                     sp++; base = 8 (sp - 1); fr[[base + 1]] = 7; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
                                     t++; pMin = pSpecial[[16]]; pRbp = 0; pPlain = 1; mode = 1,
                                     mode = 3],
-                            (k >= 2 && k <= 7) || k == 20 || k == 21,
-                                on++; out[[3 on]] = 1; out[[3 on + 1]] = k; out[[3 on + 2]] = t; t++; mode = 3,
+                            (k >= 2 && k <= 7) || k == 20 || k == 21 || k == 22,
+                                on++; out[[3 on]] = 1; out[[3 on + 1]] = If[k == 22, 100, k]; out[[3 on + 2]] = t; t++; mode = 3,
                             k == 10,
                                 t++; brackets++;
                                 sp++; base = 8 (sp - 1); fr[[base + 1]] = 5;
@@ -1862,8 +1873,8 @@ $fastWarnParams := $fastWarnParams = Developer`ToPackedArray[{$tkOperator, $tkCo
 
 (* the kinds of token that open a bracket's items, and that close them, by kind + 1, and the
    operators that do, the long-name brackets, by operator + 1 *)
-$openKindFlags = Developer`ToPackedArray[ReplacePart[ConstantArray[0, 22], Thread[{12, 14, 16} + 1 -> 1]]];
-$closeKindFlags = Developer`ToPackedArray[ReplacePart[ConstantArray[0, 22], Thread[{0, 13, 15, 17, 18} + 1 -> 1]]];
+$openKindFlags = Developer`ToPackedArray[ReplacePart[ConstantArray[0, $tkWord + 1], Thread[{12, 14, 16} + 1 -> 1]]];
+$closeKindFlags = Developer`ToPackedArray[ReplacePart[ConstantArray[0, $tkWord + 1], Thread[{0, 13, 15, 17, 18} + 1 -> 1]]];
 $warnOpenOps := $warnOpenOps = Developer`ToPackedArray[ReplacePart[ConstantArray[0, $fastNotId + 2],
     Thread[(Append[Keys[$fastGroupTable], fastLongOp["LeftDoubleBracket"]] + 1) -> 1]]]
 $warnCloseOps := $warnCloseOps = Developer`ToPackedArray[ReplacePart[ConstantArray[0, $fastNotId + 2],

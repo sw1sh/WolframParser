@@ -157,6 +157,10 @@ $number = ParseCondition[text[
     ~~ ParseOptional[ParseLiteral["`"] ~~ ParseOptional[ParseLiteral["`"]] ~~ ParseOptional[ParseRegex["[-+]?([0-9]+\\.?[0-9]*|\\.[0-9]+)"]]]
     ~~ ParseOptional[ParseLiteral["*^"] ~~ ParseRegex["[-+]?[0-9]+"]]], baseDigitsQ]
 
+(* whether the file after >> closes its brackets, as a notebook reads x >> b[c: a string's are its
+   characters *)
+closedBracketsQ[s_String] := StringStartsQ[s, "\""] || StringCount[s, "["] <= StringCount[s, "]"]
+
 (* whether a number's text has a base of 2 to 36, if any, and only digits of its base after it *)
 baseDigitsQ[s_String] := StringFreeQ[s, "^^"] || With[{parts = StringSplit[s, "^^", 2]},
     With[{base = FromDigits[parts[[1]]], digits = ToLowerCase[First[StringCases[parts[[2]], StartOfString ~~ d : RegularExpression["[0-9a-zA-Z.]*"] :> d], ""]]},
@@ -393,7 +397,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
     (* >> or >>> and a file alone, else, as a notebook reads it, the expression after it: a file
        where the end, a newline, ;, , or a closer follows it *)
     put = ParseAction[ParseChoice[operator[">>>"], operator[">>"]] ~~ ParseChoice[
-            ParseAction[leaf[$file, "File"] ~~ ParseLookahead[ParseChoice[ParseRegex["\\z"], ParseRegex["[\\n\\r;,)\\]}]"], ParseLiteral["|>"]]], #1 &],
+            ParseAction[leaf[ParseCondition[$file, closedBracketsQ], "File"] ~~ ParseLookahead[ParseChoice[ParseRegex["\\z"], ParseRegex["[\\n\\r;,)\\]}]"], ParseLiteral["|>"]]], #1 &],
             RecRef[putRight]],
         Function[{o, file}, Function[x, alg["Binary"][If[o === ">>>", "PutAppend", "Put"], x, file]]]];
 
@@ -536,6 +540,8 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
         ParseAction[ParseLookahead[ParseChoice[ParseOptional[$name] ~~ $blank, $name] ~~ ParseRegex["[ \t]*"] ~~ ParseLiteral[":"] ~~
             ParseNotFollowedBy[ParseCharacter[":" | "=" | ">"]]] ~~ RecRef[messagePattern], #2 &],
         leaf[$string, "String"],
+        (* a string not closed, as a notebook reads a::"b: a word of its text to the end of the source *)
+        leaf[ParseRegex["\"(?:[^\"\\\\]|\\\\[\\s\\S])*\\z"], "Tag"],
         word,
         ParseAction[ParseLookahead[ParseChoice[ParseLiteral["("], ParseLiteral["{"], ParseLiteral["<|"], ParseLiteral["<<"], ParseLiteral["?"]]] ~~ otherUnits, #2 &],
         Sequence @@ Map[Function[s, ParseAction[s[[2, 2]] ~~ prefixedTable[unit, precedenceValue[First[s]]], #1[#2] &]],
