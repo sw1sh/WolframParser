@@ -40,17 +40,27 @@ $fastClasses := $fastClasses = With[{file = FileNameJoin[{$languagesDirectory, "
 		_ :> fastClassesComputed[]}]]
 
 (* the table computed: what dev/freeze-classes.wls records, as runs, on Wolfram 15 *)
-fastClassesComputed[] := Module[{t = ConstantArray[0, 65536], high = Range[128, 65535]},
-	t[[ToCharacterCode["ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz$`"] + 1]] = 1;
-	t[[Range[48, 57] + 1]] = 2;
-	t[[{32, 9, 12} + 1]] = 3;
-	t[[{10, 13} + 1]] = 4;
-	t[[high + 1]] = 5;
-	t[[ToCharacterCode[StringJoin[Keys[$nonLetterCharacters]]] + 1]] = 0;
-	t[[Pick[high, StringMatchQ[Characters[FromCharacterCode[high]], WhitespaceCharacter]] + 1]] = 0;
-	t[[ToCharacterCode[StringJoin[Lookup[$longNameTable["Characters"], $longNameTable["Whitespace"], Nothing]]] + 1]] = 3;
-	t[[ToCharacterCode[StringJoin[Lookup[$longNameTable["Characters"], $heldNewlineNames, Nothing]]] + 1]] = 4;
-	t]
+fastClassesComputed::usage = "fastClassesComputed[] gives the class of each character code from 0 to 65535, computed."
+fastClassesComputed[] := With[{high = Range[128, 65535]},
+	codesClassified[{
+		{ToCharacterCode["ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz$`"], 1},
+		{Range[48, 57], 2},
+		{{32, 9, 12}, 3},
+		{{10, 13}, 4},
+		{high, 5},
+		{ToCharacterCode[StringJoin[Keys[$nonLetterCharacters]]], 0},
+		{Pick[high, StringMatchQ[Characters[FromCharacterCode[high]], WhitespaceCharacter]], 0},
+		{ToCharacterCode[StringJoin[Lookup[$longNameTable["Characters"], $longNameTable["Whitespace"], Nothing]]], 3},
+		{ToCharacterCode[StringJoin[Lookup[$longNameTable["Characters"], $heldNewlineNames, Nothing]]], 4}
+	}]
+]
+
+codesClassified::usage = "codesClassified[assignments] gives the class of each character code from 0 to 65535, 0 but where the \
+assignments, {codes, class} each, a later one before an earlier, give one."
+codesClassified[assignments_List] := Developer`ToPackedArray @ ReplacePart[
+	ConstantArray[0, 65536],
+	Normal @ Association @ Catenate[Function[{codes, class}, Thread[(codes + 1) -> class]] @@@ assignments]
+]
 
 (* ::Section:: *)
 (*Operators*)
@@ -81,17 +91,25 @@ fastLongOp[name_String] := Which[
 
 (* the operators of one, two and three ASCII characters, and of a character
 	past ASCII, by their codes *)
-$fastOp1 := $fastOp1 = Module[{t = ConstantArray[0, 65536]},
-	Scan[(t[[First[ToCharacterCode[#]] + 1]] = fastOp[#]) &, Select[$operatorSpellings, StringLength[#] === 1 &]];
-	KeyValueMap[Function[{op, spellings}, Scan[(t[[First[ToCharacterCode[#]] + 1]] = fastOp[op]) &, Select[spellings, StringLength[#] === 1 &]]],
-		$longNameOperators];
-	Scan[With[{c = Lookup[$longNameTable["Characters"], #, None]}, If[StringQ[c] && First[ToCharacterCode[c]] <= 65535,
-		t[[First[ToCharacterCode[c]] + 1]] = fastLongOp[#]]] &, Append[$fastLongNames, "InvisibleComma"]];
-	With[{c = $longNameTable["Characters"]["Not"]}, t[[First[ToCharacterCode[c]] + 1]] = $fastNotId];
-	t]
-$fastOp2 := $fastOp2 = Module[{t = ConstantArray[0, {128, 128}]},
-	Scan[With[{c = ToCharacterCode[#]}, t[[c[[1]] + 1, c[[2]] + 1]] = fastOp[#]] &, Select[$operatorSpellings, StringLength[#] === 2 &]];
-	t]
+$fastOp1 := $fastOp1 = Developer`ToPackedArray @ ReplacePart[ConstantArray[0, 65536], Normal @ Association @ Join[
+	Map[First[ToCharacterCode[#]] + 1 -> fastOp[#] &, Select[$operatorSpellings, StringLength[#] === 1 &]],
+	Catenate @ KeyValueMap[
+		Function[{op, spellings}, Map[First[ToCharacterCode[#]] + 1 -> fastOp[op] &, Select[spellings, StringLength[#] === 1 &]]],
+		$longNameOperators
+	],
+	Map[
+		First[ToCharacterCode[$longNameTable["Characters"][#]]] + 1 -> fastLongOp[#] &,
+		Select[Append[$fastLongNames, "InvisibleComma"], longNameCodeQ]
+	],
+	{First[ToCharacterCode[$longNameTable["Characters"]["Not"]]] + 1 -> $fastNotId}
+]]
+
+longNameCodeQ::usage = "longNameCodeQ[name] is True where the long name name has a character of one code below 65536."
+longNameCodeQ[name_String] := With[{c = Lookup[$longNameTable["Characters"], name, None]}, StringQ[c] && First[ToCharacterCode[c]] <= 65535]
+$fastOp2 := $fastOp2 = Developer`ToPackedArray @ ReplacePart[
+	ConstantArray[0, {128, 128}],
+	Map[(ToCharacterCode[#] + 1) -> fastOp[#] &, Select[$operatorSpellings, StringLength[#] === 2 &]]
+]
 $fastOp3 = Association[Map[ToCharacterCode[#] -> fastOp[#] &, Select[$operatorSpellings, StringLength[#] === 3 &]]]
 (* each long name of the language: -1 a letter, else its operator *)
 $fastLongNameOps := $fastLongNameOps = Join[
@@ -105,8 +123,9 @@ $fastLongNameOps := $fastLongNameOps = Join[
 	the two, {c1, c2, c3, operator} for each of 3, and the long names,
 	{how many, where each begins, then each, by length and then by codes,
 	its length, its codes and its operator, -1 for a letter} *)
-$fastOp2Flat := $fastOp2Flat = Developer`ToPackedArray[Flatten[$fastOp2 + 4096 Module[{t = ConstantArray[0, {128, 128}]},
-	Scan[(t[[#[[1]] + 1, #[[2]] + 1]] = 1) &, Keys[$fastOp3]]; t]]]
+$fastOp2Flat := $fastOp2Flat = Developer`ToPackedArray @ Flatten[
+	$fastOp2 + 4096 ReplacePart[ConstantArray[0, {128, 128}], Map[(Take[#, 2] + 1) -> 1 &, Keys[$fastOp3]]]
+]
 $fastOp3Table = Developer`ToPackedArray[Flatten[KeyValueMap[Append[#1, #2] &, $fastOp3]]]
 $fastLongOpTable := $fastLongOpTable = With[
 	{entries = Map[Join[{Length[#[[1]]]}, #[[1]], {#[[2]]}] &, SortBy[KeyValueMap[{ToCharacterCode[#1], #2} &, $fastLongNameOps], {Length[#[[1]]] &, First}]]},
@@ -1740,9 +1759,9 @@ fastLeafValue[kind_Integer, s_String] := heldLeafValue[$fastLeafKinds[kind], s]
 buildStep::usage = "buildStep[{stack, heads, leaf, statements, leaves, marks}, {code, a, b}] gives the state after the instruction, the \
 values of the leaves and their marks the leaves and marks."
 buildStep[{stack_List, heads_List, leaf_Integer, statements_List, leaves_List, marks_List}, {1, _Integer, _Integer}] :=
-	{pushed[stack, leaves[[leaf + 1]], marks[[leaf + 1]]], heads, leaf + 1, statements, leaves, marks}
-buildStep[{stack_List, heads_List, leaf_Integer, statements_List, leaves_List, marks_List}, {25, _Integer, _Integer}] :=
-	{Last[stack], heads, leaf, {topValue[stack], statements}, leaves, marks}
+	{{{leaves[[leaf + 1]], marks[[leaf + 1]]}, stack}, heads, leaf + 1, statements, leaves, marks}
+buildStep[{{{value_, _Integer}, below_List}, heads_List, leaf_Integer, statements_List, leaves_List, marks_List}, {25, _Integer, _Integer}] :=
+	{below, heads, leaf, {value, statements}, leaves, marks}
 buildStep[{stack_List, heads_List, leaf_Integer, statements_List, leaves_List, marks_List}, {6, a_Integer, _Integer}] :=
 	{stack, {a, heads}, leaf, statements, leaves, marks}
 buildStep[{stack_List, heads_List, leaf_Integer, statements_List, leaves_List, marks_List}, {7, a_Integer, _Integer}] := With[
@@ -1772,21 +1791,25 @@ popped::usage = "popped[stack, n] gives {the n values on top of the stack, in th
 popped[stack_List, n_Integer] := With[{top = linkedTop[stack, n]}, {First /@ First[top], Last[top]}]
 
 (* The step of the stack of each code but 1, 25, 6 and 7. A call, an operator and a bracket replace
-	the values they take with their value, its mark 0. *)
+	the values they take with their value, its mark 0. The steps of one or two values take them by
+	the stack's pattern, those of more by popped. *)
 stackStep::usage = "stackStep[code, a, b, stack] gives the stack after the instruction {code, a, b}."
 (* the call of the value below a arguments *)
+stackStep[8, 1, _Integer, {{x_, _Integer}, {{f_, _Integer}, below_List}}] := {{heldCall[f, {x}], 0}, below}
+stackStep[8, 2, _Integer, {{y_, _Integer}, {{x_, _Integer}, {{f_, _Integer}, below_List}}}] := {{heldCall[f, {x, y}], 0}, below}
 stackStep[8, a_Integer, _Integer, stack_List] := calledPushed[popped[stack, a]]
 (* a binary operator of head a; f @ x and x // f are calls, a/b a Divide *)
 stackStep[4, a_Integer, _Integer, {{y_, _Integer}, {{x_, _Integer}, below_List}}] := pushed[below, binaryValue[a, x, y], 0]
 (* the call of head a of the b values on top *)
+stackStep[5, a_Integer, 2, {{y_, _Integer}, {{x_, _Integer}, below_List}}] := {{headValue[a, {x, y}], 0}, below}
 stackStep[5, a_Integer, b_Integer, stack_List] := headPushed[a, popped[stack, b]]
 (* a bracket of head a of b values; a parenthesis the value in it, its mark 0 *)
 stackStep[9, a_Integer, b_Integer, stack_List] := If[a === $fastParenHead, replacedTop[stack, topValue[stack]], headPushed[a, popped[stack, b]]]
 stackStep[19, a_Integer, _Integer, stack_List] := symbolPushed["CompoundExpression", popped[stack, a]]
 (* a prefix operator of head a; a minus folds into a number literal *)
-stackStep[2, a_Integer, _Integer, stack_List] := replacedTop[stack, prefixValue[a, topValue[stack], topMark[stack]]]
+stackStep[2, a_Integer, _Integer, {{x_, mark_Integer}, below_List}] := {{prefixValue[a, x, mark], 0}, below}
 (* a postfix operator of head a *)
-stackStep[3, a_Integer, _Integer, stack_List] := replacedTop[stack, headValue[a, {topValue[stack]}]]
+stackStep[3, a_Integer, _Integer, {{x_, _Integer}, below_List}] := {{headValue[a, {x}], 0}, below}
 stackStep[23, _Integer, _Integer, {{y_, _Integer}, {{x_, _Integer}, below_List}}] := pushed[below, symbolCall["Pattern", {x, y}], 0]
 stackStep[11, _Integer, _Integer, stack_List] := pushed[stack, heldSymbol["Null"], 0]
 stackStep[14, a_Integer, _Integer, stack_List] := symbolPushed["MessageName", popped[stack, a]]
