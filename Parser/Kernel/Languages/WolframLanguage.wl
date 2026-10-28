@@ -595,31 +595,46 @@ negatedHeld[e_HoldComplete, _] := Replace[e, HoldComplete[x_] :> HoldComplete[Ti
 
 (* x_h, __, x___., ...: the name before the underscores, their count, and
 	the head or the . after them *)
-blankExpression[s_String] := Block[{under = StringPosition[s, "_"], name, head, blank},
-	name = StringTake[s, under[[1, 1]] - 1]; head = StringDrop[s, under[[-1, 1]]];
-	blank = If[ head === "" || head === ".", $heldBlanks[[Length[under]]],
-		heldCall[heldSymbol[$blankNames[[Length[under]]]], {heldName[head]}]];
-	If[name =!= "", blank = heldCall[heldSymbol["Pattern"], {heldName[name], blank}]];
-	If[head === ".", heldCall[heldSymbol["Optional"], {blank}], blank]]
+blankExpression::usage = "blankExpression[s] gives the pattern of the blank text s, x_h, __, x___. and the like, held."
+blankExpression[s_String] := With[{underscores = StringPosition[s, "_"]},
+	{name = StringTake[s, First[First[underscores]] - 1], count = Length[underscores], head = StringDrop[s, First[Last[underscores]]]},
+	If[head === ".", heldCall[heldSymbol["Optional"], {namedBlank[name, count, ""]}], namedBlank[name, count, head]]
+]
+
+namedBlank::usage = "namedBlank[name, count, head] gives the blank of count underscores and the head, \"\" for none, named name, \"\" \
+for none, held."
+namedBlank["", count_Integer, head_String] := headBlank[count, head]
+namedBlank[name_String, count_Integer, head_String] := heldCall[heldSymbol["Pattern"], {heldName[name], headBlank[count, head]}]
+
+headBlank::usage = "headBlank[count, head] gives the blank of count underscores and the head, \"\" for none, held."
+headBlank[count_Integer, ""] := $heldBlanks[[count]]
+headBlank[count_Integer, head_String] := heldCall[heldSymbol[$blankNames[[count]]], {heldName[head]}]
 
 $blankNames = {"Blank", "BlankSequence", "BlankNullSequence"}
 $heldBlanks := $heldBlanks = symbolCall[#, {}] & /@ $blankNames
 
+slotExpression::usage = "slotExpression[s] gives the slot of the text s, #, #2, ##, #name or #\"name\", held."
 slotExpression[s_String] /; StringStartsQ[s, "#\""] := symbolCall["Slot", {HoldComplete @@ {stringValue[StringDrop[s, 1]]}}]
-slotExpression[s_String] := With[{rest = StringDelete[s, "#"]},
-	symbolCall[If[StringStartsQ[s, "##"], "SlotSequence", "Slot"],
-		{Which[rest === "", HoldComplete[1], StringMatchQ[rest, DigitCharacter ..], HoldComplete @@ {FromDigits[rest]}, True, HoldComplete @@ {longNamesRead[rest]}]}]]
+slotExpression[s_String] := symbolCall[If[StringStartsQ[s, "##"], "SlotSequence", "Slot"], {slotArgument[StringDelete[s, "#"]]}]
+
+slotArgument::usage = "slotArgument[rest] gives the argument of a slot of the text rest after its #s, held: 1 for none, a number, or a \
+name."
+slotArgument[""] := HoldComplete[1]
+slotArgument[rest_String] /; StringMatchQ[rest, DigitCharacter ..] := HoldComplete @@ {FromDigits[rest]}
+slotArgument[rest_String] := HoldComplete @@ {longNamesRead[rest]}
 
 (* a name's text, each long name in it that is a letter its character *)
 longNamesRead[s_String] := If[ StringFreeQ[s, "\\["], s,
 	StringReplace[s, "\\[" ~~ name : (LetterCharacter | DigitCharacter) .. ~~ "]" /; KeyExistsQ[longNameCharacters[], name] :> longNameCharacters[][name]]]
 
 (* %: Out[]; %%: Out[-2]; %3: Out[3] *)
-outExpression[s_String] := With[{count = StringCount[s, "%"], digits = StringDelete[s, "%"]},
-	symbolCall["Out", Which[
-		digits =!= "", {HoldComplete @@ {FromDigits[digits]}},
-		count === 1, {},
-		True, {HoldComplete @@ {-count}}]]]
+outExpression::usage = "outExpression[s] gives the Out of the text s, %, %% or %3, held."
+outExpression[s_String] := symbolCall["Out", outArguments[StringCount[s, "%"], StringDelete[s, "%"]]]
+
+outArguments::usage = "outArguments[count, digits] gives the arguments of the Out of count %s and the digits after them, held."
+outArguments[_Integer, digits_String] /; digits =!= "" := {HoldComplete @@ {FromDigits[digits]}}
+outArguments[1, ""] := {}
+outArguments[count_Integer, ""] := {HoldComplete @@ {-count}}
 
 (* ::Section:: *)
 (*Numbers*)
@@ -629,39 +644,68 @@ outExpression[s_String] := With[{count = StringCount[s, "%"], digits = StringDel
 	*^e for a power of the base. A real without a mark is a machine real,
 	unless its digits are more than a machine real holds; it then keeps
 	the accuracy its digits give [WL 15.0.0]. *)
-numberValue[s_String] := Which[DigitQ[s], FromDigits[s], StringFreeQ[s, "^" | "*" | "`"], decimalValue[s], True, markedNumberValue[s]]
+numberValue::usage = "numberValue[s] gives the value of the number text s."
+numberValue[s_String] := Which[
+	DigitQ[s],
+		FromDigits[s],
+	StringFreeQ[s, "^" | "*" | "`"],
+		decimalValue[s],
+	True,
+		markedNumberValue[s]
+]
 
 (* a real of digits and a point alone: the machine real nearest its value, or, with more digits
 	than a machine real holds, its value at the accuracy its digits give, as markedNumberValue reads
 	one with no mark *)
-decimalValue[s_String] := With[{parts = StringSplit[s, ".", All]},
-	With[{digits = parts[[1]] <> parts[[2]], places = StringLength[parts[[2]]]},
-		With[{exact = FromDigits[digits] / 10^places},
-			If[significantDigits[digits, 10], SetAccuracy[exact, places], machineReal[exact]]]]]
+decimalValue::usage = "decimalValue[s] gives the value of the text s of digits and a point."
+decimalValue[s_String] := pointValue[StringSplit[s, ".", All]]
 
-markedNumberValue[s_String] := Module[{base = 10, text = s, exponent = 0, mark = None, markText = "", int, frac, point, digits, scale},
-	If[ StringContainsQ[text, "^^"],
-		{base, text} = {FromDigits[First[StringSplit[text, "^^"]]], Last[StringSplit[text, "^^"]]}];
-	If[ StringContainsQ[text, "*^"],
-		{text, exponent} = {First[StringSplit[text, "*^"]], signedValue[Last[StringSplit[text, "*^"]]]}];
-	If[ StringContainsQ[text, "`"],
-		With[{at = First[First[StringPosition[text, "`", 1]]]},
-			{mark, markText} = If[StringTake[text, {at, Min[at + 1, StringLength[text]]}] === "``",
-				{"Accuracy", StringDrop[text, at + 1]},
-				{"Precision", StringDrop[text, at]}];
-			text = StringTake[text, at - 1]]];
-	{int, frac} = If[StringContainsQ[text, "."], StringSplit[text, ".", All][[{1, 2}]], {text, ""}];
-	point = StringContainsQ[text, "."];
-	digits = FromDigits[int <> frac, base]; scale = exponent - StringLength[frac];
+pointValue::usage = "pointValue[{whole, fraction}] gives the value of the digits whole, a point and the digits fraction."
+pointValue[{whole_String, fraction_String, ___String}] := With[{digits = whole <> fraction},
+	{exact = FromDigits[digits] / 10^StringLength[fraction]},
+	If[significantDigits[digits, 10], SetAccuracy[exact, StringLength[fraction]], machineReal[exact]]
+]
+
+(* A number's text with a base, a power of the base or a mark: the base before ^^, the power after
+	*^, the mark, a ` of a precision or a `` of an accuracy, and its digits, and the digits before
+	and after the point, valued as numberValue says. *)
+markedNumberValue::usage = "markedNumberValue[s] gives the value of the number text s that has a base, a power of the base or a mark."
+markedNumberValue[s_String] := With[
+	{base = If[StringContainsQ[s, "^^"], FromDigits[First[StringSplit[s, "^^"]]], 10], unbased = Last[StringSplit[s, "^^"]]},
+	{exponent = If[StringContainsQ[unbased, "*^"], signedValue[Last[StringSplit[unbased, "*^"]]], 0]},
+	markedValue[base, exponent, numberMark[First[StringSplit[unbased, "*^"]]], StringContainsQ[s, "*^"]]
+]
+
+numberMark::usage = "numberMark[text] gives {the digits of the number text before its mark, the mark None, \"Precision\" or \"Accuracy\", \
+the text of the mark's digits}."
+numberMark[text_String] := Replace[StringPosition[text, "`", 1], {
+	{} :> {text, None, ""},
+	{{at_Integer, _Integer}} :> If[StringTake[text, {at, Min[at + 1, StringLength[text]]}] === "``",
+		{StringTake[text, at - 1], "Accuracy", StringDrop[text, at + 1]},
+		{StringTake[text, at - 1], "Precision", StringDrop[text, at]}
+	]
+}]
+
+markedValue::usage = "markedValue[base, exponent, {digits, mark, markText}, powered] gives the value of the digits text of the base, the \
+power exponent of the base, and the mark, powered True where the text has a *^."
+markedValue[base_Integer, exponent_, {text_String, mark_, markText_String}, powered_] := With[
+	{whole = First[StringSplit[text, ".", All]], fraction = If[StringContainsQ[text, "."], StringSplit[text, ".", All][[2]], ""]},
+	{digits = FromDigits[whole <> fraction, base], scale = exponent - StringLength[fraction], point = StringContainsQ[text, "."]},
 	Which[
-		mark === None && ! point, If[digits === 0, 0, digits * base^scale],
-		mark === "Accuracy", accurateValue[digits, base, scale, signedValue[markText]],
+		mark === None && !point,
+			If[digits === 0, 0, digits base^scale],
+		mark === "Accuracy",
+			accurateValue[digits, base, scale, signedValue[markText]],
 		(* a zero of a precision: an integer one exact [WL 15.0.0] *)
-		mark === "Precision" && markText =!= "" && digits === 0, If[point, 0., 0],
-		mark === "Precision" && markText =!= "", With[{p = digitsInBase[signedValue[markText], base]},
-			SetPrecision[scaledValue[digits, base, scale, Max[p, 0]], p]],
-		mark === None && significantDigits[int <> frac, base, StringContainsQ[s, "*^"]], longValue[digits, base, scale, StringLength[frac] - exponent],
-		True, machineValue[digits, base, scale]]
+		mark === "Precision" && markText =!= "" && digits === 0,
+			If[point, 0., 0],
+		mark === "Precision" && markText =!= "",
+			With[{precision = digitsInBase[signedValue[markText], base]}, SetPrecision[scaledValue[digits, base, scale, Max[precision, 0]], precision]],
+		mark === None && significantDigits[whole <> fraction, base, powered],
+			longValue[digits, base, scale, StringLength[fraction] - exponent],
+		True,
+			machineValue[digits, base, scale]
+	]
 ]
 
 (* "-12", "3.5", ".5" -> the exact value *)
@@ -725,12 +769,16 @@ machineReal[x_] := Which[
 	Abs[x] >= 2^-1022, nearestMachineReal[x],
 	True, With[{k = Round[Abs[x] 2^1074]}, If[k === 0, 0., Quiet[N[Sign[x] k / 2^1074], General::munfl]]]]
 
-nearestMachineReal[x_] := Module[{a = Abs[x], e, m},
-	e = BitLength[Numerator[a]] - BitLength[Denominator[a]];
-	If[a < 2^e, e--];
-	m = Round[a 2^(52 - e)];
-	If[m === 2^53, m = 2^52; e++];
-	Sign[x] N[m 2^(e - 52)]]
+nearestMachineReal::usage = "nearestMachineReal[x] gives the machine real nearest the exact value x, at least the least normal one."
+nearestMachineReal[x_] := With[{a = Abs[x]},
+	{bits = BitLength[Numerator[a]] - BitLength[Denominator[a]]},
+	{exponent = If[a < 2^bits, bits - 1, bits]},
+	Sign[x] roundedMachineReal[Round[a 2^(52 - exponent)], exponent]
+]
+
+roundedMachineReal::usage = "roundedMachineReal[m, e] gives the machine real of the 53-bit mantissa m and the exponent e, a mantissa \
+rounded up to 2^53 the next power of 2."
+roundedMachineReal[m_Integer, e_Integer] := If[m === 2^53, N[2^(e + 1)], N[m 2^(e - 52)]]
 
 (* ::Section:: *)
 (*Strings*)
@@ -781,82 +829,172 @@ heldLeaf["Integer" | "Real", s_String] := <|"Expr" -> heldLeafValue["Integer", s
 heldLeaf[kind_String, s_String] := held[heldLeafValue[kind, s]]
 
 (* ::Section:: *)
+(*Linked lists*)
+
+(* A linked list is {first, rest}, the empty one {}: a step of a loop that puts an item on one
+	neither copies it nor writes over it. *)
+linkedItems::usage = "linkedItems[list] gives the items of the linked list {first, {second, ... {}}}, the first first."
+linkedItems[list_List] := First /@ Most[NestWhileList[Last, list, # =!= {} &]]
+
+(* ::Section:: *)
 (*Linear syntax*)
 
 (* The boxes of linear syntax as Wolfram 15's reader reads them: a \( to its \) its boxes, a \!
 	before it LinearBoxes of them, all held. Inside, \^ \_ \% \& \+ \/ \@ \` build the boxes they
 	name from the box on either side, \( \) group, \* reads the input after it, and the rest is
 	rows of tokens, nested as their concrete syntax tree nests them. *)
+linearHeld::usage = "linearHeld[s] gives the boxes of the linear syntax s, \\(...\\) or \\!\\(...\\), held."
 linearHeld[s_String] := With[{interpret = StringStartsQ[s, "\\!"]},
-	With[{inner = StringTake[s, {If[interpret, 5, 3], If[StringEndsQ[s, "\\)"], -3, -1]}]},
-		ReplaceAll[HoldComplete @@ {If[interpret, LinearBoxes[linearGroup[inner]], linearGroup[inner]]}, linearInput[HoldComplete[e_]] :> e]]]
+	{inner = StringTake[s, {If[interpret, 5, 3], If[StringEndsQ[s, "\\)"], -3, -1]}]},
+	ReplaceAll[HoldComplete @@ {If[interpret, LinearBoxes[linearGroup[inner]], linearGroup[inner]]}, linearInput[HoldComplete[e_]] :> e]
+]
 
 (* the boxes of a group's text: a form's, after its \`, else its row's *)
+linearGroup::usage = "linearGroup[s] gives the boxes of the text s of a group: a form's, after its \\`, else its row's."
 linearGroup[s_String] := With[{pieces = linearPieces[s]},
-	With[{f = FirstPosition[pieces, {"Form"}, {0}, {1}][[1]]},
-		If[f === 0, linearRow[pieces], FormBox[linearRow[Drop[pieces, f]], linearForm[Take[pieces, f - 1]]]]]]
+	Replace[FirstPosition[pieces, {"Form"}, {0}, {1}], {
+		{0} :> linearRow[pieces],
+		{form_Integer} :> FormBox[linearRow[Drop[pieces, form]], linearForm[Take[pieces, form - 1]]]
+	}]
+]
 
 (* the pieces of a group's text: {"Text", t}, {"Box", boxes}, {"Op", o} for a box operator, and
-	{"Form"}; a newline or a tab in the text is whitespace, and \  \t \n are their boxes *)
-linearPieces[s_String] := Module[{cs = Characters[s], n, i = 1, out = Internal`Bag[], text = Internal`Bag[], depth, j, e, flush},
-	n = Length[cs];
-	flush := If[Internal`BagLength[text] > 0, Internal`StuffBag[out, {"Text", StringJoin[Internal`BagPart[text, All]]}]; text = Internal`Bag[]];
-	While[ i <= n,
-		If[ cs[[i]] === "\\" && i < n,
-			Switch[ cs[[i + 1]],
-				"(",
-					flush; depth = 1; j = i + 2;
-					While[j <= n && depth > 0, If[cs[[j]] === "\\" && j < n, Switch[cs[[j + 1]], "(", depth++, ")", depth--]; j += 2, j++]];
-					Internal`StuffBag[out, {"Box", linearGroup[StringJoin[cs[[i + 2 ;; If[depth === 0, j - 3, n]]]]]}]; i = j,
-				")" | "!", i += 2,
-				"^" | "_" | "%" | "&" | "+" | "/" | "@", flush; Internal`StuffBag[out, {"Op", cs[[i + 1]]}]; i += 2,
-				"`", flush; Internal`StuffBag[out, {"Form"}]; i += 2,
-				"*", flush; {e, i} = linearStar[cs, i + 2]; Internal`StuffBag[out, {"Box", e}],
-				" ", flush; Internal`StuffBag[out, {"Box", " "}]; i += 2,
-				"t", flush; Internal`StuffBag[out, {"Box", "\t"}]; i += 2,
-				"n", flush; Internal`StuffBag[out, {"Box", "\n"}]; i += 2,
-				_, Internal`StuffBag[text, cs[[i]] <> cs[[i + 1]]]; i += 2],
-			Internal`StuffBag[text, If[MemberQ[{"\n", "\r", "\t"}, cs[[i]]], " ", cs[[i]]]]; i++]];
-	flush;
-	Internal`BagPart[out, All]]
+	{"Form"}; a newline or a tab in the text is whitespace, and \  \t \n are their boxes. The text is
+	read an escape or a character at a time, the state {where it goes on, the pieces read, a linked
+	list, the text not yet a piece}. *)
+linearPieces::usage = "linearPieces[s] gives the pieces of the text s of a group of linear syntax."
+linearPieces[s_String] := With[{characters = Characters[s]},
+	Reverse @ linkedItems @ textFlushed @ NestWhile[
+		linearPieceStep[characters, #] &,
+		{1, {}, ""},
+		First[#] <= Length[characters] &
+	]
+]
+
+textFlushed::usage = "textFlushed[{at, pieces, text}] gives the pieces with the text as a piece of its own, where there is any."
+textFlushed[{_Integer, pieces_List, ""}] := pieces
+textFlushed[{_Integer, pieces_List, text_String}] := {{"Text", text}, pieces}
+
+linearPieceStep::usage = "linearPieceStep[characters, {at, pieces, text}] gives the state after the escape or the character at at."
+linearPieceStep[characters_List, {at_Integer, pieces_List, text_String}] /; characters[[at]] === "\\" && at < Length[characters] :=
+	linearEscapeStep[characters, at, characters[[at + 1]], pieces, text]
+linearPieceStep[characters_List, {at_Integer, pieces_List, text_String}] :=
+	{at + 1, pieces, text <> If[MemberQ[{"\n", "\r", "\t"}, characters[[at]]], " ", characters[[at]]]}
+
+linearEscapeStep::usage = "linearEscapeStep[characters, at, c, pieces, text] gives the state after the escape \\c at at."
+linearEscapeStep[characters_List, at_Integer, "(", pieces_List, text_String] := With[{close = groupClose[characters, at + 2]},
+	{
+		First[close],
+		{{"Box", linearGroup[StringJoin[Take[characters, {at + 2, If[Last[close] === 0, First[close] - 3, Length[characters]]}]]]}, textFlushed[{at, pieces, text}]},
+		""
+	}
+]
+linearEscapeStep[_List, at_Integer, ")" | "!", pieces_List, text_String] := {at + 2, pieces, text}
+linearEscapeStep[_List, at_Integer, op : "^" | "_" | "%" | "&" | "+" | "/" | "@", pieces_List, text_String] :=
+	{at + 2, {{"Op", op}, textFlushed[{at, pieces, text}]}, ""}
+linearEscapeStep[_List, at_Integer, "`", pieces_List, text_String] := {at + 2, {{"Form"}, textFlushed[{at, pieces, text}]}, ""}
+linearEscapeStep[characters_List, at_Integer, "*", pieces_List, text_String] := With[{star = linearStar[characters, at + 2]},
+	{Last[star], {{"Box", First[star]}, textFlushed[{at, pieces, text}]}, ""}
+]
+linearEscapeStep[_List, at_Integer, " ", pieces_List, text_String] := {at + 2, {{"Box", " "}, textFlushed[{at, pieces, text}]}, ""}
+linearEscapeStep[_List, at_Integer, "t", pieces_List, text_String] := {at + 2, {{"Box", "\t"}, textFlushed[{at, pieces, text}]}, ""}
+linearEscapeStep[_List, at_Integer, "n", pieces_List, text_String] := {at + 2, {{"Box", "\n"}, textFlushed[{at, pieces, text}]}, ""}
+linearEscapeStep[_List, at_Integer, c_String, pieces_List, text_String] := {at + 2, pieces, text <> "\\" <> c}
+
+(* where the group whose text begins at from closes: {past its \), how many \( are left open} *)
+groupClose::usage = "groupClose[characters, from] gives {where reading goes on after the \\) that closes the group from from on, how \
+many groups are left open there}."
+groupClose[characters_List, from_Integer] := NestWhile[groupScanStep[characters, #] &, {from, 1}, First[#] <= Length[characters] && Last[#] > 0 &]
+
+groupScanStep::usage = "groupScanStep[characters, {at, depth}] gives the scan's place and the depth of the groups after the character, or \
+the escape, at at."
+groupScanStep[characters_List, {at_Integer, depth_Integer}] /; characters[[at]] === "\\" && at < Length[characters] :=
+	{at + 2, depth + Switch[characters[[at + 1]], "(", 1, ")", -1, _, 0]}
+groupScanStep[_List, {at_Integer, depth_Integer}] := {at + 1, depth}
 
 (* \* and the input after it, a string or a name and its brackets: the boxes it gives, held where
 	they are no string, and where the text goes on *)
-linearStar[cs_List, i0_Integer] := Module[{i = i0, n = Length[cs], depth, quoted = False, from, read},
-	While[i <= n && cs[[i]] === " ", i++];
-	from = i;
-	If[ i <= n && cs[[i]] === "\"",
-		i++; While[i <= n && cs[[i]] =!= "\"", If[cs[[i]] === "\\", i += 2, i++]]; i++,
-		While[i <= n && (LetterQ[cs[[i]]] || DigitQ[cs[[i]]] || MemberQ[{"$", "`"}, cs[[i]]]), i++];
-		While[ i <= n && cs[[i]] === "[",
-			depth = 0;
-			While[ i <= n,
-				Which[
-					quoted, If[cs[[i]] === "\\", i++, If[cs[[i]] === "\"", quoted = False]],
-					cs[[i]] === "\"", quoted = True,
-					cs[[i]] === "[", depth++,
-					cs[[i]] === "]", depth--];
-				i++;
-				If[! quoted && depth === 0, Break[]]]]];
-	read = WolframLanguageHeld[StringJoin[cs[[from ;; i - 1]]]];
-	{Replace[read, {{HoldComplete[x_String]} :> x, {h_HoldComplete} :> linearInput[h], _ :> StringJoin[cs[[from ;; i - 1]]]}], i}]
+linearStar::usage = "linearStar[characters, from] gives {the boxes of the input after a \\* from from on, where the text goes on}."
+linearStar[characters_List, start_Integer] := With[{from = start + LengthWhile[Drop[characters, start - 1], # === " " &]},
+	{end = starEnd[characters, from]},
+	{starBoxes[StringJoin[Take[characters, {from, end - 1}]]], end}
+]
+
+starEnd::usage = "starEnd[characters, from] gives where the input of a \\* from from on ends: past a string, or past a name and its \
+brackets."
+starEnd[characters_List, from_Integer] /; from <= Length[characters] && characters[[from]] === "\"" := 1 + NestWhile[
+	If[characters[[#]] === "\\", # + 2, # + 1] &,
+	from + 1,
+	# <= Length[characters] && characters[[#]] =!= "\"" &
+]
+starEnd[characters_List, from_Integer] := NestWhile[
+	bracketsEnd[characters, #] &,
+	from + LengthWhile[Drop[characters, from - 1], LetterQ[#] || DigitQ[#] || # === "$" || # === "`" &],
+	# <= Length[characters] && characters[[#]] === "[" &
+]
+
+bracketsEnd::usage = "bracketsEnd[characters, from] gives where the brackets that open at from close, strings in them read whole."
+bracketsEnd[characters_List, from_Integer] := First @ NestWhile[
+	bracketScanStep[characters, #] &,
+	bracketScanStep[characters, {from, 0, False}],
+	First[#] <= Length[characters] && (Last[#] || #[[2]] =!= 0) &
+]
+
+bracketScanStep::usage = "bracketScanStep[characters, {at, depth, quoted}] gives the scan's place, the depth of the brackets and whether \
+it is in a string, after the character at at."
+bracketScanStep[characters_List, {at_Integer, depth_Integer, True}] := {at + If[characters[[at]] === "\\", 2, 1], depth, characters[[at]] =!= "\""}
+bracketScanStep[characters_List, {at_Integer, depth_Integer, False}] := Switch[characters[[at]],
+	"\"",
+		{at + 1, depth, True},
+	"[",
+		{at + 1, depth + 1, False},
+	"]",
+		{at + 1, depth - 1, False},
+	_,
+		{at + 1, depth, False}
+]
+
+starBoxes::usage = "starBoxes[text] gives the boxes of the input text of a \\*: a string it reads as, held input, else the text."
+starBoxes[text_String] := Replace[WolframLanguageHeld[text], {
+	{HoldComplete[x_String]} :> x,
+	{held_HoldComplete} :> linearInput[held],
+	_ :> text
+}]
 
 (* the form before a \`: the symbol a name names, else its boxes *)
-linearForm[pieces_List] := With[{b = linearRow[pieces]},
-	If[ StringQ[b] && StringMatchQ[b, (LetterCharacter | "$") ~~ (WordCharacter | "$" | "`") ...],
-		Replace[WolframLanguageHeld[b], {{HoldComplete[x_Symbol]} :> linearInput[HoldComplete[x]], _ :> b}], b]]
+linearForm::usage = "linearForm[pieces] gives the form the pieces before a \\` name."
+linearForm[pieces_List] := With[{boxes = linearRow[pieces]},
+	If[StringQ[boxes] && StringMatchQ[boxes, (LetterCharacter | "$") ~~ (WordCharacter | "$" | "`") ...],
+		Replace[WolframLanguageHeld[boxes], {{HoldComplete[x_Symbol]} :> linearInput[HoldComplete[x]], _ :> boxes}],
+		boxes
+	]
+]
 
 (* the boxes of a row's pieces: its box operators folded, inside each bracket first, then the rest *)
-linearRow[pieces_List] := linearPlain[linearFoldBrackets[Catenate[Map[If[#[[1]] === "Text", linearTextTokens[#[[2]]], {#}] &, pieces]]]]
+linearRow::usage = "linearRow[pieces] gives the boxes of the row of the pieces."
+linearRow[pieces_List] := linearPlain @ linearFoldBrackets @ Catenate[linearRowTokens /@ pieces]
+
+linearRowTokens::usage = "linearRowTokens[piece] gives the tokens of a text piece, and any other piece itself."
+linearRowTokens[{"Text", text_String}] := linearTextTokens[text]
+linearRowTokens[piece_List] := {piece}
 
 (* the tokens of a row's text, {"Tok", text, kind, the whitespace before it}, by the lexer *)
-linearTextTokens[t_String] := Module[{codes = ToCharacterCode[t], lexed},
-	lexed = fastLexFunction[paddedCodes[codes], $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial];
-	If[ lexed[[1]] =!= 0,
-		If[StringTrim[t] === "", {}, {{"Tok", StringTrim[t], 1, If[StringStartsQ[t, " "], " ", ""]}}],
-		Table[With[{a = lexed[[5 j]], before = If[j === 1, 1, lexed[[5 (j - 1) + 1]]]},
-			{"Tok", FromCharacterCode[codes[[a ;; lexed[[5 j + 1]] - 1]]], lexed[[5 j - 2]], FromCharacterCode[codes[[before ;; a - 1]]]}],
-			{j, lexed[[2]] - 1}]]]
+linearTextTokens::usage = "linearTextTokens[t] gives the tokens of the text t, {\"Tok\", text, kind, the whitespace before it}."
+linearTextTokens[t_String] := With[{codes = ToCharacterCode[t]},
+	textTokens[t, codes, lexedCodes[paddedCodes[codes]]]
+]
+
+textTokens::usage = "textTokens[t, codes, lexed] gives the tokens of the text t of the codes, by the lexer's tokens lexed of them."
+textTokens[t_String, _List, lexed_List] /; lexerStatus[lexed] =!= 0 := If[StringTrim[t] === "", {}, {{"Tok", StringTrim[t], 1, If[StringStartsQ[t, " "], " ", ""]}}]
+textTokens[_String, codes_List, lexed_List] := Table[
+	{
+		"Tok",
+		FromCharacterCode @ Take[codes, {tokenStart[lexed, t], tokenEnd[lexed, t] - 1}],
+		tokenKind[lexed, t],
+		FromCharacterCode @ Take[codes, {If[t === 1, 1, tokenEnd[lexed, t - 1]], tokenStart[lexed, t] - 1}]
+	},
+	{t, tokenCount[lexed] - 1}
+]
 
 (* the kinds of token that open and close a bracket, and those of an atom *)
 $linearOpenKinds = {10, 12, 14, 16}
@@ -864,86 +1002,186 @@ $linearCloseKinds = {11, 13, 15, 17}
 $linearAtomKinds = {1, 2, 3, 4, 5, 6, 7, 8, 19}
 
 (* a token that may be a prefix operator *)
-linearPrefixQ[t_List] := t[[1]] === "Tok" && t[[3]] === 9 && MemberQ[{"-", "+", "!", "++", "--"}, t[[2]]]
+linearPrefixQ::usage = "linearPrefixQ[token] is True for a token that may be a prefix operator."
+linearPrefixQ[{"Tok", t_String, 9, _String}] := MemberQ[{"-", "+", "!", "++", "--"}, t]
+linearPrefixQ[_] := False
 
-(* where the bracket that token i of ts opens closes *)
-linearClose[ts_List, i_Integer] := Module[{depth = 0, j = i},
-	While[ j <= Length[ts],
-		If[ts[[j, 1]] === "Tok" && MemberQ[$linearOpenKinds, ts[[j, 3]]], depth++];
-		If[ts[[j, 1]] === "Tok" && MemberQ[$linearCloseKinds, ts[[j, 3]]], depth--; If[depth === 0, Return[j, Module]]];
-		j++];
-	Length[ts]]
+linearOpenerQ::usage = "linearOpenerQ[token] is True for a token that opens a bracket."
+linearOpenerQ[{"Tok", _String, kind_Integer, _String}] := MemberQ[$linearOpenKinds, kind]
+linearOpenerQ[_] := False
+
+linearCloserQ::usage = "linearCloserQ[token] is True for a token that closes a bracket."
+linearCloserQ[{"Tok", _String, kind_Integer, _String}] := MemberQ[$linearCloseKinds, kind]
+linearCloserQ[_] := False
+
+(* where the bracket that token i of ts opens closes, or the last token *)
+linearClose::usage = "linearClose[ts, i] gives the token of ts that closes the bracket token i opens, or the last token."
+linearClose[ts_List, i_Integer] := Replace[
+	FirstPosition[Accumulate[Boole[linearOpenerQ[#]] - Boole[linearCloserQ[#]] & /@ Drop[ts, i - 1]], 0, {Length[ts] - i + 1}],
+	{k_Integer} :> i + k - 1
+]
 
 (* the last token of the operand a box operator takes from token i on, prefixes before it where
 	they may be: an atom, a bracketed group or a box, then the brackets of its call; i - 1 where
 	none begins there *)
-linearPrimaryEnd[ts_List, i0_Integer, prefixes_ : False] := Module[{i = i0, n = Length[ts]},
-	If[TrueQ[prefixes], While[i <= n && linearPrefixQ[ts[[i]]], i++]];
-	Which[
-		i > n, Return[i0 - 1, Module],
-		ts[[i, 1]] === "Box", Null,
-		ts[[i, 1]] === "Tok" && MemberQ[$linearAtomKinds, ts[[i, 3]]],
-			While[i < n && ts[[i + 1, 1]] === "Tok" && MemberQ[{1, 2}, ts[[i + 1, 3]]] && ts[[i + 1, 4]] === "" && ! MemberQ[{3, 4}, ts[[i, 3]]], i++],
-		ts[[i, 1]] === "Tok" && MemberQ[{10, 14, 16}, ts[[i, 3]]], i = linearClose[ts, i],
-		True, Return[i0 - 1, Module]];
-	While[i < n && ts[[i + 1, 1]] === "Tok" && ts[[i + 1, 3]] === 12, i = linearClose[ts, i + 1]];
-	i]
+linearPrimaryEnd::usage = "linearPrimaryEnd[ts, i, prefixes] gives the last token of the operand that begins at token i of ts, prefix \
+operators before it where prefixes is True, or i - 1 where none does."
+linearPrimaryEnd[ts_List, start_Integer, prefixes_ : False] := With[
+	{first = If[TrueQ[prefixes], start + LengthWhile[Drop[ts, start - 1], linearPrefixQ], start]},
+	Replace[linearOperandEnd[ts, first], {None :> start - 1, end_Integer :> linearCallsEnd[ts, end]}]
+]
+
+linearOperandEnd::usage = "linearOperandEnd[ts, i] gives the last token of the atom, the bracketed group or the box at token i of ts, or \
+None."
+linearOperandEnd[ts_List, i_Integer] /; i > Length[ts] := None
+linearOperandEnd[ts_List, i_Integer] /; MatchQ[ts[[i]], {"Box", _}] := i
+linearOperandEnd[ts_List, i_Integer] /; MatchQ[ts[[i]], {"Tok", _String, kind_Integer /; MemberQ[$linearAtomKinds, kind], _String}] :=
+	NestWhile[# + 1 &, i, atomGoesOnQ[ts, #] &]
+linearOperandEnd[ts_List, i_Integer] /; MatchQ[ts[[i]], {"Tok", _String, 10 | 14 | 16, _String}] := linearClose[ts, i]
+linearOperandEnd[_List, _Integer] := None
+
+atomGoesOnQ::usage = "atomGoesOnQ[ts, i] is True where the atom that token i of ts ends goes on with the name or the blank that touches it."
+atomGoesOnQ[ts_List, i_Integer] := And[
+	i < Length[ts],
+	MatchQ[ts[[i + 1]], {"Tok", _String, 1 | 2, ""}],
+	!MatchQ[ts[[i]], {"Tok", _String, 3 | 4, _String}]
+]
+
+linearCallsEnd::usage = "linearCallsEnd[ts, end] gives the last token of the brackets of the calls after token end of ts, or end."
+linearCallsEnd[ts_List, end_Integer] := NestWhile[
+	linearClose[ts, # + 1] &,
+	end,
+	# < Length[ts] && MatchQ[ts[[# + 1]], {"Tok", _String, 12, _String}] &
+]
 
 (* the box operators inside each bracket folded, then those around them *)
-linearFoldBrackets[ts_List] := Module[{out = Internal`Bag[], i = 1, j, n = Length[ts]},
-	While[ i <= n,
-		If[ ts[[i, 1]] === "Tok" && MemberQ[$linearOpenKinds, ts[[i, 3]]],
-			j = linearClose[ts, i];
-			Scan[Internal`StuffBag[out, #] &, Join[{ts[[i]]},
-				If[ ts[[j, 1]] === "Tok" && MemberQ[$linearCloseKinds, ts[[j, 3]]] && j > i,
-					Append[linearFoldBrackets[ts[[i + 1 ;; j - 1]]], ts[[j]]],
-					linearFoldBrackets[ts[[i + 1 ;; j]]]]]];
-			i = j + 1,
-			Internal`StuffBag[out, ts[[i]]]; i++]];
-	linearFold[Internal`BagPart[out, All]]]
+linearFoldBrackets::usage = "linearFoldBrackets[ts] gives the tokens and boxes of ts, the box operators inside each bracket folded, then \
+those around them."
+linearFoldBrackets[ts_List] := linearFold @ Catenate @ Reverse @ linkedItems @ Last @ NestWhile[
+	bracketsStep[ts, #] &,
+	{1, {}},
+	First[#] <= Length[ts] &
+]
+
+bracketsStep::usage = "bracketsStep[ts, {i, parts}] gives the place after token i of ts, a bracket's whole, and the parts read, a linked \
+list, with its own."
+bracketsStep[ts_List, {i_Integer, parts_List}] /; linearOpenerQ[ts[[i]]] := With[{j = linearClose[ts, i]},
+	{j + 1, {Prepend[bracketInside[ts, i, j], ts[[i]]], parts}}
+]
+bracketsStep[ts_List, {i_Integer, parts_List}] := {i + 1, {{ts[[i]]}, parts}}
+
+bracketInside::usage = "bracketInside[ts, i, j] gives the tokens of the bracket from token i to token j of ts after its opener, folded."
+bracketInside[ts_List, i_Integer, j_Integer] /; j > i && linearCloserQ[ts[[j]]] := Append[linearFoldBrackets[Take[ts, {i + 1, j - 1}]], ts[[j]]]
+bracketInside[ts_List, i_Integer, j_Integer] := linearFoldBrackets[Take[ts, {i + 1, j}]]
 
 (* The box operators of a row folded into the boxes they build, by precedence: \& and \+ the
 	tightest, then \_, \^, the prefix \@ and, the loosest, \/. The scripts and \@ read to the
-	right, \/ to the left; \% gives the third box of the script or root before it. *)
-linearFold[ts_List] := Module[{out = Internal`Bag[], i = 1, n = Length[ts], pos, op, operand, script, sub, sup, root, fraction},
-	op[o_] := pos <= n && ts[[pos]] === {"Op", o};
-	operand := Module[{e = linearPrimaryEnd[ts, pos, True]},
-		Which[
-			e >= pos, With[{b = linearPlain[ts[[pos ;; e]]]}, pos = e + 1; b],
-			pos <= n && ts[[pos, 1]] === "Tok" && ts[[pos, 3]] === 9, pos++; linearLeaf[ts[[pos - 1, 2]]],
-			True, ""]];
-	script := Module[{b = operand, k, x, y},
-		If[ op["&"] || op["+"],
-			k = ts[[pos, 2]]; pos++; x = script;
-			If[ op["%"],
-				pos++; y = script; If[k === "&", UnderoverscriptBox[b, y, x], UnderoverscriptBox[b, x, y]],
-				If[k === "&", OverscriptBox[b, x], UnderscriptBox[b, x]]],
-			b]];
-	sub := Module[{b = script, x, y},
-		If[op["_"], pos++; x = sub; If[op["%"], pos++; y = sub; SubsuperscriptBox[b, x, y], SubscriptBox[b, x]], b]];
-	sup := Module[{b = sub}, If[op["^"], pos++; SuperscriptBox[b, root], b]];
-	root := If[op["@"], pos++; With[{x = root}, If[op["%"], pos++; RadicalBox[x, root], SqrtBox[x]]], sup];
-	fraction := Module[{b = root}, While[op["/"], pos++; b = FractionBox[b, root]]; b];
-	While[ i <= n,
-		If[ ts[[i, 1]] === "Op" || (i < n && ts[[i, 1]] === "Tok" && ts[[i, 3]] === 9 && ts[[i + 1, 1]] === "Op") ||
-				(! linearPrefixQ[ts[[i]]] && linearPrimaryEnd[ts, i] >= i && linearPrimaryEnd[ts, i] < n && ts[[linearPrimaryEnd[ts, i] + 1, 1]] === "Op"),
-			pos = i; Internal`StuffBag[out, {"Box", fraction}]; i = Max[pos, i + 1],
-			Internal`StuffBag[out, ts[[i]]]; i++]];
-	Internal`BagPart[out, All]]
+	right, \/ to the left; \% gives the third box of the script or root before it. Each reader takes
+	the tokens and a place and gives {the boxes it reads, the place after them}. *)
+linearFold::usage = "linearFold[ts] gives the tokens and boxes of the row ts, its box operators folded into the boxes they build."
+linearFold[ts_List] := Reverse @ linkedItems @ Last @ NestWhile[foldStep[ts, #] &, {1, {}}, First[#] <= Length[ts] &]
+
+foldStep::usage = "foldStep[ts, {i, items}] gives the place after the token, or the boxes of the operators, at token i of ts, and the \
+items read, a linked list, with them."
+foldStep[ts_List, {i_Integer, items_List}] /; boxOperatorAtQ[ts, i] := With[{read = linearFraction[ts, i]},
+	{Max[Last[read], i + 1], {{"Box", First[read]}, items}}
+]
+foldStep[ts_List, {i_Integer, items_List}] := {i + 1, {ts[[i]], items}}
+
+boxOperatorAtQ::usage = "boxOperatorAtQ[ts, i] is True where a box operator's boxes begin at token i of ts."
+boxOperatorAtQ[ts_List, i_Integer] := Or[
+	MatchQ[ts[[i]], {"Op", _}],
+	i < Length[ts] && MatchQ[ts[[i]], {"Tok", _String, 9, _String}] && MatchQ[ts[[i + 1]], {"Op", _}],
+	!linearPrefixQ[ts[[i]]] && With[{end = linearPrimaryEnd[ts, i]}, end >= i && end < Length[ts] && MatchQ[ts[[end + 1]], {"Op", _}]]
+]
+
+linearOpQ::usage = "linearOpQ[ts, i, o] is True where token i of ts is the box operator o."
+linearOpQ[ts_List, i_Integer, o_String] := i <= Length[ts] && ts[[i]] === {"Op", o}
+
+linearOperand::usage = "linearOperand[ts, i] gives the operand of a box operator at token i of ts: its boxes, an operator's text, or \
+\"\" for none."
+linearOperand[ts_List, i_Integer] := With[{end = linearPrimaryEnd[ts, i, True]},
+	Which[
+		end >= i,
+			{linearPlain[Take[ts, {i, end}]], end + 1},
+		i <= Length[ts] && MatchQ[ts[[i]], {"Tok", _String, 9, _String}],
+			{linearLeaf[ts[[i, 2]]], i + 1},
+		True,
+			{"", i}
+	]
+]
+
+linearScript::usage = "linearScript[ts, i] gives an operand with the over- and underscripts after it."
+linearScript[ts_List, i_Integer] := scriptAfter[ts, linearOperand[ts, i]]
+
+scriptAfter::usage = "scriptAfter[ts, {b, i}] gives the boxes b with the \\& or \\+ script at token i of ts, and its \\% limit."
+scriptAfter[ts_List, {b_, i_Integer}] /; linearOpQ[ts, i, "&"] || linearOpQ[ts, i, "+"] := scriptLimits[ts, b, ts[[i, 2]], linearScript[ts, i + 1]]
+scriptAfter[_List, read_List] := read
+
+scriptLimits::usage = "scriptLimits[ts, b, k, {x, i}] gives the boxes b with the script x of the operator k, \\& over and \\+ under, and \
+the \\% one at token i of ts on the other side."
+scriptLimits[ts_List, b_, k_String, {x_, i_Integer}] /; linearOpQ[ts, i, "%"] := With[{y = linearScript[ts, i + 1]},
+	{If[k === "&", UnderoverscriptBox[b, First[y], x], UnderoverscriptBox[b, x, First[y]]], Last[y]}
+]
+scriptLimits[_List, b_, k_String, {x_, i_Integer}] := {If[k === "&", OverscriptBox[b, x], UnderscriptBox[b, x]], i}
+
+linearSub::usage = "linearSub[ts, i] gives a script with the subscripts after it."
+linearSub[ts_List, i_Integer] := subAfter[ts, linearScript[ts, i]]
+
+subAfter::usage = "subAfter[ts, {b, i}] gives the boxes b with the \\_ subscript at token i of ts, and its \\% superscript."
+subAfter[ts_List, {b_, i_Integer}] /; linearOpQ[ts, i, "_"] := subLimits[ts, b, linearSub[ts, i + 1]]
+subAfter[_List, read_List] := read
+
+subLimits::usage = "subLimits[ts, b, {x, i}] gives the boxes b with the subscript x and the \\% superscript at token i of ts."
+subLimits[ts_List, b_, {x_, i_Integer}] /; linearOpQ[ts, i, "%"] := With[{y = linearSub[ts, i + 1]}, {SubsuperscriptBox[b, x, First[y]], Last[y]}]
+subLimits[_List, b_, {x_, i_Integer}] := {SubscriptBox[b, x], i}
+
+linearSup::usage = "linearSup[ts, i] gives a subscript with the superscript after it."
+linearSup[ts_List, i_Integer] := supAfter[ts, linearSub[ts, i]]
+
+supAfter::usage = "supAfter[ts, {b, i}] gives the boxes b with the \\^ superscript at token i of ts."
+supAfter[ts_List, {b_, i_Integer}] /; linearOpQ[ts, i, "^"] := With[{x = linearRoot[ts, i + 1]}, {SuperscriptBox[b, First[x]], Last[x]}]
+supAfter[_List, read_List] := read
+
+linearRoot::usage = "linearRoot[ts, i] gives the root of a \\@ at token i of ts, else a superscript."
+linearRoot[ts_List, i_Integer] /; linearOpQ[ts, i, "@"] := rootAfter[ts, linearRoot[ts, i + 1]]
+linearRoot[ts_List, i_Integer] := linearSup[ts, i]
+
+rootAfter::usage = "rootAfter[ts, {x, i}] gives the square root of x, or its root of the \\% index at token i of ts."
+rootAfter[ts_List, {x_, i_Integer}] /; linearOpQ[ts, i, "%"] := With[{index = linearRoot[ts, i + 1]}, {RadicalBox[x, First[index]], Last[index]}]
+rootAfter[_List, {x_, i_Integer}] := {SqrtBox[x], i}
+
+linearFraction::usage = "linearFraction[ts, i] gives the roots from token i of ts, each \\/ between them a fraction, read to the left."
+linearFraction[ts_List, i_Integer] := NestWhile[fractionStep[ts, #] &, linearRoot[ts, i], linearOpQ[ts, Last[#], "/"] &]
+
+fractionStep::usage = "fractionStep[ts, {b, i}] gives the fraction of b over the root after the \\/ at token i of ts."
+fractionStep[ts_List, {b_, i_Integer}] := With[{denominator = linearRoot[ts, i + 1]}, {FractionBox[b, First[denominator]], Last[denominator]}]
 
 (* the boxes of a row with no box operator left: its concrete syntax tree, the box of each name
 	that stands for one in its place *)
-linearPlain[ts_List] := Module[{boxes = <||>, k = 0, text, tree},
-	Which[
-		ts === {}, "",
-		Length[ts] === 1 && ts[[1, 1]] === "Box", ts[[1, 2]],
-		True,
-			text = StringJoin[Map[Function[t, If[ t[[1]] === "Box",
-				k++; boxes["zzLinearBox" <> ToString[k] <> "zz"] = t[[2]]; " zzLinearBox" <> ToString[k] <> "zz ",
-				t[[4]] <> t[[2]]]], ts]];
-			tree = WolframLanguageConcrete[text];
-			With[{items = DeleteCases[linearCST[#, boxes] & /@ tree[[2]], Nothing]},
-				Which[items === {}, "", Length[items] === 1, items[[1]], True, RowBox[items]]]]]
+linearPlain::usage = "linearPlain[ts] gives the boxes of the tokens and boxes ts, a row with no box operator left."
+linearPlain[{}] := ""
+linearPlain[{{"Box", boxes_}}] := boxes
+linearPlain[ts_List] := With[{keys = MapIndexed[linearKey, ts]},
+	{boxes = Association[Cases[Transpose[{keys, ts}], {key_String, {"Box", b_}} :> key -> b]]},
+	linearItems @ DeleteCases[
+		linearCST[#, boxes] & /@ Replace[WolframLanguageConcrete[StringJoin[MapThread[linearText, {keys, ts}]]], CodeParser`ContainerNode[_, children_, _] :> children],
+		Nothing
+	]
+]
+
+linearKey::usage = "linearKey[item, {i}] gives the name that stands for the box item i of a row in its text, None for a token."
+linearKey[{"Box", _}, {i_Integer}] := "zzLinearBox" <> ToString[i] <> "zz"
+linearKey[_, _] := None
+
+linearText::usage = "linearText[key, item] gives the text of an item of a row: a box's name, a token's whitespace and text."
+linearText[key_String, _] := " " <> key <> " "
+linearText[None, {"Tok", t_String, _Integer, before_String}] := before <> t
+
+linearItems::usage = "linearItems[items] gives the boxes of a row's items: \"\" for none, one alone, more in a RowBox."
+linearItems[{}] := ""
+linearItems[{one_}] := one
+linearItems[items_List] := RowBox[items]
 
 (* a node of a concrete syntax tree as boxes: a call's brackets in its row, a pattern's or a slot's
 	leaves one string, whitespace other than spaces, tabs and newlines kept *)
