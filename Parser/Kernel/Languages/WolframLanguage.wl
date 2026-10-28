@@ -1835,6 +1835,7 @@ characterEscapes[s_String] := If[StringContainsQ[s, "\\:" | "\\." | "\\|"], esca
 
 (* s as the readers read it, without its line continuations and with each character escape its
 	character, and the positions in s of its characters, None where they are all of s's *)
+readSource[s_String] /; !StringContainsQ[s, "\\"] := {s, None}
 readSource[s_String] := With[{spans = lineContinuations[s], escapes = characterEscapes[s]},
 	If[ spans === {} && escapes === {}, {s, None},
 		With[{edits = SortBy[Join[Thread[{spans, ""}], escapes], #[[1, 1]] &]},

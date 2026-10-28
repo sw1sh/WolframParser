@@ -593,7 +593,10 @@ $fastLexHelpers := {$lexLongNameDeclaration, $lexQuotedDeclaration, $lexCommentD
 
 (* a source's codes and three zeros after them, packed, as every typed function takes them: no
 	look ahead reads past them, and the empty source's are packed too *)
-paddedCodes[codes_List] := Developer`ToPackedArray[Join[codes, {0, 0, 0}]]
+paddedCodes::usage = "paddedCodes[codes] gives the codes, packed or none, and three zeros after them, packed."
+paddedCodes[codes_List] := Join[codes, $threeZeros]
+
+$threeZeros = Developer`ToPackedArray[{0, 0, 0}]
 
 (* The function of a typed declaration: the definition a compiler of typed
 	code gave the declared symbol, where one did; else the declaration's
@@ -2058,7 +2061,7 @@ lineBefore[{_Integer, ranges_List}] := {rangeFirstToken[Last[ranges]], Most[rang
 segmentState::usage = "segmentState[state, from, reading] gives the state with the segment and the rows of the reading of its source \
 from the character from on."
 segmentState[state_Association, from_Integer, reading_Association] := With[
-	{segment = readingSegment[reading]},
+	{segment = readingSegment[reading, StringContainsQ[state["Clean"], "," | "\\"]]},
 	{parts = Join[state["Parts"], segmentRows[state, from, reading, segment, Length[state["Segments"]] + 1]]},
 	Join[state, <|
 		"Segments" -> Append[state["Segments"], segment],
@@ -2068,13 +2071,14 @@ segmentState[state_Association, from_Integer, reading_Association] := With[
 	|>]
 ]
 
-readingSegment::usage = "readingSegment[reading] gives the segment of a reading: <|\"Codes\", \"Lexed\", \"Program\", \"Warning\" -> the \
-tokens that may give a warning and how many of them come before each token, \"Leaves\" -> fastLeafData's|>."
-readingSegment[reading_Association] := <|
+readingSegment::usage = "readingSegment[reading, warns] gives the segment of a reading: <|\"Codes\", \"Lexed\", \"Program\", \"Warning\" -> \
+the tokens that may give a warning and how many of them come before each token, \"Leaves\" -> fastLeafData's|>, warns False where the \
+source holds no comma and no \\, which no warning comes from without."
+readingSegment[reading_Association, warns_] := <|
 	"Codes" -> reading["Codes"],
 	"Lexed" -> reading["Lexed"],
 	"Program" -> reading["Program"],
-	"Warning" -> If[MemberQ[reading["Codes"], 44 | 92],
+	"Warning" -> If[TrueQ[warns],
 		warningTokens[reading["Codes"], reading["Lexed"]],
 		{{}, ConstantArray[0, tokenCount[reading["Lexed"]] + 1]}
 	],
@@ -2127,12 +2131,30 @@ stoppedData[state_Association, from_Integer, reading_Association, row_Integer] :
 rowStarts::usage = "rowStarts[rows] gives where the line of each of the rows begins."
 rowStarts[rows_List] := rows[[All, 2]]
 
-(* the statement of the source s whose line begins at pos, 1 or the position the call before gave *)
+(* the statement of the source s whose line begins at pos, 1 or the position the call before gave;
+	a source that holds no comma and no \, and whose first statement, on its first line, cannot be
+	read, is that statement's failure at once, with no warning, and nothing is kept for it *)
+WolframLanguageHeldNext[s_String, 1] := With[{reading = quietReading[s]},
+	{warned[failureAt[reading["Stop"]["Failure"], reading["Stop"]["Failure"]["Position"]], {}], 1} /; firstStatementStopQ[reading]
+]
 WolframLanguageHeldNext[s_String, pos_Integer] := With[
 	{place = heldNextState[s]},
 	{state = $heldNextStates[[place]]},
 	{index = partIndex[state, pos]},
 	heldNextPart[place, state, index, state["Parts"][[index]]]
+]
+
+quietReading::usage = "quietReading[s] gives the reading of the codes of the source s where it holds no comma and no \\, and no parts \
+of it are kept, else None."
+quietReading[s_String] /; StringContainsQ[s, "," | "\\"] || MemberQ[Lookup[$heldNextStates, "Source"], s] := None
+quietReading[s_String] := codesReading[ToCharacterCode[s]]
+
+firstStatementStopQ::usage = "firstStatementStopQ[reading] is True where reading stops in the first statement, on the first line."
+firstStatementStopQ[None] := False
+firstStatementStopQ[reading_Association] := And[
+	reading["Stop"] =!= None,
+	reading["Stop"]["Statement"] === 1,
+	newlineBefore[reading["Lexed"], 1] === 0
 ]
 
 partIndex::usage = "partIndex[state, pos] gives the place among the state's parts of the one whose line begins at pos, or of the first \
@@ -2413,22 +2435,24 @@ typedFlat[_, s_String] := stagesProgram[s]
 (* the program of a source by the typed stages, each called in turn, as flatProgram gives it *)
 stagesProgram::usage = "stagesProgram[s] gives the program of the source s by the typed stages, each called in turn, as flatProgram gives \
 it, or None."
-stagesProgram[s_String] := codesProgram[s, ToCharacterCode[s]]
+stagesProgram[s_String] := With[{escaped = StringContainsQ[s, "\\"]},
+	If[escaped && lineContinuations[s] =!= {}, None, codesProgram[ToCharacterCode[s], escaped]]
+]
 
-codesProgram::usage = "codesProgram[s, codes] gives the program of the source s of the codes by the typed stages, or None."
-codesProgram[s_String, codes_List] /; MemberQ[codes, 92] && lineContinuations[s] =!= {} := None
-codesProgram[_String, codes_List] := With[{padded = paddedCodes[codes]},
+codesProgram::usage = "codesProgram[codes, escaped] gives the program of a source of the codes by the typed stages, or None, escaped \
+True where the source holds a \\."
+codesProgram[codes_List, escaped_] := With[{padded = paddedCodes[codes]},
 	{lexed = lexedCodes[padded]},
-	If[lexerStatus[lexed] === 0, wholeProgram[codes, padded, splitParse[lexed, padded]], None]
+	If[lexerStatus[lexed] === 0, wholeProgram[codes, padded, splitParse[lexed, padded], escaped], None]
 ]
 
-wholeProgram::usage = "wholeProgram[codes, padded, {lexed, program}] gives flatProgram's array of a source that reads whole, or None \
-where it does not, or a comma leaves a Null, or a string's escape warns."
-wholeProgram[codes_List, padded_List, {lexed_List, program_List}] /; lexerStatus[lexed] === 0 && parseStatus[program] === 0 := With[
+wholeProgram::usage = "wholeProgram[codes, padded, {lexed, program}, escaped] gives flatProgram's array of a source that reads whole, or \
+None where it does not, or a comma leaves a Null, or a string's escape warns."
+wholeProgram[codes_List, padded_List, {lexed_List, program_List}, escaped_] /; lexerStatus[lexed] === 0 && parseStatus[program] === 0 := With[
 	{flat = fastWholeFunction[program, lexed, wholeLines[codes, padded, lexed, program]]},
-	If[commaNulls[flat] > 0 || MemberQ[codes, 92] && escapeWarnedQ[codes, lexed], None, Developer`ToPackedArray[Join[flat, codes]]]
+	If[commaNulls[flat] > 0 || escaped && escapeWarnedQ[codes, lexed], None, Developer`ToPackedArray[Join[flat, codes]]]
 ]
-wholeProgram[_List, _List, _List] := None
+wholeProgram[_List, _List, _List, _] := None
 
 wholeLines::usage = "wholeLines[codes, padded, lexed, program] gives the lines fastLines makes of a source that reads whole, for fastWhole."
 wholeLines[codes_List, padded_List, lexed_List, program_List] := fastLinesFunction[
