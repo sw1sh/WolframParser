@@ -352,11 +352,11 @@ translated[Verbatim[BlankNullSequence][]] := {".*", {}}
 translated[Verbatim[Pattern][x_Symbol, p_]] := With[{inner = translated[p]}, {"(" <> First[inner] <> ")", Prepend[Last[inner], HoldComplete[x]]}]
 translated[p_StringExpression] := joined[translated /@ List @@ p, ""]
 translated[p_Alternatives] := grouped[joined[translated /@ List @@ p, "|"], ""]
-translated[Verbatim[Repeated][p_]] := quantified[p, "+"]
-translated[Verbatim[RepeatedNull][p_]] := quantified[p, "*"]
-translated[Verbatim[Repeated][p_, {min_Integer, max_Integer}]] := quantified[p, "{" <> ToString[min] <> "," <> ToString[max] <> "}"]
-translated[Verbatim[Repeated][p_, {min_Integer, Infinity}]] := quantified[p, "{" <> ToString[min] <> ",}"]
-translated[Verbatim[Repeated][p_, max_Integer]] := quantified[p, "{1," <> ToString[max] <> "}"]
+translated[Verbatim[Repeated][p_]] := quantifiedRegex[p, "+"]
+translated[Verbatim[RepeatedNull][p_]] := quantifiedRegex[p, "*"]
+translated[Verbatim[Repeated][p_, {min_Integer, max_Integer}]] := quantifiedRegex[p, "{" <> ToString[min] <> "," <> ToString[max] <> "}"]
+translated[Verbatim[Repeated][p_, {min_Integer, Infinity}]] := quantifiedRegex[p, "{" <> ToString[min] <> ",}"]
+translated[Verbatim[Repeated][p_, max_Integer]] := quantifiedRegex[p, "{1," <> ToString[max] <> "}"]
 translated[Verbatim[Longest][p_]] := translated[p]
 translated[chars : {__String}] /; AllTrue[chars, StringLength[#] === 1 &] := {bracketed[chars, False], {}}
 translated[HoldPattern[CharacterRange[a_String, b_String]]] /; StringLength[a] === StringLength[b] === 1 && Max[ToCharacterCode[a <> b]] < 128 :=
@@ -402,7 +402,7 @@ grouped[{regex_String, names_List}, suffix_String] := {"(" <> regex <> ")" <> su
 
 (* A pattern's regex with a quantifier: the regex of one atom, a character, . or a bracket, takes it
 	as it is, and any other in a group of no name. *)
-quantified[p_, suffix_String] := With[{inner = translated[p]},
+quantifiedRegex[p_, suffix_String] := With[{inner = translated[p]},
 	If[atomicQ[p], {First[inner] <> suffix, Last[inner]}, grouped[inner, suffix]]
 ]
 

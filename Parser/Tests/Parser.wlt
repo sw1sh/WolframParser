@@ -1211,3 +1211,42 @@ VerificationTest[
     {"42", True, {"odd", "43"}},
     TestID -> "ParseCondition: a result the test rejects is a failure a choice goes past"
 ]
+
+(* Each function of the files the kernel compiles is defined in one of them: the kernel's compiler
+   gives a function to one unit, its file, where Wolfram 15 takes rules from two files as one
+   symbol's. The files that share a private context are compared, each by the names its top-level
+   statements give rules or a FunctionDeclaration. *)
+Needs["CodeParser`"]
+
+unitDefinedNames[(CodeParser`PackageNode | CodeParser`ContextNode)[_, parts_List, _]] := Catenate[unitDefinedNames /@ parts]
+unitDefinedNames[CodeParser`CallNode[CodeParser`LeafNode[Symbol, "CompoundExpression", _], parts_List, _]] := Catenate[unitDefinedNames /@ parts]
+unitDefinedNames[CodeParser`CallNode[CodeParser`LeafNode[Symbol, "Set" | "SetDelayed" | "UpSet" | "UpSetDelayed", _], {lhs_, rhs_}, _]] := Join[
+    unitHeadName[lhs],
+    Cases[rhs, CodeParser`CallNode[CodeParser`LeafNode[Symbol, "FunctionDeclaration", _], {CodeParser`LeafNode[Symbol, name_String, _], ___}, _] :> name, {0, Infinity}]
+]
+unitDefinedNames[_] := {}
+
+unitHeadName[CodeParser`CallNode[CodeParser`LeafNode[Symbol, "MessageName" | "Attributes" | "Options", _], _List, _]] := {}
+unitHeadName[CodeParser`CallNode[CodeParser`LeafNode[Symbol, "Condition" | "HoldPattern", _], {first_, ___}, _]] := unitHeadName[first]
+unitHeadName[CodeParser`CallNode[head_, _List, _]] := unitHeadName[head]
+unitHeadName[CodeParser`LeafNode[Symbol, name_String, _]] := {name}
+unitHeadName[_] := {}
+
+unitFileNames[file_String] := DeleteDuplicates[Catenate[unitDefinedNames /@ CodeParser`CodeParse[File[file]][[2]]]]
+
+VerificationTest[
+    With[{kernel = FileNameJoin[{PacletObject["Wolfram/Parser"]["Location"], "Kernel"}]},
+        Map[
+            Function[group, With[{names = unitFileNames[FileNameJoin[{kernel, #}]] & /@ group},
+                Select[Tally[Catenate[names]], Last[#] > 1 &][[All, 1]]
+            ]],
+            {
+                {"Parser.wl", "AST.wl", "CharacterClassRuns.wl"},
+                {"Languages/WolframLanguage.wl", "Languages/WolframLanguageFast.wl"},
+                {"StringPatternsVM.wl", "StringPatterns.wl", "RegularExpressions.wl"}
+            }
+        ]
+    ],
+    {{}, {}, {}},
+    TestID -> "Parser: a function of the files the kernel compiles is defined in one file of its context"
+]
