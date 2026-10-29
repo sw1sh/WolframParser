@@ -254,8 +254,19 @@ VerificationTest[
 VerificationTest[
     {StringPatternProgram["a" ~~ DigitCharacter ..]["Regex"], StringPatternProgram[x : DigitCharacter ~~ "." ~~ DigitCharacter ..]["Regex"],
      StringPatternProgram["x" ~~ RegularExpression["(a)(b)"]]["Regex"], StringPatternProgram[RegularExpression["a|b"]]["Regex"]},
-    {{"a([[:digit:]])+", {None}}, {"([[:digit:]])\\.([[:digit:]])+", {HoldComplete[x], None}}, {"x(a)(b)", {1, 2}}, {"(a|b)", {None}}},
+    {{"a[[:digit:]]+", {}}, {"([[:digit:]])\\.[[:digit:]]+", {HoldComplete[x]}}, {"x(a)(b)", {1, 2}}, {"(a|b)", {None}}},
     TestID -> "string patterns: the regex of a pattern and a name for each of its groups"
+]
+
+(* a repeat of one atom takes its quantifier with no group, any other repeat a group; a letter and a
+   word character are each one bracket of the ASCII bytes outside the class, with no group *)
+VerificationTest[
+    {StringPatternProgram[("ab") ..]["Regex"], StringPatternProgram[Repeated[_, {2, 3}]]["Regex"],
+     StringPatternProgram["<" ~~ WordCharacter ..]["Regex"], StringPatternProgram[LetterCharacter ...]["Regex"]},
+    {{"(ab)+", {None}}, {".{2,3}", {}},
+     {"<[^" <> FromCharacterCode[1] <> "-/:-@[-`{-" <> FromCharacterCode[127] <> "]+", {}},
+     {"[^" <> FromCharacterCode[1] <> "-@[-`{-" <> FromCharacterCode[127] <> "]*", {}}},
+    TestID -> "string patterns: a repeat of one atom opens no group, and a letter or a word character is one bracket"
 ]
 
 (* a bracket as POSIX reads one: ] first, - last, ^ not first, a backslash a character as any other *)

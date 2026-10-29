@@ -101,7 +101,7 @@ The regex of a pattern, with the name that holds each group it opens:
 StringPatternProgram[x : DigitCharacter ~~ "." ~~ DigitCharacter ..]["Regex"]
 ```
 
-<!-- => {"([[:digit:]])\\.([[:digit:]])+", {HoldComplete[x], None}} -->
+<!-- => {"([[:digit:]])\\.[[:digit:]]+", {HoldComplete[x]}} -->
 
 A bracket expression as POSIX reads one, where a backslash is a character as any other, a `]` comes first and a `-` last:
 

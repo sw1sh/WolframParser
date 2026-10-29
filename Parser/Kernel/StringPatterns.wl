@@ -352,11 +352,11 @@ translated[Verbatim[BlankNullSequence][]] := {".*", {}}
 translated[Verbatim[Pattern][x_Symbol, p_]] := With[{inner = translated[p]}, {"(" <> First[inner] <> ")", Prepend[Last[inner], HoldComplete[x]]}]
 translated[p_StringExpression] := joined[translated /@ List @@ p, ""]
 translated[p_Alternatives] := grouped[joined[translated /@ List @@ p, "|"], ""]
-translated[Verbatim[Repeated][p_]] := grouped[translated[p], "+"]
-translated[Verbatim[RepeatedNull][p_]] := grouped[translated[p], "*"]
-translated[Verbatim[Repeated][p_, {min_Integer, max_Integer}]] := grouped[translated[p], "{" <> ToString[min] <> "," <> ToString[max] <> "}"]
-translated[Verbatim[Repeated][p_, {min_Integer, Infinity}]] := grouped[translated[p], "{" <> ToString[min] <> ",}"]
-translated[Verbatim[Repeated][p_, max_Integer]] := grouped[translated[p], "{1," <> ToString[max] <> "}"]
+translated[Verbatim[Repeated][p_]] := quantified[p, "+"]
+translated[Verbatim[RepeatedNull][p_]] := quantified[p, "*"]
+translated[Verbatim[Repeated][p_, {min_Integer, max_Integer}]] := quantified[p, "{" <> ToString[min] <> "," <> ToString[max] <> "}"]
+translated[Verbatim[Repeated][p_, {min_Integer, Infinity}]] := quantified[p, "{" <> ToString[min] <> ",}"]
+translated[Verbatim[Repeated][p_, max_Integer]] := quantified[p, "{1," <> ToString[max] <> "}"]
 translated[Verbatim[Longest][p_]] := translated[p]
 translated[chars : {__String}] /; AllTrue[chars, StringLength[#] === 1 &] := {bracketed[chars, False], {}}
 translated[HoldPattern[CharacterRange[a_String, b_String]]] /; StringLength[a] === StringLength[b] === 1 && Max[ToCharacterCode[a <> b]] < 128 :=
@@ -377,12 +377,15 @@ translated[_] := Throw[None, regexOf]
 
 (* The classes in the C locale are of ASCII; a byte above 127, part of a character beyond ASCII,
 	counts as a letter. Digits are a class, not the range 0-9, which the system's regexes compare by
-	collation, at twice the time. *)
-$nonASCII = "[^" <> FromCharacterCode[1] <> "-" <> FromCharacterCode[127] <> "]"
+	collation, at twice the time. A letter and a word character are each one bracket of the bytes
+	that are none, the ASCII ones outside the class, so that a byte above 127 is one and no group
+	opens, whose matches the C library's regexec tracks at twice the time and more. *)
+$letterBracket = "[^" <> FromCharacterCode[1] <> "-@[-`{-" <> FromCharacterCode[127] <> "]"
+$wordBracket = "[^" <> FromCharacterCode[1] <> "-/:-@[-`{-" <> FromCharacterCode[127] <> "]"
 
 $classes = <|
-	DigitCharacter -> {"[[:digit:]]", {}}, LetterCharacter -> {"([[:alpha:]]|" <> $nonASCII <> ")", {None}},
-	WhitespaceCharacter -> {"[[:space:]]", {}}, WordCharacter -> {"([[:alnum:]]|" <> $nonASCII <> ")", {None}},
+	DigitCharacter -> {"[[:digit:]]", {}}, LetterCharacter -> {$letterBracket, {}},
+	WhitespaceCharacter -> {"[[:space:]]", {}}, WordCharacter -> {$wordBracket, {}},
 	PunctuationCharacter -> {"[[:punct:]]", {}}, HexadecimalCharacter -> {"[[:xdigit:]]", {}},
 	StartOfString -> {"^", {}}, EndOfString -> {"$", {}}, Whitespace -> {"[[:space:]]+", {}},
 	NumberString -> {"[+-]?([[:digit:]]+([.][[:digit:]]*)?|[.][[:digit:]]+)", {None, None}}
@@ -396,6 +399,20 @@ joined[parts_List, separator_String] := {StringRiffle[First /@ parts, separator]
 
 (* the regex in a group of no name, then the suffix *)
 grouped[{regex_String, names_List}, suffix_String] := {"(" <> regex <> ")" <> suffix, Prepend[names, None]}
+
+(* A pattern's regex with a quantifier: the regex of one atom, a character, . or a bracket, takes it
+	as it is, and any other in a group of no name. *)
+quantified[p_, suffix_String] := With[{inner = translated[p]},
+	If[atomicQ[p], {First[inner] <> suffix, Last[inner]}, grouped[inner, suffix]]
+]
+
+(* whether a pattern's regex is one atom with no group *)
+atomicQ[s_String] := StringLength[s] === 1
+atomicQ[Verbatim[Blank][]] := True
+atomicQ[chars : {__String}] := AllTrue[chars, StringLength[#] === 1 &]
+atomicQ[HoldPattern[CharacterRange[_String, _String]] | Verbatim[Except][_]] := True
+atomicQ[c_Symbol] := MatchQ[regexClass[c], {r_String /; StringStartsQ[r, "["] && StringEndsQ[r, "]"], {}}]
+atomicQ[_] := False
 
 (* s with the characters that a regex reads specially escaped *)
 escaped[s_String] := StringReplace[s, $regexEscapes]
