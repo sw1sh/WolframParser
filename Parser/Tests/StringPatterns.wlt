@@ -259,14 +259,12 @@ VerificationTest[
 ]
 
 (* a repeat of one atom takes its quantifier with no group, any other repeat a group; a letter and a
-   word character are each one bracket of the ASCII bytes outside the class, with no group *)
+   word character are each one bracket of classes, with no range and no group *)
 VerificationTest[
     {StringPatternProgram[("ab") ..]["Regex"], StringPatternProgram[Repeated[_, {2, 3}]]["Regex"],
      StringPatternProgram["<" ~~ WordCharacter ..]["Regex"], StringPatternProgram[LetterCharacter ...]["Regex"]},
-    {{"(ab)+", {None}}, {".{2,3}", {}},
-     {"<[^" <> FromCharacterCode[1] <> "-/:-@[-`{-" <> FromCharacterCode[127] <> "]+", {}},
-     {"[^" <> FromCharacterCode[1] <> "-@[-`{-" <> FromCharacterCode[127] <> "]*", {}}},
-    TestID -> "string patterns: a repeat of one atom opens no group, and a letter or a word character is one bracket"
+    {{"(ab)+", {None}}, {".{2,3}", {}}, {"<[^[:punct:][:space:][:cntrl:]]+", {}}, {"[^[:punct:][:space:][:cntrl:][:digit:]]*", {}}},
+    TestID -> "string patterns: a repeat of one atom opens no group, and a letter or a word character is one bracket of classes"
 ]
 
 (* a bracket as POSIX reads one: ] first, - last, ^ not first, a backslash a character as any other *)

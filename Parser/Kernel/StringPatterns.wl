@@ -376,16 +376,14 @@ translated[c_Symbol] := Replace[regexClass[c], None :> Throw[None, regexOf]]
 translated[_] := Throw[None, regexOf]
 
 (* The classes in the C locale are of ASCII; a byte above 127, part of a character beyond ASCII,
-	counts as a letter. Digits are a class, not the range 0-9, which the system's regexes compare by
-	collation, at twice the time. A letter and a word character are each one bracket of the bytes
-	that are none, the ASCII ones outside the class, so that a byte above 127 is one and no group
-	opens, whose matches the C library's regexec tracks at twice the time and more. *)
-$letterBracket = "[^" <> FromCharacterCode[1] <> "-@[-`{-" <> FromCharacterCode[127] <> "]"
-$wordBracket = "[^" <> FromCharacterCode[1] <> "-/:-@[-`{-" <> FromCharacterCode[127] <> "]"
-
+	counts as a letter. A bracket holds classes and no range: macOS's regexes compare a range by
+	collation, at twice the time, and under a UTF-8 collation the range of a negated bracket takes
+	in the letters, so that it matches none. A word character is what is none of punctuation,
+	whitespace and a control character, a letter none of those or a digit, each one bracket, so that
+	no group opens, whose matches the C library's regexec tracks at twice the time and more. *)
 $classes = <|
-	DigitCharacter -> {"[[:digit:]]", {}}, LetterCharacter -> {$letterBracket, {}},
-	WhitespaceCharacter -> {"[[:space:]]", {}}, WordCharacter -> {$wordBracket, {}},
+	DigitCharacter -> {"[[:digit:]]", {}}, LetterCharacter -> {"[^[:punct:][:space:][:cntrl:][:digit:]]", {}},
+	WhitespaceCharacter -> {"[[:space:]]", {}}, WordCharacter -> {"[^[:punct:][:space:][:cntrl:]]", {}},
 	PunctuationCharacter -> {"[[:punct:]]", {}}, HexadecimalCharacter -> {"[[:xdigit:]]", {}},
 	StartOfString -> {"^", {}}, EndOfString -> {"$", {}}, Whitespace -> {"[[:space:]]+", {}},
 	NumberString -> {"[+-]?([[:digit:]]+([.][[:digit:]]*)?|[.][[:digit:]]+)", {None, None}}
