@@ -367,6 +367,30 @@ VerificationTest[
     TestID -> "EBNF classic: a token's node carries its source span, and a rule in Spans gets the span it matched"]
 
 VerificationTest[
+    EBNFDeclarations["(* a comment (* nested *) *)\n%level Equal 9\n<a> ::= \"x\" (* after a rule *)\n%operator \"=\" Infix`Equal InfixR Set (* after its fields *)\n%level Semi -4\n%end"],
+    <|"level" -> {{"Equal", 9}, {"Semi", -4}}, "operator" -> {{"=", "Infix`Equal", "InfixR", "Set"}}, "end" -> {{}}|>,
+    TestID -> "EBNF classic: declarations, each keyword's fields in order, quoted terminals, integers and words, comments among them"]
+
+VerificationTest[
+    EBNFRules["%start a\n<a> ::= \"x\" <b>\n(* <c> ::= \"z\" *)\n<b> ::= \"y\"", "Dialect" -> "Classic"],
+    {Wolfram`Parser`EBNFPrivate`EBNFDeclaration["start", {"a"}],
+     Wolfram`Parser`EBNFPrivate`EBNFRule["a", "::=", {{Wolfram`Parser`EBNFPrivate`Lit["x"], Wolfram`Parser`EBNFPrivate`NonTerm["b"]}}],
+     Wolfram`Parser`EBNFPrivate`EBNFRule["b", "::=", {{Wolfram`Parser`EBNFPrivate`Lit["y"]}}]},
+    TestID -> "EBNF classic: a declaration among the rules, in source order, and a rule in a comment is none"]
+
+VerificationTest[
+    Module[{g = EBNFParse["%keyword field\n<pair> :: \"a\" (* the left *) \"=\" \"1\"", "Dialect" -> "Classic"]},
+        Parse[g["pair"], "a = 1"]
+    ],
+    {"a", "=", "1"},
+    TestID -> "EBNF classic: EBNFParse reads past declarations and comments"]
+
+VerificationTest[
+    EBNFDeclarations["<a> ::= \"x\""],
+    <||>,
+    TestID -> "EBNF classic: a grammar with no declaration has none"]
+
+VerificationTest[
     Block[{$Context = "EBNFProbe`", $ContextPath = {"Wolfram`Parser`", "System`"}},
         EBNFParse["<a> ::= x <b>\n<b> ::= y", "Tokens" -> {"b"}];
         Names["EBNFProbe`*"]

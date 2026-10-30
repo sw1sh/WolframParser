@@ -5,7 +5,7 @@ Context: Wolfram`Parser`
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/ref/EBNFRules
 Keywords: [ebnf, bnf, grammar, rules, meta-grammar, inspection, parse tree, syntaxbnf]
-SeeAlso: [EBNFParse, Parse, ParseAction, ParserCombinator, TPTPImport, ABCBNF]
+SeeAlso: [EBNFParse, EBNFDeclarations, Parse, ParseAction, ParserCombinator, TPTPImport, ABCBNF]
 RelatedGuides: [WolframParser]
 ---
 
@@ -19,12 +19,13 @@ RelatedGuides: [WolframParser]
 
 - Each record has the form `EBNFRule[name, kind, body]`: *name* is the rule's non-terminal name, *kind* is the arrow string, and *body* is the list of alternatives. `EBNFRule` and the body markers below are internal heads in the package's private `` Wolfram`Parser`EBNFPrivate` `` context.
 - *kind* is one of `"::="` (syntactic), `":=="` (semantic), `"::-"` (token construction), or `":::"` (character class) — the four arrows the grammar notation distinguishes; the classic dialect has `"::="` and `"::"`.
+- In the classic dialect, a declaration, a line that begins with `%`, gives the record `EBNFDeclaration[keyword, fields]` in its place among the rules; [EBNFDeclarations]() collects them by keyword.
 - Each alternative in *body* is a list of elements: `Lit[s]` for a literal token, `NonTerm[name]` for a non-terminal reference, and `Rep["Many", elt]` for a postfix-`*` repetition. The classic dialect adds `Opt[alts]` for `[...]`, `Rep["ManyAlts", alts]` for `{...}`, `Group[alts]` for `(...)`, and `CharRange[a, b]` for `"a" | ... | "b"`.
 - The following option can be given:
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `"Dialect"` | `"TPTP"` | the grammar's notation: `"TPTP"`, the one the TPTP project publishes, or `"Classic"`, with quoted terminals and `[...]`, `{...}`, `(...)` and `...` ranges |
+| `"Dialect"` | `"TPTP"` | the grammar's notation: `"TPTP"`, the one the TPTP project publishes, or `"Classic"`, with quoted terminals, `[...]`, `{...}`, `(...)` and `...` ranges, Wolfram Language comments and `%` declarations |
 - Rules are returned in source order.
 - [EBNFParse]() calls [EBNFRules]() internally and then lowers each record to a [ParserCombinator](). [EBNFRules]() stops before lowering, so it is the way to inspect a parsed grammar's shape — rule count, names, and kinds — without building parsers.
 - Left-recursion elimination and longest-first alternative sorting are applied by [EBNFParse]() during lowering, not by [EBNFRules](); the records reflect the grammar exactly as written.

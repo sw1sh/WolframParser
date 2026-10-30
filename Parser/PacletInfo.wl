@@ -51,6 +51,7 @@ PacletObject[<|
                 "Wolfram`Parser`ExportLaTeX",
                 "Wolfram`Parser`EBNFParse",
                 "Wolfram`Parser`EBNFRules",
+                "Wolfram`Parser`EBNFDeclarations",
                 "Wolfram`Parser`TPTPImport",
                 "Wolfram`Parser`MarkdownInlineParse",
                 "Wolfram`Parser`MarkdownInlineParser",

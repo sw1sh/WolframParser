@@ -19,6 +19,9 @@
 	`<name> ::=` or `<name> ::`, terminals in quotes, `[...]` optional,
 	`{...}` repeated, `(...)` grouped, and `"a" | ... | "z"` for a range of
 	characters - the grammar the ABC language's specification publishes.
+	Its comments are Wolfram Language comments, and a line that begins
+	with % is a declaration, as a parser generator's are, which
+	EBNFDeclarations gives.
 
 	The output of `EBNFParse[File[path]]` / `EBNFParse[source]` is an
 	`Association[name -> ParserCombinator]` covering every rule in the
@@ -36,8 +39,16 @@ EBNFParse::usage =
 EBNFRules::usage =
 	"EBNFRules[source] returns the list of raw EBNFRule[name, kind, " <>
 	"alts] structures parsed from `source`, without lowering them to " <>
-	"ParserCombinators. Useful for inspecting the parsed grammar shape. " <>
+	"ParserCombinators, and in the classic dialect an EBNFDeclaration[keyword, fields] " <>
+	"for each declaration. Useful for inspecting the parsed grammar shape. " <>
 	"EBNFRules[File[path]] reads from a file."
+
+EBNFDeclarations::usage =
+	"EBNFDeclarations[source] gives the declarations of a grammar in the classic dialect, " <>
+	"its lines that begin with %, as an Association of each keyword with the fields of its " <>
+	"declarations in order, a list for each: <|keyword -> {{field, ...}, ...}, ...|>. A field " <>
+	"is a quoted terminal or a word, as a string, or an integer. " <>
+	"EBNFDeclarations[File[path]] reads from a file."
 
 Begin["`EBNFPrivate`"]
 
@@ -169,9 +180,26 @@ grammarP = ParseAction[wsc ~~ ParseMany[ParseAction[ruleP ~~ wsc, #1 &]], #2 &]
 	optional, `{...}` repeated, `(...)` grouped; and an alternative that is
 	only `...` between two one-character terminals stands for the characters
 	between them, as in `"a" | ... | "z"`. Whitespace, newlines included,
-	separates elements; a rule ends where the next `<name> ::` begins. *)
+	separates elements; a rule ends where the next `<name> ::` begins.
+	A comment, nested as in the Wolfram Language, is whitespace. Between
+	rules, % begins a declaration: a keyword, then the fields up to the end
+	of the line, each a quoted terminal, an integer, or a word of other
+	characters but whitespace, quotes and a parenthesis. *)
 
-classicWs = ParseMany[space]
+classicComment = ParseAction[
+	ParseLiteral["(*"] ~~
+		ParseMany[ParseChoice[
+			ParseSome[ParseCharacter[_ ? (# =!= "*" && # =!= "(" && # =!= "\n" &)]],
+			ParseLiteral["\n"],
+			ParseRecursive[classicComment],
+			ParseLiteral["*"] ~~ ParseNotFollowedBy[ParseLiteral[")"]],
+			ParseLiteral["("]
+		]] ~~
+		ParseLiteral["*)"],
+	Null &
+]
+
+classicWs = ParseMany[ParseChoice[space, classicComment]]
 
 classicArrow = ParseChoice[ParseLiteral["::="], ParseLiteral["::"]]
 
@@ -226,7 +254,27 @@ classicRuleP = ParseAction[
 	EBNFRule[#1[[1]], #3, #5] &
 ]
 
-classicGrammarP = ParseAction[classicWs ~~ ParseMany[ParseAction[classicRuleP ~~ classicWs, #1 &]], #2 &]
+(* a declaration: % and its keyword, then its fields to the end of the line *)
+classicLineWs = ParseMany[ParseChoice[ParseCharacter[" " | "\t"], classicComment]]
+
+classicWordCharacter = ParseCharacter[_ ? (! StringMatchQ[#, WhitespaceCharacter | "\"" | "'" | "("] &)]
+
+classicField = ParseChoice[
+	ParseAction[classicLiteral, First],
+	ParseAction[
+		ParseOptional[ParseLiteral["-"]] ~~ ParseSome[ParseCharacter[DigitCharacter]] ~~ ParseNotFollowedBy[classicWordCharacter],
+		Function[{sign, digits, end}, If[MissingQ[sign], 1, -1] FromDigits[StringJoin[digits]]]
+	],
+	ParseAction[ParseSome[classicWordCharacter], StringJoin]
+]
+
+classicDeclaration = ParseAction[
+	ParseLiteral["%"] ~~ ident ~~ classicLineWs ~~ ParseMany[ParseAction[classicField ~~ classicLineWs, #1 &]] ~~
+		ParseChoice[ParseCharacter["\n" | "\r"], ParseNotFollowedBy[ParseCharacter[_]]],
+	EBNFDeclaration[#2, #4] &
+]
+
+classicGrammarP = ParseAction[classicWs ~~ ParseMany[ParseAction[ParseChoice[classicRuleP, classicDeclaration] ~~ classicWs, #1 &]], #2 &]
 
 
 (* ::Section:: *)
@@ -662,6 +710,11 @@ Options[EBNFRules] = {"Dialect" -> "TPTP"}
 EBNFRules[source_String, OptionsPattern[]] :=
 	Parse[If[OptionValue["Dialect"] === "Classic", classicGrammarP, grammarP], source]
 EBNFRules[File[path_String], opts : OptionsPattern[]] := EBNFRules[Import[path, "Text"], opts]
+
+EBNFDeclarations[source_String] := With[{rules = EBNFRules[source, "Dialect" -> "Classic"]},
+	If[FailureQ[rules], rules, GroupBy[Cases[rules, EBNFDeclaration[keyword_, fields_] :> {keyword, fields}], First -> Last]]
+]
+EBNFDeclarations[File[path_String]] := EBNFDeclarations[Import[path, "Text"]]
 
 Options[EBNFParse] = {
 	"PrimitiveOverrides" -> <||>,

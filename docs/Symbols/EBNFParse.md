@@ -5,7 +5,7 @@ Context: Wolfram`Parser`
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/ref/EBNFParse
 Keywords: [ebnf, bnf, grammar, meta-grammar, parser generator, lowering, left recursion, tptp, syntaxbnf, combinator]
-SeeAlso: [EBNFRules, Parse, ParseAction, ParseChoice, ParseRecursive, ParseOperatorTable, TPTPImport, ABCBNF, ParserCombinator]
+SeeAlso: [EBNFRules, EBNFDeclarations, Parse, ParseAction, ParseChoice, ParseRecursive, ParseOperatorTable, TPTPImport, ABCBNF, ParserCombinator]
 RelatedGuides: [WolframParser]
 ---
 
@@ -24,7 +24,7 @@ RelatedGuides: [WolframParser]
 - Four arrow kinds are recognized: `::=` (syntactic), `:==` (semantic, same surface shape), `::-` (token construction), and `:::` (character class). The `::-` and `:::` bodies compile through a regex-style meta-parser that handles classes (`[a-z]`, `[^*]`), grouping (`(x|y)`), references (`<name>`), and the postfix operators `*`, `+`, `?`.
 - A directly left-recursive rule `A ::= A r | b` is rewritten to the equivalent `A ::= b (r)*` before lowering; indirect (mutual) left recursion is not rewritten.
 - Each rule's alternatives are sorted longest-first by element count, so a longer shared-prefix alternative is tried before a shorter one.
-- With `"Dialect" -> "Classic"` the grammar is in the BNF of many language reports: `<name> ::=` or `<name> ::`, terminals in double or single quotes with `\n` `\r` `\t` escapes, non-terminals as `<name>` or a bare name, `[...]` for an optional part, `{...}` for a repeated one, `(...)` for a group, and `"a" | ... | "z"` for the characters from `a` to `z`. An optional part that is absent gives `Missing["NoMatch"]`.
+- With `"Dialect" -> "Classic"` the grammar is in the BNF of many language reports: `<name> ::=` or `<name> ::`, terminals in double or single quotes with `\n` `\r` `\t` escapes, non-terminals as `<name>` or a bare name, `[...]` for an optional part, `{...}` for a repeated one, `(...)` for a group, and `"a" | ... | "z"` for the characters from `a` to `z`. An optional part that is absent gives `Missing["NoMatch"]`. Its comments are Wolfram Language comments, and its lines that begin with `%` are declarations, which [EBNFParse]() reads past and [EBNFDeclarations]() gives.
 - `"Whitespace"` names the characters skipped between elements; an element that itself begins with one of them, such as a space the grammar writes out, is not preceded by the skip. A rule in `"Tokens"` is matched without skipping, as is every rule it reaches, and its value is the text it matched; an AST node its action builds from that text carries the token's source span. A rule in `"Spans"` hands its action the `{start, end}` character span it matched, after its values.
 - The BNF source is itself parsed by a grammar built entirely from `Parse*` combinators — see the tutorial [Parsing BNF Grammars](paclet:Wolfram/Parser/tutorial/ParsingBNFGrammars).
 

@@ -82,6 +82,7 @@ Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_co
 
 - [EBNFParse]() read a BNF grammar (a string or <code>[File]()[path]</code>) and return an <code>[Association]()[name -> [ParserCombinator]()]</code>
 - [EBNFRules]() return the unlowered list of <code>EBNFRule[name, kind, body]</code> records
+- [EBNFDeclarations]() return the declarations of a classic grammar, its lines that begin with `%`, by keyword
 - [TPTPImport]() import TPTP theorem-prover formulas (FOF / CNF / THF) or an SZS derivation
 - [TPTPExport]() render an SZS-output derivation back to TPTP text
 
