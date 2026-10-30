@@ -318,9 +318,9 @@ referenced[p_, seen_List] := {p, seen}
 	shortest repeat, no name twice and no empty match. It finds a match where the program has one if
 	it has no name twice, whose texts must be the same, and no empty match, which the regex search
 	passes over. *)
-regexLikeQ[p_] := ! nullableQ[p] && FreeQ[p, _alternatives | repeat[_, _, _, False] | repeat[Except[_?singleCharacterQ], _, _, _] | _backreference | _regular] &&
+regexLikeQ[p_] := ! nullableQ[p] && FreeQ[p, _alternatives | repeat[_, _, _, False] | repeat[Except[_?singleCharacterQ], _, _, _] | _backreference] &&
 	DuplicateFreeQ[Cases[p, named[x_, _] :> x, {0, Infinity}]]
-regexFindsQ[p_] := ! nullableQ[p] && FreeQ[p, _backreference | _regular] && DuplicateFreeQ[Cases[p, named[x_, _] :> x, {0, Infinity}]]
+regexFindsQ[p_] := ! nullableQ[p] && FreeQ[p, _backreference] && DuplicateFreeQ[Cases[p, named[x_, _] :> x, {0, Infinity}]]
 
 (* whether a program may match no characters *)
 nullableQ[literal[codes_]] := codes === {}
@@ -373,12 +373,15 @@ translated[Verbatim[Except][c_String]] /; StringLength[c] === 1 := {bracketed[{c
 translated[Verbatim[Except][c_Symbol]] := With[{class = regexClass[c]},
 	{"[^" <> StringTake[First[class], {2, -2}] <> "]", {}} /; MatchQ[class, {_String?(StringMatchQ[#, "[[:" ~~ __ ~~ ":]]"] &), {}}]
 ]
-(* A regex of alternatives is a group of no name, so that what stands around it, StartOfString ~~
-	RegularExpression["a|b"] among them, takes all of them [WL 15.0.0]; POSIX has no group that
-	captures nothing. A backreference counts the group, so a regex with one is left as it is. *)
-translated[RegularExpression[re_String]] := With[{regex = {posixRegex[re], Range[regexGroupCount[re]]}},
-	If[StringContainsQ[re, "|"] && ! StringContainsQ[re, "\\" ~~ DigitCharacter], grouped[regex, ""], regex]
-]
+(* A RegularExpression's regex is that of its program, the program of its parts, where POSIX has
+	every part and reads it as the program does on a text of ASCII characters, the texts a kernel
+	runs a regex on. A regex of alternatives is a group of no name, so that what stands around it,
+	StartOfString ~~ RegularExpression["a|b"] among them, takes all of them [WL 15.0.0]; POSIX has no
+	group that captures nothing. *)
+translated[RegularExpression[re_String]] := Replace[Block[{$merged = $merged, $declined = $declined}, Catch[program[RegularExpression[re]], program]], {
+	regular[p_] :> programRegex[p],
+	_ :> Throw[None, regexOf]
+}]
 translated[c_Symbol] := Replace[regexClass[c], None :> Throw[None, regexOf]]
 translated[_] := Throw[None, regexOf]
 
@@ -439,32 +442,63 @@ bracketed[chars_List, negated_] := With[{set = DeleteDuplicates[chars]},
 	]
 ]
 
-(* The escapes of Perl's syntax that POSIX names otherwise; the groups of a RegularExpression, each
-	a "(" that is not escaped, not in a bracket expression, and not "(?" of PCRE, which a POSIX
-	regex does not have. *)
-posixRegex[re_String] := StringReplace[re, {"\\d" -> "[[:digit:]]", "\\s" -> "[[:space:]]", "\\w" -> "[[:alnum:]_]", "\\D" -> "[^[:digit:]]", "\\S" -> "[^[:space:]]", "\\W" -> "[^[:alnum:]_]"}]
+(* The regex of a part of a RegularExpression's program, {regex, names}, the number of each group
+	of the regex among the names: a literal, a class of characters, one after another,
+	alternatives, a group, a repeat of the longest first of at most 255, and ^ and \z; none for a
+	repeat of the shortest first, an atomic part, a possessive repeat, a lookaround, a
+	backreference, $, \Z, a word boundary, an anchor of a line, an anchor in a repeat, which a
+	regex finds where it should not, and a literal of no character or of a NUL. *)
+programRegex[literal[codes_List]] := If[codes === {} || MemberQ[codes, 0], Throw[None, regexOf], {escaped[FromCharacterCode[codes]], {}}]
+programRegex[characterClass[codeIn[spec_]]] := {asciiClassRegex[Select[Range[127], codeIn[spec]]], {}}
+programRegex[sequence[parts_List]] := joined[programRegex /@ parts, ""]
+programRegex[alternatives[parts_List]] := grouped[joined[programRegex /@ parts, "|"], ""]
+programRegex[capture[n_Integer, alternatives[parts_List]]] := With[{inner = joined[programRegex /@ parts, "|"]}, {"(" <> First[inner] <> ")", Prepend[Last[inner], n]}]
+programRegex[capture[n_Integer, p_]] := With[{inner = programRegex[p]}, {"(" <> First[inner] <> ")", Prepend[Last[inner], n]}]
+programRegex[repeat[p_, min_Integer, max : (_Integer | Infinity), True]] /; FreeQ[p, _anchor] && min <= 255 && (max === Infinity || max <= 255) := With[
+	{inner = programRegex[p], q = Which[
+		{min, max} === {0, Infinity}, "*",
+		{min, max} === {1, Infinity}, "+",
+		{min, max} === {0, 1}, "?",
+		min === max, "{" <> ToString[min] <> "}",
+		max === Infinity, "{" <> ToString[min] <> ",}",
+		True, "{" <> ToString[min] <> "," <> ToString[max] <> "}"
+	]},
+	If[MatchQ[p, literal[{_}] | _characterClass], {First[inner] <> q, Last[inner]}, grouped[inner, q]]
+]
+programRegex[anchor[StartOfString]] := {"^", {}}
+programRegex[anchor[EndOfString]] := {"$", {}}
+programRegex[_] := Throw[None, regexOf]
 
-regexGroupCount[re_String] := Replace[Fold[regexScanned, {0, "Normal"}, Characters[re]], {{count_, "Open"} :> count + 1, {count_, _} :> count}]
+(* A class of characters on a text of ASCII characters, by the codes it has of 1 to 127: the
+	character alone, . for all of them, or the shorter of the bracket of its characters and the
+	negated bracket of the others; none for none of them. *)
+asciiClassRegex[{}] := Throw[None, regexOf]
+asciiClassRegex[{c_Integer}] := escaped[FromCharacterCode[c]]
+asciiClassRegex[codes_List] /; Length[codes] === 127 := "."
+asciiClassRegex[codes_List] := With[{in = classBracket[codes, False], out = classBracket[Complement[Range[127], codes], True]},
+	If[StringLength[out] < StringLength[in], out, in]
+]
 
-(* the groups counted and the state of the scan of a regex after a character; in a bracket
-	expression a "]" first, after "^" or not, is a character, and [:class:], [.symbol.] and
-	[=class=] end at their own "]" *)
-regexScanned[{count_, "Open"}, "?"] := {count, "Normal"}
-regexScanned[{count_, "Open"}, c_] := regexScanned[{count + 1, "Normal"}, c]
-regexScanned[{count_, "Normal"}, "\\"] := {count, "Escape"}
-regexScanned[{count_, "Normal"}, "("] := {count, "Open"}
-regexScanned[{count_, "Normal"}, "["] := {count, "BracketFirst"}
-regexScanned[{count_, "Normal" | "Escape"}, _] := {count, "Normal"}
-regexScanned[{count_, "BracketFirst"}, "^"] := {count, "BracketCaret"}
-regexScanned[{count_, "BracketFirst" | "BracketCaret"}, "]"] := {count, "Bracket"}
-regexScanned[{count_, "BracketFirst" | "BracketCaret" | "Bracket"}, "["] := {count, "BracketOpen"}
-regexScanned[{count_, "Bracket"}, "]"] := {count, "Normal"}
-regexScanned[{count_, "BracketFirst" | "BracketCaret" | "Bracket"}, _] := {count, "Bracket"}
-regexScanned[{count_, "BracketOpen"}, ":" | "." | "="] := {count, "Class"}
-regexScanned[{count_, "BracketOpen"}, c_] := regexScanned[{count, "Bracket"}, c]
-regexScanned[{count_, "Class"}, ":" | "." | "="] := {count, "ClassEnd"}
-regexScanned[{count_, "ClassEnd"}, "]"] := {count, "Bracket"}
-regexScanned[{count_, "Class" | "ClassEnd"}, _] := {count, "Class"}
+(* A bracket of the ASCII codes, the POSIX classes they hold whole and their other characters, as
+	bracketed sets them out; the classes of the C locale, each of ASCII, the largest first. *)
+classBracket[codes_List, negated_] := With[{cover = Fold[
+		Function[{held, class}, If[SubsetQ[codes, class[[2]]] && IntersectingQ[held[[2]], class[[2]]], {Append[held[[1]], class[[1]]], Complement[held[[2]], class[[2]]]}, held]],
+		{{}, codes}, $posixClasses
+	]},
+	If[cover[[1]] === {},
+		bracketed[FromCharacterCode /@ codes, negated],
+		With[{chars = FromCharacterCode /@ cover[[2]]}, StringJoin["[", If[negated, "^", ""], If[MemberQ[chars, "]"], "]", ""], cover[[1]],
+			DeleteCases[chars, "]" | "-" | "^" | "["], If[MemberQ[chars, "["], "[", ""], If[MemberQ[chars, "^"], "^", ""], If[MemberQ[chars, "-"], "-", ""], "]"
+		]]
+	]
+]
+$posixClasses = {
+	{"[:print:]", Range[32, 126]}, {"[:graph:]", Range[33, 126]}, {"[:alnum:]", Join[Range[48, 57], Range[65, 90], Range[97, 122]]},
+	{"[:alpha:]", Join[Range[65, 90], Range[97, 122]]}, {"[:punct:]", Join[Range[33, 47], Range[58, 64], Range[91, 96], Range[123, 126]]},
+	{"[:cntrl:]", Append[Range[1, 31], 127]}, {"[:upper:]", Range[65, 90]}, {"[:lower:]", Range[97, 122]},
+	{"[:xdigit:]", Join[Range[48, 57], Range[65, 70], Range[97, 102]]}, {"[:digit:]", Range[48, 57]}, {"[:space:]", Append[Range[9, 13], 32]},
+	{"[:blank:]", {9, 32}}
+}
 
 
 (* ::Section:: *)

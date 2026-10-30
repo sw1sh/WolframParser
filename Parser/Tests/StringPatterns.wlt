@@ -254,8 +254,8 @@ VerificationTest[
 VerificationTest[
     {StringPatternProgram["a" ~~ DigitCharacter ..]["Regex"], StringPatternProgram[x : DigitCharacter ~~ "." ~~ DigitCharacter ..]["Regex"],
      StringPatternProgram["x" ~~ RegularExpression["(a)(b)"]]["Regex"], StringPatternProgram[RegularExpression["a|b"]]["Regex"]},
-    {{"a[[:digit:]]+", {}}, {"([[:digit:]])\\.[[:digit:]]+", {HoldComplete[x]}}, {"x(a)(b)", {1, 2}}, {"(a|b)", {None}}},
-    TestID -> "string patterns: the regex of a pattern and a name for each of its groups"
+    {{"a[[:digit:]]+", {}}, {"([[:digit:]])\\.[[:digit:]]+", {HoldComplete[x]}}, {"x(a)(b)", {1, 2}}, {"[ab]", {}}},
+    TestID -> "string patterns: the regex of a pattern and a name for each of its groups, alternatives of a character one bracket"
 ]
 
 (* a repeat of one atom takes its quantifier with no group, any other repeat a group; a letter and a
@@ -467,4 +467,21 @@ VerificationTest[
     {StringPatternMatcher[{StringPatternProgram[RegularExpression["(*FAIL)"]]}, "Each"], StringPatternRecords["ab", {StringPatternProgram[RegularExpression["(*FAIL)"]]}, "Each"]},
     {None, None},
     TestID -> "string patterns: no matcher for a program that has none, as no records"
+]
+
+(* a RegularExpression's regex, POSIX's, exact on a text of ASCII characters: its classes brackets
+   of POSIX's classes and of characters, a group for each of its groups, and none where POSIX has
+   no part of it or reads one otherwise *)
+VerificationTest[
+    Map[StringPatternProgram[RegularExpression[#]]["Regex"] &,
+        {"[0-9]+", "a.*", "(ab|cd)e", "\\w+@\\w+", "[^,]+", "(?i)ab", "^a\\z", "(?:ab)+", "\\s*,\\s*", "a+?", "a$", "\\bfoo", "a(?=b)", "(a)\\1", "x{300}"}],
+    {{"[[:digit:]]+", {}}, {"a[^\n]*", {}}, {"(ab|cd)e", {1}}, {"[[:alnum:]_]+@[[:alnum:]_]+", {}}, {"[^,]+", {}}, {"[Aa][Bb]", {}}, {"^a$", {}},
+     {"(ab)+", {None}}, {"[[:space:]]*,[[:space:]]*", {}}, None, None, None, None, None, None},
+    TestID -> "string patterns: a regex's POSIX regex, its classes brackets of classes and characters, none where POSIX reads a part otherwise"
+]
+
+VerificationTest[
+    Map[With[{p = StringPatternProgram[RegularExpression[#]]}, {p["RegexLike"], p["RegexFinds"]}] &, {"c ", "[0-9]+", "(ab|cd)e", "(?:ab)+"}],
+    {{True, True}, {True, True}, {False, True}, {False, True}},
+    TestID -> "string patterns: a regex matches as its program does, or finds a match where it has one, as a pattern's"
 ]

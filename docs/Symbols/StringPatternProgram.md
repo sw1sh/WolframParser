@@ -31,7 +31,7 @@ RelatedGuides: [WolframParser]
 | `"Pattern"` | the pattern *patt* |
 | `"Program"` | the program, or [None]() if *patt* has a part that no program has |
 | `"Ways"` | the program of every way, which the mode `"All"` of [StringPatternMatches]() matches: alternatives of single characters a way each, where Wolfram 15 counts them so |
-| `"Regex"` | `{regex, names}`: a POSIX extended regular expression that means what *patt* does, for a host's C library to match, and for each group it opens the name of *patt* that holds it, <code>[HoldComplete]()[*x*]</code>, the number of a group of a [RegularExpression](), or [None](); [None]() if no regex means the same |
+| `"Regex"` | `{regex, names}`: a POSIX extended regular expression that means what *patt* does, for a host's C library to match, and for each group it opens the name of *patt* that holds it, <code>[HoldComplete]()[*x*]</code>, the number of a group of a [RegularExpression](), or [None](); [None]() if no regex means the same. A [RegularExpression]()'s regex means what it does on a text of ASCII characters, its classes those characters of them; it has none where POSIX has no part of it or reads one otherwise: a repeat of the shortest first, an atomic group or a possessive repeat, a lookaround, a backreference, `$`, `\Z`, a word boundary, or an anchor of a line |
 | `"RegexLike"` | whether a regex's leftmost longest match finds the matches the program finds |
 | `"RegexFinds"` | whether a regex finds a match wherever the program has one |
 | `"Class"` | `{test, min, max}` for a pattern of one character class or a repeat of one, else [None]() |
@@ -110,6 +110,14 @@ StringPatternProgram[{"-", "a", "]"}]["Regex"]
 ```
 
 <!-- => {"[]a-]", {}} -->
+
+The regex of a [RegularExpression]() on ASCII text, its classes brackets of POSIX's classes and of characters, `.` every character but a newline:
+
+```wl
+StringPatternProgram[RegularExpression["\\w+@[^.]+\\..*"]]["Regex"]
+```
+
+<!-- => {"[[:alnum:]_]+@[^.]+\\.[^\n]*", {}} -->
 
 A repeat of one class, from once on, runs as far as its characters go:
 
