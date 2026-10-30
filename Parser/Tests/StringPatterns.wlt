@@ -439,3 +439,32 @@ VerificationTest[
      {HoldForm[x : DigitCharacter], HoldForm[x : DigitCharacter]}},
     TestID -> "string patterns: the restrictions the matcher ignores, of which Wolfram 15 warns"
 ]
+
+(* a matcher, made once for the programs of a mode, gives each string's records as the programs do *)
+VerificationTest[
+    With[{ps = StringPatternProgram /@ {x : DigitCharacter .., (y : "a") | "b"}},
+        With[{m = StringPatternMatcher[ps, "Each"]},
+            {StringPatternRecords["a1b22", m], Developer`PackedArrayQ[StringPatternRecords["a1b22", m]], m["Sides"], m["Mode"], m["Method"]}
+        ]
+    ],
+    {{{0, 1, 2, 0, 1}, {1, 2, 1, 1, 2}, {2, 3, 2, -1, -1}, {3, 5, 1, 3, 5}}, True, {{{HoldPattern[x], False}}, {{HoldPattern[y], False}}}, "Each", "Typed"},
+    TestID -> "string patterns: a matcher gives the records of a string, packed, and the sides of its programs' names"
+]
+
+VerificationTest[
+    Select[{{x : DigitCharacter .., y_}, {(DigitCharacter ..) ? (StringLength[#] > 1 &)}, {x_ ~~ x_}, {RegularExpression["([a-z]+)(\\d+)?"]}, {"a" ~~ __}},
+        Function[ps, With[{programs = StringPatternProgram /@ ps}, AnyTrue[{"First", "Each", "Overlapping", "All"}, Function[mode,
+            StringPatternRecords["a1b22 ab 333", StringPatternMatcher[programs, mode]] =!= StringPatternRecords["a1b22 ab 333", programs, mode]["Records"] ||
+            StringPatternRecords["a1b22 ab 333", StringPatternMatcher[programs, mode, Method -> "Interpreter"]] =!=
+                StringPatternRecords["a1b22 ab 333", programs, mode, Method -> "Interpreter"]["Records"]
+        ]]]]
+    ],
+    {},
+    TestID -> "string patterns: a matcher's records, typed or interpreted, are the programs' in every mode, a test of the characters among them"
+]
+
+VerificationTest[
+    {StringPatternMatcher[{StringPatternProgram[RegularExpression["(*FAIL)"]]}, "Each"], StringPatternRecords["ab", {StringPatternProgram[RegularExpression["(*FAIL)"]]}, "Each"]},
+    {None, None},
+    TestID -> "string patterns: no matcher for a program that has none, as no records"
+]

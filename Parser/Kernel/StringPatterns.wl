@@ -39,9 +39,16 @@ string s from the left, each {start, end, k, rules}: progk matched the character
 their text. The mode is \"First\", \"Each\", \"Overlapping\" or \"All\"."
 StringPatternRecords::usage = "StringPatternRecords[s, {prog1, prog2, ...}, mode] gives the matches of StringPatternMatches as an \
 association: \"Records\", a packed array of rows {start, end, k, then the start and end of each name of progk}, and \"Sides\", for \
-each program the left side of each name's rule and whether the name occurs more than once."
+each program the left side of each name's rule and whether the name occurs more than once. \
+StringPatternRecords[s, matcher] gives the \"Records\" alone, of the matcher StringPatternMatcher made."
+StringPatternMatcher::usage = "StringPatternMatcher[{prog1, prog2, ...}, mode] gives the matcher of the programs progi in the mode, \
+made once for them, which StringPatternRecords[s, matcher] runs on the string s: it holds what the matches of every string take, the \
+bytecode, its parameters, and the classes of characters where no test of a character needs the string. matcher[\"Sides\"] gives the \
+\"Sides\" of StringPatternRecords, and matcher[\"Mode\"] and matcher[\"Method\"] the mode and how it matches. It gives None where a \
+program has no program for the mode."
 Options[StringPatternMatches] = {Method -> Automatic}
 Options[StringPatternRecords] = {Method -> Automatic}
+Options[StringPatternMatcher] = {Method -> Automatic}
 
 Begin["`Private`"]
 
@@ -736,6 +743,47 @@ StringPatternRecords[s_String, programs : {___StringPatternProgram}, mode : "Fir
 StringPatternRecords[s_String, program_StringPatternProgram, mode : "First" | "Each" | "Overlapping" | "All", opts : OptionsPattern[]] :=
 	StringPatternRecords[s, {program}, mode, opts]
 
+(* A matcher: its properties, then what a run takes, by the typed matcher {bytecode, code, pool,
+	classes, None where they need the string, parameters} or by the interpreter {programs, mode,
+	names}. A run takes the codes of the string, its classes where they need it, the matcher's call
+	and its records. *)
+StringPatternMatcher[programs : {___StringPatternProgram}, mode : "First" | "Each" | "Overlapping" | "All", OptionsPattern[]] := With[
+	{ps = modePrograms[programs, mode]},
+	Which[
+		MemberQ[ps, None], None,
+		interpretedQ[ps, OptionValue[Method]], With[{names = programNames /@ ps},
+			StringPatternMatcher[<|"Mode" -> mode, "Method" -> "Interpreter", "Sides" -> Map[nameSides, names]|>, {ps, mode, names}]
+		],
+		True, typedMatcher[ps, mode]
+	]
+]
+(* the matcher of the typed matcher for the programs ps of a mode *)
+typedMatcher[ps_List, mode_String] := With[{bc = vmBytecode[ps]}, StringPatternMatcher[<|"Mode" -> mode, "Method" -> "Typed", "Sides" -> bc["Sides"]|>,
+	{bc, bc["Code"], bc["Pool"], If[bc["Tests"] === {}, bc["Classes"], None], vmParams[bc, Length[ps], mode]}
+]]
+StringPatternMatcher[program_StringPatternProgram, mode : "First" | "Each" | "Overlapping" | "All", opts : OptionsPattern[]] :=
+	StringPatternMatcher[{program}, mode, opts]
+StringPatternMatcher[a_Association, _List][property_String] := Lookup[a, property, Missing["NotAvailable", property]]
+
+StringPatternRecords[s_String, StringPatternMatcher[_Association, {bc_Association, code_, pool_, None, params_}]] := With[
+	{codes = Developer`ToPackedArray[ToCharacterCode[s]]},
+	With[{classes = classesOf[bc, codes]}, matcherRunRecords[bc, classes, codes, params, s, vmFunction[code, pool, classes, codes, params, $vmNoState]]]
+]
+StringPatternRecords[s_String, StringPatternMatcher[_Association, {bc_Association, code_, pool_, classes_, params_}]] := With[
+	{codes = Developer`ToPackedArray[ToCharacterCode[s]]},
+	matcherRunRecords[bc, classes, codes, params, s, vmFunction[code, pool, classes, codes, params, $vmNoState]]
+]
+StringPatternRecords[s_String, StringPatternMatcher[_Association, {ps_List, mode_String, names_List}]] :=
+	programRecords[programMatches[textSubject[s], ps, mode], names]
+
+StringPatternMatcher /: MakeBoxes[matcher : StringPatternMatcher[a_Association, _List], form : (StandardForm | TraditionalForm)] :=
+	BoxForm`ArrangeSummaryBox[
+		StringPatternMatcher, matcher, None,
+		{BoxForm`SummaryItem[{"Mode: ", a["Mode"]}], BoxForm`SummaryItem[{"Method: ", a["Method"]}]},
+		{BoxForm`SummaryItem[{"Sides: ", a["Sides"]}]},
+		form
+	]
+
 textSubject[s_String] := subject[ToCharacterCode[s], StringLength[s], s]
 
 (* whether the interpreter matches the programs, by the method *)
@@ -1029,22 +1077,25 @@ classesOf[bc_Association, codes_List] := With[{data = Map[
 ]
 
 $vmModes = <|"First" -> 1, "Each" -> 2, "Overlapping" -> 3, "All" -> 4|>
+(* the matcher's state at the start of a run, none *)
+$vmNoState = Developer`ToPackedArray[{}]
 
 (* The matches of the programs in s by the typed matcher, {bytecode, records}, the records each
 	{start, end, k, then the start and end of each name} in a packed array: each condition the
 	matcher stops at evaluated here, the matcher then called again from its state. *)
 vmRecords[s_String, programs_List, mode_String] := With[{bc = vmBytecode[programs], codes = Developer`ToPackedArray[ToCharacterCode[s]]},
-	{classes = vmClasses[bc, codes],
-		params = Developer`ToPackedArray[{$vmModes[mode], 0, Length[programs], bc["MaxNames"], bc["Registers"], bc["Table"], Lookup[bc, "Starts", 0]}]
-	},
-	{bc, matcherRunRecords[bc, classes, codes, params, s, vmFunction[bc["Code"], bc["Pool"], classes, codes, params, Developer`ToPackedArray[{}]]]}
+	{classes = vmClasses[bc, codes], params = vmParams[bc, Length[programs], mode]},
+	{bc, matcherRunRecords[bc, classes, codes, params, s, vmFunction[bc["Code"], bc["Pool"], classes, codes, params, $vmNoState]]}
 ]
+
+(* the matcher's parameters for n programs of the bytecode bc in a mode *)
+vmParams[bc_Association, n_Integer, mode_String] := Developer`ToPackedArray[{$vmModes[mode], 0, n, bc["MaxNames"], bc["Registers"], bc["Table"], Lookup[bc, "Starts", 0]}]
 
 (* the records of the matcher's first run, where it stops at no condition; else of its runs from the
 	condition it stops at on *)
 matcherRunRecords::usage = "matcherRunRecords[bc, classes, codes, params, s, out] gives the records of the matcher's runs on the text s, out its first."
 matcherRunRecords[_Association, _, _List, _List, _String, out_List] /; out[[1]] =!= 2 :=
-	Developer`ToPackedArray[Partition[out[[4 ;; 3 + out[[2]] out[[3]]]], out[[3]]]]
+	ArrayReshape[out[[4 ;; 3 + out[[2]] out[[3]]]], {out[[2]], out[[3]]}]
 matcherRunRecords[bc_Association, classes_, codes_List, params_List, s_String, out_List] := Developer`ToPackedArray[matcherRecords[NestWhile[
 	matcherRun,
 	matcherRunEnd[{bc, classes, codes, params, subject[codes, Length[codes], s], {}, Partition[out[[4 ;; 3 + out[[2]] out[[3]]]], out[[3]]], True}, out],

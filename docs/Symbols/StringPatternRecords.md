@@ -6,13 +6,15 @@ ContextPath: [Wolfram`Parser`, Wolfram`Parser`StringPatterns`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/ref/StringPatternRecords
 Keywords: [string pattern, matches, records, packed array, names, StringCases, Overlaps]
-SeeAlso: [StringPatternMatches, StringPatternProgram, StringCases, StringPosition, StringTake]
+SeeAlso: [StringPatternMatcher, StringPatternMatches, StringPatternProgram, StringCases, StringPosition, StringTake]
 RelatedGuides: [WolframParser]
 ---
 
 ## Usage
 
 <code>[StringPatternRecords]()[*s*, {*prog*<sub>1</sub>, *prog*<sub>2</sub>, ...}, *mode*]</code> gives the matches of [StringPatternMatches]() as an association of their records and the left sides of their names.
+
+<code>[StringPatternRecords]()[*s*, *matcher*]</code> gives the records alone of the matches of the [StringPatternMatcher]() *matcher* in *s*.
 
 ## Details & Options
 
@@ -23,6 +25,7 @@ RelatedGuides: [WolframParser]
 - The groups of a [RegularExpression]() come after the names, each with its number for *lhs*.
 - The records come from the matcher with no rule made for each match, for a host that binds the names itself.
 - [StringPatternRecords]() gives [None]() if one of the programs has none.
+- A [StringPatternMatcher]() holds what the matches of every string take, made once; with it, a call does only the work of its string.
 
 ## Basic Examples
 
