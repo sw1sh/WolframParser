@@ -1279,3 +1279,27 @@ VerificationTest[
     {Take[WolframLanguageHeldNext["?a*=b\na::b_", 1], 2], Take[WolframLanguageHeldNext["?a*=b\na::b_", 7], 2]},
     {{HoldComplete[Information["a*", LongForm -> False] = b], 7}, {HoldComplete[MessageName[a, "b_"]], 12}},
     TestID -> "wl: one statement at a time, the tokens that are two split too"]
+
+(* ===== the syntax, WolframLanguage.ebnf ===== *)
+
+VerificationTest[
+    With[{languages = FileNameJoin[{PacletObject["Wolfram/Parser"]["Location"], "Kernel", "Languages"}]},
+        EBNFDeclarations[File[FileNameJoin[{languages, "WolframLanguage.ebnf"}]]] === Get[FileNameJoin[{languages, "WolframLanguageSyntax.wl"}]]
+    ],
+    True,
+    TestID -> "WolframLanguageSyntax.wl holds the declarations of the syntax, WolframLanguage.ebnf, as dev/freeze-syntax.wls writes them"]
+
+VerificationTest[
+    With[{syntax = Wolfram`Parser`Languages`WolframLanguage`Private`$syntax},
+        Complement[syntax["operator"][[All, 2]], syntax["level"][[All, 1]]]
+    ],
+    {},
+    TestID -> "Each operator of the syntax binds at a level it declares"]
+
+VerificationTest[
+    Complement[Wolfram`Parser`Languages`WolframLanguage`Private`$syntax["operator"][[All, 3]],
+        {"Prefix", "Postfix", "InfixL", "InfixR", "InfixN", "Ternary", "Call", "Derivative", "MessageName", "Span", "Pattern", "Optional",
+            "TagSet", "Unset", "Put", "Compound"}
+    ],
+    {},
+    TestID -> "Each operator of the syntax has a form the grammars and the typed parser read"]

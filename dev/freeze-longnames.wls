@@ -49,8 +49,10 @@ integrals = Cases[names, n_ /; MatchQ[top[escape[n] <> " f \\[DifferentialD] x"]
 
 (* precedence: the operator's own, or that of a class, found by comparison *)
 ownOrMissing[n_, kind_] := With[{v = Lookup[precedence, kind <> "`LongName`" <> n, Lookup[precedence, "LongName`" <> n, Missing[]]]}, v];
-asciiRefs = {{"=", 9}, {"//", 18}, {"/.", 28}, {"->", 31}, {"/;", 34}, {"~~", 36}, {"|", 42}, {"||", 58}, {"&&", 62}, {"===", 70}, {"==", 76},
-    {"+", 86}, {"*", 108}, {"/", 122}, {".", 126}, {"**", 132}, {"^", 151}, {"<>", 152}, {"@@", 161}, {"@", 165}, {"/*", 168}, {"@*", 170}};
+(* ASCII infix operators of known precedence, the level the syntax, WolframLanguage.ebnf, gives each *)
+syntax = Get[FileNameJoin[{root, "Parser", "Kernel", "Languages", "WolframLanguageSyntax.wl"}]];
+infixLevel[s_String] := Association[Apply[Rule, syntax["level"], {1}]][First[Cases[syntax["operator"], {s, level_, "InfixL" | "InfixR" | "InfixN", ___} :> level]]];
+asciiRefs = Map[{#, infixLevel[#]} &, {"=", "//", "/.", "->", "/;", "~~", "|", "||", "&&", "===", "==", "+", "*", "/", ".", "**", "^", "<>", "@@", "@", "/*", "@*"}];
 infixNames = Select[names, infixForms[#] =!= None &];
 refs = Join[
     Map[{#[[1]], #[[2]], top["a " <> #[[1]] <> " b"][[1, 1]]} &, asciiRefs],

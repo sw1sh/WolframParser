@@ -14,9 +14,11 @@
 	gives: each top-level expression, held. Outside brackets a newline ends an
 	expression wherever the expression could end; comments are whitespace.
 
-	The binding powers are CodeParser's published precedences
-	(Resources/Generated/Precedence.wl of the CodeParser paclet, MIT); the
-	levels of the ParseOperatorTable are generated from them. Flat operators
+	The operators, their precedences and their forms are those of the
+	language's syntax, WolframLanguage.ebnf, as WolframLanguageSyntax.wl
+	records its declarations; the binding powers are CodeParser's published
+	precedences (Resources/Generated/Precedence.wl of the CodeParser paclet,
+	MIT), and the levels of the ParseOperatorTable are generated from them. Flat operators
 	(a + b - c, a < b <= c, a.b.c) are its "InfixN" chains and a ~f~ b its
 	"Ternary". The forms whose operands are optional or are not expressions
 	(a ;; b, a; b;, t /: lhs = rhs, a::tag, x >> file) are postfix operators
@@ -47,23 +49,29 @@ WolframLanguageSemantic::usage = "WolframLanguageSemantic is the algebra that bu
 Begin["`Private`"]
 
 (* ::Section:: *)
+(*The syntax: WolframLanguage.ebnf*)
+
+(* The declarations of the language's syntax, WolframLanguage.ebnf, which
+	dev/freeze-syntax.wls records in WolframLanguageSyntax.wl: each keyword
+	with the fields of its declarations, in order. *)
+$syntax = Get[FileNameJoin[{DirectoryName[$InputFileName], "WolframLanguageSyntax.wl"}]]
+
+(* the operators, in order, each <|"Spelling", "Level", "Form", "Head",
+	"Chain", "Tag"|>: the chain key and CodeParser's tag Missing where the
+	operator has none *)
+syntaxOperator[{spelling_String, level_String, form_String, head_String, options___String}] := Join[
+	<|"Spelling" -> spelling, "Level" -> level, "Form" -> form, "Head" -> head, "Chain" -> Missing[], "Tag" -> Missing[]|>,
+	Association[Map[Capitalize[#[[1]]] -> #[[2]] &, Partition[{options}, 2]]]
+]
+$syntaxOperators = Map[syntaxOperator, $syntax["operator"]]
+
+(* ::Section:: *)
 (*Precedence: CodeParser's published table*)
 
-(* The value CodeParser's Resources/Generated/Precedence.wl gives each
-	operator this grammar reads, under the name it has there. A higher
-	value binds more tightly. *)
-$codeParserPrecedence = <|
-	"ColonColon" -> 184, "Infix`Question" -> 178, "Call" -> 176, "Postfix`PlusPlus" -> 174,
-	"Prefix`PlusPlus" -> 172, "AtStar" -> 170, "SlashStar" -> 168, "At" -> 165, "Tilde" -> 162,
-	"SlashAt" -> 161, "Postfix`Bang" -> 158, "SingleQuote" -> 154, "LessGreater" -> 152, "Caret" -> 151,
-	"StarStar" -> 132, "Dot" -> 126, "Prefix`Minus" -> 124, "Slash" -> 122, "Star" -> 108,
-	"Infix`Plus" -> 86, "SemiSemi" -> 80, "LongName`DirectedEdge" -> 79, "Class`Inequality" -> 76,
-	"EqualEqualEqual" -> 70, "Class`SetRelations" -> 68, "Prefix`Bang" -> 64, "AmpAmp" -> 62,
-	"BarBar" -> 58, "DotDot" -> 44, "Bar" -> 42, "Fake`PatternColon" -> 40, "Fake`OptionalColon" -> 38,
-	"TildeTilde" -> 36, "SlashSemi" -> 34, "LessMinusGreater" -> 33, "MinusGreater" -> 31,
-	"SlashDot" -> 28, "PlusEqual" -> 27, "Amp" -> 24, "SlashSlashEqual" -> 21, "SlashSlash" -> 18, "SlashColon" -> 11,
-	"Equal" -> 9, "GreaterGreater" -> 6, "Semi" -> 4
-|>
+(* The level each operator this grammar reads binds at, under the name
+	CodeParser's Resources/Generated/Precedence.wl gives it. A higher value
+	binds more tightly. *)
+$codeParserPrecedence = Association[Apply[Rule, $syntax["level"], {1}]]
 
 (* specs: {{precedence name, operator spec}, ...}; the levels of those
 	binding more tightly than min, tightest first, in the order given *)
@@ -83,25 +91,15 @@ precedenceValue[value_Integer] := value
 
 (* Every operator spelt in ASCII. An operator token is the longest one
 	there: - is not read where ->, -- or -= is. *)
-$operatorSpellings = {
-	">>>", "===", "=!=", "//@", "//.", "//=", "@@@", "^:=", "...", "|->", "<->", "->", ":>", ":=", "^=", "/:",
-	"=.", "==", "!=", "<=", ">=", "&&", "||", "<>", "/@", "@@", "@*", "/*", "//", "/.", "/;", "..", "::",
-	"++", "--", "+=", "-=", "*=", "/=", ";;", "~~", "**", "!!", "<<", ">>", "<|", "|>", "+", "-", "*",
-	"/", "^", "=", "<", ">", "!", "&", "@", "?", ":", ";", ".", "'", "~", "|"
-}
+$operatorSpellings = Catenate[$syntax["token"]]
 
-(* The operators also written as a long name or as its character. *)
-$longNameOperators = <|
-	"->" -> {"\\[Rule]", "\:f522"}, ":>" -> {"\\[RuleDelayed]", "\:f51f"}, "*" -> {"\\[Times]", "\:00d7"},
-	"==" -> {"\\[Equal]", "\:f431", "\\[LongEqual]", "\:f7d9"}, "!=" -> {"\\[NotEqual]", "\:2260"},
-	"<=" -> {"\\[LessEqual]", "\:2264"}, ">=" -> {"\\[GreaterEqual]", "\:2265"}, "&&" -> {"\\[And]", "\:2227"},
-	"||" -> {"\\[Or]", "\:2228"}, "!" -> {"\\[Not]", "\:00ac"}, "|->" -> {"\\[Function]", "\:f4a1"},
-	"<->" -> {"\\[TwoWayRule]", "\:f120"}, "DirectedEdge" -> {"\\[DirectedEdge]", "\:f3d5"},
-	"UndirectedEdge" -> {"\\[UndirectedEdge]", "\:f3d4"}, "Element" -> {"\\[Element]", "\:2208"}
-|>
+(* The operators also written as a long name or as its character, read at
+	their first use, and those with no ASCII spelling, by name. *)
+$longNameOperators := $longNameOperators = Association[Map[First[#] -> Catenate[longNameSpellings /@ Rest[#]] &, $syntax["longname"]]]
+$longNameOnlyOperators = Select[$syntax["longname"][[All, 1]], ! MemberQ[$operatorSpellings, #] &]
 
-$operatorLongNames  = Select[Flatten[Values[$longNameOperators]], StringStartsQ[#, "\\["] &]
-$operatorCharacters = Select[Flatten[Values[$longNameOperators]], StringLength[#] === 1 &]
+$operatorLongNames := $operatorLongNames = Select[Flatten[Values[$longNameOperators]], StringStartsQ[#, "\\["] &]
+$operatorCharacters := $operatorCharacters = Select[Flatten[Values[$longNameOperators]], StringLength[#] === 1 &]
 
 (* one spelling of an operator, not followed by what would make it a longer
 	one of all; one of those cutQ gives True for is none right before a [. The
@@ -127,7 +125,9 @@ longest[s_String, all_List, cutQ_] := With[{more = Select[all, StringStartsQ[#, 
 
 freeformCutQ[s_String] := StringEndsQ[s, "="] && ! MemberQ[{"//=", "^:="}, s]
 
-spellings[op_String] := Prepend[Lookup[$longNameOperators, op, {}], op]
+(* an operator's spellings: its ASCII one and its long names, or the long
+	names alone of one named by its long name *)
+spellings[op_String] := If[MemberQ[$longNameOnlyOperators, op], $longNameOperators[op], Prepend[Lookup[$longNameOperators, op, {}], op]]
 
 (* a parser's pieces joined into the text it read *)
 text[p_] := ParseAction[p, Function[StringJoin[Cases[Flatten[{##}], _String]]]]
@@ -500,99 +500,55 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	(* a . not before a digit, which begins a number *)
 	dot = after[ParseAction[longest["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]], #1 &], wsAll];
 
-	specs = {
-		{"ColonColon", {"Postfix", messageName}},
-		{"Infix`Question", {"InfixL", binary["?", "PatternTest"]}},
-		{"Call", {"Postfix", part}},
-		{"Call", {"Postfix", call}},
-		{"Postfix`PlusPlus", {"Postfix", postfix["++", "Increment"]}},
-		{"Postfix`PlusPlus", {"Postfix", postfix["--", "Decrement"]}},
-		{"Prefix`PlusPlus", {"Prefix", prefix["++", "PreIncrement"]}},
-		{"Prefix`PlusPlus", {"Prefix", prefix["--", "PreDecrement"]}},
-		{"AtStar", {"InfixN", operator["@*"], flat["Composition"]}},
-		{"SlashStar", {"InfixN", operator["/*"], flat["RightComposition"]}},
-		{"At", {"InfixR", ParseAction[operator["@"], Function[o, Function[{l, r}, alg["Call"][l, {r}]]]]}},
-		{"Tilde", {"Ternary", operator["~"], ParseAction[operator["~"], Function[o, Function[{l, m, r}, alg["Call"][m, {l, r}]]]]}},
-		{"SlashAt", {"InfixR", binary["/@", "Map"]}},
-		{"SlashAt", {"InfixR", binary["//@", "MapAll"]}},
-		{"SlashAt", {"InfixR", binary["@@", "Apply"]}},
-		{"SlashAt", {"InfixR", binary["@@@", "MapApply"]}},
-		{"Postfix`Bang", {"Postfix", postfix["!", "Factorial"]}},
-		{"Postfix`Bang", {"Postfix", postfix["!!", "Factorial2"]}},
-		{"SingleQuote", {"Postfix", derivative}},
-		{"LessGreater", {"InfixN", operator["<>"], flat["StringJoin"]}},
-		{"Caret", {"InfixR", binary["^", "Power"]}},
-		{"StarStar", {"InfixN", operator["**"], flat["NonCommutativeMultiply"]}},
-		{"Dot", {"InfixN", dot, flat["Dot"]}},
-		{"Prefix`Minus", {"Prefix", prefix["-", "Minus"]}},
-		{"Prefix`Minus", {"Prefix", prefix["+", "Plus"]}},
-		{"Slash", {"InfixL", binary["/", "Divide"]}},
-		{"Star", {"InfixN", operator["*"], flat["Times"]}},
-		{"Star", {"InfixN", implicit, flat["Times"]}},
-		{"Infix`Plus", {"InfixN", operator["+"], plus}},
-		{"Infix`Plus", {"InfixN", operator["-"], plus}},
-		{"SemiSemi", {"Postfix", span}},
-		{"LongName`DirectedEdge", {"InfixR", binary["DirectedEdge", "DirectedEdge"]}},
-		{"LongName`DirectedEdge", {"InfixR", binary["UndirectedEdge", "UndirectedEdge"]}},
-		{"Class`Inequality", {"InfixN", relationOp["==", "Equal"], relation}},
-		{"Class`Inequality", {"InfixN", relationOp["!=", "Unequal"], relation}},
-		{"Class`Inequality", {"InfixN", relationOp["<=", "LessEqual"], relation}},
-		{"Class`Inequality", {"InfixN", relationOp[">=", "GreaterEqual"], relation}},
-		{"Class`Inequality", {"InfixN", relationOp["<", "Less"], relation}},
-		{"Class`Inequality", {"InfixN", relationOp[">", "Greater"], relation}},
-		{"EqualEqualEqual", {"InfixN", operator["==="], flat["SameQ"]}},
-		{"EqualEqualEqual", {"InfixN", operator["=!="], flat["UnsameQ"]}},
-		{"Class`SetRelations", {"InfixN", operator["Element"], flat["Element"]}},
-		{"Prefix`Bang", {"Prefix", prefix["!", "Not"]}},
-		{"Prefix`Bang", {"Prefix", ParseAction[operator["!!"], Function[o, Function[x, alg["Prefix"]["Not", alg["Prefix"]["Not", x]]]]]}},
-		{"AmpAmp", {"InfixN", operator["&&"], flat["And"]}},
-		{"BarBar", {"InfixN", operator["||"], flat["Or"]}},
-		{"DotDot", {"Postfix", postfix["..", "Repeated"]}},
-		{"DotDot", {"Postfix", postfix["...", "RepeatedNull"]}},
-		{"Bar", {"InfixN", operator["|"], flat["Alternatives"]}},
-		{"Fake`OptionalColon", {"InfixL", binary[":", "Optional"]}},
-		{"TildeTilde", {"InfixN", operator["~~"], flat["StringExpression"]}},
-		{"SlashSemi", {"InfixL", binary["/;", "Condition"]}},
-		{"LessMinusGreater", {"InfixR", binary["<->", "TwoWayRule"]}},
-		{"MinusGreater", {"InfixR", binary["->", "Rule"]}},
-		{"MinusGreater", {"InfixR", binary[":>", "RuleDelayed"]}},
-		{"SlashDot", {"InfixL", binary["/.", "ReplaceAll"]}},
-		{"SlashDot", {"InfixL", binary["//.", "ReplaceRepeated"]}},
-		{"PlusEqual", {"InfixR", binary["+=", "AddTo"]}},
-		{"PlusEqual", {"InfixR", binary["-=", "SubtractFrom"]}},
-		{"PlusEqual", {"InfixR", binary["*=", "TimesBy"]}},
-		{"PlusEqual", {"InfixR", binary["/=", "DivideBy"]}},
-		{"Amp", {"Postfix", postfix["&", "Function"]}},
-		{"SlashSlashEqual", {"InfixR", binary["//=", "ApplyTo"]}},
-		{"SlashSlash", {"InfixL", ParseAction[operator["//"], Function[o, Function[{l, r}, alg["Call"][r, {l}]]]]}},
-		{"SlashColon", {"Postfix", tagSet}},
-		{"Equal", {"Postfix", ParseAction[unset, Function[o, Function[x, alg["Postfix"][x, "Unset"]]]]}},
-		{"Equal", {"InfixR", ParseAction[setOperator, Function[o, Function[{l, r}, alg["Binary"]["Set", l, r]]]]}},
-		{"Equal", {"InfixR", binary[":=", "SetDelayed"]}},
-		{"Equal", {"InfixR", binary["^=", "UpSet"]}},
-		{"Equal", {"InfixR", binary["^:=", "UpSetDelayed"]}},
-		{"Equal", {"InfixR", binary["|->", "Function"]}},
-		{"GreaterGreater", {"Postfix", put}},
-		{"Semi", {"Postfix", compound}}
-	};
+	(* the specs of the syntax's operators, {level, spec} each: none for a form
+		the units read, and one for the two forms of Unset and the two of Put *)
+	specs = Catenate[Map[Function[row, With[{s = row["Spelling"], head = row["Head"]}, Map[{row["Level"], #} &, Switch[row["Form"],
+		"MessageName", {{"Postfix", messageName}},
+		"Call", {{"Postfix", part}, {"Postfix", call}},
+		"Derivative", {{"Postfix", derivative}},
+		"Span", {{"Postfix", span}},
+		"TagSet", {{"Postfix", tagSet}},
+		"Unset", {{"Postfix", ParseAction[unset, Function[o, Function[x, alg["Postfix"][x, "Unset"]]]]}},
+		"Put", If[head === "Put", {{"Postfix", put}}, {}],
+		"Compound", {{"Postfix", compound}},
+		"Pattern", {},
+		"Optional", {{"InfixL", binary[s, head]}},
+		"Ternary", {{"Ternary", operator[s], ParseAction[operator[s], Function[o, Function[{l, m, r}, alg["Call"][m, {l, r}]]]]}},
+		"Prefix", {{"Prefix", If[head === "NotNot",
+			ParseAction[operator[s], Function[o, Function[x, alg["Prefix"]["Not", alg["Prefix"]["Not", x]]]]],
+			prefix[s, head]
+		]}},
+		"Postfix", If[head === "Unset", {}, {{"Postfix", postfix[s, head]}}],
+		"InfixN", {Which[
+			s === "", {"InfixN", implicit, flat[head]},
+			row["Chain"] === "Relation", {"InfixN", relationOp[s, head], relation},
+			row["Chain"] === "Plus", {"InfixN", operator[s], plus},
+			s === ".", {"InfixN", dot, flat[head]},
+			True, {"InfixN", operator[s], flat[head]}
+		]},
+		"InfixL" | "InfixR", {{row["Form"], Which[
+			head === "At", ParseAction[operator[s], Function[o, Function[{l, r}, alg["Call"][l, {r}]]]],
+			head === "SlashSlash", ParseAction[operator[s], Function[o, Function[{l, r}, alg["Call"][r, {l}]]]],
+			s === "=", ParseAction[setOperator, Function[o, Function[{l, r}, alg["Binary"][head, l, r]]]],
+			True, binary[s, head]
+		]}}
+	]]]], $syntaxOperators]];
 
 	longSpecs = Join[
-		Map[Function[row, With[{name = row[[1]], head = heldLongHead[row]}, {row[[4]], Which[
-			row[[3]] === CodeParser`InfixInequality,
+		Map[Function[row, With[{name = row[[1]], spec = heldLongInfixSpec[row]}, With[{head = spec[[3]], key = If[Length[spec] === 4, spec[[4]], None]}, {spec[[1]], Which[
+			key === "Relation",
 				{"InfixN", ParseAction[longOperator[name], head &], relation},
-			name === "Minus",
+			key === "Plus",
 				{"InfixN", ParseAction[longOperator[name], "-" &], plus},
-			name === "ImplicitPlus",
-				{"InfixL", ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Binary"]["Plus", l, r]]]]},
-			name === "Divides",
+			key === "Divisible",
 				{"InfixN", longOperator[name], divisible},
-			name === "InvisibleApplication",
-				{"InfixR", ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Call"][l, {r}]]]]},
-			row[[2]] === "InfixNode",
+			StringQ[key],
 				{"InfixN", longOperator[name], flat[head]},
+			head === "At",
+				{spec[[2]], ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Call"][l, {r}]]]]},
 			True,
-				{If[row[[5]] === "Right", "InfixR", "InfixL"], ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Binary"][head, l, r]]]]}
-		]}]],
+				{spec[[2]], ParseAction[longOperator[name], Function[o, Function[{l, r}, alg["Binary"][head, l, r]]]]}
+		]}]]],
 			$heldLongInfix
 		],
 		Map[{#[[4]], {"Prefix", With[{head = heldLongHead[#]}, ParseAction[longOperator[#[[1]]], Function[o, Function[x, alg["Prefix"][head, x]]]]]}} &, $heldLongPrefix],
@@ -645,10 +601,6 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	SetRec[tagRight, table[unit, $codeParserPrecedence["Equal"] - 1]];
 	table[unit, 0]
 ]
-
-(* Long-named operators: their spellings are listed under the operator's
-	own name rather than an ASCII one. *)
-spellings[op : "DirectedEdge" | "UndirectedEdge" | "Element"] := $longNameOperators[op]
 
 (* ::Section:: *)
 (*The held algebra*)
@@ -1341,19 +1293,31 @@ $heldLongPrefix := $heldLongPrefix = Select[$longNameTable["Prefix"],
 ]
 $integralPrecedence := $integralPrecedence = First[Cases[$longNameTable["Prefix"], {"Integral", _, _, p_Integer, _} :> p]]
 
-(* the head the kernel gives a long-name operator: its tag's, a relation's
-	the kernel's symbol for it, and \[HermitianConjugate] ConjugateTranspose *)
-heldLongHead[row_List] := Which[
+(* the heads and the forms of the long-name operators the kernel reads
+	otherwise than CodeParser, by name, as the syntax declares them *)
+$longOperatorHeads = Association[Apply[Rule, $syntax["longhead"], {1}]]
+$longOperatorForms = Association[Apply[Rule, $syntax["longform"], {1}]]
+
+(* the head the kernel gives a long-name operator: the one the syntax
+	declares, else a relation's name and another's tag's *)
+heldLongHead[row_List] := Lookup[$longOperatorHeads, row[[1]], If[row[[3]] === CodeParser`InfixInequality, row[[1]], SymbolName[row[[3]]]]]
+
+(* how the held grammar and the typed parser read a long-name infix operator
+	of CodeParser's table: {precedence, fixity, head}, and the key of the chain
+	one makes with others. A relation is of the relations' chain; one the
+	syntax gives a form, of that form; an InfixNode a chain of its own head,
+	\[Minus] in a sum's and \[Divides] in Divisible's, whose operands it
+	reverses; a BinaryNode binary *)
+heldLongInfixSpec[row_List] := With[{head = heldLongHead[row], p = row[[4]], form = Lookup[$longOperatorForms, row[[1]], None]}, Which[
 	row[[3]] === CodeParser`InfixInequality,
-		Lookup[$relationHeads, row[[1]], row[[1]]],
-	row[[1]] === "HermitianConjugate",
-		"ConjugateTranspose",
+		{p, "InfixN", head, "Relation"},
+	StringQ[form],
+		{p, form, head},
+	row[[2]] === "InfixNode",
+		{p, "InfixN", head, head},
 	True,
-		SymbolName[row[[3]]]
-]
-$relationHeads = <|"NotEqual" -> "Unequal", "LessSlantEqual" -> "LessEqual", "GreaterSlantEqual" -> "GreaterEqual",
-	"Equal" -> "Equal", "LongEqual" -> "Equal"
-|>
+		{p, If[row[[5]] === "Right", "InfixR", "InfixL"], head}
+]]
 
 (* An integral as a notebook reads it: k signs of one kind, as \[Integral]\[Integral], and an operand
 	whose factors end in k differentials, \[DifferentialD] x or \[CapitalDifferentialD] x, no other
@@ -1775,6 +1739,10 @@ spanProduct[first_item, item[CodeParser`InfixNode[Times, children_List, _], triv
 	concreteNode[CodeParser`InfixNode, Times, Join[kids[first], {concreteLeaf[Token`Fake`ImplicitTimes, ""]}, Most[children]], item[Last[children], trivia]]
 spanProduct[first_item, next_item] := stepsItem[CodeParser`InfixNode, Times, first, {step[{}, {concreteLeaf[Token`Fake`ImplicitTimes, ""]}, next]}]
 
+(* the head of the node CodeParser makes of an operator of the syntax:
+	its tag, or its head's System` symbol *)
+concreteHead[row_Association] := Symbol[If[StringQ[row["Tag"]], row["Tag"], "System`" <> row["Head"]]]
+
 (* The concrete expression parser: operands and postfix operators are
 	followed by the trivia ws, other operators by wsAll; brackets hold
 	expressions of nested. Outside brackets, a newline ends an expression
@@ -2053,82 +2021,30 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 	plus = chain[Plus];
 	times = chain[Times];
 
-	specs = {
-		{"ColonColon", {"Postfix", messageName}},
-		{"Infix`Question", {"InfixL", binary["?", PatternTest]}},
-		{"Call", {"Postfix", call}},
-		{"Call", {"Postfix", typeSpecifier}},
-		{"Postfix`PlusPlus", {"Postfix", postfix["++", Increment]}},
-		{"Postfix`PlusPlus", {"Postfix", postfix["--", Decrement]}},
-		{"Prefix`PlusPlus", {"Prefix", prefix["++", PreIncrement]}},
-		{"Prefix`PlusPlus", {"Prefix", prefix["--", PreDecrement]}},
-		{"AtStar", flat[op["@*"], chain[Composition]]},
-		{"SlashStar", flat[op["/*"], chain[RightComposition]]},
-		{"At", {"InfixR", binary["@", CodeParser`BinaryAt]}},
-		{"Tilde", {"Postfix", tilde}},
-		{"SlashAt", {"InfixR", binary["/@", Map]}},
-		{"SlashAt", {"InfixR", binary["//@", MapAll]}},
-		{"SlashAt", {"InfixR", binary["@@", Apply]}},
-		{"SlashAt", {"InfixR", binary["@@@", MapApply]}},
-		{"Postfix`Bang", {"Postfix", postfix["!", Factorial]}},
-		{"Postfix`Bang", {"Postfix", postfix["!!", Factorial2]}},
-		{"SingleQuote", {"Postfix", postfix["'", Derivative]}},
-		{"LessGreater", flat[op["<>"], chain[StringJoin]]},
-		{"Caret", {"InfixR", binary["^", Power]}},
-		{"StarStar", flat[op["**"], chain[NonCommutativeMultiply]]},
-		{"Dot", flat[dotOperator, chain[Dot]]},
-		{"Prefix`Minus", {"Prefix", prefix["-", Minus]}},
-		{"Prefix`Minus", {"Prefix", prefix["+", Plus]}},
-		{"Slash", {"InfixL", binary["/", Divide]}},
-		{"Star", flat[op["*"], times]},
-		{"Star", {"InfixN", implicitTimesFirst, times, implicitTimes}},
-		{"Infix`Plus", flat[op["+"], plus]},
-		{"Infix`Plus", flat[op["-"], plus]},
-		{"SemiSemi", {"Postfix", spanTail}},
-		{"LongName`DirectedEdge", {"InfixR", binary["DirectedEdge", DirectedEdge]}},
-		{"LongName`DirectedEdge", {"InfixR", binary["UndirectedEdge", UndirectedEdge]}},
-		{"Class`Inequality", flat[op["=="], inequality]},
-		{"Class`Inequality", flat[op["!="], inequality]},
-		{"Class`Inequality", flat[op["<="], inequality]},
-		{"Class`Inequality", flat[op[">="], inequality]},
-		{"Class`Inequality", flat[op["<"], inequality]},
-		{"Class`Inequality", flat[op[">"], inequality]},
-		{"EqualEqualEqual", flat[op["==="], chain[SameQ]]},
-		{"EqualEqualEqual", flat[op["=!="], chain[UnsameQ]]},
-		{"Class`SetRelations", flat[op["Element"], chain[Element]]},
-		{"Prefix`Bang", {"Prefix", prefix["!", Not]}},
-		{"Prefix`Bang", {"Prefix", prefix["!!", CodeParser`PrefixNot2]}},
-		{"AmpAmp", flat[op["&&"], chain[And]]},
-		{"BarBar", flat[op["||"], chain[Or]]},
-		{"DotDot", {"Postfix", postfix["..", Repeated]}},
-		{"DotDot", {"Postfix", postfix["...", RepeatedNull]}},
-		{"Bar", flat[op["|"], chain[Alternatives]]},
-		{"Fake`OptionalColon", {"InfixR", optionalColon}},
-		{"TildeTilde", flat[op["~~"], chain[StringExpression]]},
-		{"SlashSemi", {"InfixL", binary["/;", Condition]}},
-		{"LessMinusGreater", {"InfixR", binary["<->", TwoWayRule]}},
-		{"MinusGreater", {"InfixR", binary["->", Rule]}},
-		{"MinusGreater", {"InfixR", binary[":>", RuleDelayed]}},
-		{"SlashDot", {"InfixL", binary["/.", ReplaceAll]}},
-		{"SlashDot", {"InfixL", binary["//.", ReplaceRepeated]}},
-		{"PlusEqual", {"InfixR", binary["+=", AddTo]}},
-		{"PlusEqual", {"InfixR", binary["-=", SubtractFrom]}},
-		{"PlusEqual", {"InfixR", binary["*=", TimesBy]}},
-		{"PlusEqual", {"InfixR", binary["/=", DivideBy]}},
-		{"Amp", {"Postfix", postfix["&", Function]}},
-		{"SlashSlashEqual", {"InfixR", binary["//=", ApplyTo]}},
-		{"SlashSlash", {"InfixL", binary["//", CodeParser`BinarySlashSlash]}},
-		{"SlashColon", {"Postfix", tagSet}},
-		{"Equal", {"Postfix", unset}},
-		{"Equal", {"InfixR", binary["=", Set]}},
-		{"Equal", {"InfixR", binary[":=", SetDelayed]}},
-		{"Equal", {"InfixR", binary["^=", UpSet]}},
-		{"Equal", {"InfixR", binary["^:=", UpSetDelayed]}},
-		{"Equal", {"InfixR", binary["|->", Function]}},
-		{"GreaterGreater", {"Postfix", put[">>", Put]}},
-		{"GreaterGreater", {"Postfix", put[">>>", PutAppend]}},
-		{"Semi", {"Postfix", compound}}
-	};
+	(* the specs of the syntax's operators, {level, spec} each: none for a form
+		the units read or for =., which unset reads; the head of a node
+		CodeParser's tag, where the operator has one *)
+	specs = Catenate[Map[Function[row, With[{s = row["Spelling"]}, Map[{row["Level"], #} &, Switch[row["Form"],
+		"MessageName", {{"Postfix", messageName}},
+		"Call", {{"Postfix", call}, {"Postfix", typeSpecifier}},
+		"Derivative", {{"Postfix", postfix[s, concreteHead[row]]}},
+		"Span", {{"Postfix", spanTail}},
+		"TagSet", {{"Postfix", tagSet}},
+		"Unset", {{"Postfix", unset}},
+		"Put", {{"Postfix", put[s, concreteHead[row]]}},
+		"Compound", {{"Postfix", compound}},
+		"Pattern", {},
+		"Optional", {{"InfixR", optionalColon}},
+		"Ternary", {{"Postfix", tilde}},
+		"Prefix", {{"Prefix", prefix[s, concreteHead[row]]}},
+		"Postfix", If[row["Head"] === "Unset", {}, {{"Postfix", postfix[s, concreteHead[row]]}}],
+		"InfixN", {Which[
+			s === "", {"InfixN", implicitTimesFirst, chain[concreteHead[row]], implicitTimes},
+			s === ".", flat[dotOperator, chain[concreteHead[row]]],
+			True, flat[op[s], chain[concreteHead[row]]]
+		]},
+		"InfixL" | "InfixR", {{row["Form"], binary[s, concreteHead[row]]}}
+	]]]], $syntaxOperators]];
 	(* the long-name operators CodeParser reads, those of no ASCII operator
 		above, at their precedences *)
 	longSpecs = Join[

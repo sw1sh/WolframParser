@@ -1,0 +1,220 @@
+(* The syntax of the Wolfram Language
+
+   The one place the Wolfram Language's syntax is written down. Wolfram/Parser's reader takes its
+   tables from it: dev/freeze-syntax.wls reads it with EBNFDeclarations and writes what it
+   declares to WolframLanguageSyntax.wl, which the reader loads, since the reader loads no grammar
+   reader; a test checks that the two agree. It is a grammar in the classic dialect of EBNFRules,
+   whose declarations are the lines that begin with %:
+
+   %level name value
+       a level that operators bind at, under the name CodeParser's Resources/Generated/Precedence.wl
+       gives it. An operator of a higher level binds more tightly.
+
+   %token spelling ...
+       operators spelt in ASCII. An operator token is the longest of them at its place in the
+       source: - is not read where ->, -- or -= is. Each is numbered in the reader's tables, in
+       order, from 1.
+
+   %longname operator name ...
+       the long names an operator is also written as, as \[name] or as its character. An operator
+       with no ASCII spelling is named by a word, and numbered after the tokens.
+
+   %longhead name head
+       the head a long-name operator of LongNameOperators.wl makes, where it is not its tag's,
+       or for a relation its own name. CodeParser's table, which dev/freeze-longnames.wls
+       records, gives the others: a relation is of the relations' chain, an InfixNode a chain
+       of its tag, a BinaryNode a binary operator of its tag.
+
+   %longform name form
+       the form of a long-name operator the kernel reads otherwise than CodeParser's node says.
+
+   %operator spelling level form head [chain key] [tag symbol]
+       an operator: its spelling, the level it binds at, its form, and the head of the expression
+       it makes. The forms:
+           Prefix, Postfix     op a and a op: head[a]
+           InfixL, InfixR      a op b, grouped from the left or from the right: head[a, b]
+           InfixN              a op b op c: head[a, b, c], one expression for a run of the
+                               operators of one level and one chain key, or of one operator
+                               where it has no key; a - b in a sum is a + (-b)
+           Ternary             a op f op b: f[a, b]
+       and the forms with rules of their own:
+           Call                f[a, ...], and f[[i, ...]]
+           Derivative          f', f'' and so on
+           MessageName         a::b::c, and t::[a, ...]
+           Span                a ;; b ;; c, each operand optional
+           Pattern             x:p, a name bound to a pattern
+           Optional            p:v, a pattern with a default
+           TagSet              t /: a = b, t /: a := b and t /: a =.
+           Unset               a =. and a = ., a space between = and .
+           Put                 a >> file and a >>> file
+           Compound            a; b; c, each operand optional
+       The spelling of a product is "", an operand right after an operand. The heads At,
+       SlashSlash and NotNot are those of f @ a, a // f and !!a, which are f[a], f[a] and
+       !(!a). tag is the head CodeParser gives the node, where it is not the head's own symbol.
+       The rows are in the order of the reader's tables; a reader that takes the forms of one
+       head with one rule, as the grammars do Unset's and Put's, takes the first.
+*)
+
+
+(* Precedence *)
+
+%level ColonColon             184
+%level Infix`Question         178
+%level Call                   176
+%level Postfix`PlusPlus       174
+%level Prefix`PlusPlus        172
+%level AtStar                 170
+%level SlashStar              168
+%level At                     165
+%level Tilde                  162
+%level SlashAt                161
+%level Postfix`Bang           158
+%level SingleQuote            154
+%level LessGreater            152
+%level Caret                  151
+%level StarStar               132
+%level Dot                    126
+%level Prefix`Minus           124
+%level Slash                  122
+%level Star                   108
+%level Infix`Plus             86
+%level SemiSemi               80
+%level LongName`DirectedEdge  79
+%level Class`Inequality       76
+%level EqualEqualEqual        70
+%level Class`SetRelations     68
+%level Prefix`Bang            64
+%level AmpAmp                 62
+%level BarBar                 58
+%level DotDot                 44
+%level Bar                    42
+%level Fake`PatternColon      40
+%level Fake`OptionalColon     38
+%level TildeTilde             36
+%level SlashSemi              34
+%level LessMinusGreater       33
+%level MinusGreater           31
+%level SlashDot               28
+%level PlusEqual              27
+%level Amp                    24
+%level SlashSlashEqual        21
+%level SlashSlash             18
+%level SlashColon             11
+%level Equal                  9
+%level GreaterGreater         6
+%level Semi                   4
+
+
+(* Operator tokens *)
+
+%token ">>>" "===" "=!=" "//@" "//." "//=" "@@@" "^:=" "..." "|->" "<->"
+%token "->" ":>" ":=" "^=" "/:" "=." "==" "!=" "<=" ">=" "&&" "||" "<>" "/@" "@@" "@*" "/*" "//" "/." "/;" ".." "::"
+%token "++" "--" "+=" "-=" "*=" "/=" ";;" "~~" "**" "!!" "<<" ">>" "<|" "|>"
+%token "+" "-" "*" "/" "^" "=" "<" ">" "!" "&" "@" "?" ":" ";" "." "'" "~" "|"
+
+
+(* Operators also written as long names *)
+
+%longname "->"            Rule
+%longname ":>"            RuleDelayed
+%longname "*"             Times
+%longname "=="            Equal LongEqual
+%longname "!="            NotEqual
+%longname "<="            LessEqual
+%longname ">="            GreaterEqual
+%longname "&&"            And
+%longname "||"            Or
+%longname "!"             Not
+%longname "|->"           Function
+%longname "<->"           TwoWayRule
+%longname DirectedEdge    DirectedEdge
+%longname UndirectedEdge  UndirectedEdge
+%longname Element         Element
+
+
+(* Long-name operators the kernel reads otherwise than CodeParser *)
+
+%longhead LessSlantEqual        LessEqual
+%longhead GreaterSlantEqual     GreaterEqual
+%longhead HermitianConjugate    ConjugateTranspose
+%longhead InvisibleApplication  At                  (* f \[InvisibleApplication] x is f[x] *)
+%longform ImplicitPlus          InfixL              (* a sum of two, not a chain *)
+
+
+(* Operators *)
+
+%operator "::"            ColonColon             MessageName  MessageName
+%operator "?"             Infix`Question         InfixL       PatternTest
+%operator "["             Call                   Call         Call
+%operator "++"            Postfix`PlusPlus       Postfix      Increment
+%operator "--"            Postfix`PlusPlus       Postfix      Decrement
+%operator "++"            Prefix`PlusPlus        Prefix       PreIncrement
+%operator "--"            Prefix`PlusPlus        Prefix       PreDecrement
+%operator "@*"            AtStar                 InfixN       Composition
+%operator "/*"            SlashStar              InfixN       RightComposition
+%operator "@"             At                     InfixR       At                      tag CodeParser`BinaryAt
+%operator "~"             Tilde                  Ternary      Tilde
+%operator "/@"            SlashAt                InfixR       Map
+%operator "//@"           SlashAt                InfixR       MapAll
+%operator "@@"            SlashAt                InfixR       Apply
+%operator "@@@"           SlashAt                InfixR       MapApply
+%operator "!"             Postfix`Bang           Postfix      Factorial
+%operator "!!"            Postfix`Bang           Postfix      Factorial2
+%operator "'"             SingleQuote            Derivative   Derivative
+%operator "<>"            LessGreater            InfixN       StringJoin
+%operator "^"             Caret                  InfixR       Power
+%operator "**"            StarStar               InfixN       NonCommutativeMultiply
+%operator "."             Dot                    InfixN       Dot
+%operator "-"             Prefix`Minus           Prefix       Minus
+%operator "+"             Prefix`Minus           Prefix       Plus
+%operator "/"             Slash                  InfixL       Divide
+%operator "*"             Star                   InfixN       Times                   chain Times
+%operator ""              Star                   InfixN       Times                   chain Times
+%operator "+"             Infix`Plus             InfixN       Plus                    chain Plus
+%operator "-"             Infix`Plus             InfixN       Plus                    chain Plus
+%operator ";;"            SemiSemi               Span         Span
+%operator DirectedEdge    LongName`DirectedEdge  InfixR       DirectedEdge
+%operator UndirectedEdge  LongName`DirectedEdge  InfixR       UndirectedEdge
+%operator "=="            Class`Inequality       InfixN       Equal                   chain Relation  tag CodeParser`InfixInequality
+%operator "!="            Class`Inequality       InfixN       Unequal                 chain Relation  tag CodeParser`InfixInequality
+%operator "<="            Class`Inequality       InfixN       LessEqual               chain Relation  tag CodeParser`InfixInequality
+%operator ">="            Class`Inequality       InfixN       GreaterEqual            chain Relation  tag CodeParser`InfixInequality
+%operator "<"             Class`Inequality       InfixN       Less                    chain Relation  tag CodeParser`InfixInequality
+%operator ">"             Class`Inequality       InfixN       Greater                 chain Relation  tag CodeParser`InfixInequality
+%operator "==="           EqualEqualEqual        InfixN       SameQ
+%operator "=!="           EqualEqualEqual        InfixN       UnsameQ
+%operator Element         Class`SetRelations     InfixN       Element
+%operator "!"             Prefix`Bang            Prefix       Not
+%operator "!!"            Prefix`Bang            Prefix       NotNot                  tag CodeParser`PrefixNot2
+%operator "&&"            AmpAmp                 InfixN       And
+%operator "||"            BarBar                 InfixN       Or
+%operator ".."            DotDot                 Postfix      Repeated
+%operator "..."           DotDot                 Postfix      RepeatedNull
+%operator "|"             Bar                    InfixN       Alternatives
+%operator ":"             Fake`PatternColon      Pattern      Pattern
+%operator ":"             Fake`OptionalColon     Optional     Optional
+%operator "~~"            TildeTilde             InfixN       StringExpression
+%operator "/;"            SlashSemi              InfixL       Condition
+%operator "<->"           LessMinusGreater       InfixR       TwoWayRule
+%operator "->"            MinusGreater           InfixR       Rule
+%operator ":>"            MinusGreater           InfixR       RuleDelayed
+%operator "/."            SlashDot               InfixL       ReplaceAll
+%operator "//."           SlashDot               InfixL       ReplaceRepeated
+%operator "+="            PlusEqual              InfixR       AddTo
+%operator "-="            PlusEqual              InfixR       SubtractFrom
+%operator "*="            PlusEqual              InfixR       TimesBy
+%operator "/="            PlusEqual              InfixR       DivideBy
+%operator "&"             Amp                    Postfix      Function
+%operator "//="           SlashSlashEqual        InfixR       ApplyTo
+%operator "//"            SlashSlash             InfixL       SlashSlash              tag CodeParser`BinarySlashSlash
+%operator "/:"            SlashColon             TagSet       TagSet
+%operator "= ."           Equal                  Unset        Unset
+%operator "="             Equal                  InfixR       Set
+%operator ":="            Equal                  InfixR       SetDelayed
+%operator "^="            Equal                  InfixR       UpSet
+%operator "^:="           Equal                  InfixR       UpSetDelayed
+%operator "|->"           Equal                  InfixR       Function
+%operator "=."            Equal                  Postfix      Unset
+%operator ">>"            GreaterGreater         Put          Put
+%operator ">>>"           GreaterGreater         Put          PutAppend
+%operator ";"             Semi                   Compound     CompoundExpression

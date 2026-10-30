@@ -68,7 +68,7 @@ codesClassified[assignments_List] := Developer`ToPackedArray @ ReplacePart[
 
 (* every operator by its name in the grammar: its ASCII spelling, or the
 	long name of one with none *)
-$fastOperators = Join[$operatorSpellings, {"DirectedEdge", "UndirectedEdge", "Element"}]
+$fastOperators = Join[$operatorSpellings, $longNameOnlyOperators]
 $fastOperatorIds = AssociationThread[$fastOperators -> Range[Length[$fastOperators]]]
 fastOp[name_String] := $fastOperatorIds[name]
 
@@ -800,90 +800,39 @@ fastLexFunction := fastLexFunction = typedFunction[fastLex, $fastLexDeclaration,
 (* ::Section:: *)
 (*The operator table*)
 
-(* The levels of the grammar's specs, by operator: the precedence, the
-	fixity and the head. A chain's key tells the operators that make one node
-	together. *)
-$fastLed = Association[Map[fastOp[#[[1]]] -> Rest[#] &, {
-	{"::", 184, "MessageName", "MessageName"},
-	{"?", 178, "InfixL", "PatternTest"},
-	{"++", 174, "Postfix", "Increment"}, {"--", 174, "Postfix", "Decrement"},
-	{"@*", 170, "InfixN", "Composition"},
-	{"/*", 168, "InfixN", "RightComposition"},
-	{"@", 165, "InfixR", "At"},
-	{"~", 162, "Ternary", "Tilde"},
-	{"/@", 161, "InfixR", "Map"}, {"//@", 161, "InfixR", "MapAll"}, {"@@", 161, "InfixR", "Apply"}, {"@@@", 161, "InfixR", "MapApply"},
-	{"!", 158, "Postfix", "Factorial"}, {"!!", 158, "Postfix", "Factorial2"},
-	{"<>", 152, "InfixN", "StringJoin"},
-	{"^", 151, "InfixR", "Power"},
-	{"**", 132, "InfixN", "NonCommutativeMultiply"},
-	{".", 126, "InfixN", "Dot"},
-	{"/", 122, "InfixL", "Divide"},
-	{"*", 108, "InfixN", "Times"},
-	{"+", 86, "InfixN", "Plus"}, {"-", 86, "InfixN", "Plus"},
-	{";;", 80, "Span", "Span"},
-	{"DirectedEdge", 79, "InfixR", "DirectedEdge"}, {"UndirectedEdge", 79, "InfixR", "UndirectedEdge"},
-	{"==", 76, "InfixN", "Equal"}, {"!=", 76, "InfixN", "Unequal"}, {"<=", 76, "InfixN", "LessEqual"},
-	{">=", 76, "InfixN", "GreaterEqual"}, {"<", 76, "InfixN", "Less"}, {">", 76, "InfixN", "Greater"},
-	{"===", 70, "InfixN", "SameQ"}, {"=!=", 70, "InfixN", "UnsameQ"},
-	{"Element", 68, "InfixN", "Element"},
-	{"&&", 62, "InfixN", "And"},
-	{"||", 58, "InfixN", "Or"},
-	{"..", 44, "Postfix", "Repeated"}, {"...", 44, "Postfix", "RepeatedNull"},
-	{"|", 42, "InfixN", "Alternatives"},
-	{"~~", 36, "InfixN", "StringExpression"},
-	{"/;", 34, "InfixL", "Condition"},
-	{"<->", 33, "InfixR", "TwoWayRule"},
-	{"->", 31, "InfixR", "Rule"}, {":>", 31, "InfixR", "RuleDelayed"},
-	{"/.", 28, "InfixL", "ReplaceAll"}, {"//.", 28, "InfixL", "ReplaceRepeated"},
-	{"+=", 27, "InfixR", "AddTo"}, {"-=", 27, "InfixR", "SubtractFrom"}, {"*=", 27, "InfixR", "TimesBy"}, {"/=", 27, "InfixR", "DivideBy"},
-	{"&", 24, "Postfix", "Function"},
-	{"//=", 21, "InfixR", "ApplyTo"},
-	{"//", 18, "InfixL", "SlashSlash"},
-	{"/:", 11, "TagSet", "TagSet"},
-	{"=", 9, "InfixR", "Set"}, {":=", 9, "InfixR", "SetDelayed"}, {"^=", 9, "InfixR", "UpSet"}, {"^:=", 9, "InfixR", "UpSetDelayed"},
-	{"|->", 9, "InfixR", "Function"}, {"=.", 9, "Postfix", "Unset"},
-	{">>", 6, "Put", "Put"}, {">>>", 6, "Put", "PutAppend"},
-	{";", 4, "Compound", "CompoundExpression"}
-}]]
+(* The operators the parser reads by their token after an operand, by
+	operator: the precedence, the form and the head. A chain's key tells the
+	operators that make one node together. *)
+$fastLedForms = {"InfixL", "InfixR", "InfixN", "Postfix", "Ternary", "MessageName", "Span", "TagSet", "Put", "Compound"}
+$fastLed = Association[Map[fastOp[#["Spelling"]] -> {precedenceValue[#["Level"]], #["Form"], #["Head"]} &,
+	Select[$syntaxOperators, MemberQ[$fastLedForms, #["Form"]] && #["Spelling"] =!= "" &]
+]]
 
 (* the operators of one chain: the products, the sums, the relations *)
-$fastChainKey = <|"Times" -> "Times", "Plus" -> "Plus", "Equal" -> "Relation", "Unequal" -> "Relation", "LessEqual" -> "Relation",
-	"GreaterEqual" -> "Relation", "Less" -> "Relation", "Greater" -> "Relation"
-|>
+$fastChainKey = Association[Map[#["Head"] -> #["Chain"] &, Select[$syntaxOperators, StringQ[#["Chain"]] &]]]
 fastChainKey[spec_List] := If[Length[spec] >= 4, spec[[4]], Lookup[$fastChainKey, spec[[3]], spec[[3]]]]
 
 (* the prefix operators: the precedence and the head *)
-$fastPrefix = Association[Map[fastOp[#[[1]]] -> Rest[#] &, {
-	{"++", 172, "PreIncrement"}, {"--", 172, "PreDecrement"}, {"-", 124, "Minus"}, {"+", 124, "Plus"}, {"!", 64, "Not"}, {"!!", 64, "NotNot"}
-}]]
+$fastPrefix = Association[Map[fastOp[#["Spelling"]] -> {precedenceValue[#["Level"]], #["Head"]} &, Select[$syntaxOperators, #["Form"] === "Prefix" &]]]
+
+(* The specs of what follows an operand with no operator token: a call, a
+	derivative, a product, and = then . with trivia between them, an unset *)
+$fastConstructs = Association[Map[
+	If[#["Spelling"] === "", "Implicit", #["Form"]] -> Join[{precedenceValue[#["Level"]], #["Form"], #["Head"]}, If[#["Spelling"] === "", {#["Chain"], "Implicit"}, {}]] &,
+	Select[$syntaxOperators, MemberQ[{"Call", "Derivative", "Unset"}, #["Form"]] || #["Spelling"] === "" &]
+]]
 
 (* The long-name operators, read at their first use: the led ones by the
 	held grammar's specs, the fourth of a spec the key of the chain it makes
 	with others, and the prefix ones; the brackets, the integrals and the
 	prefix operators that a product goes on at. *)
 $fastLedTable := $fastLedTable = Join[$fastLed, Association[Join[
-	Map[Function[row, fastLongOp[row[[1]]] -> With[{head = heldLongHead[row], p = row[[4]]}, Which[
-		row[[3]] === CodeParser`InfixInequality,
-			{p, "InfixN", head, "Relation"},
-		row[[1]] === "Minus",
-			{p, "InfixN", "Plus", "Plus"},
-		row[[1]] === "ImplicitPlus",
-			{p, "InfixL", "Plus"},
-		row[[1]] === "Divides",
-			{p, "InfixN", "Divisible", "Divisible"},
-		row[[1]] === "InvisibleApplication",
-			{p, "InfixR", "At"},
-		row[[2]] === "InfixNode",
-			{p, "InfixN", head, head},
-		True,
-			{p, If[row[[5]] === "Right", "InfixR", "InfixL"], head}
-	]]], $heldLongInfix
-	],
+	Map[fastLongOp[#[[1]]] -> heldLongInfixSpec[#] &, $heldLongInfix],
 	Map[fastLongOp[#[[1]]] -> {#[[4]], "Postfix", heldLongHead[#]} &, $longNameTable["Postfix"]],
-	{fastLongOp["LeftDoubleBracket"] -> {176, "LongPart", "Part"}}
+	{fastLongOp["LeftDoubleBracket"] -> {$codeParserPrecedence["Call"], "LongPart", "Part"}}
 ]]]
 $fastPrefixTable := $fastPrefixTable = Join[$fastPrefix,
-	Association[Map[fastLongOp[#[[1]]] -> {#[[4]], heldLongHead[#]} &, $heldLongPrefix]], <|$fastNotId -> {64, "Not"}|>
+	Association[Map[fastLongOp[#[[1]]] -> {#[[4]], heldLongHead[#]} &, $heldLongPrefix]], <|$fastNotId -> $fastPrefix[fastOp["!"]]|>
 ]
 $fastGroupTable := $fastGroupTable = Association[Map[fastLongOp[#[[1]]] -> {fastLongOp[#[[2]]], SymbolName[#[[3]]]} &,
 	Select[$longNameTable["Groups"], #[[1]] =!= "LeftDoubleBracket" &]
@@ -893,7 +842,11 @@ $fastPrefixOnly := $fastPrefixOnly = AssociationThread[Join[DeleteCases[fastLong
 $fastLongMinus := $fastLongMinus = fastLongOp["Minus"]
 $fastRightDoubleBracket := $fastRightDoubleBracket = fastLongOp["RightDoubleBracket"]
 
-$fastPatternColon = 40; $fastOptionalColon = 38; $fastSpanOperand = 80; $fastCompoundOperand = 4; $fastTagLeft = 9; $fastTagRight = 8; $fastImplicitTimes = 108
+(* the levels of the operands the parser reads by rules of their own: of x:p and p:v, of a span,
+	of a compound, of the left and right sides of t /: a = b *)
+$fastPatternColon = $codeParserPrecedence["Fake`PatternColon"]; $fastOptionalColon = $codeParserPrecedence["Fake`OptionalColon"]
+$fastSpanOperand = $codeParserPrecedence["SemiSemi"]; $fastCompoundOperand = $codeParserPrecedence["Semi"]
+$fastTagLeft = $codeParserPrecedence["Equal"]; $fastTagRight = $codeParserPrecedence["Equal"] - 1
 $fastColon = fastOp[":"]; $fastSemiSemi = fastOp[";;"]; $fastSemi = fastOp[";"]; $fastQuestion = fastOp["?"]; $fastColonColon = fastOp["::"]
 $fastColonEqual = fastOp[":="]; $fastEqual = fastOp["="]; $fastEqualDot = fastOp["=."]; $fastTilde = fastOp["~"]; $fastDot = fastOp["."]; $fastMinus = fastOp["-"]
 
@@ -904,30 +857,28 @@ $fastColonEqual = fastOp[":="]; $fastEqual = fastOp["="]; $fastEqualDot = fastOp
 	in a list, and each token's index in it, 0 if it is none. A token's spec
 	is the operator's it is, or that of the call, a derivative or a product
 	for its kind; = before . is an unset. *)
-$fastSpecList := $fastSpecList = DeleteDuplicates[Join[Values[$fastLedTable],
-	{{176, "Call", "Call"}, {154, "Derivative", "Derivative"}, {$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}, {9, "Unset", "Unset"}}
-]]
+$fastSpecList := $fastSpecList = DeleteDuplicates[Join[Values[$fastLedTable], Values[$fastConstructs]]]
 fastSpecIndex[spec_] := First[FirstPosition[$fastSpecList, spec, {0}, {1}, Heads -> False]]
 $fastOpSpecIndex := $fastOpSpecIndex = With[{n = $fastNotId + 1}, Developer`ToPackedArray[
 	Table[Which[
 		KeyExistsQ[$fastLedTable, k],
 			fastSpecIndex[$fastLedTable[k]],
 		KeyExistsQ[$fastPrefixOnly, k],
-			fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}],
+			fastSpecIndex[$fastConstructs["Implicit"]],
 		True,
 			0
 	], {k, 0, n}
 	]
 ]]
 $fastKindSpecIndex := $fastKindSpecIndex = Developer`ToPackedArray[ReplacePart[ConstantArray[0, $tkWord + 1], Join[
-	{($tkOpenSquare + 1) -> fastSpecIndex[{176, "Call", "Call"}], ($tkPrimes + 1) -> fastSpecIndex[{154, "Derivative", "Derivative"}]},
-	Map[(# + 1) -> fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}] &,
+	{($tkOpenSquare + 1) -> fastSpecIndex[$fastConstructs["Call"]], ($tkPrimes + 1) -> fastSpecIndex[$fastConstructs["Derivative"]]},
+	Map[(# + 1) -> fastSpecIndex[$fastConstructs["Implicit"]] &,
 		{$tkName, $tkBlank, $tkInteger, $tkReal, $tkString, $tkSlot, $tkOut, $tkOpenParen, $tkOpenCurly, $tkOpenAssociation, $tkBoxes, $tkFreeform, $tkWord}
 	]
 ]]]
 fastLedIndices[lexed_List] := fastLedFunction[lexed, $fastKindSpecIndex, $fastOpSpecIndex, $fastLedParams]
 $fastLedParams := $fastLedParams = Developer`ToPackedArray[{$tkOperator, $fastEqual, $fastDot, $fastUnsetSpecIndex}]
-$fastUnsetSpecIndex := $fastUnsetSpecIndex = fastSpecIndex[{9, "Unset", "Unset"}]
+$fastUnsetSpecIndex := $fastUnsetSpecIndex = fastSpecIndex[$fastConstructs["Unset"]]
 
 (* ::Section:: *)
 (*The typed parser*)
@@ -2147,7 +2098,7 @@ $fastSpecialArray := $fastSpecialArray = Developer`ToPackedArray[Join[
 	$fastMinus, $fastLongMinus, $fastRightDoubleBracket, $fastQuestion
 	},
 	{$integralPrecedence, $fastPatternColon, $fastSpanOperand, $fastCompoundOperand, $fastTagLeft, $fastTagRight, $fastOptionalColon},
-	{fastSpecIndex[{$fastImplicitTimes, "InfixN", "Times", "Times", "Implicit"}]}
+	{fastSpecIndex[$fastConstructs["Implicit"]]}
 ]]
 $fastHeadCodeArray := $fastHeadCodeArray = Developer`ToPackedArray[fastHeadCode /@ {"Minus", "Unset", "Paren", "List", "Association", "NotNot", "Optional",
 	"Times", "DifferentialD", "CapitalDifferentialD"
