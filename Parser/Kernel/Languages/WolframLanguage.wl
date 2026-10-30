@@ -856,18 +856,23 @@ escapedText[text_String] := If[ StringLength[text] > 128 && Head[fastStringValue
 	]
 ]
 
-$escapes = {
-	"\\\r" -> "", "\\\n" -> "", "\\<" -> "", "\\>" -> "",
-	"\\\\" -> "\\", "\\\"" -> "\"", "\\n" -> "\n", "\\t" -> "\t", "\\r" -> "\r", "\\b" -> "\b", "\\f" -> "\f", "\\ " -> " ",
-	"\\" ~~ digits : Repeated[CharacterRange["0", "7"], {3}] :> FromCharacterCode[FromDigits[digits, 8]],
-	"\\." ~~ digits : Repeated[HexadecimalCharacter, {2}] :> FromCharacterCode[FromDigits[digits, 16]],
-	"\\:" ~~ digits : Repeated[HexadecimalCharacter, {4}] :> FromCharacterCode[FromDigits[digits, 16]],
-	"\\|" ~~ digits : Repeated[HexadecimalCharacter, {6}] :> FromCharacterCode[FromDigits[digits, 16]],
-	"\\[" ~~ name : (LetterCharacter | DigitCharacter) .. ~~ "]" /; KeyExistsQ[longNameCharacters[], name] :> longNameCharacters[][name],
-	(* the escapes of linear box syntax *)
-	"\\!" -> "\:f7c1", "\\(" -> "\:f7c9", "\\)" -> "\:f7c0", "\\*" -> "\:f7c8", "\\@" -> "\:f7c2", "\\^" -> "\:f7c6",
-	"\\_" -> "\:f7ca", "\\%" -> "\:f7c5", "\\&" -> "\:f7c7", "\\+" -> "\:f7cb", "\\/" -> "\:f7cc", "\\`" -> "\:f7cd"
-}
+(* {lead, radix, n}: a backslash, the lead and n digits of the radix, the character of that code.
+	The rule is made by replacement in a held one, which renames none of its pattern variables, as
+	With would *)
+escapeCodeRule[{lead_String, radix_Integer, n_Integer}] := ReleaseHold[ReplaceAll[
+	Hold[start ~~ digits : Repeated[digit, {count}] :> FromCharacterCode[FromDigits[digits, base]]],
+	{start -> "\\" <> lead, digit -> If[radix === 8, CharacterRange["0", "7"], HexadecimalCharacter], count -> n, base -> radix}
+]]
+
+(* the escapes of a string, as the syntax declares them: a backslash and a character, a character
+	code, a long name, and the escapes of linear box syntax *)
+$escapes = Join[
+	Map[("\\" <> #[[1]]) -> If[IntegerQ[#[[2]]], FromCharacterCode[#[[2]]], #[[2]]] &, $syntax["escape"]],
+	Map[escapeCodeRule, $syntax["escapecode"]],
+	{"\\[" ~~ name : (LetterCharacter | DigitCharacter) .. ~~ "]" /; KeyExistsQ[longNameCharacters[], name] :> longNameCharacters[][name]},
+	Map[("\\" <> #[[1]]) -> FromCharacterCode[#[[2]]] &, $syntax["boxescape"]]
+]
+
 
 (* the character of each long name, "Alpha" -> the letter alpha, as
 	Wolfram 15's front end reads it (Languages/LongNameCharacters.wl,
@@ -1478,12 +1483,7 @@ commaAfterErrorQ[_] := False
 
 (* CodeParser names a token by its characters, -> Token`MinusGreater, and
 	a long name or its character by the name, Token`LongName`Rule *)
-$tokenCharacterNames = <|
-	"+" -> "Plus", "-" -> "Minus", "*" -> "Star", "/" -> "Slash", "^" -> "Caret", "<" -> "Less", ">" -> "Greater",
-	"=" -> "Equal", ":" -> "Colon", ";" -> "Semi", "." -> "Dot", "!" -> "Bang", "@" -> "At", "|" -> "Bar", "&" -> "Amp",
-	"?" -> "Question", "~" -> "Tilde", "'" -> "SingleQuote", "_" -> "Under", "#" -> "Hash", "%" -> "Percent", "," -> "Comma",
-	"[" -> "OpenSquare", "]" -> "CloseSquare", "{" -> "OpenCurly", "}" -> "CloseCurly", "(" -> "OpenParen", ")" -> "CloseParen"
-|>
+$tokenCharacterNames = Association[Apply[Rule, Partition[Catenate[$syntax["character"]], 2], {1}]]
 
 tokenSymbol[s_String] := tokenSymbol[s] = Symbol["Token`" <> Which[
 	StringStartsQ[s, "\\["],
@@ -1654,13 +1654,15 @@ closerStartQ[c_String] := StringContainsQ["])}|\\", c] || KeyExistsQ[$closerLabe
 $longWhitespace := $longWhitespace = Catenate[longNameSpellings /@ $longNameTable["Whitespace"]]
 $longNewlines := $longNewlines = Catenate[longNameSpellings /@ $longNameTable["Newlines"]]
 (* the long names a notebook reads as newlines, written out or as their characters: those
-	CodeParser calls newlines but the two discretionary separators, which it reads as spaces *)
-$heldNewlineNames := $heldNewlineNames = DeleteCases[$longNameTable["Newlines"], "DiscretionaryLineSeparator" | "DiscretionaryParagraphSeparator"]
+	CodeParser calls newlines but the ones the syntax declares spaces, the two discretionary
+	separators *)
+$heldNewlineNames := $heldNewlineNames = DeleteCases[$longNameTable["Newlines"], Alternatives @@ Catenate[$syntax["space"]]]
 $heldNewlines := $heldNewlines = Catenate[longNameSpellings /@ $heldNewlineNames]
 (* The long names a notebook reads as spaces, written out or as their characters: CodeParser's
-	whitespace, \[COMPATIBILITYKanjiSpace] and the two discretionary separators, each character
+	whitespace and those the syntax declares, \[COMPATIBILITYKanjiSpace] and the two discretionary
+	separators, each character
 	CodeParser gives one and the one the front end reads, \[AutoSpace]'s two among them. *)
-$spaceNames := $spaceNames = Union[$longNameTable["Whitespace"], {"COMPATIBILITYKanjiSpace", "DiscretionaryLineSeparator", "DiscretionaryParagraphSeparator"}]
+$spaceNames := $spaceNames = Union[$longNameTable["Whitespace"], Catenate[$syntax["space"]]]
 $spaceCharacters := $spaceCharacters = AssociationThread[
 	Union[Lookup[$longNameTable["Characters"], $spaceNames, Nothing], Lookup[longNameCharacters[], $spaceNames, Nothing]] -> True
 ]

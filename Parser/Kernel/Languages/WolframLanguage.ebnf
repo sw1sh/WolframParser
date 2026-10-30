@@ -19,6 +19,27 @@
        the long names an operator is also written as, as \[name] or as its character. An operator
        with no ASCII spelling is named by a word, and numbered after the tokens.
 
+   %character character name ...
+       the names CodeParser gives its tokens by, a name for each character: the token -> is
+       Token`MinusGreater.
+
+   %escape character text
+       an escape of a string, a backslash and the character after it, and the text that stands
+       for them, or its character code.
+
+   %escapecode lead radix digits
+       an escape of a string by a character code: a backslash, the lead and as many digits of
+       the radix.
+
+   %boxescape character code
+       an escape of linear syntax, a backslash and the character after it, and the code of the
+       character that stands for them. A backslash and a long name in brackets stand for its
+       character.
+
+   %space name ...
+       the long names the front end reads as spaces besides those CodeParser does, which
+       LongNameOperators.wl records, none of them a newline.
+
    %longhead name head
        the head a long-name operator of LongNameOperators.wl makes, where it is not its tag's,
        or for a relation its own name. CodeParser's table, which dev/freeze-longnames.wls
@@ -130,6 +151,53 @@
 %longname DirectedEdge    DirectedEdge
 %longname UndirectedEdge  UndirectedEdge
 %longname Element         Element
+
+
+(* The characters CodeParser names its tokens by *)
+
+%character "+" Plus        "-" Minus        "*" Star         "/" Slash       "^" Caret      "<" Less        ">" Greater
+%character "=" Equal       ":" Colon        ";" Semi         "." Dot         "!" Bang       "@" At          "|" Bar
+%character "&" Amp         "?" Question     "~" Tilde        "'" SingleQuote "_" Under      "#" Hash        "%" Percent
+%character "," Comma       "[" OpenSquare   "]" CloseSquare  "{" OpenCurly   "}" CloseCurly "(" OpenParen   ")" CloseParen
+
+
+(* String escapes *)
+
+%escape "\r"   ""       (* a line continuation *)
+%escape "\n"   ""
+%escape "<"    ""       (* the ends of a string's boxes *)
+%escape ">"    ""
+%escape "\\"   92
+%escape "\""   34
+%escape "n"    10
+%escape "t"    9
+%escape "r"    13
+%escape "b"    8
+%escape "f"    12
+%escape " "    32
+
+%escapecode ""   8   3    (* \ooo *)
+%escapecode "."  16  2    (* \.xx *)
+%escapecode ":"  16  4    (* \:xxxx *)
+%escapecode "|"  16  6    (* \|xxxxxx *)
+
+%boxescape "!"  63425     (* U+F7C1 *)
+%boxescape "("  63433     (* U+F7C9 *)
+%boxescape ")"  63424     (* U+F7C0 *)
+%boxescape "*"  63432     (* U+F7C8 *)
+%boxescape "@"  63426     (* U+F7C2 *)
+%boxescape "^"  63430     (* U+F7C6 *)
+%boxescape "_"  63434     (* U+F7CA *)
+%boxescape "%"  63429     (* U+F7C5 *)
+%boxescape "&"  63431     (* U+F7C7 *)
+%boxescape "+"  63435     (* U+F7CB *)
+%boxescape "/"  63436     (* U+F7CC *)
+%boxescape "`"  63437     (* U+F7CD *)
+
+
+(* Spaces *)
+
+%space COMPATIBILITYKanjiSpace DiscretionaryLineSeparator DiscretionaryParagraphSeparator
 
 
 (* Long-name operators the kernel reads otherwise than CodeParser *)

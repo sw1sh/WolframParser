@@ -2462,12 +2462,18 @@ EndPackage[]
 	BeginPackage with a {"Wolfram`Parser`"} dependency; this root context is not yet on $Packages
 	mid-load, so mark it loaded first to keep that dependency's Needs a no-op rather than a
 	recursive re-Get of this file. Where WolframLanguageReader.wl loads this file, the core is
-	followed by the AST vocabulary and the Wolfram Language's grammar and reader alone. *)
+	followed by the AST vocabulary and the Wolfram Language's grammar and reader alone; where
+	$ebnfOnly is True, by the AST vocabulary and the EBNF reader alone, for a tool that reads the
+	grammar the languages' tables are made from, as dev/freeze-syntax.wls does. *)
 Get[FileNameJoin[{DirectoryName[$InputFileName], "AST.wl"}]];
-If[ TrueQ[Wolfram`Parser`Private`$wolframLanguageOnly],
+Which[
+	TrueQ[Wolfram`Parser`Private`$wolframLanguageOnly],
 	If[! MemberQ[$Packages, "Wolfram`Parser`"], AppendTo[$Packages, "Wolfram`Parser`"]];
 	Get[FileNameJoin[{DirectoryName[$InputFileName], "Languages", "WolframLanguage.wl"}]];
 	Get[FileNameJoin[{DirectoryName[$InputFileName], "Languages", "WolframLanguageFast.wl"}]],
+	TrueQ[Wolfram`Parser`Private`$ebnfOnly],
+	Get[FileNameJoin[{DirectoryName[$InputFileName], "EBNF.wl"}]],
+	True,
 	Get[FileNameJoin[{DirectoryName[$InputFileName], "LaTeX.wl"}]];
 	Get[FileNameJoin[{DirectoryName[$InputFileName], "EBNF.wl"}]];
 	Get[FileNameJoin[{DirectoryName[$InputFileName], "TPTP.wl"}]];

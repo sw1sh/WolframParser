@@ -73,6 +73,49 @@
         {"UndirectedEdge", "UndirectedEdge"},
         {"Element", "Element"}
     },
+    "character" -> {
+        {"+", "Plus", "-", "Minus", "*", "Star", "/", "Slash", "^", "Caret", "<", "Less", ">", "Greater"},
+        {"=", "Equal", ":", "Colon", ";", "Semi", ".", "Dot", "!", "Bang", "@", "At", "|", "Bar"},
+        {"&", "Amp", "?", "Question", "~", "Tilde", "'", "SingleQuote", "_", "Under", "#", "Hash", "%", "Percent"},
+        {",", "Comma", "[", "OpenSquare", "]", "CloseSquare", "{", "OpenCurly", "}", "CloseCurly", "(", "OpenParen", ")", "CloseParen"}
+    },
+    "escape" -> {
+        {"\r", ""},
+        {"\n", ""},
+        {"<", ""},
+        {">", ""},
+        {"\\", 92},
+        {"\"", 34},
+        {"n", 10},
+        {"t", 9},
+        {"r", 13},
+        {"b", 8},
+        {"f", 12},
+        {" ", 32}
+    },
+    "escapecode" -> {
+        {"", 8, 3},
+        {".", 16, 2},
+        {":", 16, 4},
+        {"|", 16, 6}
+    },
+    "boxescape" -> {
+        {"!", 63425},
+        {"(", 63433},
+        {")", 63424},
+        {"*", 63432},
+        {"@", 63426},
+        {"^", 63430},
+        {"_", 63434},
+        {"%", 63429},
+        {"&", 63431},
+        {"+", 63435},
+        {"/", 63436},
+        {"`", 63437}
+    },
+    "space" -> {
+        {"COMPATIBILITYKanjiSpace", "DiscretionaryLineSeparator", "DiscretionaryParagraphSeparator"}
+    },
     "longhead" -> {
         {"LessSlantEqual", "LessEqual"},
         {"GreaterSlantEqual", "GreaterEqual"},

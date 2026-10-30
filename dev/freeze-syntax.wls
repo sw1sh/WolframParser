@@ -8,8 +8,8 @@
 $ProgressReporting = False;
 
 root = ParentDirectory[DirectoryName[$InputFileName]];
-PacletDirectoryLoad[FileNameJoin[{root, "Parser"}]];
-Needs["Wolfram`Parser`"];
+(* the parser core and the EBNF reader alone: the languages read the file this writes *)
+Block[{Wolfram`Parser`Private`$ebnfOnly = True}, Get[FileNameJoin[{root, "Parser", "Kernel", "Parser.wl"}]]];
 languages = FileNameJoin[{root, "Parser", "Kernel", "Languages"}];
 outFile = FileNameJoin[{languages, "WolframLanguageSyntax.wl"}];
 declarations = EBNFDeclarations[File[FileNameJoin[{languages, "WolframLanguage.ebnf"}]]];
