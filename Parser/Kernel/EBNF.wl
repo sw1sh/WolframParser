@@ -895,7 +895,7 @@ EBNFParse[File[path_String], opts : OptionsPattern[]] :=
    {"Regex", piece, ...}, a regular expression that matches what that part of the rule matches
    and no more, its pieces strings and {"Class", name}, a class the reader gives; the nodes of
    sequences, choices, options, repetitions and lookaheads; and {"Rule", name} for a rule that
-   refers to itself, whose tree "Rules" gives. A regular expression stands for as much of a rule
+   refers to itself, whose tree "Rules" gives, a token of such a rule among them. A regular expression stands for as much of a rule
    as has no lookahead, so that a reader can match it in a window of its input: its choices are
    atomic and its repetitions possessive, as a PEG's; characters that are alternatives next to
    one another are one class, and a regular expression repeated among other alternatives a run
@@ -907,8 +907,9 @@ EBNFParse[File[path_String], opts : OptionsPattern[]] :=
 tokenTrees[rules_List, names_List, classes_Association] := Catch[Block[
 	{$tokenRules = Association[Cases[rules, EBNFRule[n_String, _, alts_List] :> (n -> alts)]], $tokenClasses = classes, $tokenSelf},
 	$tokenSelf = Select[Keys[$tokenRules], MemberQ[reachableTokenRules[{#}, False], #] &];
+	(* a token whose rule refers to itself is that rule, its tree among the rules *)
 	<|
-		"Tokens" -> AssociationMap[finalTokenTree[ruleBodyTree[#]] &, names],
+		"Tokens" -> AssociationMap[If[MemberQ[$tokenSelf, #], {"Rule", #}, finalTokenTree[ruleBodyTree[#]]] &, names],
 		"Rules" -> AssociationMap[finalTokenTree[ruleBodyTree[#]] &, Intersection[$tokenSelf, reachableTokenRules[names, True]]]
 	|>
 ], tokenTrees]

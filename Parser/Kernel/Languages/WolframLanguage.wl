@@ -149,7 +149,7 @@ syntaxToken[name_String] := syntaxToken[name] = With[{tree = $syntax["tokentrees
 (* the rules that refer to themselves a tree reaches, and those their trees reach in turn *)
 reachedTokenRules[tree_] := FixedPoint[
 	Union[#, Cases[Lookup[$syntax["tokenrules"], #], {"Rule", r_String} :> r, Infinity]] &,
-	Union[Cases[tree, {"Rule", r_String} :> r, Infinity]]
+	Union[Cases[{tree}, {"Rule", r_String} :> r, Infinity]]
 ]
 
 (* the checks the syntax declares, by the functions that make them *)

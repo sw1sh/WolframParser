@@ -458,13 +458,11 @@ VerificationTest[
     <|"Tokens" -> <|
         "digits" -> {"Regex", "[0-2][0-2]*+"},
         "string" -> {"Regex", "[\"](?:(?>[^\"\\x{5c}]|[\\x{5c}](?s:.)))*+[\"]"},
-        "comment" -> {"Sequence", {"Regex", "\\(\\*"},
-            {"Many", {"Choice", {"Rule", "comment"}, {"Regex", "[^(*]++"}, {"Sequence", {"Regex", "[(]"}, {"NotAhead", {"Regex", "[*]"}}}, {"Sequence", {"Regex", "[*]"}, {"NotAhead", {"Regex", "[)]"}}}}},
-            {"Regex", "\\*\\)"}}|>,
+        "comment" -> {"Rule", "comment"}|>,
       "Rules" -> <|"comment" -> {"Sequence", {"Regex", "\\(\\*"},
             {"Many", {"Choice", {"Rule", "comment"}, {"Regex", "[^(*]++"}, {"Sequence", {"Regex", "[(]"}, {"NotAhead", {"Regex", "[*]"}}}, {"Sequence", {"Regex", "[*]"}, {"NotAhead", {"Regex", "[)]"}}}}},
             {"Regex", "\\*\\)"}}|>|>,
-    TestID -> "EBNF tokens: a rule's tree is regular expressions where it has no lookahead, its characters one class, a class repeated a run"]
+    TestID -> "EBNF tokens: a rule's tree is regular expressions where it has no lookahead, its characters one class, a class repeated a run, a rule that refers to itself a rule"]
 
 VerificationTest[
     Module[{rules = EBNFRules[tokenGrammar, "Dialect" -> "Classic"], trees, parsers, alphabets, inputs},

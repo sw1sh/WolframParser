@@ -77,7 +77,11 @@ SetRec[RC[s_], p_]   := (s = p)
    to itself. Its value is the text it matched. *)
 tokenTreeParser[tree_, rules_Association : <||>, classes_Association : <||>] := Module[{cells = AssociationMap[RecCell[] &, Keys[rules]]},
 	KeyValueMap[SetRec[cells[#1], tokenTreeCombinator[#2, cells, classes]] &, rules];
-	ParseAction[tokenTreeCombinator[tree, cells, classes], StringJoin[Cases[Flatten[{##}], _String]] &]
+	(* a regular expression's value is the text it matched already *)
+	If[ MatchQ[tree, {"Regex", ___}],
+		tokenTreeCombinator[tree, cells, classes],
+		ParseAction[tokenTreeCombinator[tree, cells, classes], StringJoin[Cases[Flatten[{##}], _String]] &]
+	]
 ]
 
 tokenTreeCombinator[{"Regex", pieces__}, _, classes_] := ParseRegex[StringJoin[Replace[{pieces}, {"Class", name_String} :> classes[name], {1}]]]
