@@ -69,6 +69,26 @@ RecCell[]            := With[{s = Unique["Wolfram`Parser`Private`rec$"]}, RC[s]]
 RecRef[RC[s_]]       := ParseRecursive[s]
 SetRec[RC[s_], p_]   := (s = p)
 
+(* The parser of a token tree, as the EBNF reader compiles a token rule to one: {"Regex", piece, ...},
+   the regular expression its pieces make, strings and {"Class", name}, the class's regular
+   expression; {"Sequence", t, ...}; {"Choice", t, ...}, the first in order that matches;
+   {"Optional", t}; {"Many", t}; {"Ahead", t} and {"NotAhead", t}, what must follow, or must not,
+   taking nothing; and {"Rule", name}, the tree of name among the rules, for a rule that refers
+   to itself. Its value is the text it matched. *)
+tokenTreeParser[tree_, rules_Association : <||>, classes_Association : <||>] := Module[{cells = AssociationMap[RecCell[] &, Keys[rules]]},
+	KeyValueMap[SetRec[cells[#1], tokenTreeCombinator[#2, cells, classes]] &, rules];
+	ParseAction[tokenTreeCombinator[tree, cells, classes], StringJoin[Cases[Flatten[{##}], _String]] &]
+]
+
+tokenTreeCombinator[{"Regex", pieces__}, _, classes_] := ParseRegex[StringJoin[Replace[{pieces}, {"Class", name_String} :> classes[name], {1}]]]
+tokenTreeCombinator[{"Sequence", ts__}, cells_, classes_] := ParseSequence @@ Map[tokenTreeCombinator[#, cells, classes] &, {ts}]
+tokenTreeCombinator[{"Choice", ts__}, cells_, classes_] := ParseChoice @@ Map[tokenTreeCombinator[#, cells, classes] &, {ts}]
+tokenTreeCombinator[{"Optional", t_}, cells_, classes_] := ParseOptional[tokenTreeCombinator[t, cells, classes]]
+tokenTreeCombinator[{"Many", t_}, cells_, classes_] := ParseMany[tokenTreeCombinator[t, cells, classes]]
+tokenTreeCombinator[{"Ahead", t_}, cells_, classes_] := ParseLookahead[tokenTreeCombinator[t, cells, classes]]
+tokenTreeCombinator[{"NotAhead", t_}, cells_, classes_] := ParseNotFollowedBy[tokenTreeCombinator[t, cells, classes]]
+tokenTreeCombinator[{"Rule", name_String}, cells_, _] := RecRef[cells[name]]
+
 (* A cell displays as a summary box rather than its private handle: whether
 	SetRec has given it a parser yet, and, opened, that parser. *)
 RC /: MakeBoxes[c : RC[s_Symbol], form : StandardForm | TraditionalForm] :=

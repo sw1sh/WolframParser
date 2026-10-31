@@ -18,7 +18,9 @@
 	A second dialect, "Classic", reads the BNF of many language reports:
 	`<name> ::=` or `<name> ::`, terminals in quotes, `[...]` optional,
 	`{...}` repeated, `(...)` grouped, and `"a" | ... | "z"` for a range of
-	characters - the grammar the ABC language's specification publishes.
+	characters - the grammar the ABC language's specification publishes -
+	`&x` and `!x`, where x must follow, or must not, taking nothing, and
+	`x - y`, x where y does not match, as ISO EBNF writes an exception.
 	Its comments are Wolfram Language comments, and a line that begins
 	with % is a declaration, as a parser generator's are, which
 	EBNFDeclarations gives.
@@ -177,9 +179,12 @@ grammarP = ParseAction[wsc ~~ ParseMany[ParseAction[ruleP ~~ wsc, #1 &]], #2 &]
 
 	`<name> ::= ...` or `<name> :: ...`; terminals in double or single quotes,
 	with \n \r \t escapes; non-terminals as `<name>` or a bare name; `[...]`
-	optional, `{...}` repeated, `(...)` grouped; and an alternative that is
-	only `...` between two one-character terminals stands for the characters
-	between them, as in `"a" | ... | "z"`. Whitespace, newlines included,
+	optional, `{...}` repeated, `(...)` grouped; `&x` and `!x` a lookahead,
+	where the element x must follow, or must not, which takes nothing; `x - y`
+	x where the element y does not match, which binds more tightly than a
+	sequence, as ISO EBNF's exception does; and an
+	alternative that is only `...` between two one-character terminals stands
+	for the characters between them, as in `"a" | ... | "z"`. Whitespace, newlines included,
 	separates elements; a rule ends where the next `<name> ::` begins.
 	A comment, nested as in the Wolfram Language, is whitespace. Between
 	rules, % begins a declaration: a keyword, then the fields up to the end
@@ -226,7 +231,14 @@ classicGroup[open_String, close_String, wrap_] := ParseAction[
 	wrap[#3] &
 ]
 
+(* &x and !x: what must follow, or must not, taken by neither *)
+classicLookahead = ParseAction[
+	ParseCharacter["&" | "!"] ~~ classicWs ~~ ParseRecursive[classicElt],
+	If[#1 === "&", Ahead[#3], NotAhead[#3]] &
+]
+
 classicElt = ParseChoice[
+	classicLookahead,
 	classicLiteral,
 	classicGroup["[", "]", Opt],
 	classicGroup["{", "}", Rep["ManyAlts", #] &],
@@ -235,8 +247,14 @@ classicElt = ParseChoice[
 	classicName
 ]
 
+(* x - y: x where y does not match *)
+classicTerm = ParseAction[
+	classicElt ~~ ParseOptional[ParseAction[classicWs ~~ ParseLiteral["-"] ~~ classicWs ~~ classicElt, #4 &]],
+	If[MissingQ[#2], #1, ButNot[#1, #2]] &
+]
+
 classicSeq = ParseAction[
-	ParseMany[ParseAction[ParseNotFollowedBy[classicRuleStart] ~~ classicElt ~~ classicWs, #2 &]],
+	ParseMany[ParseAction[ParseNotFollowedBy[classicRuleStart] ~~ classicTerm ~~ classicWs, #2 &]],
 	{##} &
 ]
 
@@ -318,6 +336,13 @@ lowerElt[Group[alts_List], symMap_, overrides_] := lowerBody[alts, symMap, overr
 
 lowerElt[CharRange[a_String, b_String], _, _] := ParseCharacter[Alternatives @@ CharacterRange[a, b]]
 
+lowerElt[Ahead[elt_], symMap_, overrides_] := ParseLookahead[lowerElt[elt, symMap, overrides]]
+
+lowerElt[NotAhead[elt_], symMap_, overrides_] := ParseNotFollowedBy[lowerElt[elt, symMap, overrides]]
+
+lowerElt[ButNot[elt_, exception_], symMap_, overrides_] :=
+	ParseAction[ParseNotFollowedBy[lowerElt[exception, symMap, overrides]] ~~ lowerElt[elt, symMap, overrides], #2 &]
+
 lowerElt[Lit[s_String], _, _] := ParseLiteral[s]
 
 lowerElt[NonTerm[name_String], symMap_, overrides_] :=
@@ -358,11 +383,12 @@ lowerSeq[{single_}, symMap_, overrides_] :=
 	lowerElt[single, symMap, overrides]
 
 lowerSeq[elts_List, symMap_, overrides_] := Module[{parts},
+	(* a lookahead takes nothing, and gives the sequence's value nothing *)
 	parts = Join @@ MapIndexed[
 		Function[{elt, i},
 			If[ First[i] > 1 && skipBeforeQ[elt],
-				{{$ebnfSkip, False}, {lowerElt[elt, symMap, overrides], True}},
-				{{lowerElt[elt, symMap, overrides], True}}
+				{{$ebnfSkip, False}, {lowerElt[elt, symMap, overrides], ! MatchQ[elt, _Ahead | _NotAhead]}},
+				{{lowerElt[elt, symMap, overrides], ! MatchQ[elt, _Ahead | _NotAhead]}}
 			]
 		],
 		elts
@@ -857,6 +883,164 @@ finishRule[name_String, parser_, actions_Association, spans_List] := Which[
 
 EBNFParse[File[path_String], opts : OptionsPattern[]] :=
 	EBNFParse[Import[path, "Text"], opts]
+
+
+(* ::Section:: *)
+(*Token rules as regular expressions*)
+
+(* The token rules of a classic grammar, compiled for a reader that takes each as a PEG reads it:
+   alternatives in order, the first that matches taken; an option and a repetition taking all
+   they can and giving none back; & and ! looking ahead, taking nothing; x - y, x where y does
+   not match. A rule's tree is the one Wolfram`Parser`Private`tokenTreeParser takes:
+   {"Regex", piece, ...}, a regular expression that matches what that part of the rule matches
+   and no more, its pieces strings and {"Class", name}, a class the reader gives; the nodes of
+   sequences, choices, options, repetitions and lookaheads; and {"Rule", name} for a rule that
+   refers to itself, whose tree "Rules" gives. A regular expression stands for as much of a rule
+   as has no lookahead, so that a reader can match it in a window of its input: its choices are
+   atomic and its repetitions possessive, as a PEG's; characters that are alternatives next to
+   one another are one class, and a class repeated among other alternatives a run of it.
+   The classes are the names the grammar leaves undefined: a list of code ranges, a set of
+   characters the rules' classes are made of; a string, a regular expression taken as it is; or
+   Automatic, a class the reader gives. <|"Tokens" -> <|name -> tree, ...|>, "Rules" ->
+   <|name -> tree, ...|>|>, or a Failure. *)
+tokenTrees[rules_List, names_List, classes_Association] := Catch[Block[
+	{$tokenRules = Association[Cases[rules, EBNFRule[n_String, _, alts_List] :> (n -> alts)]], $tokenClasses = classes, $tokenSelf},
+	$tokenSelf = Select[Keys[$tokenRules], MemberQ[reachableTokenRules[{#}, False], #] &];
+	<|
+		"Tokens" -> AssociationMap[finalTokenTree[ruleBodyTree[#]] &, names],
+		"Rules" -> AssociationMap[finalTokenTree[ruleBodyTree[#]] &, Intersection[$tokenSelf, reachableTokenRules[names, True]]]
+	|>
+], tokenTrees]
+
+tokenFailure[template_String, args___] := Throw[Failure["EBNFToken", <|"MessageTemplate" -> template, "MessageParameters" -> {args}|>], tokenTrees]
+
+(* the rules a rule's body names, and those they name in turn, the rules themselves among them or not *)
+reachableTokenRules[names_List, withThem_] := With[{named = Cases[#, NonTerm[n_String] /; KeyExistsQ[$tokenRules, n] && ! KeyExistsQ[$tokenClasses, n] :> n, Infinity] &},
+	FixedPoint[Union[#, named[Lookup[$tokenRules, #, {}]]] &, If[withThem, Union[names], Union[named[Lookup[$tokenRules, names, {}]]]]]
+]
+
+ruleBodyTree[name_String] := If[ KeyExistsQ[$tokenRules, name], tokenBodyTree[$tokenRules[name]], tokenFailure["No rule or class `1`.", name]]
+
+(* While compiling, a part is tokenClass[ranges], one character of a set of code ranges;
+   tokenRegex[pieces], a regular expression; or a tree node of parts. *)
+tokenRegexQ[_tokenClass | _tokenRegex] := True
+tokenRegexQ[_] := False
+
+tokenPieces[tokenRegex[pieces_List]] := pieces
+tokenPieces[tokenClass[ranges_List]] := {classRegexOf[ranges]}
+
+(* a part as the reader's tree: strings next to one another joined *)
+finalTokenTree[part_?tokenRegexQ] := Prepend[joinedPieces[tokenPieces[part]], "Regex"]
+finalTokenTree[{"Rule", name_String}] := {"Rule", name}
+finalTokenTree[{head_String, parts___}] := Prepend[finalTokenTree /@ {parts}, head]
+joinedPieces[pieces_List] := Map[If[StringQ[First[#]], StringJoin[#], Splice[#]] &, Split[pieces, StringQ[#1] && StringQ[#2] &]]
+
+tokenEltTree[Lit[s_String]] := If[ StringLength[s] === 1,
+	tokenClass[{{First[ToCharacterCode[s]], First[ToCharacterCode[s]]}}],
+	tokenRegex[{StringJoin[regexCharacter /@ Characters[s]]}]
+]
+tokenEltTree[CharRange[a_String, b_String]] := tokenClass[{{First[ToCharacterCode[a]], First[ToCharacterCode[b]]}}]
+tokenEltTree[NonTerm[name_String]] := Which[
+	KeyExistsQ[$tokenClasses, name], Replace[$tokenClasses[name], {
+		ranges : {{_Integer, _Integer} ...} :> tokenClass[ranges],
+		r_String :> tokenRegex[{"(?:" <> r <> ")"}],
+		Automatic :> tokenRegex[{"(?:", {"Class", name}, ")"}],
+		other_ :> tokenFailure["The class `1` is `2`, not code ranges, a regular expression or Automatic.", name, other]
+	}],
+	MemberQ[$tokenSelf, name], {"Rule", name},
+	True, ruleBodyTree[name]
+]
+tokenEltTree[Opt[alts_List]] := With[{part = tokenBodyTree[alts]},
+	If[tokenRegexQ[part], tokenRegex[Join[tokenAtom[part], {"?+"}]], {"Optional", part}]
+]
+tokenEltTree[Group[alts_List]] := tokenBodyTree[alts]
+tokenEltTree[Rep["ManyAlts", alts_List]] := tokenRepetition[tokenBodyTree[alts]]
+tokenEltTree[Rep["Many", inner_]] := tokenRepetition[tokenEltTree[inner]]
+tokenEltTree[Ahead[elt_]] := {"Ahead", tokenEltTree[elt]}
+tokenEltTree[NotAhead[elt_]] := {"NotAhead", tokenEltTree[elt]}
+tokenEltTree[ButNot[elt_, exception_]] := With[{part = tokenEltTree[elt], not = tokenEltTree[exception]},
+	If[ MatchQ[part, _tokenClass] && MatchQ[not, _tokenClass],
+		tokenClass[rangesWithout[First[part], First[not]]],
+		{"Sequence", {"NotAhead", not}, part}
+	]
+]
+tokenEltTree[other_] := tokenFailure["A token rule cannot hold `1`.", other]
+
+(* a repetition: of a regular expression, a possessive one; of a choice, each class among its
+   alternatives a run of the class *)
+tokenRepetition[part_?tokenRegexQ] := tokenRegex[Join[tokenAtom[part], {"*+"}]]
+tokenRepetition[{"Choice", alts___}] := {"Many", {"Choice", Sequence @@ Map[If[MatchQ[#, _tokenClass], tokenRegex[Join[tokenPieces[#], {"++"}]], #] &, {alts}]}}
+tokenRepetition[part_] := {"Many", part}
+
+(* a part as one atom of a regular expression: a class is one, anything else is grouped *)
+tokenAtom[part_tokenClass] := tokenPieces[part]
+tokenAtom[part_tokenRegex] := Join[{"(?:"}, tokenPieces[part], {")"}]
+
+(* a sequence: the parts that are regular expressions next to one another one regular expression *)
+tokenSeqTree[{}] := tokenRegex[{""}]
+tokenSeqTree[elts_List] := With[{parts = joinedRuns[tokenEltTree /@ elts, tokenRegex[Join @@ (tokenPieces /@ #)] &]},
+	If[Length[parts] === 1, First[parts], Prepend[parts, "Sequence"]]
+]
+
+(* choices: those that are regular expressions next to one another one atomic choice, and of
+   those, characters next to one another one class *)
+tokenBodyTree[{alt_List}] := tokenSeqTree[alt]
+tokenBodyTree[alts_List] := With[{parts = joinedRuns[tokenSeqTree /@ alts, regexChoice]},
+	If[Length[parts] === 1, First[parts], Prepend[parts, "Choice"]]
+]
+
+regexChoice[parts_List] := With[{classes = joinedClasses[parts]},
+	If[ Length[classes] === 1, First[classes], tokenRegex[Join[{"(?>"}, Flatten[Riffle[tokenPieces /@ classes, {{"|"}}], 1], {")"}]]]
+]
+joinedClasses[parts_List] := Map[
+	If[MatchQ[#, {__tokenClass}], tokenClass[Join @@ #[[All, 1]]], Splice[#]] &,
+	Split[parts, MatchQ[#1, _tokenClass] && MatchQ[#2, _tokenClass] &]
+]
+
+(* runs of parts that are regular expressions, each of two or more made one by join *)
+joinedRuns[parts_List, join_] := Map[
+	Which[Length[#] === 1, First[#], tokenRegexQ[First[#]], join[#], True, Splice[#]] &,
+	Split[parts, tokenRegexQ[#1] && tokenRegexQ[#2] &]
+]
+
+(* code ranges merged, and those of a set without those of another *)
+mergedRanges[ranges_List] := Fold[
+	If[ #1 =!= {} && #2[[1]] <= #1[[-1, 2]] + 1, ReplacePart[#1, {-1, 2} -> Max[#1[[-1, 2]], #2[[2]]]], Append[#1, #2]] &,
+	{}, SortBy[ranges, First]
+]
+rangesWithout[ranges_List, without_List] := Fold[
+	Function[{rs, w}, Catenate[Map[Function[r, Select[{{r[[1]], Min[r[[2]], w[[1]] - 1]}, {Max[r[[1]], w[[2]] + 1], r[[2]]}}, #[[1]] <= #[[2]] &]], rs]]],
+	mergedRanges[ranges], mergedRanges[without]
+]
+
+(* a set of characters as a class, or as the class of those it leaves out, whichever is shorter:
+   every character any one, and none a match of nothing *)
+$lastCharacterCode = 1114111
+classRegexOf[ranges_List] := With[{merged = mergedRanges[ranges]},
+	With[{in = classBody[merged], out = classBody[rangesWithout[{{0, $lastCharacterCode}}, merged]]},
+		Which[
+			merged === {}, "(?!)",
+			out === "", "(?s:.)",
+			StringLength[out] < StringLength[in], "[^" <> out <> "]",
+			True, "[" <> in <> "]"
+		]
+	]
+]
+classBody[ranges_List] := StringJoin[Map[If[#[[1]] === #[[2]], classCharacter[#[[1]]], classCharacter[#[[1]]] <> "-" <> classCharacter[#[[2]]]] &, ranges]]
+classCharacter[code_Integer] := If[ 32 < code < 127 && ! MemberQ[ToCharacterCode["]\\^-["], code],
+	FromCharacterCode[code],
+	"\\x{" <> IntegerString[code, 16] <> "}"
+]
+
+(* a character of a literal in a regular expression *)
+regexCharacter[c_String] := With[{code = First[ToCharacterCode[c]]},
+	Which[
+		StringMatchQ[c, RegularExpression["[A-Za-z0-9]"]], c,
+		32 <= code < 127 && StringContainsQ["\\^$.|?*+()[]{}", c], "\\" <> c,
+		32 <= code < 127, c,
+		True, "\\x{" <> IntegerString[code, 16] <> "}"
+	]
+]
 
 
 End[]

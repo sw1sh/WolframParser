@@ -329,6 +329,22 @@ VerificationTest[
     TestID -> "EBNF classic: :: and ::= arrows, a range of characters, bare names and [optional] parts"]
 
 VerificationTest[
+    EBNFRules["<word> ::= <letter> { <letter> } ! \"-\" & ( \" \" | \".\" )", "Dialect" -> "Classic"],
+    {Wolfram`Parser`EBNFPrivate`EBNFRule["word", "::=", {{Wolfram`Parser`EBNFPrivate`NonTerm["letter"],
+        Wolfram`Parser`EBNFPrivate`Rep["ManyAlts", {{Wolfram`Parser`EBNFPrivate`NonTerm["letter"]}}],
+        Wolfram`Parser`EBNFPrivate`NotAhead[Wolfram`Parser`EBNFPrivate`Lit["-"]],
+        Wolfram`Parser`EBNFPrivate`Ahead[Wolfram`Parser`EBNFPrivate`Group[{{Wolfram`Parser`EBNFPrivate`Lit[" "]}, {Wolfram`Parser`EBNFPrivate`Lit["."]}}]]}}]},
+    TestID -> "EBNF classic: & and ! read as lookaheads of the element after them"]
+
+VerificationTest[
+    Module[{g = EBNFParse["<word> ::= <letter> { <letter> } ! \"-\"\n<letter> ::= \"a\" | ... | \"z\"", "Dialect" -> "Classic", "Tokens" -> {"word"}]},
+        {Parse[g["word"] ~~ ParseLiteral[" "], "ab "], FailureQ[Parse[g["word"] ~~ ParseLiteral["-"], "ab-"]],
+            Parse[ParseLookahead[g["word"]] ~~ ParseRegex["[a-z]+"], "ab"]}
+    ],
+    {{"ab", " "}, True, {Null, "ab"}},
+    TestID -> "EBNF classic: a lookahead takes nothing and keeps nothing in the rule's value"]
+
+VerificationTest[
     Module[{g = EBNFParse["<greeting> :: 'hello' [\", \" <who>] { \"!\" }\n<who> :: \"world\" | \"you\"", "Dialect" -> "Classic"]},
         {Parse[g["greeting"], "hello, world!!"], Parse[g["greeting"], "hello"]}
     ],
@@ -399,3 +415,70 @@ VerificationTest[
     TestID -> "EBNF: the symbols a grammar's rules use are made in a private context, not the caller's"
 ]
 
+
+(* ===== token rules compiled to regular expressions ===== *)
+
+(* a reference reading of a classic grammar as a PEG: the position after what an element matches
+   at position i of s, or $Failed *)
+tokenPegRules = <||>; tokenPegClasses = <||>;
+tokenPeg[Wolfram`Parser`EBNFPrivate`Lit[l_String], s_, i_] :=
+	If[i + StringLength[l] - 1 <= StringLength[s] && StringTake[s, {i, i + StringLength[l] - 1}] === l, i + StringLength[l], $Failed]
+tokenPeg[Wolfram`Parser`EBNFPrivate`CharRange[a_String, b_String], s_, i_] :=
+	If[i <= StringLength[s] && First[ToCharacterCode[a]] <= First[ToCharacterCode[StringTake[s, {i}]]] <= First[ToCharacterCode[b]], i + 1, $Failed]
+tokenPeg[Wolfram`Parser`EBNFPrivate`NonTerm[n_String], s_, i_] := If[KeyExistsQ[tokenPegClasses, n],
+	Replace[StringCases[StringDrop[s, i - 1], StartOfString ~~ RegularExpression[tokenPegClasses[n]], 1], {{m_String} :> i + StringLength[m], _ -> $Failed}],
+	tokenPegAlts[tokenPegRules[n], s, i]]
+tokenPeg[Wolfram`Parser`EBNFPrivate`Opt[alts_List], s_, i_] := Replace[tokenPegAlts[alts, s, i], $Failed -> i]
+tokenPeg[Wolfram`Parser`EBNFPrivate`Group[alts_List], s_, i_] := tokenPegAlts[alts, s, i]
+tokenPeg[Wolfram`Parser`EBNFPrivate`Rep["ManyAlts", alts_List], s_, i_] := Module[{j = i, k}, While[(k = tokenPegAlts[alts, s, j]) =!= $Failed && k > j, j = k]; j]
+tokenPeg[Wolfram`Parser`EBNFPrivate`Ahead[e_], s_, i_] := If[tokenPeg[e, s, i] === $Failed, $Failed, i]
+tokenPeg[Wolfram`Parser`EBNFPrivate`NotAhead[e_], s_, i_] := If[tokenPeg[e, s, i] === $Failed, i, $Failed]
+tokenPeg[Wolfram`Parser`EBNFPrivate`ButNot[a_, b_], s_, i_] := If[tokenPeg[b, s, i] === $Failed, tokenPeg[a, s, i], $Failed]
+tokenPegSeq[{}, s_, i_] := i
+tokenPegSeq[{e_, rest___}, s_, i_] := With[{j = tokenPeg[e, s, i]}, If[j === $Failed, $Failed, tokenPegSeq[{rest}, s, j]]]
+tokenPegAlts[alts_List, s_, i_] := Catch[Scan[With[{j = tokenPegSeq[#, s, i]}, If[j =!= $Failed, Throw[j, tokenPegAlts]]] &, alts]; $Failed, tokenPegAlts]
+tokenPegRest[name_String, s_String] := Replace[tokenPegAlts[tokenPegRules[name], s, 1], {$Failed -> "FAIL", j_Integer :> StringDrop[s, j - 1]}]
+tokenTreeRest[p_, s_String] := Replace[Parse[ParseAction[p ~~ ParseRegex["(?s:.*)"], #2 &], s], _Failure -> "FAIL"]
+
+tokenGrammar = "
+<name> ::= [ \"`\" ] <part> { \"`\" <part> } ! <namechar>
+<part> ::= <start> { <start> | <digit> }
+<start> ::= \"a\" | ... | \"c\" | \"$\" | <letter>
+<digit> ::= \"0\" | ... | \"2\"
+<namechar> ::= <start> | <digit> | \"`\"
+<number> ::= <digits> ! \"^^\" [ \".\" ! \".\" [ <digits> ] ] | \".\" <digits>
+<digits> ::= <digit> { <digit> }
+<string> ::= '\"' { <character> - ( '\"' | \"\\\\\" ) | \"\\\\\" <character> } '\"'
+<comment> ::= \"(*\" { <comment> | <character> - ( \"(\" | \"*\" ) | \"(\" ! \"*\" | \"*\" ! \")\" } \"*)\"
+";
+tokenLetter = "\\\\\\[(?:Alpha|Beta)\\]";
+
+VerificationTest[
+    Wolfram`Parser`EBNFPrivate`tokenTrees[EBNFRules[tokenGrammar, "Dialect" -> "Classic"], {"digits", "string", "comment"}, <|"character" -> {{0, 1114111}}, "letter" -> Automatic|>],
+    <|"Tokens" -> <|
+        "digits" -> {"Regex", "[0-2][0-2]*+"},
+        "string" -> {"Regex", "[\"](?:(?>[^\"\\x{5c}]|[\\x{5c}](?s:.)))*+[\"]"},
+        "comment" -> {"Sequence", {"Regex", "\\(\\*"},
+            {"Many", {"Choice", {"Rule", "comment"}, {"Regex", "[^(*]++"}, {"Sequence", {"Regex", "[(]"}, {"NotAhead", {"Regex", "[*]"}}}, {"Sequence", {"Regex", "[*]"}, {"NotAhead", {"Regex", "[)]"}}}}},
+            {"Regex", "\\*\\)"}}|>,
+      "Rules" -> <|"comment" -> {"Sequence", {"Regex", "\\(\\*"},
+            {"Many", {"Choice", {"Rule", "comment"}, {"Regex", "[^(*]++"}, {"Sequence", {"Regex", "[(]"}, {"NotAhead", {"Regex", "[*]"}}}, {"Sequence", {"Regex", "[*]"}, {"NotAhead", {"Regex", "[)]"}}}}},
+            {"Regex", "\\*\\)"}}|>|>,
+    TestID -> "EBNF tokens: a rule's tree is regular expressions where it has no lookahead, its characters one class, a class repeated a run"]
+
+VerificationTest[
+    Module[{rules = EBNFRules[tokenGrammar, "Dialect" -> "Classic"], trees, parsers, alphabets, inputs},
+        tokenPegRules = Association[Cases[rules, Wolfram`Parser`EBNFPrivate`EBNFRule[n_String, _, alts_List] :> (n -> alts)]];
+        tokenPegClasses = <|"character" -> "(?s:.)", "letter" -> tokenLetter|>;
+        trees = Wolfram`Parser`EBNFPrivate`tokenTrees[rules, {"name", "number", "string", "comment"}, <|"character" -> {{0, 1114111}}, "letter" -> Automatic|>];
+        parsers = AssociationMap[Wolfram`Parser`Private`tokenTreeParser[trees["Tokens", #], trees["Rules"], <|"letter" -> tokenLetter|>] &, Keys[trees["Tokens"]]];
+        alphabets = <|"name" -> {"a", "$", "0", "`", "^", "\\[Alpha]", "\\[Gamma]", "\\["}, "number" -> {"0", "1", ".", "^", "a"},
+            "string" -> {"\"", "\\", "a", "\n", "\[Alpha]"}, "comment" -> {"(", "*", ")", "a", "\\"}|>;
+        SeedRandom[5];
+        Association[KeyValueMap[Function[{name, alphabet},
+            inputs = DeleteDuplicates[Table[StringJoin[RandomChoice[alphabet, RandomInteger[{0, 8}]]], 600]];
+            name -> Select[inputs, tokenPegRest[name, #] =!= tokenTreeRest[parsers[name], #] &]
+        ], alphabets]]
+    ],
+    <|"name" -> {}, "number" -> {}, "string" -> {}, "comment" -> {}|>,
+    TestID -> "EBNF tokens: a compiled rule matches what the rule matches read as a PEG, its classes from the reader"]
