@@ -1,10 +1,12 @@
 (* The syntax of the Wolfram Language
 
-   The one place the Wolfram Language's syntax is written down. Wolfram/Parser's reader takes its
-   tables from it: dev/freeze-syntax.wls reads it with EBNFDeclarations and writes what it
-   declares to WolframLanguageSyntax.wl, which the reader loads, since the reader loads no grammar
-   reader; a test checks that the two agree. It is a grammar in the classic dialect of EBNFRules,
-   whose declarations are the lines that begin with %:
+   The one place the Wolfram Language's syntax is written down. Wolfram/Parser's readers take their
+   tables and their tokens from it: dev/freeze-syntax.wls reads its declarations with
+   EBNFDeclarations, compiles its token rules to regular expressions, and writes both to
+   WolframLanguageSyntax.wl, which the readers load, since they load no grammar reader; a test
+   checks that the two agree, and another that the fast lexer's tokens span what the token rules
+   read. It is a grammar in the classic dialect of EBNFRules, whose declarations are the lines that
+   begin with %:
 
    %level name value
        a level that operators bind at, under the name CodeParser's Resources/Generated/Precedence.wl
@@ -387,9 +389,9 @@
 %tokens concrete_name letterlike_error number_text unterminated_string unterminated_comment
 %tokens unhandled_character concrete_comment concrete_blanks concrete_newline
 
-%class concrete_letter_name      reader    (* \\[Name], a long name CodeParser reads as a letter *)
+%class concrete_letter_name      reader    (* \[Name], a long name CodeParser reads as a letter *)
 %class concrete_letter_character reader    (* a character past ASCII CodeParser reads as a letter *)
-%class unknown_long_name         reader    (* \\[Name], a long name that is not CodeParser's *)
+%class unknown_long_name         reader    (* \[Name], a long name that is not CodeParser's *)
 
 <concrete_letter>      ::= <concrete_letter_name> | <concrete_letter_character>
 <ascii_part>           ::= ( <ascii_letter> | "$" ) { <ascii_letter> | <digit> | "$" }
@@ -408,8 +410,8 @@
 <unterminated_string>  ::= '"' { <character> }
 <unterminated_comment> ::= "(*" { <character> }
 
-(* a \\ that begins no letter, CodeParser's Token`Error`UnhandledCharacter: a long name not the
-   language's, a \\[ not closed, a \\: \\. \\| short of its digits, or a \\ and the character after it,
+(* a \ that begins no letter, CodeParser's Token`Error`UnhandledCharacter: a long name not the
+   language's, a \[ not closed, a \: \. \| short of its digits, or a \ and the character after it,
    none at the end *)
 <hex_digit>            ::= <digit> | "a" | ... | "f" | "A" | ... | "F"
 <unhandled_character>  ::= <unknown_long_name> | "\\[" { <alphanumeric> } ! "]"

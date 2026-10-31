@@ -1291,6 +1291,46 @@ VerificationTest[
     True,
     TestID -> "WolframLanguageSyntax.wl holds the declarations and the compiled token rules of the syntax, WolframLanguage.ebnf, as dev/freeze-syntax.wls writes them"]
 
+(* the fast lexer's names, blanks, numbers, strings, slots, outs, files and free-form input, each
+   against the text the syntax's tokens read at its start: a blank's a name, if any, then a blank *)
+wlTokenMismatches[s_String] := Module[{sym = Symbol["Wolfram`Parser`Languages`WolframLanguage`Private`" <> #] &, rules, specText, padded, lexed, last},
+    rules = <|1 -> {"name"}, 2 -> {"name?", "blank"}, 3 -> {"number"}, 4 -> {"number"}, 5 -> {"string"}, 6 -> {"slot"}, 7 -> {"out"}, 8 -> {"file"}, 21 -> {"freeform"}|>;
+    specText[text_String, names_List] := Fold[
+        Function[{read, r}, If[read === $Failed, $Failed,
+            With[{m = Parse[ParseAction[sym["syntaxToken"][StringTrim[r, "?"]] ~~ ParseRegex["(?s:.*)"], {#1, #2} &], StringDrop[text, StringLength[read]]]},
+                Which[! FailureQ[m], read <> m[[1]], StringEndsQ[r, "?"], read, True, $Failed]]]],
+        "", names];
+    padded = sym["paddedCodes"][ToCharacterCode[s]];
+    lexed = sym["lexedCodes"][padded];
+    last = sym["tokenCount"][lexed] - If[sym["lexerStatus"][lexed] === 0, 1, 2];
+    Select[Table[With[{k = sym["tokenKind"][lexed, t], a = sym["tokenStart"][lexed, t], b = sym["tokenEnd"][lexed, t]},
+        If[KeyExistsQ[rules, k],
+            With[{text = StringTake[s, {a, b - 1}], spec = specText[StringTake[s, {a, Min[StringLength[s], a + Max[400, b - a + 60]]}], rules[k]]},
+                If[spec === text, Nothing, {text, spec}]],
+            Nothing]], {t, last}], ListQ]
+];
+
+VerificationTest[
+    Catenate[wlTokenMismatches /@ {
+        "a_b + x__ - _. + _h + x___ + f[#1, ##2, #a, #a`b, #\"k\", %, %%, %3]",
+        "a`b`c + `d + $x + x$1 + \\[Alpha]x + \[Beta] + \\[Alpha]\\[Beta]1",
+        "16^^ff.8`20*^-3 + 1.5`20 + 1``10 + .5 + 2*^-3 + 36^^zz + 1.5`-3 + 7`.5",
+        "\"s\\\"t\" + \"\\[Alpha]\" + \"a\nb\" (* c (* d *) *) + f[x] (* \\( *)",
+        "Get << a/b.m; x >> \"f.txt\"; x >>> c`d`; << \\[Alpha]/x[1]",
+        "f'' + y=[1 + 1] + z",
+        "x = 1;\n(* a *)\ny = {1, 2.5, \"s\"}\n?a*b\n??c"
+    }],
+    {},
+    TestID -> "wl tokens: the fast lexer's tokens span what the syntax's tokens read"]
+
+VerificationTest[
+    With[{root = PacletObject["Wolfram/Parser"]["Location"]},
+        Association[Map[FileNameTake[#] -> Length[wlTokenMismatches[ByteArrayToString[ReadByteArray[#], "UTF-8"]]] &,
+            FileNameJoin[{root, "Kernel", #}] & /@ {"AST.wl", "EBNF.wl", "Markdown.wl", "TPTP.wl", FileNameJoin[{"Languages", "WolframLanguageSyntax.wl"}]}]]
+    ],
+    <|"AST.wl" -> 0, "EBNF.wl" -> 0, "Markdown.wl" -> 0, "TPTP.wl" -> 0, "WolframLanguageSyntax.wl" -> 0|>,
+    TestID -> "wl tokens: on the paclet's own sources, the fast lexer's tokens span what the syntax's tokens read"]
+
 VerificationTest[
     With[{syntax = Wolfram`Parser`Languages`WolframLanguage`Private`$syntax},
         Complement[syntax["operator"][[All, 2]], syntax["level"][[All, 1]]]
