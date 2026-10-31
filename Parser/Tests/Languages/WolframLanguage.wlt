@@ -1291,10 +1291,11 @@ VerificationTest[
     True,
     TestID -> "WolframLanguageSyntax.wl holds the declarations and the compiled token rules of the syntax, WolframLanguage.ebnf, as dev/freeze-syntax.wls writes them"]
 
-(* the fast lexer's names, blanks, numbers, strings, slots, outs, files and free-form input, each
-   against the text the syntax's tokens read at its start: a blank's a name, if any, then a blank *)
+(* the fast lexer's names, blanks, numbers, strings, slots, outs, files, primes and free-form input,
+   each against the text the syntax's token of its kind reads at its start *)
 wlTokenMismatches[s_String] := Module[{sym = Symbol["Wolfram`Parser`Languages`WolframLanguage`Private`" <> #] &, rules, specText, padded, lexed, last},
-    rules = <|1 -> {"name"}, 2 -> {"name?", "blank"}, 3 -> {"number"}, 4 -> {"number"}, 5 -> {"string"}, 6 -> {"slot"}, 7 -> {"out"}, 8 -> {"file"}, 21 -> {"freeform"}|>;
+    rules = <|1 -> {"name"}, 2 -> {"named_blank"}, 3 -> {"number"}, 4 -> {"number"}, 5 -> {"string"}, 6 -> {"slot"}, 7 -> {"out"}, 8 -> {"file"},
+        19 -> {"primes"}, 21 -> {"freeform"}|>;
     specText[text_String, names_List] := Fold[
         Function[{read, r}, If[read === $Failed, $Failed,
             With[{m = Parse[ParseAction[sym["syntaxToken"][StringTrim[r, "?"]] ~~ ParseRegex["(?s:.*)"], {#1, #2} &], StringDrop[text, StringLength[read]]]},
@@ -1317,7 +1318,7 @@ VerificationTest[
         "16^^ff.8`20*^-3 + 1.5`20 + 1``10 + .5 + 2*^-3 + 36^^zz + 1.5`-3 + 7`.5",
         "\"s\\\"t\" + \"\\[Alpha]\" + \"a\nb\" (* c (* d *) *) + f[x] (* \\( *)",
         "Get << a/b.m; x >> \"f.txt\"; x >>> c`d`; << \\[Alpha]/x[1]",
-        "f'' + y=[1 + 1] + z",
+        "f'' + y=[1 + 1] + z + g'''[x] + h'[y]'",
         "x = 1;\n(* a *)\ny = {1, 2.5, \"s\"}\n?a*b\n??c"
     }],
     {},

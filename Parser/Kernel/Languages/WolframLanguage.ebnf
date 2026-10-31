@@ -94,6 +94,11 @@
    %check rule check
        a check of the text a token rule matched, past what the rule says, which the readers
        make: a token whose text fails it is none.
+
+   %freeform spelling ...
+       the operators ending in = that a notebook reads before a [ all the same: any other
+       operator ending in =, = itself among them, is none right before a [, where =[ begins
+       free-form input.
 *)
 
 
@@ -424,3 +429,49 @@
 <concrete_comment>     ::= "(*" { <concrete_comment> | <character> - ( "(" | "*" ) | "(" ! "*" | "*" ! ")" } "*)"
 <concrete_blanks>      ::= ( " " | "\t" ) { " " | "\t" }
 <concrete_newline>     ::= "\r\n" | "\n" | "\r"
+
+
+(* Special forms
+
+   The tokens of the special forms, as the held reader takes them: the query ? or ?? and the
+   blanks after it; a derivative's primes; the = of a set, which is not that of ==, =!=, of the
+   =[ of free-form input or of = before a number's .; the =. of an unset, whitespace between the
+   = and the ., the . no number's; the file >> writes, and what follows it, after its whitespace,
+   where it is a file alone: the end, a newline, ;, ,, a closer or |>; the start of a message
+   pattern, a name or a blank and a colon; a message tag not closed before the end of the source;
+   a symbol, a name no _ follows; and a blank with its name. *)
+
+%tokens information_query primes set_operator unset_operator put_file file_end message_pattern_start unterminated_tag
+%tokens symbol named_blank
+
+%check put_file closed_brackets   (* its brackets closed, where it is not a string *)
+
+%freeform "//=" "^:="
+
+<information_query>     ::= ( "??" | "?" ) { " " | "\t" }
+<primes>                ::= "'" { "'" }
+<set_operator>          ::= "=" ! ( "=" ! "[" | "!=" ! "[" | "[" | "." ! <digit> )
+<unset_operator>        ::= "=" ! ( "=" | "!=" ) <whitespace> "." ! ( <digit> | "." )
+<put_file>              ::= <file>
+<file_end>              ::= <end> | "\n" | "\r" | ";" | "," | ")" | "]" | "}" | "|>"
+<message_pattern_start> ::= ( [ <name> ] <blank> | <name> ) { " " | "\t" } ":" ! ( ":" | "=" | ">" )
+<unterminated_tag>      ::= '"' { <character> - ( '"' | "\\" ) | "\\" <character> } <end>
+<symbol>                ::= <name> ! "_"
+<named_blank>           ::= [ <name> ] <blank>
+
+(* The tokens of the special forms, as the concrete reader takes them: a run of two or more %,
+   CodeParser's Token`PercentPercent; a name of ASCII alone, which the reader looks ahead for;
+   the tokens CodeParser does not read, ?? among them; and a control character, which no token
+   holds. *)
+
+%tokens percents ascii_name_ahead unsupported stray_character
+
+%class past_ascii             range 128 1114111
+%class control                range 0 31
+%class delete                 range 127 127
+%class unsupported_long_name  reader    (* \[Name], or its character, of a long name CodeParser does not read *)
+
+<percents>              ::= "%" "%" { "%" }
+<ascii_name_ahead>      ::= <ascii_part> ! ( "\\" | "`" | <past_ascii> )
+<unsupported>           ::= "??" | <unsupported_long_name>
+<stray_character>       ::= <control> - ( "\t" | "\n" | "\f" | "\r" ) | <delete>

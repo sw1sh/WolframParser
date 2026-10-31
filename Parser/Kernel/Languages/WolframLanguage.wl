@@ -104,8 +104,8 @@ $operatorCharacters := $operatorCharacters = Select[Flatten[Values[$longNameOper
 (* one spelling of an operator, not followed by what would make it a longer
 	one of all; one of those cutQ gives True for is none right before a [. The
 	held grammar's cut, as a notebook reads it, is an operator that ends in =,
-	but //= and ^:=: the = and the [ begin free-form input. CodeParser has no
-	free-form input, so the concrete grammar cuts none. *)
+	but those the syntax's %freeform declares: the = and the [ begin free-form
+	input. CodeParser has no free-form input, so the concrete grammar cuts none. *)
 longest[s_String] := longest[s, $operatorSpellings, freeformCutQ]
 longest[s_String, all_List] := longest[s, all, False &]
 longest[s_String, all_List, cutQ_] := With[{more = Select[all, StringStartsQ[#, s] && # =!= s &]},
@@ -123,7 +123,7 @@ longest[s_String, all_List, cutQ_] := With[{more = Select[all, StringStartsQ[#, 
 	]
 ]
 
-freeformCutQ[s_String] := StringEndsQ[s, "="] && ! MemberQ[{"//=", "^:="}, s]
+freeformCutQ[s_String] := StringEndsQ[s, "="] && ! MemberQ[Catenate[Lookup[$syntax, "freeform", {}]], s]
 
 (* an operator's spellings: its ASCII one and its long names, or the long
 	names alone of one named by its long name *)
@@ -154,13 +154,14 @@ reachedTokenRules[tree_] := FixedPoint[
 
 (* the checks the syntax declares, by the functions that make them *)
 $tokenChecks := $tokenChecks = Association[Map[#[[1]] -> $checkFunctions[#[[2]]] &, Lookup[$syntax, "check", {}]]]
-$checkFunctions = <|"base_digits" -> baseDigitsQ|>
+$checkFunctions = <|"base_digits" -> baseDigitsQ, "closed_brackets" -> closedBracketsQ|>
 
 (* The classes the syntax leaves to the reader, as regular expressions: the long names a notebook
 	reads as letters; the characters past ASCII it reads as letters, those no operator, bracket,
 	whitespace or space has; the long names CodeParser reads as letters, and the characters past
-	ASCII it reads as letters, a space among them; the long names that are not CodeParser's; and
-	the long names, and their characters, that a notebook reads as spaces and as newlines. *)
+	ASCII it reads as letters, a space among them; the long names that are not CodeParser's, and
+	the spellings of those it does not read; and the long names, and their characters, that a
+	notebook reads as spaces and as newlines. *)
 tokenClassRegex["held_letter_name"] := tokenClassRegex["held_letter_name"] =
 	"\\\\\\[(?:" <> StringRiffle[Sort[Select[Keys[$longNames], heldLetterNameQ["\\[" <> # <> "]"] &]], "|"] <> ")\\]"
 tokenClassRegex["held_letter_character"] := tokenClassRegex["held_letter_character"] = "[^\\x00-\\x7F" <> StringJoin[codeRegex /@ Select[
@@ -171,6 +172,7 @@ tokenClassRegex["concrete_letter_character"] := tokenClassRegex["concrete_letter
 	Union[$operatorCharacters, Keys[$nonLetterCharacters]], First[ToCharacterCode[#]] > 127 &]] <> "]"
 tokenClassRegex["unknown_long_name"] := tokenClassRegex["unknown_long_name"] =
 	"\\\\\\[(?!(?:" <> StringRiffle[Sort[Keys[$longNames]], "|"] <> ")\\])[A-Za-z0-9]+\\]"
+tokenClassRegex["unsupported_long_name"] := tokenClassRegex["unsupported_long_name"] = literalsRegex[Catenate[longNameSpellings /@ $longNameTable["Unsupported"]]]
 tokenClassRegex["held_space"] := tokenClassRegex["held_space"] = literalsRegex[$heldSpaces]
 tokenClassRegex["held_newline"] := tokenClassRegex["held_newline"] = literalsRegex[$heldNewlines]
 
@@ -254,8 +256,8 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	nullLeaf[x_] := x;
 
 	(* --- operands --- *)
-	symbolLeaf = SpannedToken[ParseAction[$name ~~ ParseNotFollowedBy[ParseLiteral["_"]], #1 &], ws, alg["Leaf"]["Symbol", #] &];
-	blankLeaf = SpannedToken[text[ParseOptional[$name] ~~ $blank], ws, alg["Leaf"]["Blank", #] &];
+	symbolLeaf = SpannedToken[syntaxToken["symbol"], ws, alg["Leaf"]["Symbol", #] &];
+	blankLeaf = SpannedToken[syntaxToken["named_blank"], ws, alg["Leaf"]["Blank", #] &];
 	(* a long name, as it is spelt or as its character *)
 	longOperator[name_String] := after[ParseChoice @@ (ParseLiteral /@ longNameSpellings[name]), wsAll];
 	longPostfixOperator[name_String] := after[ParseChoice @@ (ParseLiteral /@ longNameSpellings[name]), ws];
@@ -306,10 +308,10 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	spanStart = ParseAction[bareSpan, Function[f, f[alg["Leaf"]["Integer", "1"]]]];
 	(* ?name and ??name, the query Information["name", LongForm -> ...] of
 		the words after it, a tab among them a space, or of a string *)
-	information = ParseAction[ParseChoice[ParseLiteral["??"], ParseLiteral["?"]] ~~ ParseRegex["[ \t]*"] ~~
+	information = ParseAction[syntaxToken["information_query"] ~~
 			ParseChoice[$string, ParseAction[$informationName, "\"" <> StringReplace[#, "\t" -> " "] <> "\"" &]] ~~ ws,
-		Function[{query, spaces, name, w}, alg["Call"][alg["Leaf"]["Symbol", "Information"], {alg["Leaf"]["String", name],
-			alg["Binary"]["Rule", alg["Leaf"]["Symbol", "LongForm"], alg["Leaf"]["Symbol", If[query === "??", "True", "False"]]]
+		Function[{query, name, w}, alg["Call"][alg["Leaf"]["Symbol", "Information"], {alg["Leaf"]["String", name],
+			alg["Binary"]["Rule", alg["Leaf"]["Symbol", "LongForm"], alg["Leaf"]["Symbol", If[StringStartsQ[query, "??"], "True", "False"]]]
 		}]]
 	];
 	otherUnits = ParseChoice[
@@ -363,8 +365,8 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 			Function[With[{parts = {##}}, Function[s, alg["Infix"]["MessageName", Prepend[parts, s]]]]]
 		]
 	];
-	derivative = ParseAction[ParseLookahead[ParseLiteral["'"]] ~~ ParseRegex["'+"] ~~ ws,
-		Function[{look, primes, w}, Function[f, alg["Call"][
+	derivative = ParseAction[syntaxToken["primes"] ~~ ws,
+		Function[{primes, w}, Function[f, alg["Call"][
 			alg["Call"][alg["Leaf"]["Symbol", "Derivative"], {alg["Leaf"]["Integer", ToString[StringLength[primes]]]}], {f}
 		]]]
 	];
@@ -416,14 +418,8 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	];
 	(* the = of a set, before a number its . begins too, not the = of free-form input; and = then
 		a . not a number's, trivia between them, an unset *)
-	setOperator = after[ParseLiteral["="] ~~
-		ParseNotFollowedBy[ParseChoice[ParseLiteral["="] ~~ ParseNotFollowedBy[ParseLiteral["["]], ParseLiteral["!="] ~~ ParseNotFollowedBy[ParseLiteral["["]],
-			ParseLiteral["["], ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]]
-		]], wsAll
-	];
-	unset = after[ParseLiteral["="] ~~ ParseNotFollowedBy[ParseChoice[ParseLiteral["="], ParseLiteral["!="]]] ~~ wsAll ~~
-		ParseLiteral["."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter | "."]], ws
-	];
+	setOperator = after[syntaxToken["set_operator"], wsAll];
+	unset = after[syntaxToken["unset_operator"], ws];
 	tagSet = ParseAction[operator["/:"] ~~ RecRef[tagLeft] ~~ ParseChoice[
 			ParseAction[unset, {"TagUnset"} &],
 			ParseAction[operator[":="] ~~ RecRef[tagRight], {"TagSetDelayed", #2} &],
@@ -437,7 +433,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 	(* >> or >>> and a file alone, else, as a notebook reads it, the expression after it: a file
 		where the end, a newline, ;, , or a closer follows it *)
 	put = ParseAction[ParseChoice[operator[">>>"], operator[">>"]] ~~ ParseChoice[
-			ParseAction[leaf[ParseCondition[$file, closedBracketsQ], "File"] ~~ ParseLookahead[ParseChoice[ParseRegex["\\z"], ParseRegex["[\\n\\r;,)\\]}]"], ParseLiteral["|>"]]], #1 &],
+			ParseAction[leaf[syntaxToken["put_file"], "File"] ~~ ParseLookahead[syntaxToken["file_end"]], #1 &],
 			RecRef[putRight]
 	],
 		Function[{o, file}, Function[x, alg["Binary"][If[o === ">>>", "PutAppend", "Put"], x, file]]]
@@ -552,13 +548,10 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 		than it *)
 	SetRec[messagePattern, table[ParseChoice[patternUnit, blankLeaf], $codeParserPrecedence["Fake`OptionalColon"] - 1]];
 	SetRec[messageOperand, ParseChoice[
-		ParseAction[ParseLookahead[ParseChoice[ParseOptional[$name] ~~ $blank, $name] ~~ ParseRegex["[ \t]*"] ~~ ParseLiteral[":"] ~~
-			ParseNotFollowedBy[ParseCharacter[":" | "=" | ">"]]
-		] ~~ RecRef[messagePattern], #2 &
-		],
+		ParseAction[ParseLookahead[syntaxToken["message_pattern_start"]] ~~ RecRef[messagePattern], #2 &],
 		leaf[$string, "String"],
 		(* a string not closed, as a notebook reads a::"b: a word of its text to the end of the source *)
-		leaf[ParseRegex["\"(?:[^\"\\\\]|\\\\[\\s\\S])*\\z"], "Tag"],
+		leaf[syntaxToken["unterminated_tag"], "Tag"],
 		word,
 		ParseAction[ParseLookahead[ParseChoice[ParseLiteral["("], ParseLiteral["{"], ParseLiteral["<|"], ParseLiteral["<<"], ParseLiteral["?"]]] ~~ otherUnits, #2 &],
 		Sequence @@ Map[Function[s, ParseAction[s[[2, 2]] ~~ prefixedTable[unit, precedenceValue[First[s]]], #1[#2] &]],
@@ -1525,9 +1518,6 @@ $unterminatedString := syntaxToken["unterminated_string"]
 $unterminatedComment := syntaxToken["unterminated_comment"]
 $unhandledCharacter := syntaxToken["unhandled_character"]
 
-(* a character that can go on with a name past its first run of ASCII *)
-nameMoreQ[c_String] := c === "\\" || c === "`" || First[ToCharacterCode[c]] > 127
-
 (* A number's text is CodeParser's Token`Error`Number where its base is
 	not 2 to 36, a digit is not one of the base's, or a ^^, a `` or a *^ has
 	nothing after it. *)
@@ -1591,9 +1581,6 @@ $lineTriviaStarts := $lineTriviaStarts = AssociationThread[Union[{" ", "\t", "("
 $allTriviaStarts := $allTriviaStarts = Join[$lineTriviaStarts, AssociationThread[Union[{"\n", "\r"}, Select[$longNewlines, StringLength[#] === 1 &]] -> True]]
 lineTriviaStartQ[c_String] := KeyExistsQ[$lineTriviaStarts, c]
 allTriviaStartQ[c_String] := KeyExistsQ[$allTriviaStarts, c]
-
-(* a control character, which no token holds *)
-strayCharacterQ[c_String] := With[{n = First[ToCharacterCode[c]]}, (n < 32 && ! MemberQ[{9, 10, 12, 13}, n]) || n === 127]
 
 $blankHeads = <|"_" -> Blank, "__" -> BlankSequence, "___" -> BlankNullSequence|>
 $patternBlankHeads = <|"_" -> CodeParser`PatternBlank, "__" -> CodeParser`PatternBlankSequence,
@@ -1723,7 +1710,7 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 		item[#1, #2] &
 	];
 	outItem = ParseAction[ParseChoice[
-			ParseAction[ParseRegex["%%+"], concreteLeaf[Token`PercentPercent, #] &],
+			ParseAction[syntaxToken["percents"], concreteLeaf[Token`PercentPercent, #] &],
 			ParseAction[ParseLiteral["%"] ~~ ParseOptional[$digits], outNode]
 	] ~~ ws,
 		item[#1, #2] &
@@ -1733,11 +1720,11 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 	letterlikeItem = ParseAction[$letterlikeError ~~ ws, errorTokenItem[Token`Error`ExpectedLetterlike, #1, #2] &];
 	unterminatedStringItem = ParseAction[ParseNotFollowedBy[$string] ~~ $unterminatedString ~~ ws, errorTokenItem[Token`Error`UnterminatedString, #2, #3] &];
 	unterminatedCommentItem = ParseAction[$unterminatedComment ~~ ws, errorTokenItem[Token`Error`UnterminatedComment, #1, #2] &];
-	unsupportedItem = ParseAction[ParseChoice @@ (ParseLiteral /@ Prepend[Catenate[longNameSpellings /@ $longNameTable["Unsupported"]], "??"]) ~~ ws,
+	unsupportedItem = ParseAction[syntaxToken["unsupported"] ~~ ws,
 		errorTokenItem[Token`Error`UnsupportedToken, #1, #2] &
 	];
 	unhandledItem = ParseAction[$unhandledCharacter ~~ ws, errorTokenItem[Token`Error`UnhandledCharacter, #1, #2] &];
-	strayItem = ParseAction[ParseCharacter[_?strayCharacterQ] ~~ ws, errorTokenItem[Token`Error`UnhandledCharacter, #1, #2] &];
+	strayItem = ParseAction[syntaxToken["stray_character"] ~~ ws, errorTokenItem[Token`Error`UnhandledCharacter, #1, #2] &];
 	errorUnits = ParseChoice[letterlikeItem, unterminatedStringItem, unterminatedCommentItem, unsupportedItem, unhandledItem, strayItem];
 	errorToken = ParseChoice[ParseCondition[numberItem, finalOperandQ], errorUnits];
 	(* where no operand begins: an operand left out *)
@@ -1748,7 +1735,7 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 	leafAhead = ParseLookahead[ParseCharacter[_?leafStartQ]] ~~ ParseChoice[
 		ParseCharacter["_" | "#" | "%" | "{"], ParseLiteral["<|"],
 		ParseLiteral["("] ~~ ParseNotFollowedBy[ParseLiteral["*"]],
-		ParseRegex["[A-Za-z$][A-Za-z0-9$]*"] ~~ ParseNotFollowedBy[ParseCharacter[_?nameMoreQ]],
+		syntaxToken["ascii_name_ahead"],
 		ParseLookahead[ParseCharacter[_?nameStartQ]] ~~ $concreteName ~~ ParseNotFollowedBy[ParseLiteral["`"]],
 		ParseLookahead[ParseCharacter[DigitCharacter | "."]] ~~ ParseCondition[$numberText, numberTextValidQ],
 		ParseLookahead[ParseLiteral["\""]] ~~ $string,
