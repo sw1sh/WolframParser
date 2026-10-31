@@ -1284,10 +1284,12 @@ VerificationTest[
 
 VerificationTest[
     With[{languages = FileNameJoin[{PacletObject["Wolfram/Parser"]["Location"], "Kernel", "Languages"}]},
-        EBNFDeclarations[File[FileNameJoin[{languages, "WolframLanguage.ebnf"}]]] === Get[FileNameJoin[{languages, "WolframLanguageSyntax.wl"}]]
+        Join[EBNFDeclarations[File[FileNameJoin[{languages, "WolframLanguage.ebnf"}]]],
+            Wolfram`Parser`EBNFPrivate`declaredTokenTrees[File[FileNameJoin[{languages, "WolframLanguage.ebnf"}]]]
+        ] === Get[FileNameJoin[{languages, "WolframLanguageSyntax.wl"}]]
     ],
     True,
-    TestID -> "WolframLanguageSyntax.wl holds the declarations of the syntax, WolframLanguage.ebnf, as dev/freeze-syntax.wls writes them"]
+    TestID -> "WolframLanguageSyntax.wl holds the declarations and the compiled token rules of the syntax, WolframLanguage.ebnf, as dev/freeze-syntax.wls writes them"]
 
 VerificationTest[
     With[{syntax = Wolfram`Parser`Languages`WolframLanguage`Private`$syntax},

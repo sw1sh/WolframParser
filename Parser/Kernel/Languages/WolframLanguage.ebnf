@@ -74,6 +74,24 @@
        !(!a). tag is the head CodeParser gives the node, where it is not the head's own symbol.
        The rows are in the order of the reader's tables; a reader that takes the forms of one
        head with one rule, as the grammars do Unset's and Put's, takes the first.
+
+   %tokens rule ...
+       the rules of the tokens: names, numbers, strings, comments, whitespace and the rest. Each
+       is read as a PEG reads it: its alternatives in order, the first that matches taken; an
+       option and a repetition taking all they can and giving none back; &x and !x, where x
+       must follow, or must not, taking nothing; and x - y, x where y does not match.
+       dev/freeze-syntax.wls compiles each to regular expressions, which the readers make
+       their parsers of.
+
+   %class name range low high
+   %class name reader
+   %class name regex expression
+       a class of characters no rule defines: those with codes from low to high; one the
+       reader makes from its tables of long names; or those a regular expression matches.
+
+   %check rule check
+       a check of the text a token rule matched, past what the rule says, which the readers
+       make: a token whose text fails it is none.
 *)
 
 
@@ -286,3 +304,76 @@
 %operator ">>"            GreaterGreater         Put          Put
 %operator ">>>"           GreaterGreater         Put          PutAppend
 %operator ";"             Semi                   Compound     CompoundExpression
+
+
+(* Tokens
+
+   The tokens of a notebook's reading, which the held reader takes. A name is read whole, its
+   context marks only between its parts: a` and a``b are none. A number is read as far as it
+   goes, and its base checked after. *)
+
+%tokens letter name digits number string comment blank slot out information_name freeform file unterminated_file
+%tokens space line_space whitespace
+
+%class character             range 0 1114111
+%class held_letter_name      reader                    (* \[Name], a long name a notebook reads as a letter *)
+%class held_letter_character reader                    (* a character past ASCII a notebook reads as a letter *)
+%class held_space            reader                    (* a long name, or its character, a notebook reads as a space *)
+%class held_newline          reader                    (* a long name, or its character, a notebook reads as a newline *)
+%class unicode_letter        regex "[^\\P{L}\\x00-\\x7F]"   (* a letter past ASCII, as Unicode has it *)
+%class end                   regex "\\z"              (* the end of the source *)
+
+%check number base_digits     (* a base from 2 to 36, and only digits of the base after its ^^ *)
+
+<letter>          ::= <held_letter_name> | <held_letter_character>
+<ascii_letter>    ::= "a" | ... | "z" | "A" | ... | "Z"
+<digit>           ::= "0" | ... | "9"
+<alphanumeric>    ::= <digit> | <ascii_letter>
+
+<name_start>      ::= <ascii_letter> | "$" | <letter>
+<name_part>       ::= <name_start> { <name_start> | <digit> }
+<name_character>  ::= <name_start> | <digit> | "`"
+<name>            ::= [ "`" ] <name_part> { "`" <name_part> } ! <name_character>
+
+<digits>          ::= <digit> { <digit> }
+<number>          ::= <number_body> [ "`" [ "`" ] [ <precision> ] ] [ "*^" <exponent> ]
+<number_body>     ::= <digits> [ "^^" <based_digits> | "." ! "." [ <digits> ] ] | "." <digits>
+<based_digits>    ::= <alphanumeric> { <alphanumeric> } [ "." ! "." { <alphanumeric> } ] | "." <alphanumeric> { <alphanumeric> }
+<precision>       ::= [ "-" | "+" ] ( <digits> [ "." ] { <digit> } | "." <digits> )
+<exponent>        ::= [ "-" | "+" ] <digits>
+
+<string>          ::= '"' { <character> - ( '"' | "\\" ) | "\\" <character> } '"'
+
+(* a comment, the comments nested in it too; a backslash takes the ( after it, which opens none *)
+<comment>         ::= "(*" { <comment> | <character> - ( "(" | "*" | "\\" ) | "\\" [ "(" ] | "(" ! "*" | "*" ! ")" } "*)"
+
+<blank>           ::= "___" [ <name> ] | "__" [ <name> ] | "_" [ "." | <name> ]
+<slot>            ::= "#" <string> | "##" { <digit> } | "#" [ <digits> | <slot_name> ]
+<slot_name>       ::= ( <ascii_letter> | "$" | "`" ) { <ascii_letter> | <digit> | "$" | "`" }
+<out>             ::= "%" { "%" } { <digit> }
+
+(* what ? and ?? ask about: words of letters, digits and the * and @ of a name pattern, with the
+   spaces and tabs between them *)
+<information_character> ::= <alphanumeric> | "$" | "`" | "*" | "@"
+<information_word> ::= ( <information_character> | <letter> ) { <information_character> | <letter> }
+<information_name> ::= <information_word> { ( " " | "\t" ) { " " | "\t" } <information_word> }
+
+(* free-form input: =[ and its text to the first ], the text on one line after any blank ones *)
+<freeform>        ::= "=[" { " " | "\t" | "\r" | "\n" } { <character> - ( "]" | "\r" | "\n" ) }
+                      [ ( "\r" | "\n" ) { " " | "\t" | "\r" | "\n" } ] "]"
+
+(* the file of << and >>: a string, or the characters of a path or a context, a letter past ASCII
+   and a \ among them, \[Name] one character, and brackets to their ] or the end of the source;
+   and one whose \[ is not closed *)
+<file>            ::= <string> | <file_unit> { <file_unit> }
+<file_unit>       ::= <file_character> | <file_bracket>
+<file_character>  ::= <alphanumeric> | "$" | "`" | "_" | "." | "/" | "~" | ":" | "!" | "*" | "?" | "-" | <unicode_letter>
+                    | "\\[" <alphanumeric> { <alphanumeric> } "]" | "\\" ! "["
+<file_bracket>    ::= "[" { <character> - ( "[" | "]" ) | <file_bracket> } ( "]" | <end> )
+<unterminated_file> ::= { <file_character> } "\\[" { <alphanumeric> } ! "]"
+
+(* whitespace: a space, a tab, a form feed, a line continued, a comment or a long name a notebook
+   reads as a space; on a line, or across lines *)
+<space>           ::= " " | "\t" | "\f" | "\\\n" | "\\\r\n" | <comment> | <held_space>
+<line_space>      ::= { <space> }
+<whitespace>      ::= { "\n" | "\r" | <held_newline> | <space> }

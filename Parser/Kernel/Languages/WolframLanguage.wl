@@ -132,47 +132,67 @@ spellings[op_String] := If[MemberQ[$longNameOnlyOperators, op], $longNameOperato
 (* a parser's pieces joined into the text it read *)
 text[p_] := ParseAction[p, Function[StringJoin[Cases[Flatten[{##}], _String]]]]
 
+(* A token of the syntax: the parser of its rule's tree, as dev/freeze-syntax.wls compiles it, with
+	the rules that refer to themselves it reaches and the classes it takes from the reader, and the
+	check the syntax declares for it, if any; its value the text it matched. A class is made at the
+	first token that takes it, so a token of none, such as digits, is made before the tables of
+	long names are read. *)
+syntaxToken[name_String] := syntaxToken[name] = With[{tree = $syntax["tokentrees"][name]},
+	With[{rules = KeyTake[$syntax["tokenrules"], reachedTokenRules[tree]]},
+		With[{parser = Wolfram`Parser`Private`tokenTreeParser[tree, rules,
+				AssociationMap[tokenClassRegex, Union[Cases[{tree, Values[rules]}, {"Class", c_String} :> c, Infinity]]]]},
+			Replace[Lookup[$tokenChecks, name, None], {None -> parser, check_ :> ParseCondition[parser, check]}]
+		]
+	]
+]
+
+(* the rules that refer to themselves a tree reaches, and those their trees reach in turn *)
+reachedTokenRules[tree_] := FixedPoint[
+	Union[#, Cases[Lookup[$syntax["tokenrules"], #], {"Rule", r_String} :> r, Infinity]] &,
+	Union[Cases[tree, {"Rule", r_String} :> r, Infinity]]
+]
+
+(* the checks the syntax declares, by the functions that make them *)
+$tokenChecks := $tokenChecks = Association[Map[#[[1]] -> $checkFunctions[#[[2]]] &, Lookup[$syntax, "check", {}]]]
+$checkFunctions = <|"base_digits" -> baseDigitsQ|>
+
+(* The classes the syntax leaves to the reader, as regular expressions: the long names a notebook
+	reads as letters; the characters past ASCII it reads as letters, those no operator, bracket,
+	whitespace or space has; and the long names, and their characters, that it reads as spaces and
+	as newlines. *)
+tokenClassRegex["held_letter_name"] := tokenClassRegex["held_letter_name"] =
+	"\\\\\\[(?:" <> StringRiffle[Sort[Select[Keys[$longNames], heldLetterNameQ["\\[" <> # <> "]"] &]], "|"] <> ")\\]"
+tokenClassRegex["held_letter_character"] := tokenClassRegex["held_letter_character"] = "[^\\x00-\\x7F" <> StringJoin[codeRegex /@ Select[
+	Union[$operatorCharacters, Keys[$nonLetterCharacters], Keys[$spaceCharacters]], First[ToCharacterCode[#]] > 127 &]] <> "]"
+tokenClassRegex["held_space"] := tokenClassRegex["held_space"] = literalsRegex[$heldSpaces]
+tokenClassRegex["held_newline"] := tokenClassRegex["held_newline"] = literalsRegex[$heldNewlines]
+
+(* a text as a regular expression of its characters' codes; any of a list of texts, as an atomic
+	choice, and none of none *)
+codeRegex[s_String] := StringJoin[Map["\\x{" <> IntegerString[#, 16] <> "}" &, ToCharacterCode[s]]]
+literalsRegex[{}] := "(?!)"
+literalsRegex[texts_List] := "(?>" <> StringRiffle[codeRegex /@ texts, "|"] <> ")"
+
 (* a character past ASCII that is no operator's: a space past ASCII that no long name has, U+2000
 	and the rest, is a letter *)
 nameCharacterQ[c_String] := First[ToCharacterCode[c]] > 127 && ! MemberQ[$operatorCharacters, c]
 
-(* a letter past ASCII, as a notebook reads it: a long name that is a letter of the language, or a
-	character past ASCII that is no operator's, bracket's, newline's or space's *)
-$letter = ParseChoice[
-	ParseAction[ParseLookahead[ParseLiteral["\\["]] ~~ ParseCondition[ParseRegex["\\\\\\[[A-Za-z0-9]+]"], heldLetterNameQ], #2 &],
-	ParseCharacter[_?heldNameCharacterQ]
-]
-
-(* a name: letters, digits, $ and ` context marks; not beginning with a
-	digit. The loop after the first run of ASCII is entered only at a
-	letter past ASCII. *)
-$name = ParseCondition[text[ParseChoice[ParseRegex["[A-Za-z$`][A-Za-z0-9$`]*"], $letter] ~~
-	ParseMany[ParseAction[ParseLookahead[ParseCharacter[_?nameContinuesQ]] ~~ ParseChoice[ParseRegex["[A-Za-z0-9$`]+"], $letter], #2 &]]
-], contextMarksQ
-]
-
-(* a name's context marks, as the reader's lexer takes them: none at its end, none before another or
-	before a digit *)
-contextMarksQ[s_String] := ! StringEndsQ[s, "`"] && StringFreeQ[s, "``" | ("`" ~~ DigitCharacter)]
-
-nameContinuesQ[c_String] := c === "\\" || First[ToCharacterCode[c]] > 127 || StringMatchQ[c, LetterCharacter | DigitCharacter | "$" | "`"]
-
-$digits = ParseRegex["[0-9]+"]
-
-(* 12, 1.5, .5, 1. (not before another .), 16^^ff.8, 16^^.8, 1.5`20, 1``10, 2*^-3; a base no
-	number has, or a digit its base has not, is none *)
-$number = ParseCondition[text[
-	ParseChoice[
-		$digits ~~ ParseOptional[ParseChoice[
-			ParseLiteral["^^"] ~~ ParseRegex["[0-9a-zA-Z]+(\\.(?!\\.)[0-9a-zA-Z]*)?|\\.[0-9a-zA-Z]+"],
-			ParseLiteral["."] ~~ ParseNotFollowedBy[ParseLiteral["."]] ~~ ParseOptional[$digits]
-		]],
-		ParseLiteral["."] ~~ $digits
-	]
-	~~ ParseOptional[ParseLiteral["`"] ~~ ParseOptional[ParseLiteral["`"]] ~~ ParseOptional[ParseRegex["[-+]?([0-9]+\\.?[0-9]*|\\.[0-9]+)"]]]
-	~~ ParseOptional[ParseLiteral["*^"] ~~ ParseRegex["[-+]?[0-9]+"]]
-], baseDigitsQ
-]
+(* The tokens the held reader takes, the syntax's rules of their names, which WolframLanguage.ebnf
+	gives and syntaxToken makes: a letter past ASCII; a name; digits; a number, its base checked; a
+	string; a blank; a slot; an out; what ? and ?? ask about; free-form input; and the file of <<
+	and >>, and one whose \[ is not closed. *)
+$letter := syntaxToken["letter"]
+$name := syntaxToken["name"]
+$digits := syntaxToken["digits"]
+$number := syntaxToken["number"]
+$string := syntaxToken["string"]
+$blank := syntaxToken["blank"]
+$slot := syntaxToken["slot"]
+$out := syntaxToken["out"]
+$informationName := syntaxToken["information_name"]
+$freeform := syntaxToken["freeform"]
+$file := syntaxToken["file"]
+$unterminatedFile := syntaxToken["unterminated_file"]
 
 (* whether the file after >> closes its brackets, as a notebook reads x >> b[c: a string's are its
 	characters *)
@@ -186,44 +206,6 @@ baseDigitsQ[s_String] := StringFreeQ[s, "^^"] || With[{parts = StringSplit[s, "^
 ]
 
 numberKind[s_String] := If[StringFreeQ[s, "." | "`"], "Integer", "Real"]
-
-(* runs of plain characters, then any escaped one *)
-$string = text[ParseLiteral["\""] ~~ ParseMany[ParseChoice[
-	ParseRegex["[^\"\\\\]+"],
-	ParseLiteral["\\"] ~~ ParseCharacter[_]
-]] ~~ ParseLiteral["\""]
-]
-
-(* _, __, ___, then an optional head, or after a single _ a .: after __ or ___ a . is a token of
-	its own, a Dot or the start of a number *)
-$blank = text[ParseChoice[
-	ParseLiteral["___"] ~~ ParseOptional[$name],
-	ParseLiteral["__"] ~~ ParseOptional[$name],
-	ParseLiteral["_"] ~~ ParseOptional[ParseChoice[ParseLiteral["."], $name]]
-]]
-
-$slot = ParseAction[ParseLookahead[ParseLiteral["#"]] ~~ ParseChoice[text[ParseLiteral["#"] ~~ $string], ParseRegex["##[0-9]*|#([0-9]+|[A-Za-z$`][A-Za-z0-9$`]*)?"]], #2 &]
-
-(* what a ? or ?? asks about: words of letters, digits and the * and @
-	of a name pattern, the spaces and tabs between them too *)
-$informationWord = text[ParseSome[ParseChoice[ParseRegex["[A-Za-z0-9$`*@]+"], $letter]]]
-$informationName = text[$informationWord ~~ ParseMany[ParseRegex["[ \t]+"] ~~ $informationWord]]
-
-$out = ParseAction[ParseLookahead[ParseLiteral["%"]] ~~ ParseRegex["%+[0-9]*"], #2 &]
-
-(* free-form input, as a notebook reads it: =[ and its text to the first ], the ] of a \[Name]
-	too, the text on one line after any blank ones *)
-$freeform = ParseRegex["=\\[[ \\t\\r\\n]*[^\\]\\r\\n]*(?:[\\r\\n][ \\t\\r\\n]*)?\\]"]
-
-(* the file of << and >>: a string, or the characters of a path or a
-	context, a letter past ASCII and a \ among them, \[Name] one
-	character; and one whose \[ is not closed *)
-$fileCharacters = "(?:[A-Za-z0-9$`_./~:!*?-]|(?![\\x00-\\x7F])\\p{L}|\\\\\\[[A-Za-z0-9]+\\]|\\\\(?!\\[))"
-(* a bracket in a file's name to its ], brackets nested, or to the end of the source, as a notebook
-	reads it *)
-$fileBracket = "(\\[(?:[^\\[\\]]|(?-1))*(?:\\]|\\z))"
-$file = ParseChoice[$string, ParseRegex["(?:" <> $fileCharacters <> "|" <> $fileBracket <> ")++"]]
-$unterminatedFile = ParseRegex[$fileCharacters <> "*\\\\\\[[A-Za-z0-9]*+(?!\\])"]
 
 (* a comment, the comments nested in it too; with escapes a backslash before an opening paren takes
 	it, so that it opens none, as a notebook reads it, where CodeParser's opens one *)
@@ -251,15 +233,9 @@ WolframLanguageGrammar[alg_] := grammar[alg]["Program"]
 (* <|"Program" -> the parser of a whole source, "Statement" -> that of one
 	top-level expression and the whitespace after it, "Expression" -> that of
 	the expression alone|> *)
-grammar[alg_] := Module[{space, wsLine, wsAll, nested, top, statement},
-	space = ParseChoice[
-		ParseCharacter[" " | "\t" | "\f"],
-		ParseLiteral["\\\n"], ParseLiteral["\\\r\n"],
-		commentParser[True],
-		ParseChoice @@ (ParseLiteral /@ $heldSpaces)
-	];
-	wsLine = ParseMany[space];
-	wsAll = ParseMany[ParseChoice[ParseCharacter["\n" | "\r"], ParseChoice @@ (ParseLiteral /@ $heldNewlines), space]];
+grammar[alg_] := Module[{wsLine, wsAll, nested, top, statement},
+	wsLine = syntaxToken["line_space"];
+	wsAll = syntaxToken["whitespace"];
 	nested = RecCell[];
 	SetRec[nested, expressionParser[alg, wsAll, wsAll, nested]];
 	top = expressionParser[alg, wsLine, wsAll, nested];
@@ -1541,10 +1517,8 @@ letterNameQ[s_String] := With[{n = StringTake[s, {3, -2}]}, KeyExistsQ[$longName
 (* a character past ASCII that is a letter: no operator's, bracket's or whitespace's *)
 concreteNameCharacterQ[c_String] := nameCharacterQ[c] && ! KeyExistsQ[$nonLetterCharacters, c]
 
-(* a long name, and a character past ASCII, that a notebook reads as a letter: one CodeParser reads
-	as a letter, and no space *)
+(* a long name that a notebook reads as a letter: one CodeParser reads as a letter, and no space *)
 heldLetterNameQ[s_String] := letterNameQ[s] && ! MemberQ[$spaceNames, StringTake[s, {3, -2}]]
-heldNameCharacterQ[c_String] := concreteNameCharacterQ[c] && ! KeyExistsQ[$spaceCharacters, c]
 
 (* a letter past ASCII: a long name that is one, or a character past
 	ASCII that is not an operator's nor whitespace *)

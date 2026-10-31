@@ -1,6 +1,7 @@
-(* The declarations of the Wolfram Language's syntax, WolframLanguage.ebnf, as EBNFDeclarations
-   reads them: each keyword with the fields of its declarations, in order. Written by
-   dev/freeze-syntax.wls; edit the grammar, not this file. *)
+(* The Wolfram Language's syntax, WolframLanguage.ebnf: its declarations as EBNFDeclarations reads
+   them, each keyword with the fields of its declarations, in order, and its token rules compiled
+   to regular expressions, tokentrees for each rule %tokens names, tokenrules for those that refer
+   to themselves. Written by dev/freeze-syntax.wls; edit the grammar, not this file. *)
 
 <|
     "level" -> {
@@ -201,5 +202,43 @@
         {">>", "GreaterGreater", "Put", "Put"},
         {">>>", "GreaterGreater", "Put", "PutAppend"},
         {";", "Semi", "Compound", "CompoundExpression"}
-    }
+    },
+    "tokens" -> {
+        {"letter", "name", "digits", "number", "string", "comment", "blank", "slot", "out", "information_name", "freeform", "file", "unterminated_file"},
+        {"space", "line_space", "whitespace"}
+    },
+    "class" -> {
+        {"character", "range", 0, 1114111},
+        {"held_letter_name", "reader"},
+        {"held_letter_character", "reader"},
+        {"held_space", "reader"},
+        {"held_newline", "reader"},
+        {"unicode_letter", "regex", "[^\\P{L}\\x00-\\x7F]"},
+        {"end", "regex", "\\z"}
+    },
+    "check" -> {
+        {"number", "base_digits"}
+    },
+    "tokentrees" -> <|
+        "letter" -> {"Regex", "(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, "))"},
+        "name" -> {"Sequence", {"Regex", "[`]?+(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))(?:(?>(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))|[0-9]))*+(?:[`](?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))(?:(?>(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))|[0-9]))*+)*+"}, {"NotAhead", {"Regex", "(?>(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))|[0-9`])"}}},
+        "digits" -> {"Regex", "[0-9][0-9]*+"},
+        "number" -> {"Sequence", {"Choice", {"Sequence", {"Regex", "[0-9][0-9]*+"}, {"Optional", {"Choice", {"Sequence", {"Regex", "\\^\\^"}, {"Choice", {"Sequence", {"Regex", "[0-9A-Za-z][0-9A-Za-z]*+"}, {"Optional", {"Sequence", {"Regex", "[.]"}, {"NotAhead", {"Regex", "[.]"}}, {"Regex", "[0-9A-Za-z]*+"}}}}, {"Regex", "[.][0-9A-Za-z][0-9A-Za-z]*+"}}}, {"Sequence", {"Regex", "[.]"}, {"NotAhead", {"Regex", "[.]"}}, {"Regex", "(?:[0-9][0-9]*+)?+"}}}}}, {"Regex", "[.][0-9][0-9]*+"}}, {"Regex", "(?:[`][`]?+(?:[+\\x{2d}]?+(?>[0-9][0-9]*+[.]?+[0-9]*+|[.][0-9][0-9]*+))?+)?+(?:\\*\\^[+\\x{2d}]?+[0-9][0-9]*+)?+"}},
+        "string" -> {"Regex", "[\"](?:(?>[^\"\\x{5c}]|[\\x{5c}](?s:.)))*+[\"]"},
+        "comment" -> {"Sequence", {"Regex", "\\(\\*"}, {"Many", {"Choice", {"Rule", "comment"}, {"Regex", "(?:(?>[^(*\\x{5c}]|[\\x{5c}][(]?+))++"}, {"Sequence", {"Regex", "[(]"}, {"NotAhead", {"Regex", "[*]"}}}, {"Sequence", {"Regex", "[*]"}, {"NotAhead", {"Regex", "[)]"}}}}}, {"Regex", "\\*\\)"}},
+        "blank" -> {"Choice", {"Sequence", {"Regex", "___"}, {"Optional", {"Sequence", {"Regex", "[`]?+(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))(?:(?>(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))|[0-9]))*+(?:[`](?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))(?:(?>(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))|[0-9]))*+)*+"}, {"NotAhead", {"Regex", "(?>(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))|[0-9`])"}}}}}, {"Sequence", {"Regex", "__"}, {"Optional", {"Sequence", {"Regex", "[`]?+(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))(?:(?>(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))|[0-9]))*+(?:[`](?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))(?:(?>(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))|[0-9]))*+)*+"}, {"NotAhead", {"Regex", "(?>(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))|[0-9`])"}}}}}, {"Sequence", {"Regex", "[_]"}, {"Optional", {"Choice", {"Regex", "[.]"}, {"Sequence", {"Regex", "[`]?+(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))(?:(?>(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))|[0-9]))*+(?:[`](?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))(?:(?>(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))|[0-9]))*+)*+"}, {"NotAhead", {"Regex", "(?>(?>[$A-Za-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))|[0-9`])"}}}}}}},
+        "slot" -> {"Regex", "(?>[#][\"](?:(?>[^\"\\x{5c}]|[\\x{5c}](?s:.)))*+[\"]|##[0-9]*+|[#](?:(?>[0-9][0-9]*+|[$A-Z`-z][$0-9A-Z`-z]*+))?+)"},
+        "out" -> {"Regex", "[%][%]*+[0-9]*+"},
+        "information_name" -> {"Regex", "(?>[$*0-9@-Z`-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))(?:(?>[$*0-9@-Z`-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, "))))*+(?:[\\x{9}\\x{20}][\\x{9}\\x{20}]*+(?>[$*0-9@-Z`-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, ")))(?:(?>[$*0-9@-Z`-z]|(?>(?:", {"Class", "held_letter_name"}, ")|(?:", {"Class", "held_letter_character"}, "))))*+)*+"},
+        "freeform" -> {"Regex", "=\\[[\\x{9}-\\x{a}\\x{d}\\x{20}]*+[^\\x{a}\\x{d}\\x{5d}]*+(?:[\\x{a}\\x{d}][\\x{9}-\\x{a}\\x{d}\\x{20}]*+)?+[\\x{5d}]"},
+        "file" -> {"Choice", {"Regex", "[\"](?:(?>[^\"\\x{5c}]|[\\x{5c}](?s:.)))*+[\"]"}, {"Sequence", {"Choice", {"Regex", "(?>[!$*\\x{2d}-:?A-Z_-z~]|(?:[^\\P{L}\\x00-\\x7F])|\\\\\\[[0-9A-Za-z][0-9A-Za-z]*+[\\x{5d}])"}, {"Sequence", {"Regex", "[\\x{5c}]"}, {"NotAhead", {"Regex", "[\\x{5b}]"}}}, {"Rule", "file_bracket"}}, {"Many", {"Choice", {"Regex", "(?>[!$*\\x{2d}-:?A-Z_-z~]|(?:[^\\P{L}\\x00-\\x7F])|\\\\\\[[0-9A-Za-z][0-9A-Za-z]*+[\\x{5d}])"}, {"Sequence", {"Regex", "[\\x{5c}]"}, {"NotAhead", {"Regex", "[\\x{5b}]"}}}, {"Rule", "file_bracket"}}}}},
+        "unterminated_file" -> {"Sequence", {"Many", {"Choice", {"Regex", "(?>[!$*\\x{2d}-:?A-Z_-z~]|(?:[^\\P{L}\\x00-\\x7F])|\\\\\\[[0-9A-Za-z][0-9A-Za-z]*+[\\x{5d}])"}, {"Sequence", {"Regex", "[\\x{5c}]"}, {"NotAhead", {"Regex", "[\\x{5b}]"}}}}}, {"Regex", "\\\\\\[[0-9A-Za-z]*+"}, {"NotAhead", {"Regex", "[\\x{5d}]"}}},
+        "space" -> {"Choice", {"Regex", "(?>[\\x{9}\\x{c}\\x{20}]|\\\\\\x{a}|\\\\\\x{d}\\x{a})"}, {"Rule", "comment"}, {"Regex", "(?:", {"Class", "held_space"}, ")"}},
+        "line_space" -> {"Many", {"Choice", {"Regex", "(?:(?>[\\x{9}\\x{c}\\x{20}]|\\\\\\x{a}|\\\\\\x{d}\\x{a}))++"}, {"Rule", "comment"}, {"Regex", "(?:(?:", {"Class", "held_space"}, "))++"}}},
+        "whitespace" -> {"Many", {"Choice", {"Regex", "(?:(?>[\\x{a}\\x{d}]|(?:", {"Class", "held_newline"}, ")|(?>[\\x{9}\\x{c}\\x{20}]|\\\\\\x{a}|\\\\\\x{d}\\x{a})))++"}, {"Rule", "comment"}, {"Regex", "(?:(?:", {"Class", "held_space"}, "))++"}}}
+    |>,
+    "tokenrules" -> <|
+        "comment" -> {"Sequence", {"Regex", "\\(\\*"}, {"Many", {"Choice", {"Rule", "comment"}, {"Regex", "(?:(?>[^(*\\x{5c}]|[\\x{5c}][(]?+))++"}, {"Sequence", {"Regex", "[(]"}, {"NotAhead", {"Regex", "[*]"}}}, {"Sequence", {"Regex", "[*]"}, {"NotAhead", {"Regex", "[)]"}}}}}, {"Regex", "\\*\\)"}},
+        "file_bracket" -> {"Sequence", {"Regex", "[\\x{5b}]"}, {"Many", {"Choice", {"Regex", "[^\\x{5b}\\x{5d}]++"}, {"Rule", "file_bracket"}}}, {"Regex", "(?>[\\x{5d}]|(?:\\z))"}}
+    |>
 |>

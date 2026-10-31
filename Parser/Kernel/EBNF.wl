@@ -178,7 +178,7 @@ grammarP = ParseAction[wsc ~~ ParseMany[ParseAction[ruleP ~~ wsc, #1 &]], #2 &]
 (* ===== the classic dialect =====
 
 	`<name> ::= ...` or `<name> :: ...`; terminals in double or single quotes,
-	with \n \r \t escapes; non-terminals as `<name>` or a bare name; `[...]`
+	with \n \r \t \f escapes; non-terminals as `<name>` or a bare name; `[...]`
 	optional, `{...}` repeated, `(...)` grouped; `&x` and `!x` a lookahead,
 	where the element x must follow, or must not, which takes nothing; `x - y`
 	x where the element y does not match, which binds more tightly than a
@@ -214,7 +214,7 @@ classicRuleStart = ParseAction[classicName ~~ classicWs ~~ classicArrow, Null &]
 
 classicEscaped = ParseAction[
 	ParseLiteral["\\"] ~~ ParseCharacter[_],
-	Replace[#2, {"n" -> "\n", "r" -> "\r", "t" -> "\t"}] &
+	Replace[#2, {"n" -> "\n", "r" -> "\r", "t" -> "\t", "f" -> "\f"}] &
 ]
 
 classicQuoted[q_String] := ParseAction[
@@ -898,7 +898,8 @@ EBNFParse[File[path_String], opts : OptionsPattern[]] :=
    refers to itself, whose tree "Rules" gives. A regular expression stands for as much of a rule
    as has no lookahead, so that a reader can match it in a window of its input: its choices are
    atomic and its repetitions possessive, as a PEG's; characters that are alternatives next to
-   one another are one class, and a class repeated among other alternatives a run of it.
+   one another are one class, and a regular expression repeated among other alternatives a run
+   of it, where it matches no empty text.
    The classes are the names the grammar leaves undefined: a list of code ranges, a set of
    characters the rules' classes are made of; a string, a regular expression taken as it is; or
    Automatic, a class the reader gives. <|"Tokens" -> <|name -> tree, ...|>, "Rules" ->
@@ -922,12 +923,16 @@ reachableTokenRules[names_List, withThem_] := With[{named = Cases[#, NonTerm[n_S
 ruleBodyTree[name_String] := If[ KeyExistsQ[$tokenRules, name], tokenBodyTree[$tokenRules[name]], tokenFailure["No rule or class `1`.", name]]
 
 (* While compiling, a part is tokenClass[ranges], one character of a set of code ranges;
-   tokenRegex[pieces], a regular expression; or a tree node of parts. *)
+   tokenRegex[pieces, empty], a regular expression, which may match the empty text where empty is
+   True; or a tree node of parts. *)
 tokenRegexQ[_tokenClass | _tokenRegex] := True
 tokenRegexQ[_] := False
 
-tokenPieces[tokenRegex[pieces_List]] := pieces
+tokenPieces[tokenRegex[pieces_List, _]] := pieces
 tokenPieces[tokenClass[ranges_List]] := {classRegexOf[ranges]}
+
+tokenEmptyQ[tokenRegex[_, empty_]] := TrueQ[empty]
+tokenEmptyQ[_tokenClass] := False
 
 (* a part as the reader's tree: strings next to one another joined *)
 finalTokenTree[part_?tokenRegexQ] := Prepend[joinedPieces[tokenPieces[part]], "Regex"]
@@ -937,21 +942,21 @@ joinedPieces[pieces_List] := Map[If[StringQ[First[#]], StringJoin[#], Splice[#]]
 
 tokenEltTree[Lit[s_String]] := If[ StringLength[s] === 1,
 	tokenClass[{{First[ToCharacterCode[s]], First[ToCharacterCode[s]]}}],
-	tokenRegex[{StringJoin[regexCharacter /@ Characters[s]]}]
+	tokenRegex[{StringJoin[regexCharacter /@ Characters[s]]}, s === ""]
 ]
 tokenEltTree[CharRange[a_String, b_String]] := tokenClass[{{First[ToCharacterCode[a]], First[ToCharacterCode[b]]}}]
 tokenEltTree[NonTerm[name_String]] := Which[
 	KeyExistsQ[$tokenClasses, name], Replace[$tokenClasses[name], {
 		ranges : {{_Integer, _Integer} ...} :> tokenClass[ranges],
-		r_String :> tokenRegex[{"(?:" <> r <> ")"}],
-		Automatic :> tokenRegex[{"(?:", {"Class", name}, ")"}],
+		r_String :> tokenRegex[{"(?:" <> r <> ")"}, True],
+		Automatic :> tokenRegex[{"(?:", {"Class", name}, ")"}, False],
 		other_ :> tokenFailure["The class `1` is `2`, not code ranges, a regular expression or Automatic.", name, other]
 	}],
 	MemberQ[$tokenSelf, name], {"Rule", name},
 	True, ruleBodyTree[name]
 ]
 tokenEltTree[Opt[alts_List]] := With[{part = tokenBodyTree[alts]},
-	If[tokenRegexQ[part], tokenRegex[Join[tokenAtom[part], {"?+"}]], {"Optional", part}]
+	If[tokenRegexQ[part], tokenRegex[Join[tokenAtom[part], {"?+"}], True], {"Optional", part}]
 ]
 tokenEltTree[Group[alts_List]] := tokenBodyTree[alts]
 tokenEltTree[Rep["ManyAlts", alts_List]] := tokenRepetition[tokenBodyTree[alts]]
@@ -966,31 +971,47 @@ tokenEltTree[ButNot[elt_, exception_]] := With[{part = tokenEltTree[elt], not = 
 ]
 tokenEltTree[other_] := tokenFailure["A token rule cannot hold `1`.", other]
 
-(* a repetition: of a regular expression, a possessive one; of a choice, each class among its
-   alternatives a run of the class *)
-tokenRepetition[part_?tokenRegexQ] := tokenRegex[Join[tokenAtom[part], {"*+"}]]
-tokenRepetition[{"Choice", alts___}] := {"Many", {"Choice", Sequence @@ Map[If[MatchQ[#, _tokenClass], tokenRegex[Join[tokenPieces[#], {"++"}]], #] &, {alts}]}}
+(* a repetition: of a regular expression, a possessive one; of a choice, each regular expression
+   among its alternatives that matches no empty text a run of it *)
+tokenRepetition[part_?tokenRegexQ] := tokenRegex[Join[tokenAtom[part], {"*+"}], True]
+tokenRepetition[{"Choice", alts___}] := {"Many", {"Choice", Sequence @@ Map[
+	If[tokenRegexQ[#] && ! tokenEmptyQ[#], tokenRegex[Join[tokenAtom[#], {"++"}], False], #] &,
+	{alts}
+]}}
 tokenRepetition[part_] := {"Many", part}
 
 (* a part as one atom of a regular expression: a class is one, anything else is grouped *)
 tokenAtom[part_tokenClass] := tokenPieces[part]
 tokenAtom[part_tokenRegex] := Join[{"(?:"}, tokenPieces[part], {")"}]
 
-(* a sequence: the parts that are regular expressions next to one another one regular expression *)
-tokenSeqTree[{}] := tokenRegex[{""}]
-tokenSeqTree[elts_List] := With[{parts = joinedRuns[tokenEltTree /@ elts, tokenRegex[Join @@ (tokenPieces /@ #)] &]},
+(* a sequence: the sequences in it spliced, and the parts that are regular expressions next to one
+   another one regular expression *)
+tokenSeqTree[{}] := tokenRegex[{""}, True]
+tokenSeqTree[elts_List] := With[{
+		parts = joinedRuns[
+			Replace[tokenEltTree /@ elts, {"Sequence", inner___} :> Splice[{inner}], {1}],
+			tokenRegex[Join @@ (tokenPieces /@ #), AllTrue[#, tokenEmptyQ]] &
+		]
+	},
 	If[Length[parts] === 1, First[parts], Prepend[parts, "Sequence"]]
 ]
 
 (* choices: those that are regular expressions next to one another one atomic choice, and of
    those, characters next to one another one class *)
+(* choices: the choices in them spliced, those that are regular expressions next to one another one
+   atomic choice, and of those, characters next to one another one class *)
 tokenBodyTree[{alt_List}] := tokenSeqTree[alt]
-tokenBodyTree[alts_List] := With[{parts = joinedRuns[tokenSeqTree /@ alts, regexChoice]},
+tokenBodyTree[alts_List] := With[{
+		parts = joinedRuns[Replace[tokenSeqTree /@ alts, {"Choice", inner___} :> Splice[{inner}], {1}], regexChoice]
+	},
 	If[Length[parts] === 1, First[parts], Prepend[parts, "Choice"]]
 ]
 
 regexChoice[parts_List] := With[{classes = joinedClasses[parts]},
-	If[ Length[classes] === 1, First[classes], tokenRegex[Join[{"(?>"}, Flatten[Riffle[tokenPieces /@ classes, {{"|"}}], 1], {")"}]]]
+	If[ Length[classes] === 1,
+		First[classes],
+		tokenRegex[Join[{"(?>"}, Flatten[Riffle[tokenPieces /@ classes, {{"|"}}], 1], {")"}], AnyTrue[classes, tokenEmptyQ]]
+	]
 ]
 joinedClasses[parts_List] := Map[
 	If[MatchQ[#, {__tokenClass}], tokenClass[Join @@ #[[All, 1]]], Splice[#]] &,
@@ -1011,6 +1032,30 @@ mergedRanges[ranges_List] := Fold[
 rangesWithout[ranges_List, without_List] := Fold[
 	Function[{rs, w}, Catenate[Map[Function[r, Select[{{r[[1]], Min[r[[2]], w[[1]] - 1]}, {Max[r[[1]], w[[2]] + 1], r[[2]]}}, #[[1]] <= #[[2]] &]], rs]]],
 	mergedRanges[ranges], mergedRanges[without]
+]
+
+(* The token rules a classic grammar's %tokens declarations name, compiled with the classes its
+   %class declarations give: range low high, the characters of those codes; reader, one the
+   reader gives; regex r, a regular expression. <|"tokentrees" -> <|rule -> tree, ...|>,
+   "tokenrules" -> <|rule -> tree, ...|>|>, or a Failure. *)
+declaredTokenTrees[File[path_String]] := declaredTokenTrees[Import[path, "Text"]]
+declaredTokenTrees[source_String] := Catch[Module[{rules = EBNFRules[source, "Dialect" -> "Classic"], declarations, compiled},
+	If[ FailureQ[rules], Throw[rules, declaredTokenTrees]];
+	declarations = EBNFDeclarations[source];
+	compiled = tokenTrees[
+		Cases[rules, _EBNFRule],
+		Catenate[Lookup[declarations, "tokens", {}]],
+		Association[Map[declaredClass, Lookup[declarations, "class", {}]]]
+	];
+	If[ FailureQ[compiled], compiled, <|"tokentrees" -> compiled["Tokens"], "tokenrules" -> compiled["Rules"]|>]
+], declaredTokenTrees]
+
+declaredClass[{name_String, "range", low_Integer, high_Integer}] := name -> {{low, high}}
+declaredClass[{name_String, "reader"}] := name -> Automatic
+declaredClass[{name_String, "regex", r_String}] := name -> r
+declaredClass[fields_] := Throw[
+	Failure["EBNFToken", <|"MessageTemplate" -> "A class is declared as name range low high, name reader or name regex expression, not `1`.", "MessageParameters" -> {fields}|>],
+	declaredTokenTrees
 ]
 
 (* a set of characters as a class, or as the class of those it leaves out, whichever is shorter:
