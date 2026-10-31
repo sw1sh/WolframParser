@@ -205,7 +205,9 @@
     },
     "tokens" -> {
         {"letter", "name", "digits", "number", "string", "comment", "blank", "slot", "out", "information_name", "freeform", "file", "unterminated_file"},
-        {"space", "line_space", "whitespace"}
+        {"space", "line_space", "whitespace"},
+        {"concrete_name", "letterlike_error", "number_text", "unterminated_string", "unterminated_comment"},
+        {"unhandled_character", "concrete_comment", "concrete_blanks", "concrete_newline"}
     },
     "class" -> {
         {"character", "range", 0, 1114111},
@@ -214,7 +216,10 @@
         {"held_space", "reader"},
         {"held_newline", "reader"},
         {"unicode_letter", "regex", "[^\\P{L}\\x00-\\x7F]"},
-        {"end", "regex", "\\z"}
+        {"end", "regex", "\\z"},
+        {"concrete_letter_name", "reader"},
+        {"concrete_letter_character", "reader"},
+        {"unknown_long_name", "reader"}
     },
     "check" -> {
         {"number", "base_digits"}
@@ -235,10 +240,20 @@
         "unterminated_file" -> {"Sequence", {"Many", {"Choice", {"Regex", "(?>[!$*\\x{2d}-:?A-Z_-z~]|(?:[^\\P{L}\\x00-\\x7F])|\\\\\\[[0-9A-Za-z][0-9A-Za-z]*+[\\x{5d}])"}, {"Sequence", {"Regex", "[\\x{5c}]"}, {"NotAhead", {"Regex", "[\\x{5b}]"}}}}}, {"Regex", "\\\\\\[[0-9A-Za-z]*+"}, {"NotAhead", {"Regex", "[\\x{5d}]"}}},
         "space" -> {"Choice", {"Regex", "(?>[\\x{9}\\x{c}\\x{20}]|\\\\\\x{a}|\\\\\\x{d}\\x{a})"}, {"Rule", "comment"}, {"Regex", "(?:", {"Class", "held_space"}, ")"}},
         "line_space" -> {"Many", {"Choice", {"Regex", "(?:(?>[\\x{9}\\x{c}\\x{20}]|\\\\\\x{a}|\\\\\\x{d}\\x{a}))++"}, {"Rule", "comment"}, {"Regex", "(?:(?:", {"Class", "held_space"}, "))++"}}},
-        "whitespace" -> {"Many", {"Choice", {"Regex", "(?:(?>[\\x{a}\\x{d}]|(?:", {"Class", "held_newline"}, ")|(?>[\\x{9}\\x{c}\\x{20}]|\\\\\\x{a}|\\\\\\x{d}\\x{a})))++"}, {"Rule", "comment"}, {"Regex", "(?:(?:", {"Class", "held_space"}, "))++"}}}
+        "whitespace" -> {"Many", {"Choice", {"Regex", "(?:(?>[\\x{a}\\x{d}]|(?:", {"Class", "held_newline"}, ")|(?>[\\x{9}\\x{c}\\x{20}]|\\\\\\x{a}|\\\\\\x{d}\\x{a})))++"}, {"Rule", "comment"}, {"Regex", "(?:(?:", {"Class", "held_space"}, "))++"}}},
+        "concrete_name" -> {"Regex", "(?>[$A-Za-z][$0-9A-Za-z]*+(?:[`][$A-Za-z][$0-9A-Za-z]*+)*+|[`][$A-Za-z][$0-9A-Za-z]*+(?:[`][$A-Za-z][$0-9A-Za-z]*+)*+|[`]?+(?>(?:", {"Class", "concrete_letter_name"}, ")|(?:", {"Class", "concrete_letter_character"}, "))[$0-9A-Za-z]*+)(?:(?>(?>(?:", {"Class", "concrete_letter_name"}, ")|(?:", {"Class", "concrete_letter_character"}, "))[$0-9A-Za-z]*+|[`](?>[$A-Za-z]|(?>(?:", {"Class", "concrete_letter_name"}, ")|(?:", {"Class", "concrete_letter_character"}, ")))[$0-9A-Za-z]*+))*+"},
+        "letterlike_error" -> {"Sequence", {"Regex", "(?:(?>[$A-Za-z][$0-9A-Za-z]*+(?:[`][$A-Za-z][$0-9A-Za-z]*+)*+|[`][$A-Za-z][$0-9A-Za-z]*+(?:[`][$A-Za-z][$0-9A-Za-z]*+)*+|[`]?+(?>(?:", {"Class", "concrete_letter_name"}, ")|(?:", {"Class", "concrete_letter_character"}, "))[$0-9A-Za-z]*+)(?:(?>(?>(?:", {"Class", "concrete_letter_name"}, ")|(?:", {"Class", "concrete_letter_character"}, "))[$0-9A-Za-z]*+|[`](?>[$A-Za-z]|(?>(?:", {"Class", "concrete_letter_name"}, ")|(?:", {"Class", "concrete_letter_character"}, ")))[$0-9A-Za-z]*+))*+)?+[`]"}, {"NotAhead", {"Regex", "(?>[$A-Za-z]|(?>(?:", {"Class", "concrete_letter_name"}, ")|(?:", {"Class", "concrete_letter_character"}, ")))"}}},
+        "number_text" -> {"Sequence", {"Choice", {"Sequence", {"Regex", "[0-9][0-9]*+"}, {"Optional", {"Choice", {"Sequence", {"Regex", "\\^\\^[0-9A-Za-z]*+"}, {"Optional", {"Sequence", {"Regex", "[.]"}, {"NotAhead", {"Regex", "[.]"}}, {"Regex", "[0-9A-Za-z]*+"}}}}, {"Sequence", {"Regex", "[.]"}, {"NotAhead", {"Regex", "[.]"}}, {"Regex", "(?:[0-9][0-9]*+)?+"}}}}}, {"Regex", "[.][0-9][0-9]*+"}}, {"Regex", "(?:[`][`]?+(?:[+\\x{2d}]?+(?>[0-9][0-9]*+(?:[.](?:[0-9][0-9]*+)?+)?+|[.][0-9][0-9]*+))?+)?+(?:\\*\\^(?:[+\\x{2d}]?+[0-9][0-9]*+)?+)?+"}},
+        "unterminated_string" -> {"Regex", "[\"](?s:.)*+"},
+        "unterminated_comment" -> {"Regex", "\\(\\*(?s:.)*+"},
+        "unhandled_character" -> {"Choice", {"Regex", "(?:", {"Class", "unknown_long_name"}, ")"}, {"Sequence", {"Regex", "\\\\\\[[0-9A-Za-z]*+"}, {"NotAhead", {"Regex", "[\\x{5d}]"}}}, {"Sequence", {"Regex", "\\\\:(?:[0-9A-Fa-f](?:[0-9A-Fa-f][0-9A-Fa-f]?+)?+)?+"}, {"NotAhead", {"Regex", "[0-9A-Fa-f]"}}}, {"Sequence", {"Regex", "\\\\\\.[0-9A-Fa-f]?+"}, {"NotAhead", {"Regex", "[0-9A-Fa-f]"}}}, {"Sequence", {"Regex", "\\\\\\|(?:[0-9A-Fa-f](?:[0-9A-Fa-f](?:[0-9A-Fa-f](?:[0-9A-Fa-f][0-9A-Fa-f]?+)?+)?+)?+)?+"}, {"NotAhead", {"Regex", "[0-9A-Fa-f]"}}}, {"Sequence", {"Regex", "[\\x{5c}]"}, {"NotAhead", {"Regex", "[\\x{a}\\x{d}.:\\x{5b}|]"}}, {"Regex", "(?s:.)?+"}}},
+        "concrete_comment" -> {"Sequence", {"Regex", "\\(\\*"}, {"Many", {"Choice", {"Rule", "concrete_comment"}, {"Regex", "[^(*]++"}, {"Sequence", {"Regex", "[(]"}, {"NotAhead", {"Regex", "[*]"}}}, {"Sequence", {"Regex", "[*]"}, {"NotAhead", {"Regex", "[)]"}}}}}, {"Regex", "\\*\\)"}},
+        "concrete_blanks" -> {"Regex", "[\\x{9}\\x{20}][\\x{9}\\x{20}]*+"},
+        "concrete_newline" -> {"Regex", "(?>\\x{d}\\x{a}|[\\x{a}\\x{d}])"}
     |>,
     "tokenrules" -> <|
         "comment" -> {"Sequence", {"Regex", "\\(\\*"}, {"Many", {"Choice", {"Rule", "comment"}, {"Regex", "(?:(?>[^(*\\x{5c}]|[\\x{5c}][(]?+))++"}, {"Sequence", {"Regex", "[(]"}, {"NotAhead", {"Regex", "[*]"}}}, {"Sequence", {"Regex", "[*]"}, {"NotAhead", {"Regex", "[)]"}}}}}, {"Regex", "\\*\\)"}},
+        "concrete_comment" -> {"Sequence", {"Regex", "\\(\\*"}, {"Many", {"Choice", {"Rule", "concrete_comment"}, {"Regex", "[^(*]++"}, {"Sequence", {"Regex", "[(]"}, {"NotAhead", {"Regex", "[*]"}}}, {"Sequence", {"Regex", "[*]"}, {"NotAhead", {"Regex", "[)]"}}}}}, {"Regex", "\\*\\)"}},
         "file_bracket" -> {"Sequence", {"Regex", "[\\x{5b}]"}, {"Many", {"Choice", {"Regex", "[^\\x{5b}\\x{5d}]++"}, {"Rule", "file_bracket"}}}, {"Regex", "(?>[\\x{5d}]|(?:\\z))"}}
     |>
 |>

@@ -158,12 +158,19 @@ $checkFunctions = <|"base_digits" -> baseDigitsQ|>
 
 (* The classes the syntax leaves to the reader, as regular expressions: the long names a notebook
 	reads as letters; the characters past ASCII it reads as letters, those no operator, bracket,
-	whitespace or space has; and the long names, and their characters, that it reads as spaces and
-	as newlines. *)
+	whitespace or space has; the long names CodeParser reads as letters, and the characters past
+	ASCII it reads as letters, a space among them; the long names that are not CodeParser's; and
+	the long names, and their characters, that a notebook reads as spaces and as newlines. *)
 tokenClassRegex["held_letter_name"] := tokenClassRegex["held_letter_name"] =
 	"\\\\\\[(?:" <> StringRiffle[Sort[Select[Keys[$longNames], heldLetterNameQ["\\[" <> # <> "]"] &]], "|"] <> ")\\]"
 tokenClassRegex["held_letter_character"] := tokenClassRegex["held_letter_character"] = "[^\\x00-\\x7F" <> StringJoin[codeRegex /@ Select[
 	Union[$operatorCharacters, Keys[$nonLetterCharacters], Keys[$spaceCharacters]], First[ToCharacterCode[#]] > 127 &]] <> "]"
+tokenClassRegex["concrete_letter_name"] := tokenClassRegex["concrete_letter_name"] =
+	"\\\\\\[(?:" <> StringRiffle[Sort[Select[Keys[$longNames], letterNameQ["\\[" <> # <> "]"] &]], "|"] <> ")\\]"
+tokenClassRegex["concrete_letter_character"] := tokenClassRegex["concrete_letter_character"] = "[^\\x00-\\x7F" <> StringJoin[codeRegex /@ Select[
+	Union[$operatorCharacters, Keys[$nonLetterCharacters]], First[ToCharacterCode[#]] > 127 &]] <> "]"
+tokenClassRegex["unknown_long_name"] := tokenClassRegex["unknown_long_name"] =
+	"\\\\\\[(?!(?:" <> StringRiffle[Sort[Keys[$longNames]], "|"] <> ")\\])[A-Za-z0-9]+\\]"
 tokenClassRegex["held_space"] := tokenClassRegex["held_space"] = literalsRegex[$heldSpaces]
 tokenClassRegex["held_newline"] := tokenClassRegex["held_newline"] = literalsRegex[$heldNewlines]
 
@@ -206,20 +213,6 @@ baseDigitsQ[s_String] := StringFreeQ[s, "^^"] || With[{parts = StringSplit[s, "^
 ]
 
 numberKind[s_String] := If[StringFreeQ[s, "." | "`"], "Integer", "Real"]
-
-(* a comment, the comments nested in it too; with escapes a backslash before an opening paren takes
-	it, so that it opens none, as a notebook reads it, where CodeParser's opens one *)
-commentParser[escapes_ : False] := With[{comment = RecCell[]},
-	SetRec[comment, ParseLiteral["(*"] ~~ ParseMany[ParseChoice @@ Join[
-		{RecRef[comment]},
-		If[TrueQ[escapes], {ParseRegex["[^(*\\\\]+"], ParseRegex["\\\\\\(?"]}, {ParseRegex["[^(*]+"]}],
-		{ParseLiteral["("] ~~ ParseNotFollowedBy[ParseLiteral["*"]],
-		ParseLiteral["*"] ~~ ParseNotFollowedBy[ParseLiteral[")"]]
-		}
-	]] ~~ ParseLiteral["*)"]
-	];
-	RecRef[comment]
-]
 
 (* ::Section:: *)
 (*The grammar, parameterised over an algebra*)
@@ -1520,51 +1513,20 @@ concreteNameCharacterQ[c_String] := nameCharacterQ[c] && ! KeyExistsQ[$nonLetter
 (* a long name that a notebook reads as a letter: one CodeParser reads as a letter, and no space *)
 heldLetterNameQ[s_String] := letterNameQ[s] && ! MemberQ[$spaceNames, StringTake[s, {3, -2}]]
 
-(* a letter past ASCII: a long name that is one, or a character past
-	ASCII that is not an operator's nor whitespace *)
-$concreteLetter = ParseChoice[
-	ParseAction[ParseLookahead[ParseLiteral["\\["]] ~~ ParseCondition[ParseRegex["\\\\\\[[A-Za-z0-9]+]"], letterNameQ], #2 &],
-	ParseCharacter[_?concreteNameCharacterQ]
-]
+(* The tokens the concrete reader takes, the syntax's rules of their names, which
+	WolframLanguage.ebnf gives and syntaxToken makes: a name; a name with a ` after it that no part
+	follows, CodeParser's Token`Error`ExpectedLetterlike; a number's text, as
+	far as a number could go; a string and a comment the source does not close; and a \ that begins
+	no letter, CodeParser's Token`Error`UnhandledCharacter. *)
+$concreteName := syntaxToken["concrete_name"]
+$letterlikeError := syntaxToken["letterlike_error"]
+$numberText := syntaxToken["number_text"]
+$unterminatedString := syntaxToken["unterminated_string"]
+$unterminatedComment := syntaxToken["unterminated_comment"]
+$unhandledCharacter := syntaxToken["unhandled_character"]
 
-(* A name: parts of letters, digits and $, each beginning with a letter or
-	$, joined by single `s, a ` before the first naming a context relative
-	to the current one: a`b, `a. The loop after the first run of ASCII is
-	entered only at a letter past ASCII or a `. *)
+(* a character that can go on with a name past its first run of ASCII *)
 nameMoreQ[c_String] := c === "\\" || c === "`" || First[ToCharacterCode[c]] > 127
-$namePartStart = ParseChoice[ParseRegex["[A-Za-z$]"], $concreteLetter]
-$concreteName = text[
-	ParseChoice[
-		ParseRegex["[A-Za-z$][A-Za-z0-9$]*(`[A-Za-z$][A-Za-z0-9$]*)*"],
-		ParseRegex["`[A-Za-z$][A-Za-z0-9$]*(`[A-Za-z$][A-Za-z0-9$]*)*"],
-		ParseOptional[ParseLiteral["`"]] ~~ $concreteLetter ~~ ParseRegex["[A-Za-z0-9$]*"]
-	] ~~
-	ParseMany[ParseAction[ParseLookahead[ParseCharacter[_?nameMoreQ]] ~~
-		ParseChoice[$concreteLetter ~~ ParseRegex["[A-Za-z0-9$]*"], ParseLiteral["`"] ~~ $namePartStart ~~ ParseRegex["[A-Za-z0-9$]*"]], #2 &
-	]]
-]
-
-(* a name with a ` after it that no part follows: CodeParser's
-	Token`Error`ExpectedLetterlike, up to the ` *)
-$letterlikeError = text[ParseOptional[$concreteName] ~~ ParseLiteral["`"] ~~ ParseNotFollowedBy[$namePartStart]]
-
-(* A number's text, as far as a number could go: digits, or b^^digits, a
-	fraction, then a precision or accuracy and an exponent. *)
-$signedDigits = ParseOptional[ParseCharacter["-" | "+"]] ~~ ParseChoice[
-	$digits ~~ ParseOptional[ParseLiteral["."] ~~ ParseOptional[$digits]],
-	ParseLiteral["."] ~~ $digits
-]
-$numberText = text[
-	ParseChoice[
-		$digits ~~ ParseOptional[ParseChoice[
-			ParseLiteral["^^"] ~~ ParseRegex["[0-9a-zA-Z]*"] ~~ ParseOptional[ParseLiteral["."] ~~ ParseNotFollowedBy[ParseLiteral["."]] ~~ ParseRegex["[0-9a-zA-Z]*"]],
-			ParseLiteral["."] ~~ ParseNotFollowedBy[ParseLiteral["."]] ~~ ParseOptional[$digits]
-		]],
-		ParseLiteral["."] ~~ $digits
-	]
-	~~ ParseOptional[ParseLiteral["`"] ~~ ParseOptional[ParseLiteral["`"]] ~~ ParseOptional[$signedDigits]]
-	~~ ParseOptional[ParseLiteral["*^"] ~~ ParseOptional[ParseOptional[ParseCharacter["-" | "+"]] ~~ $digits]]
-]
 
 (* A number's text is CodeParser's Token`Error`Number where its base is
 	not 2 to 36, a digit is not one of the base's, or a ^^, a `` or a *^ has
@@ -1586,22 +1548,6 @@ baseDigitsValidQ[body_String] := With[{base = FromDigits[First[StringSplit[body,
 ]
 
 digitValue[c_String] := With[{n = First[ToCharacterCode[c]]}, If[n <= 57, n - 48, n - 87]]
-
-(* a string or a comment the source does not close: the rest of the source *)
-$unterminatedString = ParseRegex["\"(?s:.*)"]
-$unterminatedComment = ParseRegex["\\(\\*(?s:.*)"]
-
-(* a \ that begins no letter: a long name not the language's, a \[ not
-	closed, a \: \. \| short of its digits, or a \ and the character after
-	it, none at the end: CodeParser's Token`Error`UnhandledCharacter *)
-$unhandledCharacter = text[ParseChoice[
-	ParseCondition[ParseRegex["\\\\\\[[A-Za-z0-9]+]"], ! KeyExistsQ[$longNames, StringTake[#, {3, -2}]] &],
-	ParseLiteral["\\["] ~~ ParseRegex["[A-Za-z0-9]*"] ~~ ParseNotFollowedBy[ParseLiteral["]"]],
-	ParseLiteral["\\:"] ~~ ParseRegex["[0-9a-fA-F]{0,3}"] ~~ ParseNotFollowedBy[ParseCharacter[HexadecimalCharacter]],
-	ParseLiteral["\\."] ~~ ParseRegex["[0-9a-fA-F]?"] ~~ ParseNotFollowedBy[ParseCharacter[HexadecimalCharacter]],
-	ParseLiteral["\\|"] ~~ ParseRegex["[0-9a-fA-F]{0,5}"] ~~ ParseNotFollowedBy[ParseCharacter[HexadecimalCharacter]],
-	ParseLiteral["\\"] ~~ ParseNotFollowedBy[ParseCharacter["[" | ":" | "." | "|" | "\n" | "\r"]] ~~ ParseOptional[ParseCharacter[_]]
-]]
 
 (* a character that can begin a leaf, and one that can begin a name *)
 leafStartQ[c_String] := StringContainsQ["_#%{<(\"`$\\.0123456789", c] || nameStartQ[c] || KeyExistsQ[$prefixOnlyCharacters, c]
@@ -2427,13 +2373,13 @@ positionWithinQ[{{l1_, c1_}, {l2_, c2_}}, {l_, c_}] := Which[
 (* <|"Program" -> the parser of a whole source, the children of its
 	ContainerNode, "Statement" -> that of the source's children|> *)
 concreteGrammar[] := Module[{comment, spaces, newline, lineTrivia, allTrivia, nested, top, statement},
-	comment = ParseAction[text[commentParser[]], {concreteLeaf[Token`Comment, #]} &];
+	comment = ParseAction[syntaxToken["concrete_comment"], {concreteLeaf[Token`Comment, #]} &];
 	spaces = ParseChoice[
-		ParseAction[ParseRegex["[ \t]+"], Function[s, concreteLeaf[Whitespace, #] & /@ Characters[s]]],
+		ParseAction[syntaxToken["concrete_blanks"], Function[s, concreteLeaf[Whitespace, #] & /@ Characters[s]]],
 		ParseAction[ParseChoice @@ (ParseLiteral /@ $longWhitespace), {concreteLeaf[Whitespace, #]} &]
 	];
 	newline = ParseChoice[
-		ParseAction[ParseRegex["\r\n|\n|\r"], {concreteLeaf[Token`Newline, #]} &],
+		ParseAction[syntaxToken["concrete_newline"], {concreteLeaf[Token`Newline, #]} &],
 		ParseAction[ParseChoice @@ (ParseLiteral /@ $longNewlines), {concreteLeaf[Token`Newline, #]} &]
 	];
 	(* each looked for only at a character that can begin it *)

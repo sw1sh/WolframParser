@@ -377,3 +377,48 @@
 <space>           ::= " " | "\t" | "\f" | "\\\n" | "\\\r\n" | <comment> | <held_space>
 <line_space>      ::= { <space> }
 <whitespace>      ::= { "\n" | "\r" | <held_newline> | <space> }
+
+
+(* The tokens of CodeParser's reading, which the concrete reader takes. A name's parts are joined
+   by single context marks, and a ` after a name that no part follows is CodeParser's
+   Token`Error`ExpectedLetterlike. A number's text is read as far as a number could go: the reader
+   makes Token`Error`Number of a text no number has. *)
+
+%tokens concrete_name letterlike_error number_text unterminated_string unterminated_comment
+%tokens unhandled_character concrete_comment concrete_blanks concrete_newline
+
+%class concrete_letter_name      reader    (* \\[Name], a long name CodeParser reads as a letter *)
+%class concrete_letter_character reader    (* a character past ASCII CodeParser reads as a letter *)
+%class unknown_long_name         reader    (* \\[Name], a long name that is not CodeParser's *)
+
+<concrete_letter>      ::= <concrete_letter_name> | <concrete_letter_character>
+<ascii_part>           ::= ( <ascii_letter> | "$" ) { <ascii_letter> | <digit> | "$" }
+<ascii_name_character> ::= <ascii_letter> | <digit> | "$"
+<concrete_part_start>  ::= <ascii_letter> | "$" | <concrete_letter>
+<concrete_name>        ::= ( <ascii_part> { "`" <ascii_part> } | "`" <ascii_part> { "`" <ascii_part> }
+                           | [ "`" ] <concrete_letter> { <ascii_name_character> } )
+                           { <concrete_letter> { <ascii_name_character> } | "`" <concrete_part_start> { <ascii_name_character> } }
+<letterlike_error>     ::= [ <concrete_name> ] "`" ! <concrete_part_start>
+
+<signed_digits>        ::= [ "-" | "+" ] ( <digits> [ "." [ <digits> ] ] | "." <digits> )
+<number_text>          ::= ( <digits> [ "^^" { <alphanumeric> } [ "." ! "." { <alphanumeric> } ] | "." ! "." [ <digits> ] ] | "." <digits> )
+                           [ "`" [ "`" ] [ <signed_digits> ] ] [ "*^" [ [ "-" | "+" ] <digits> ] ]
+
+(* a string or a comment the source does not close: the rest of the source *)
+<unterminated_string>  ::= '"' { <character> }
+<unterminated_comment> ::= "(*" { <character> }
+
+(* a \\ that begins no letter, CodeParser's Token`Error`UnhandledCharacter: a long name not the
+   language's, a \\[ not closed, a \\: \\. \\| short of its digits, or a \\ and the character after it,
+   none at the end *)
+<hex_digit>            ::= <digit> | "a" | ... | "f" | "A" | ... | "F"
+<unhandled_character>  ::= <unknown_long_name> | "\\[" { <alphanumeric> } ! "]"
+                         | "\\:" [ <hex_digit> [ <hex_digit> [ <hex_digit> ] ] ] ! <hex_digit>
+                         | "\\." [ <hex_digit> ] ! <hex_digit>
+                         | "\\|" [ <hex_digit> [ <hex_digit> [ <hex_digit> [ <hex_digit> [ <hex_digit> ] ] ] ] ] ! <hex_digit>
+                         | "\\" ! ( "[" | ":" | "." | "|" | "\n" | "\r" ) [ <character> ]
+
+(* a comment, the comments nested in it too, as CodeParser reads it: a backslash takes nothing *)
+<concrete_comment>     ::= "(*" { <concrete_comment> | <character> - ( "(" | "*" ) | "(" ! "*" | "*" ! ")" } "*)"
+<concrete_blanks>      ::= ( " " | "\t" ) { " " | "\t" }
+<concrete_newline>     ::= "\r\n" | "\n" | "\r"
