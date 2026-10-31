@@ -41,8 +41,8 @@ RelatedGuides: [WolframParser]
 | `"ClassCodes"` | for a pattern of one character class, its codes below 65536 as a packed table of 1 and 0 by code + 1, else [None]() |
 | `"Properties"` | the properties |
 
-- A [RegularExpression]() matches as Wolfram 15 matches it: Perl's syntax, the classes of characters Unicode's, `"."` no newline and `$` the end or before a newline that ends the text, each group holding what it matched last, which a rule's `"$n"` takes.
-- A pattern has no program if it has a part that is no string pattern, a repeat of an anchor such as [StartOfString](), an [Except]() of a pattern of more than one character, or a [RegularExpression]() with recursion, a conditional group, a branch reset, a verb, a callout, `\G`, `\K`, `\C`, `\X`, a script of `\p`, a caseless backreference, a backreference in the group it refers to or a possessive repeat of a part that may match nothing.
+- A [RegularExpression]() matches as Wolfram 15 matches it: Perl's syntax, the classes of characters Unicode's, `"."` no newline and `$` the end or before a newline that ends the text, each group holding what it matched last, which a rule's `"$n"` takes. A call of a group, `(?1)`, `(?-1)`, `(?+1)`, `(?&name)`, `(?P>name)` or `\g<1>`, matches the group's pattern again where it stands, recursively too: its first way alone, since Wolfram 15's calls are atomic, and the groups after it are as they were before it.
+- A pattern has no program if it has a part that is no string pattern, a repeat of an anchor such as [StartOfString](), an [Except]() of a pattern of more than one character, or a [RegularExpression]() with a call of the whole regex, `(?R)`, a call that may come round to its group again before a character, a call of a group in a larger pattern, whose groups Wolfram 15 counts in the whole of it, a conditional group, a branch reset, a verb, a callout, `\G`, `\K`, `\C`, `\X`, a script of `\p` or a possessive repeat of a part that may match nothing.
 - A kernel builds its String functions of patterns on [StringPatternProgram]() and [StringPatternMatches]().
 
 ## Basic Examples
@@ -151,7 +151,15 @@ StringPatternMatches["ab12 cd3", {StringPatternProgram[RegularExpression["([a-z]
 
 <!-- => {{0, 4, 1, {1 -> "ab", 2 -> "12"}}, {5, 8, 1, {1 -> "cd", 2 -> "3"}}} -->
 
-A regular expression with recursion has no program:
+A call of a group matches the group's pattern again, here within itself, for brackets nested to any depth:
+
+```wl
+StringPatternMatches["x [a [b [c]]] y", {StringPatternProgram[RegularExpression["(\\[(?:[^\\[\\]]|(?1))*\\])"]]}, "Each"]
+```
+
+<!-- => {{2, 13, 1, {1 -> "[a [b [c]]]"}}} -->
+
+A call of the whole regex has no program, since Wolfram 15 takes it with what it puts around the regex:
 
 ```wl
 StringPatternProgram[RegularExpression["\\((?R)?\\)"]]["Program"]
@@ -165,7 +173,7 @@ What it declines:
 StringPatternProgram[RegularExpression["\\((?R)?\\)"]]["Declined"]
 ```
 
-<!-- => "recursion" -->
+<!-- => "a call of the whole regex, which Wolfram 15 takes with what it puts around the regex" -->
 
 A backreference in a caseless regex matches its group's text in any case:
 

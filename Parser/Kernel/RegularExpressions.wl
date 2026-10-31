@@ -12,7 +12,8 @@
 Begin["Wolfram`Parser`StringPatterns`Private`"]
 
 (* The program of a regex, or a Throw of None, tagged program, for a regex that Wolfram 15 does not
-	take or that has a part no program has: recursion, a conditional group, a branch reset, a verb, a
+	take or that has a part no program has: a call of the whole regex, a call that may come round to
+	its group again before a character, a conditional group, a branch reset, a verb, a
 	callout, \G, \K, \C, \X, a script of \p, a possessive repeat of a part that may match nothing,
 	whose ways Wolfram 15's matcher counts as it repeats, or a lookbehind of no fixed length. A
 	backreference in the group it refers to holds the group's text of the time round before, and
@@ -29,16 +30,47 @@ Begin["Wolfram`Parser`StringPatterns`Private`"]
 	lookbehind[{{len, p}, ...}, positive]
 									nothing, where one of the p, of len characters, ends here, or
 									where none does
-	atomic[p]                     p, its first way alone *)
+	atomic[p]                     p, its first way alone
+	call[n]                       the nth group's first way from here, as Wolfram 15's atomic calls
+									match, the groups as they were before it after it *)
 regexProgram[re_String] := Block[{$re = ToCharacterCode[re], $at = 1, $caseless = False, $multiline = False, $dotAll = False, $extended = False,
 		$groups = 0, $groupNames = <||>, $referenced = <||>
 },
 	With[{p = regexAlternation[]},
 		If[$at <= Length[$re], regexFails[]];
 		If[AnyTrue[Keys[$referenced], # > $groups &], regexFails[]];
-		p
+		regexCalled[p]
 	]
 ]
+
+(* A regex's calls of its groups, by number once it is read whole, since a call by name may come
+	before its group: each of a group the regex has, and none that may come round to its own
+	group again before a character, which Wolfram 15 does not take [WL 15.0.0] *)
+regexCalled[p_] := If[FreeQ[p, _call], p, With[
+	{q = ReplaceAll[p, call[{"Name", name_}] :> call[Lookup[$groupNames, name, regexFails[]]]]},
+	{bodies = Association[Cases[q, capture[n_, body_] :> n -> body, {0, Infinity}]]},
+	If[! SubsetQ[Keys[bodies], Union[Cases[q, call[n_Integer] :> n, {0, Infinity}]]], regexFails["a call of a group the regex has not"]];
+	If[callLoopQ[bodies], regexFails["a call that may come round to its group again before a character"]];
+	q
+]]
+
+(* whether a group may call itself, at once or through others, before a character: the groups
+	that may match nothing found first, then the calls each makes before a character *)
+callLoopQ[bodies_Association] := With[{empty = FixedPoint[Function[e, Map[callNullableQ[#, e] &, bodies]], Map[False &, bodies]]},
+	With[{reach = FixedPoint[Function[r, Map[Function[calls, Union[calls, Catenate[Lookup[r, calls]]]], r]], Map[leftCalls[#, empty] &, bodies]]},
+		AnyTrue[Keys[reach], MemberQ[reach[#], #] &]
+	]
+]
+
+(* whether a part may match nothing, a call's group by the table empty *)
+callNullableQ[p_, empty_Association] := nullableQ[ReplaceAll[p, call[m_] :> If[TrueQ[empty[m]], literal[{}], literal[{-1}]]]]
+
+(* the groups a part may call before it reads a character *)
+leftCalls[call[m_], empty_] := {m}
+leftCalls[sequence[parts_List], empty_] := Union @@ Map[leftCalls[#, empty] &, Take[parts, UpTo[LengthWhile[parts, callNullableQ[#, empty] &] + 1]]]
+leftCalls[alternatives[parts_List], empty_] := Union @@ Map[leftCalls[#, empty] &, parts]
+leftCalls[repeat[p_, ___] | capture[_, p_] | atomic[p_] | lookahead[p_, _], empty_] := leftCalls[p, empty]
+leftCalls[_, empty_] := {}
 
 (* no program: a regex Wolfram 15 does not take, or a part no program has *)
 regexFails[] := declined["a regex Wolfram 15 does not take"]
@@ -222,21 +254,41 @@ regexClosed[e_] := Block[{$caseless = $caseless, $multiline = $multiline, $dotAl
 ]
 
 (* (?imsx-imsx) for the rest of the group, (?imsx-imsx: ...) for its own alone *)
-regexOptions[] := (
-	With[{c1 = regexPeek[], c2 = regexPeek[1]},
-		Which[
-			MemberQ[{82, 38}, c1] || (IntegerQ[c1] && 48 <= c1 <= 57) || (MemberQ[{43, 45}, c1] && IntegerQ[c2] && 48 <= c2 <= 57) || (c1 === 80 && c2 === 62),
-				regexFails["recursion"],
-			c1 === 40,
-				regexFails["a conditional group"],
-			c1 === 124,
-				regexFails["a branch reset"],
-			c1 === 67,
-				regexFails["a callout"]
-		]
-	];
-	regexOptionFlags[{$caseless, $multiline, $dotAll, $extended}, True]
-)
+regexOptions[] := With[{c1 = regexPeek[], c2 = regexPeek[1]},
+	Which[
+		c1 === 82 || (c1 === 48 && c2 === 41),
+			regexFails["a call of the whole regex, which Wolfram 15 takes with what it puts around the regex"],
+		c1 === 38 || (c1 === 80 && c2 === 62) || (IntegerQ[c1] && 48 <= c1 <= 57) || (MemberQ[{43, 45}, c1] && IntegerQ[c2] && 48 <= c2 <= 57),
+			regexCall[41],
+		c1 === 40,
+			regexFails["a conditional group"],
+		c1 === 124,
+			regexFails["a branch reset"],
+		c1 === 67,
+			regexFails["a callout"],
+		True,
+			regexOptionFlags[{$caseless, $multiline, $dotAll, $extended}, True]
+	]
+]
+
+(* A call of a group, its text up to the code close: (?n), (?+n) of the nth group after, (?-n) of
+	the nth before, and (?&name) or (?P>name); and \g<...> and \g'...' of the same, made calls by
+	number once the regex is read whole *)
+regexCall[close_Integer] := Module[{sign, n},
+	Which[
+		regexSkip["&"] || regexSkip["P>"],
+			call[{"Name", regexName[{close}]}],
+		True,
+			sign = Which[regexSkip["+"], 1, regexSkip["-"], -1, True, 0];
+			n = regexNumber[];
+			Which[
+				n === None && sign === 0, call[{"Name", regexName[{close}]}],
+				n === None || regexNext[] =!= close || (sign =!= 0 && n < 1), regexFails[],
+				sign === 0 && n === 0, regexFails["a call of the whole regex, which Wolfram 15 takes with what it puts around the regex"],
+				True, call[Switch[sign, 1, $groups + n, -1, $groups - n + 1, _, n]]
+			]
+	]
+]
 
 (* the options read so far, {caseless, multiline, dotAll, extended}, on True before a - and False
 	after it: a ) sets them for the rest of the group, a : for the group it opens alone *)
@@ -323,7 +375,7 @@ regexEscape[] := With[{c = regexNext[]},
 		69,
 			Nothing,
 		103,
-			regexReference[regexGroupNumber[]],
+			If[MemberQ[{60, 39}, regexPeek[]], regexCall[If[regexNext[] === 60, 62, 39]], regexReference[regexGroupNumber[]]],
 		107,
 			regexReference[regexNamed[]],
 		_?(49 <= # <= 57 &),

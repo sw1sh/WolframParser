@@ -120,7 +120,11 @@ StringPatternProgram /: MakeBoxes[program : StringPatternProgram[a_Association],
 	]
 
 (* the program of a pattern, or None if it has parts that no program has *)
-stringProgram[pattern_] := Catch[backreferenced[program[pattern]], program]
+stringProgram[pattern_] := Catch[aloneCalled[backreferenced[program[pattern]]], program]
+
+(* A regex's calls of its groups are taken in a regex alone, where its groups are its own; in a
+	larger pattern Wolfram 15 counts the groups of the whole of it [WL 15.0.0] *)
+aloneCalled[p_] := If[FreeQ[p, _call] || MatchQ[p, regular[_]], p, declined["a call of a group of a regex in a larger pattern, which Wolfram 15 counts the groups of"]]
 
 (* A pattern of one character class, or a repeat of one, matches a whole string whose characters
 	all pass the class's test, as many as the repeat allows: it is tested on the codes, with no
@@ -334,6 +338,8 @@ nullableQ[excluding[_, p_] | builtIn[_, p_]] := nullableQ[p]
 nullableQ[_anchor | _backreference] := True
 nullableQ[(regular | atomic)[p_] | capture[_, p_]] := nullableQ[p]
 nullableQ[_captured | _lookahead | _lookbehind] := True
+(* a call of a group may, as far as the call alone says *)
+nullableQ[_call] := True
 
 
 (* ::Section:: *)
@@ -637,7 +643,14 @@ matched[conditioned[p_, test_HoldComplete, names_], z_subject, i_Integer, b_, k_
 ]]
 matched[excluding[test_, p_], z : subject[_, n_, _], i_Integer, b_, k_] := If[i < n && ! TrueQ[test[codeAt[z, i]]], matched[p, z, i, b, k], $noMatch]
 matched[anchor[name_], z_subject, i_Integer, b_, k_] := If[anchorQ[name, z, i], k[i, b], $noMatch]
-matched[regular[p_], z_subject, i_Integer, b_, k_] := matched[p, z, i, b, k]
+matched[regular[p_], z_subject, i_Integer, b_, k_] := If[FreeQ[p, _call], matched[p, z, i, b, k], Block[{$calledGroups = calledGroups[p]}, matched[p, z, i, b, k]]]
+(* a call of a group matches the group's first way, as Wolfram 15's calls are atomic, and the
+	groups after it are as they were before it [WL 15.0.0] *)
+matched[call[n_], z_subject, i_Integer, b_, k_] := With[{r = matched[$calledGroups[n], z, i, b, Function[{j, c}, {j}]]},
+	If[r === $noMatch, $noMatch, k[First[r], b]]
+]
+(* the groups of a regex's program by their numbers, made once *)
+calledGroups[p_] := calledGroups[p] = Association[Cases[p, c : capture[n_, _] :> n -> c, {0, Infinity}]]
 (* a regex's group holds what it matched last; a backreference to one that holds nothing matches
 	nothing; a lookaround's first way alone, the groups it set kept where it is positive; an atomic
 	part's first way alone *)
@@ -820,8 +833,8 @@ StringPatternMatcher /: MakeBoxes[matcher : StringPatternMatcher[a_Association, 
 
 textSubject[s_String] := subject[ToCharacterCode[s], StringLength[s], s]
 
-(* whether the interpreter matches the programs, by the method *)
-interpretedQ[programs_List, method_] := method === "Interpreter"
+(* whether the interpreter matches the programs: by the method, and for a call of a group, which the typed matcher has not *)
+interpretedQ[programs_List, method_] := method === "Interpreter" || ! FreeQ[programs, _call]
 
 (* the programs a mode matches: every way of each in the mode "All" *)
 modePrograms[programs_List, "All"] := Lookup[First /@ programs, "Ways"]

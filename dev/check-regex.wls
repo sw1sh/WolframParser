@@ -31,7 +31,7 @@ $anchors = {"^", "$", "\\b", "\\B", "\\A", "\\z", "\\Z"};
 $quantifiers = {"*", "+", "?", "{2}", "{1,2}", "{0,1}", "{2,}", "*?", "+?", "??", "{1,2}?", "*+", "++", "?+"};
 
 atom[0] := RandomChoice[{5, 4, 1} -> {RandomChoice[$characters] &, RandomChoice[$classes] &, RandomChoice[$anchors] &}][]
-atom[d_Integer] := RandomChoice[{6, 2, 2, 1, 1, 1, 1, 1, 1, 1} -> {
+atom[d_Integer] := RandomChoice[{6, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2} -> {
     atom[0] &,
     "(" <> regex[d - 1] <> ")" &,
     "(?:" <> regex[d - 1] <> ")" &,
@@ -41,7 +41,8 @@ atom[d_Integer] := RandomChoice[{6, 2, 2, 1, 1, 1, 1, 1, 1, 1} -> {
     "(?<!" <> RandomChoice[{"a", "\\s", "ab", "a|b"}] <> ")" &,
     "(?>" <> regex[d - 1] <> ")" &,
     RandomChoice[{"(?i)", "(?m)", "(?s)", "(?i:" <> regex[d - 1] <> ")"}] &,
-    "\\1" &}][]
+    "\\1" &,
+    RandomChoice[{"(?1)", "(?-1)", "(?+1)", "(?2)", "\\g<1>", "(?R)"}] &}][]
 piece[d_Integer] := With[{a = atom[d]}, If[RandomReal[] < 0.35 && ! MemberQ[$anchors, a], a <> RandomChoice[$quantifiers], a]]
 branch[d_Integer] := StringJoin[Table[piece[d], {RandomInteger[{1, 3}]}]]
 regex[d_Integer] := StringRiffle[Table[branch[d], {RandomChoice[{6, 2, 1} -> {1, 2, 3}]}], "|"]
@@ -59,7 +60,7 @@ groups[matches_List] := Map[Cases[#[[4]], (_Integer -> t_) :> t] &, matches];
    Wolfram 15's. *)
 emptyQ[p_] := TrueQ[Wolfram`Parser`StringPatterns`Private`nullableQ[p["Program"]]]
 
-differ = {}; agree = 0; noProgram = 0; notNative = 0; both = 0; unmade = {}; empties = 0;
+differ = {}; agree = 0; called = 0; noProgram = 0; notNative = 0; both = 0; unmade = {}; empties = 0;
 Do[
     With[{re = regex[RandomInteger[{0, 2}]], s = randomString[]},
         With[{p = StringPatternProgram[RegularExpression[re]], w = native[StringCases[s, RegularExpression[re]]]},
@@ -76,12 +77,12 @@ Do[
                                 AssociationMap[Function[method, With[{e = StringPatternMatches[s, {p}, "Each", Method -> method], a = StringPatternMatches[s, {p}, "All", Method -> method]},
                                     If[empty, {cut[s, a]}, {cut[s, e], groups[e], cut[s, a]}]]], {"VM", "Interpreter"}],
                                 # =!= wanted &]},
-                            If[wrong === <||>, agree++, AppendTo[differ, {re, s, Keys[wrong], {First[Values[wrong]], wanted}}]]]]]]]],
+                            If[wrong === <||>, agree++; If[! FreeQ[p["Program"], Wolfram`Parser`StringPatterns`Private`call], called++], AppendTo[differ, {re, s, Keys[wrong], {First[Values[wrong]], wanted}}]]]]]]]],
     {count}];
 
 Scan[Function[d, Print["   ", ToString[d[[1]], InputForm], " on ", ToString[d[[2]], InputForm], " (", d[[3]], ")\n      engine ", ToString[d[[4, 1]], InputForm],
     "\n      W15    ", ToString[d[[4, 2]], InputForm]]], Take[differ, UpTo[30]]];
 Print["   a sample of the regexes with no program that Wolfram 15 takes: ", ToString[Take[unmade, UpTo[12]], InputForm]];
-Print["regex: ", count, " cases, seed ", seed, ": ", agree, " agree, ", Length[differ], " differ, ", noProgram, " with no program (", both,
+Print["regex: ", count, " cases, seed ", seed, ": ", agree, " agree (", called, " of them with a call of a group), ", Length[differ], " differ, ", noProgram, " with no program (", both,
     " of them no regex in Wolfram 15 either), ", notNative, " no regex in Wolfram 15 with a program, ", empties, " that may match nothing held by every way"];
 If[differ =!= {}, Exit[1]];

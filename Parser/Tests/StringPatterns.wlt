@@ -413,7 +413,7 @@ VerificationTest[
     StringPatternProgram[#]["Declined"] & /@ {RegularExpression["\\((?R)?\\)"], RegularExpression["(?(1)a|b)"], RegularExpression["(?|a)"], RegularExpression["(*FAIL)"],
         RegularExpression["\\Ga"], RegularExpression["(?<=a+)b"], RegularExpression["(a?)++"], RegularExpression["\\p{Greek}"], RegularExpression["a{2,1}"],
         RegularExpression["(?i)(a)\\1"], "a" ~~ DigitCharacter},
-    {"recursion", "a conditional group", "a branch reset", "a verb", "\\G", "a lookbehind of no fixed length", "a possessive repeat of a part that may match nothing",
+    {"a call of the whole regex, which Wolfram 15 takes with what it puts around the regex", "a conditional group", "a branch reset", "a verb", "\\G", "a lookbehind of no fixed length", "a possessive repeat of a part that may match nothing",
      "\\p{Greek}, a script or no property", "a regex Wolfram 15 does not take", None, None},
     TestID -> "string patterns: what a program declines, by name"
 ]
@@ -484,4 +484,36 @@ VerificationTest[
     Map[With[{p = StringPatternProgram[RegularExpression[#]]}, {p["RegexLike"], p["RegexFinds"]}] &, {"c ", "[0-9]+", "(ab|cd)e", "(?:ab)+"}],
     {{True, True}, {True, True}, {False, True}, {False, True}},
     TestID -> "string patterns: a regex matches as its program does, or finds a match where it has one, as a pattern's"
+]
+
+(* a regex's calls of its groups, as Wolfram 15 matches them: a group's pattern again where it is
+   called, its first way alone, since its calls are atomic, and the groups after it as they were
+   before it; by number, relative, by name and by \g, recursive too [WL 15.0.0] *)
+VerificationTest[
+    Map[Function[c, Map[Function[m, Prepend[Table[Lookup[m[[4]], k, ""], {k, c[[3]]}], StringTake[c[[1]], {m[[1]] + 1, m[[2]]}]]],
+        StringPatternMatches[c[[1]], {StringPatternProgram[RegularExpression[c[[2]]]]}, "Each"]]],
+        {{"x [a [b] c](u) y [d](e)", "\\[((?:[^\\[\\]]|\\[(?1)\\])*)\\]\\(([^)]*)\\)", 2}, {"abca", "(?1)c(a|ab)", 1}, {"ba", "((a)|b)(?1)", 2},
+         {"((a))", "(?<p>\\((?:[^()]|(?&p))*\\))", 1}, {"aba", "(a)(?-1)?b(?1)", 1}, {"bb", "(?+1)(b)", 1}, {"abab", "(ab)\\g<1>", 1},
+         {"[[a]] [x\\]y]", "\\[((?:[^\\[\\]\\\\]|\\\\.|(\\[(?:[^\\[\\]\\\\]|\\\\.|(?2))*\\]))+)\\]", 2}}
+    ],
+    {{{"[a [b] c](u)", "a [b] c", "u"}, {"[d](e)", "d", "e"}}, {}, {{"ba", "b", ""}}, {{"((a))", "((a))"}}, {{"aba", "a"}}, {{"bb", "b"}},
+     {{"abab", "ab"}}, {{"[[a]]", "[a]", "[a]"}, {"[x\\]y]", "x\\]y", ""}}},
+    TestID -> "string patterns: a regex's calls of its groups, atomic, the groups as they were after each, recursive too"
+]
+
+VerificationTest[
+    {StringPatternMatcher[{StringPatternProgram[RegularExpression["(a(?1)?b)"]]}, "Each"]["Method"],
+     StringPatternRecords["aabb ab", {StringPatternProgram[RegularExpression["(a(?1)?b)"]]}, "Each"]["Records"],
+     StringPatternProgram[RegularExpression["(a(?1)?b)"]]["Regex"]},
+    {"Interpreter", {{0, 4, 1, 0, 4}, {5, 7, 1, 5, 7}}, None},
+    TestID -> "string patterns: a program with a call matched by the interpreter, with no POSIX regex"
+]
+
+VerificationTest[
+    Map[StringPatternProgram[#]["Declined"] &, {RegularExpression["a(?R)?"], RegularExpression["((?1)?a)"], RegularExpression["(a|(?1)b)"],
+        RegularExpression["(?1)"], "x" ~~ RegularExpression["(a)(?1)"]}],
+    {"a call of the whole regex, which Wolfram 15 takes with what it puts around the regex",
+     "a call that may come round to its group again before a character", "a call that may come round to its group again before a character",
+     "a call of a group the regex has not", "a call of a group of a regex in a larger pattern, which Wolfram 15 counts the groups of"},
+    TestID -> "string patterns: no program for a call of the whole regex, one that may loop, one of no group, or one in a larger pattern"
 ]
