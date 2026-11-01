@@ -203,16 +203,21 @@ operatorDispatch[levels_List] :=
 		|>
 	]
 
+(* The specs an operator's first character can begin, by character, in the table's order, and the
+	specs any character can begin: one pass files each spec's place under each of its first
+	characters, and the specs of any character join every list. The table is a local of the
+	Module, so the function over the characters holds its name, not its whole body. *)
 byFirstCharacter[specs_List] :=
-	Module[{firsts = firstCharacters[#[[3]]] & /@ specs, characters, rest},
+	Module[{all = specs, firsts = firstCharacters[#[[3]]] & /@ specs, any, starts, characters},
+		any = Flatten[Position[firsts, All, {1}, Heads -> False]];
+		starts = GroupBy[
+			Catenate[MapIndexed[Function[{f, i}, If[ListQ[f], Thread[{DeleteDuplicates[f], First[i]}], {}]], firsts]],
+			First -> Last
+		];
 		characters = Union @@ Cases[firsts, _List];
-		rest = Pick[specs, Map[# === All &, firsts]];
 		{
-			AssociationMap[
-				Function[c, Pick[specs, Map[# === All || MemberQ[#, c] &, firsts]]],
-				characters
-			],
-			rest
+			AssociationMap[Function[c, all[[Union[starts[c], any]]]], characters],
+			all[[any]]
 		}
 	]
 
