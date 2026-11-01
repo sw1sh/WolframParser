@@ -3036,13 +3036,13 @@ applyLineBreaks[boxes_] := boxes //. {
 		]
 }
 
-(* ===== precompiled-parser asset =====
-	ParserCompile[LaTeXMathParser, Method -> "PEGVM"] is shipped as a paclet
-	Asset (<|"Hash" -> Hash[LaTeXMathParser], "Parser" -> compiled|>). On
-	first use LaTeXMathParse loads it IF the stored hash matches the current
-	grammar's hash - so a stale asset (grammar changed since it was built) is
-	ignored and we fall back to the interpreter. Rebuild with
-	BuildLaTeXParserAsset[]. *)
+(* The PEG-VM program of LaTeXMathParser, ParserCompile[LaTeXMathParser, Method -> "PEGVM"]'s
+	data, is shipped as a paclet Asset: <|"Grammar" -> the grammar's hash, "Data" -> the program|>,
+	its instruction lists packed, in compressed WXF, which a kernel reads in a fraction of a second.
+	On first use LaTeXMathParse loads it IF its grammar hash is the current grammar's - so a stale
+	asset (the grammar changed since it was built) is ignored and the interpreter is used. The hash
+	is SHA-256 of the grammar's serialized bytes, the same on any kernel, as Hash of an expression
+	is not. Rebuild with BuildLaTeXParserAsset[]. *)
 
 $latexDir = DirectoryName[$InputFileName]
 
@@ -3055,6 +3055,9 @@ compiledLatexAssetPath[] := Module[{p},
 	]
 ]
 
+(* the grammar's hash, as the asset records it *)
+latexGrammarHash[] := Hash[BinarySerialize[LaTeXMathParser], "SHA256", "HexString"]
+
 (* memoised: the compiled parser when the asset is present and current,
 	else $Failed (interpretive fallback). The asset stores only the grammar
 	hash and the PEG-VM instruction data; the runnable "Code" is rebuilt
@@ -3066,8 +3069,8 @@ loadCompiledLatexParser[] := (
 	If[$compiledLatexCache === "unset",
 		$compiledLatexCache = Module[{path = compiledLatexAssetPath[], stored, lpc = LaTeXMathParser},
 			If[StringQ[path] && FileExistsQ[path],
-				stored = Quiet @ Check[Uncompress[Import[path]], $Failed];
-				If[AssociationQ[stored] && stored["Hash"] === Hash[lpc],
+				stored = Quiet @ Check[Import[path, "WXF"], $Failed];
+				If[AssociationQ[stored] && stored["Grammar"] === latexGrammarHash[],
 					ParserCombinator[lpc[[1]], lpc[[2]],
 						Append[lpc[[3]], "Code" -> Wolfram`Parser`Private`pegCodeFn[stored["Data"]]]
 					],
@@ -3082,14 +3085,14 @@ loadCompiledLatexParser[] := (
 
 activeLatexParser[] := With[{c = loadCompiledLatexParser[]}, If[c === $Failed, LaTeXMathParser, c]]
 
-(* build (or rebuild) the asset from the current grammar: just the grammar
-	hash + the PEG-VM instruction data (Prog/Classes/ClassPats/Spec),
-	Compress'd (the tables are large but compress well). *)
+(* build (or rebuild) the asset from the current grammar: the grammar's hash and the PEG-VM
+	instruction data (Prog/Classes/ClassPats/Spec), Prog and Classes packed, in WXF compressed for
+	size. *)
 BuildLaTeXParserAsset[] := Module[{data, path},
-	data = Wolfram`Parser`Private`pegCompile[LaTeXMathParser];
+	data = MapAt[Developer`ToPackedArray, Wolfram`Parser`Private`pegCompile[LaTeXMathParser], {{"Prog"}, {"Classes"}}];
 	path = FileNameJoin[{ParentDirectory[$latexDir], "Assets", "LaTeXMathParserCompiled.wxf"}];
 	If[! DirectoryQ[DirectoryName[path]], CreateDirectory[DirectoryName[path]]];
-	Export[path, Compress[<|"Hash" -> Hash[LaTeXMathParser], "Data" -> data|>], "WXF"];
+	Export[path, <|"Grammar" -> latexGrammarHash[], "Data" -> data|>, "WXF", PerformanceGoal -> "Size"];
 	$compiledLatexCache = "unset";   (* reset cache so the next call reloads *)
 	path
 ]
