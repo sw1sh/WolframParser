@@ -2932,7 +2932,8 @@ longNameText::usage = "longNameText[codes, i] gives the letters and digits of th
 longNameText[codes_List, i_Integer] := FromCharacterCode @ TakeWhile[Drop[codes, i - 1], 48 <= # <= 57 || 65 <= # <= 90 || 97 <= # <= 122 &]
 
 (* token t of a lexed source opens, or closes, a bracket's items: its kind, or the long name it is;
-	the end of the source closes them too, where the lexer reads it *)
+	the end of the source closes them too, where the lexer reads to it, not where it stops at its
+	last token or in a string or a comment not closed *)
 bracketQ::usage = "bracketQ[lexed, t, brackets] is True where token t of lexed opens, or closes, a bracket's items, as brackets, \
 $warnOpeners or $warnClosers, tells."
 bracketQ[lexed_List, t_Integer, brackets_Association] := With[{kind = tokenKind[lexed, t]},
@@ -2940,7 +2941,7 @@ bracketQ[lexed_List, t_Integer, brackets_Association] := With[{kind = tokenKind[
 		kind === $tkOperator,
 			KeyExistsQ[brackets, tokenOperator[lexed, t]],
 		kind === $tkEnd,
-			brackets === $warnClosers && (lexerStatus[lexed] =!= 1 || t < tokenCount[lexed]),
+			brackets === $warnClosers && (lexerStatus[lexed] =!= 1 && lexerStatus[lexed] =!= 3 || t < tokenCount[lexed]),
 		True,
 			MemberQ[brackets["Kinds"], kind]
 	]
