@@ -2477,6 +2477,23 @@ WolframLanguageBoxes[s_String] := If[ StringFreeQ[s, $activeLinearOpen],
 	]
 ]
 
+(* A list of tokens, strings and boxes, read as the front end reads the tokens of a row it
+	regroups: each box an operand, each string a token of its own. A box stands for a name and
+	tokens are kept apart by an invisible blank while the text is read. *)
+WolframLanguageBoxes[items_List] := With[
+	{keys = Table["zzBoxOperand" <> IntegerString[i] <> "zz", {i, Length[items]}], separator = FromCharacterCode[8288]},
+	With[{text = StringRiffle[MapThread[If[StringQ[#1], #1, #2] &, {items, keys}], separator]},
+		Replace[
+			DeleteCases[WolframLanguageBoxes[text], separator, Infinity],
+			Join[
+				MapThread[If[StringQ[#1], Nothing, #2 -> #1] &, {items, keys}],
+				{RowBox[{one_}] :> one}
+			],
+			{0, Infinity}
+		]
+	]
+]
+
 frontEndBoxesOf::usage = "frontEndBoxesOf[s] gives the front end's boxes of the source s."
 frontEndBoxesOf[s_String] := With[{items = frontEndSourceItems[s]}, If[FailureQ[items], items, frontEndRow[items]]]
 
@@ -2505,11 +2522,34 @@ frontEndSourceItems[s_String, top_ : True] := With[{tree = WolframLanguageConcre
 	]
 ]
 
-(* the blank after a product of names written apart, at the end of the source, is in the product's row *)
-frontEndTrailingBlank::usage = "frontEndTrailingBlank[children] gives the top-level children of a source, the spaces after a closing implicit product moved into it."
-frontEndTrailingBlank[{before___, CodeParser`InfixNode[Times, factors_List, data_], blank : CodeParser`LeafNode[Whitespace, _, _] ..}] /;
-	MemberQ[factors, CodeParser`LeafNode[Token`Fake`ImplicitTimes, _, _]] := {before, CodeParser`InfixNode[Times, Join[factors, {blank}], data]}
+(* a blank at the end of the source after an operand is in the row of the innermost operator
+	before it; after a bracket, a call or an operator it stands outside, in the row around *)
+frontEndTrailingBlank::usage = "frontEndTrailingBlank[children] gives the top-level children of a source, the blanks closing it given to the operator before them."
+frontEndTrailingBlank[{before___, node_, blank : CodeParser`LeafNode[Whitespace, _, _] ..}] /; ! MissingQ[frontEndBlankHolder[node, {blank}]] :=
+	{before, frontEndBlankHolder[node, {blank}]}
 frontEndTrailingBlank[children_List] := children
+
+frontEndOperatorNodeQ::usage = "frontEndOperatorNodeQ[node] is True for a node of an operator and its operands."
+frontEndOperatorNodeQ[(CodeParser`InfixNode | CodeParser`BinaryNode | CodeParser`PrefixNode | CodeParser`TernaryNode | CodeParser`PrefixBinaryNode)[_, _List, _]] := True
+frontEndOperatorNodeQ[_] := False
+
+frontEndOperandQ::usage = "frontEndOperandQ[node] is True for what ends an expression as an operand: a name, a number, a string, a token such as x_, a group or a call."
+frontEndOperandQ[CodeParser`LeafNode[kind_, _, _]] := ! StringStartsQ[ToString[kind], "Token`"]
+frontEndOperandQ[node_] := ! frontEndOperatorNodeQ[node] && MatchQ[node, (CodeParser`CompoundNode | CodeParser`BlankNode | CodeParser`BlankSequenceNode | CodeParser`BlankNullSequenceNode |
+	CodeParser`PatternBlankNode | CodeParser`PatternBlankSequenceNode | CodeParser`PatternBlankNullSequenceNode | CodeParser`OptionalDefaultPatternNode |
+	CodeParser`GroupNode | CodeParser`CallNode)[___]]
+
+frontEndBlankHolder::usage = "frontEndBlankHolder[node, blanks] gives node with blanks held by its innermost operator whose last operand ends it, or Missing where none does."
+frontEndBlankHolder[node_?frontEndOperatorNodeQ, blanks_List] := With[{last = Last[node[[2]]]},
+	Which[
+		frontEndOperatorNodeQ[last] && ! MissingQ[frontEndBlankHolder[last, blanks]], ReplacePart[node, {2, -1} -> frontEndBlankHolder[last, blanks]],
+		frontEndOperandQ[last], frontEndKeepBlank[node, blanks],
+		True, Missing["NoOperand"]
+	]
+]
+frontEndBlankHolder[_, _] := Missing["NoOperator"]
+
+frontEndKeepBlank::usage = "frontEndKeepBlank[node, blanks] stands for node with the blanks closing the source in its row."
 
 frontEndTrivia::usage = "frontEndTrivia[box] marks the box of whitespace, a newline or a comment in the items of a node, which go outside the node where they stand at its edge."
 
@@ -2586,9 +2626,10 @@ frontEndItems[CodeParser`PostfixNode[Derivative, {inner_, CodeParser`LeafNode[_,
 }]}
 (* !! before an operand is two !s to the front end *)
 frontEndItems[CodeParser`PrefixNode[CodeParser`PrefixNot2, {_, rest___}, _]] := frontEndNode[Join[{"!"}, frontEndNode[Join[{"!"}, Join @@ (frontEndItems /@ {rest})]]]]
-(* a product of names written apart keeps a closing blank in its row (frontEndTrailingBlank) *)
-frontEndItems[CodeParser`InfixNode[Times, {factors__, blank : CodeParser`LeafNode[Whitespace, text_String, _]}, _]] /;
-	MemberQ[{factors}, CodeParser`LeafNode[Token`Fake`ImplicitTimes, _, _]] := {frontEndRow[Append[Join @@ (frontEndItems /@ {factors}), text]]}
+frontEndItems[frontEndKeepBlank[node_, blanks_List]] := Replace[frontEndItems[node], {
+	{before___, RowBox[row_List]} :> {before, frontEndRow[Join[row, Join @@ (frontEndItems /@ blanks)]]},
+	{before___, last_} :> {before, frontEndRow[Join[{last}, Join @@ (frontEndItems /@ blanks)]]}
+}]
 frontEndItems[(head : CodeParser`BinaryNode | CodeParser`TernaryNode)[op : Unset | CodeParser`TagUnset,
 	children : {___, CodeParser`LeafNode[Token`Equal, _, _], CodeParser`LeafNode[Token`Dot, _, _], ___}, data_]] :=
 	frontEndItems[head[op, frontEndUnset[children], data]]

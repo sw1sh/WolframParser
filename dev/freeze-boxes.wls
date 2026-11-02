@@ -39,7 +39,8 @@ frontEndForms = {
     (* comments and dots *)
     "f[x] (* a comment *)",
     (* active linear syntax in a string, one token; the blank after a product of names written apart *)
-    "\"\!\(\*StyleBox[\"prop\",\"TI\"]\)\"", "c[\"\!\(\*StyleBox[\"prop\",\"TI\"]\)\"]", "The expression ", "Further output of ", "f[a b ]", "(* line1\nline2 *)", "f[x] (* a\n  b *)", "(* a\n(* b *)\nc *)", "(* a +\n b *)\nx", "<|\"TermRanks\" -> {...}, \"FirstDifferential\" -> d1|>", "{z$1, \[Ellipsis], z$n}"
+    "\"\!\(\*StyleBox[\"prop\",\"TI\"]\)\"", "c[\"\!\(\*StyleBox[\"prop\",\"TI\"]\)\"]", "The expression ", "Further output of ", "f[a b ]",
+    "-a ", "a + b ", "f[x] ", "a;b ", "a b+c ", "{a} ", "x_ ", "a^b ", "a! ", "-a  ", "a + b*c ", "a*b + c ", "a + (b) ", "a + f[x] ", "a = b + c ", "(* line1\nline2 *)", "f[x] (* a\n  b *)", "(* a\n(* b *)\nc *)", "(* a +\n b *)\nx", "<|\"TermRanks\" -> {...}, \"FirstDifferential\" -> d1|>", "{z$1, \[Ellipsis], z$n}"
 };
 
 forms = DeleteDuplicates[Join[frontEndForms, concreteForms]];

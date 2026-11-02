@@ -51,6 +51,21 @@ $frontEndBoxes = {
     {"The expression ", RowBox[{"The", " ", "expression", " "}]},
     {"Further output of ", RowBox[{"Further", " ", "output", " ", "of", " "}]},
     {"f[a b ]", RowBox[{"f", "[", RowBox[{"a", " ", "b"}], " ", "]"}]},
+    {"-a ", RowBox[{"-", "a", " "}]},
+    {"a + b ", RowBox[{"a", " ", "+", " ", "b", " "}]},
+    {"f[x] ", RowBox[{RowBox[{"f", "[", "x", "]"}], " "}]},
+    {"a;b ", RowBox[{"a", ";", "b", " "}]},
+    {"a b+c ", RowBox[{RowBox[{"a", " ", "b"}], "+", "c", " "}]},
+    {"{a} ", RowBox[{RowBox[{"{", "a", "}"}], " "}]},
+    {"x_ ", RowBox[{"x_", " "}]},
+    {"a^b ", RowBox[{"a", "^", "b", " "}]},
+    {"a! ", RowBox[{RowBox[{"a", "!"}], " "}]},
+    {"-a  ", RowBox[{"-", "a", "  "}]},
+    {"a + b*c ", RowBox[{"a", " ", "+", " ", RowBox[{"b", "*", "c", " "}]}]},
+    {"a*b + c ", RowBox[{RowBox[{"a", "*", "b"}], " ", "+", " ", "c", " "}]},
+    {"a + (b) ", RowBox[{"a", " ", "+", " ", RowBox[{"(", "b", ")"}], " "}]},
+    {"a + f[x] ", RowBox[{"a", " ", "+", " ", RowBox[{"f", "[", "x", "]"}], " "}]},
+    {"a = b + c ", RowBox[{"a", " ", "=", " ", RowBox[{"b", " ", "+", " ", "c", " "}]}]},
     {"(* line1\nline2 *)", RowBox[{"(*", " ", RowBox[{"line1", "\n", "line2"}], " ", "*)"}]},
     {"f[x] (* a\n  b *)", RowBox[{RowBox[{"f", "[", "x", "]"}], " ", RowBox[{"(*", " ", RowBox[{"a", "\n", "  ", "b"}], " ", "*)"}]}]},
     {"(* a\n(* b *)\nc *)", RowBox[{"(*", " ", RowBox[{"a", "\n", RowBox[{"(*", " ", "b", " ", "*)"}], "\n", "c"}], " ", "*)"}]},
@@ -560,3 +575,23 @@ $frontEndOpen = {
 Scan[
     Function[c, VerificationTest[WolframLanguageBoxes[c[[1]]], c[[2]], TestID -> "boxes: " <> c[[1]]]],
     Select[$frontEndBoxes, ! MemberQ[$frontEndOpen, First[#]] &]]
+
+(* === a token list, as the front end regroups the tokens of a row it reads again on save ===
+   W15's ExportString[notebook, "NB"], recorded by the kernel's notebook-store probes: each box an
+   operand, each string a token of its own *)
+Scan[
+    Function[c, VerificationTest[WolframLanguageBoxes[c[[1]]], c[[2]], TestID -> "boxes of tokens: " <> ToString[c[[1]], InputForm]]],
+    {
+        {{"a", " ", "+", "x"}, RowBox[{"a", " ", "+", "x"}]},
+        {{" ", "a", "+", "x"}, RowBox[{" ", RowBox[{"a", "+", "x"}]}]},
+        {{" ", "a", "b", "+", "x"}, RowBox[{" ", RowBox[{RowBox[{"a", "b"}], "+", "x"}]}]},
+        {{"a", " ", "+", "b", "*", "c"}, RowBox[{"a", " ", "+", RowBox[{"b", "*", "c"}]}]},
+        {{"d", ",", "a", " ", "-", "b", "+", "c"}, RowBox[{"d", ",", RowBox[{"a", " ", "-", "b", "+", "c"}]}]},
+        {{"b", "-", "a", " ", ",", "c"}, RowBox[{RowBox[{"b", "-", "a"}], " ", ",", "c"}]},
+        {{"a", " ", "*", RowBox[{"b", "+", "c"}]}, RowBox[{"a", " ", "*", RowBox[{"b", "+", "c"}]}]},
+        {{"f", "[", "a", " ", "]"}, RowBox[{"f", "[", "a", " ", "]"}]},
+        {{"-", "a", " "}, RowBox[{"-", "a", " "}]},
+        {{"a", " ", "b", "+", "c"}, RowBox[{RowBox[{"a", " ", "b"}], "+", "c"}]},
+        {{"{", "0", ",", "0.`", " ", "+", "x", "}"}, RowBox[{"{", RowBox[{"0", ",", RowBox[{"0.`", " ", "+", "x"}]}], "}"}]},
+        {{":", " "}, RowBox[{":", " "}]}
+    }]

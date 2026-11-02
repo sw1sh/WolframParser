@@ -14,6 +14,8 @@ RelatedGuides: [ParserZoo]
 
 <code>[WolframLanguageBoxes]()[*code*]</code> gives the boxes Wolfram 15's front end makes of the Wolfram Language text *code* typed in an input cell, as it answers `FrontEnd``ReparseBoxStructurePacket`[*code*].
 
+<code>[WolframLanguageBoxes]()[{*token*<sub>1</sub>, *token*<sub>2</sub>, ...}]</code> gives the row the front end makes of a list of tokens when it reads a row again, each string a token and each box an operand.
+
 ## Details & Options
 
 - The boxes come from the concrete syntax tree [WolframLanguageConcrete]() gives: each token is a string and each node a `RowBox` of its children, as the front end lays out typed text. A kernel without a front end can make with it the boxes a notebook's input cell holds.
@@ -22,7 +24,7 @@ RelatedGuides: [ParserZoo]
 - A long name the front end knows is its character, in a string too: `\[Lambda]` gives `"λ"`. A `\\` before `[` keeps the `[` as text.
 - A string that stands alone, the whole of *code*, keeps its text as typed, its long names spelled out.
 - Active linear syntax, `\(...\)` in its own characters, is one piece of text in a string, quotes and all.
-- The blank after a product of names written apart, at the end of *code*, is in the product's row.
+- A blank at the end of *code* after an operand is in the row of the innermost operator before it. After a bracket, a call or a postfix operator it stands outside, in the row around.
 - What the front end reads as one token is one string: a pattern such as `x_`, `_h` or `x_.`, a slot such as `#1`, an `Out` such as `%2`, the primes of `y''` and `=.`. A `!!` before an operand is two `!`s.
 - Text that is not Wolfram Language gives the tokens the front end gives: an operator without its operand is that operator alone, and a group the text does not close is its opener with what follows it in one row.
 - A token alone is that string, not a `RowBox`, and empty text gives `""`.
