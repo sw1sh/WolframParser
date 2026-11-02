@@ -18,7 +18,7 @@ RelatedGuides: [ParserZoo]
 
 - The boxes come from the concrete syntax tree [WolframLanguageConcrete]() gives: each token is a string and each node a `RowBox` of its children, as the front end lays out typed text. A kernel without a front end can make with it the boxes a notebook's input cell holds.
 - Spaces, tabs and newlines keep their places, and a run of spaces and tabs is one string. Whitespace, newlines and comments at the edges of a node stand outside it, in the row around it.
-- A comment is a row of its own, `"(*"`, its text read as code, and `"*)"`.
+- A comment is a row of its own, `"(*"`, its text read as code inside brackets, so a newline in it ends no expression, and `"*)"`.
 - A long name the front end knows is its character, in a string too: `\[Lambda]` gives `"λ"`. A `\\` before `[` keeps the `[` as text.
 - A string that stands alone, the whole of *code*, keeps its text as typed, its long names spelled out.
 - What the front end reads as one token is one string: a pattern such as `x_`, `_h` or `x_.`, a slot such as `#1`, an `Out` such as `%2`, the primes of `y''` and `=.`. A `!!` before an operand is two `!`s.

@@ -37,7 +37,7 @@ frontEndForms = {
     (* long names, in code and in strings *)
     "\\[Lambda] y[x]", "{\"\\[Bullet]\"}", "\"a\\\\[Bullet]\"", "\\[Alpha] + \\[NotALongName]",
     (* comments and dots *)
-    "f[x] (* a comment *)", "<|\"TermRanks\" -> {...}, \"FirstDifferential\" -> d1|>", "{z$1, \[Ellipsis], z$n}"
+    "f[x] (* a comment *)", "(* line1\nline2 *)", "f[x] (* a\n  b *)", "(* a\n(* b *)\nc *)", "(* a +\n b *)\nx", "<|\"TermRanks\" -> {...}, \"FirstDifferential\" -> d1|>", "{z$1, \[Ellipsis], z$n}"
 };
 
 forms = DeleteDuplicates[Join[frontEndForms, concreteForms]];

@@ -2503,8 +2503,21 @@ frontEndText[t_String] := If[StringFreeQ[t, "\\["], t,
 frontEndComment::usage = "frontEndComment[t] gives the front end's boxes of the comment t, closed or not: a row of its opener, its text read as code and its closer."
 frontEndComment[t_String] := With[{closed = StringEndsQ[t, "*)"] && StringLength[t] >= 4},
 	With[{body = StringTake[t, {3, If[closed, -3, -1]}]},
-		frontEndRow[Join[{"(*"}, Replace[frontEndSourceItems[body], _?FailureQ :> {body}], If[closed, {"*)"}, {}]]]
+		frontEndRow[Join[{"(*"}, frontEndCommentItems[body], If[closed, {"*)"}, {}]]]
 	]
+]
+
+(* the front end reads a comment's text as inside brackets, where a newline ends no expression *)
+frontEndCommentItems::usage = "frontEndCommentItems[body] gives the front end's boxes of the text of a comment, as items."
+frontEndCommentItems[body_String] := Replace[
+	If[ StringContainsQ[body, "\n"],
+		Replace[WolframLanguageConcrete["(" <> body <> ")"], {
+			CodeParser`ContainerNode[_, {CodeParser`GroupNode[CodeParser`GroupParen, {_, inner___, _}, _]}, _] :> Join @@ (frontEndItems /@ {inner}),
+			_ :> frontEndSourceItems[body]
+		}],
+		frontEndSourceItems[body]
+	],
+	_?FailureQ :> {body}
 ]
 
 frontEndOpen::usage = "frontEndOpen[items] gives the items of a group not closed, its opener and what follows it in one row."
