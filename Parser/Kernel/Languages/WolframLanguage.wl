@@ -43,7 +43,8 @@ WolframLanguageSyntaxQ::usage  = "WolframLanguageSyntaxQ[\"code\"] gives True wh
 WolframLanguageSyntaxLength::usage = "WolframLanguageSyntaxLength[\"code\"] gives the number of characters from the start of code that read as Wolfram Language, as SyntaxLength does: the length of code where it all reads, the characters before the place where reading stops, and a number past the length of code where code ends before its expression does, by the lexer and the parser alone."
 WolframLanguageGrammar::usage  = "WolframLanguageGrammar[alg] builds the Wolfram Language parser over the algebra alg, an Association with the keys of ASTAlgebra; the parser gives the list of the top-level expressions."
 WolframLanguageConcrete::usage = "WolframLanguageConcrete[\"code\"] parses Wolfram Language source to its concrete syntax tree, as CodeParser`CodeConcreteParse gives it: a ContainerNode of the top-level expressions and the whitespace, newlines and comments around them, in CodeParser's own nodes, every character of the source in a leaf. Source that is not Wolfram Language reads as CodeParser reads it, into its error nodes: nothing fails."
-LinearBoxes::usage             = "LinearBoxes[boxes] stands for the linear syntax \\!\\(...\\) in what WolframLanguageHeld and WolframLanguageHeldNext read, boxes the boxes of its \\(...\\), where the kernel's reader gives MakeExpression[boxes, StandardForm]."
+WolframLanguageBoxes::usage    = "WolframLanguageBoxes[\"code\"] gives the boxes Wolfram 15's front end makes of code typed in an input cell, as it answers FrontEnd`ReparseBoxStructurePacket[code]: each token a string, its long names their characters, each node of the concrete syntax tree a RowBox, whitespace, newlines and comments in their places."
+LinearBoxes::usage             ="LinearBoxes[boxes] stands for the linear syntax \\!\\(...\\) in what WolframLanguageHeld and WolframLanguageHeldNext read, boxes the boxes of its \\(...\\), where the kernel's reader gives MakeExpression[boxes, StandardForm]."
 WolframLanguageSemantic::usage = "WolframLanguageSemantic is the algebra that builds each expression held: its builders give <|\"Expr\" -> HoldComplete[expr], \"Literal\" -> .., \"Chain\" -> ..|>, the flags telling a number literal and a product, into which a minus folds."
 
 Begin["`Private`"]
@@ -2453,6 +2454,91 @@ WolframLanguageConcrete[File[f_String]] := With[{bytes = ReadByteArray[f]},
 		If[FailureQ[r], r, CodeParser`ContainerNode[File, r[[2]], Append[r[[3]], "FileName" -> ExpandFileName[f]]]]
 	]
 ]
+
+(* ::Section:: *)
+(*The front end's boxes*)
+
+(* The boxes Wolfram 15's front end makes of typed text, which it gives a kernel that sends it
+	FrontEnd`ReparseBoxStructurePacket: the concrete syntax tree's tokens as strings, each node a
+	RowBox of its children. Whitespace, newlines and comments at the edges of a node stand outside
+	it, in the row around it, and a comment is a row of its own, its text read as code. *)
+WolframLanguageBoxes[s_String] := With[{items = frontEndSourceItems[s]}, If[FailureQ[items], items, frontEndRow[items]]]
+
+frontEndSourceItems::usage = "frontEndSourceItems[s] gives the front end's boxes of the top-level items of the source s, in order, or the failure of its concrete syntax tree."
+frontEndSourceItems[s_String] := With[{tree = WolframLanguageConcrete[s]},
+	If[FailureQ[tree], tree, Join @@ (frontEndItems /@ tree[[2]])]
+]
+
+frontEndTrivia::usage = "frontEndTrivia[box] marks the box of whitespace, a newline or a comment in the items of a node, which go outside the node where they stand at its edge."
+
+frontEndRow::usage = "frontEndRow[items] gives a row of boxes as the front end holds it: no empty strings, a run of spaces and tabs one string, one item alone, more in a RowBox, none \"\"."
+frontEndRow[items_List] := Replace[
+	SequenceReplace[DeleteCases[items /. frontEndTrivia[box_] :> box, ""], {blank__String /; Length[{blank}] > 1 && AllTrue[{blank}, StringMatchQ[#, (" " | "\t") ..] &]} :> StringJoin[blank]],
+	{{} -> "", {one_} :> one, row_ :> RowBox[row]}
+]
+
+frontEndNode::usage = "frontEndNode[items] gives the items a node stands for in the row around it: its row, with the trivia at its edges before and after it."
+frontEndNode[items_List] := With[{core = DeleteCases[items, ""]},
+	With[{before = LengthWhile[core, MatchQ[_frontEndTrivia]], after = LengthWhile[Reverse[core], MatchQ[_frontEndTrivia]]},
+		If[ before === Length[core],
+			core,
+			Join[Take[core, before], {frontEndRow[core[[before + 1 ;; Length[core] - after]]]}, Take[core, -after]]
+		]
+	]
+]
+
+frontEndText::usage = "frontEndText[t] gives the text of a token as the front end holds it, its long names their characters, in a string too; a \\\\ stays two characters."
+frontEndText[t_String] := If[StringFreeQ[t, "\\["], t,
+	StringReplace[t, {
+		"\\\\" -> "\\\\",
+		"\\[" ~~ name : (LetterCharacter | DigitCharacter) .. ~~ "]" /; KeyExistsQ[longNameCharacters[], name] :> longNameCharacters[][name]
+	}]
+]
+
+frontEndComment::usage = "frontEndComment[t] gives the front end's boxes of the comment t, closed or not: a row of its opener, its text read as code and its closer."
+frontEndComment[t_String] := With[{closed = StringEndsQ[t, "*)"] && StringLength[t] >= 4},
+	With[{body = StringTake[t, {3, If[closed, -3, -1]}]},
+		frontEndRow[Join[{"(*"}, Replace[frontEndSourceItems[body], _?FailureQ :> {body}], If[closed, {"*)"}, {}]]]
+	]
+]
+
+frontEndOpen::usage = "frontEndOpen[items] gives the items of a group not closed, its opener and what follows it in one row."
+frontEndOpen[{opener_, rest___}] := Replace[frontEndNode[{rest}], {{} :> {opener}, after_ :> {opener, frontEndRow[after]}}]
+
+frontEndToken::usage = "frontEndToken[children] gives the items of what the front end reads as one token, a pattern's or a slot's parts: one string where every part is one."
+frontEndToken[children_List] := With[{parts = frontEndRow[frontEndItems[#]] & /@ children},
+	If[AllTrue[parts, StringQ], {StringJoin[parts]}, frontEndNode[parts]]
+]
+
+(* =. is one token to the front end *)
+frontEndUnset::usage = "frontEndUnset[children] gives the children of an Unset or TagUnset node, its = and . one token."
+frontEndUnset[children_List] := SequenceReplace[children,
+	{CodeParser`LeafNode[Token`Equal, "=", data_], CodeParser`LeafNode[Token`Dot, ".", _]} :> CodeParser`LeafNode[Token`EqualDot, "=.", data]]
+
+frontEndItems::usage = "frontEndItems[node] gives the front end's boxes of a node of a concrete syntax tree, as the items it stands for in the row around it."
+frontEndItems[CodeParser`LeafNode[Whitespace | Token`Newline, t_String, _]] := {frontEndTrivia[t]}
+frontEndItems[CodeParser`LeafNode[Token`Comment, t_String, _]] := {frontEndTrivia[frontEndComment[t]]}
+frontEndItems[CodeParser`ErrorNode[Token`Error`UnterminatedComment, t_String, _]] := {frontEndTrivia[frontEndComment[t]]}
+frontEndItems[CodeParser`LeafNode[_, t_String, _]] := {frontEndText[t]}
+frontEndItems[(CodeParser`ErrorNode | CodeParser`SyntaxErrorNode)[_, t_String, _]] := {frontEndText[t]}
+frontEndItems[(CodeParser`CompoundNode | CodeParser`BlankNode | CodeParser`BlankSequenceNode | CodeParser`BlankNullSequenceNode |
+	CodeParser`PatternBlankNode | CodeParser`PatternBlankSequenceNode | CodeParser`PatternBlankNullSequenceNode |
+	CodeParser`OptionalDefaultPatternNode | CodeParser`OptionalDefaultNode)[_, children_List, _]] := frontEndToken[children]
+(* y'' is one token of primes to the front end *)
+frontEndItems[CodeParser`PostfixNode[Derivative, {inner_, CodeParser`LeafNode[_, primes_String, _]}, _]] := {Replace[frontEndRow[frontEndItems[inner]], {
+	RowBox[{base_, before_String /; StringMatchQ[before, "'" ..]}] /; MatchQ[inner, CodeParser`PostfixNode[Derivative, _, _]] :> RowBox[{base, before <> primes}],
+	boxes_ :> RowBox[{boxes, primes}]
+}]}
+(* !! before an operand is two !s to the front end *)
+frontEndItems[CodeParser`PrefixNode[CodeParser`PrefixNot2, {_, rest___}, _]] := frontEndNode[Join[{"!"}, frontEndNode[Join[{"!"}, Join @@ (frontEndItems /@ {rest})]]]]
+frontEndItems[(head : CodeParser`BinaryNode | CodeParser`TernaryNode)[op : Unset | CodeParser`TagUnset,
+	children : {___, CodeParser`LeafNode[Token`Equal, _, _], CodeParser`LeafNode[Token`Dot, _, _], ___}, data_]] :=
+	frontEndItems[head[op, frontEndUnset[children], data]]
+frontEndItems[CodeParser`CallNode[head_List, CodeParser`GroupMissingCloserNode[_, children_List, _], _]] :=
+	frontEndNode[Join[Join @@ (frontEndItems /@ head), frontEndOpen[Join @@ (frontEndItems /@ children)]]]
+frontEndItems[CodeParser`CallNode[head_List, _[_, children_List, _], _]] := frontEndNode[Join @@ (frontEndItems /@ Join[head, children])]
+frontEndItems[CodeParser`GroupMissingCloserNode[_, children_List, _]] := frontEndNode[frontEndOpen[Join @@ (frontEndItems /@ children)]]
+frontEndItems[_[_, children_List, _]] := frontEndNode[Join @@ (frontEndItems /@ children)]
 
 (* A source stops being read at the first statement that cannot be; that
 	statement read alone says where and why, which the source's own failure

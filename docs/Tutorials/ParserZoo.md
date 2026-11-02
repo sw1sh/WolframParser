@@ -165,6 +165,7 @@ The Wolfram Language itself, as a package file is written: its operators at the 
 - [WolframLanguageSyntaxLength]() count the characters at the start of a source that read, as [SyntaxLength]() does
 - [WolframLanguageAST]() parse to a standard AST, each operator named by its head
 - [WolframLanguageConcrete]() parse to the concrete syntax tree [CodeParser]() gives, every character in a leaf
+- [WolframLanguageBoxes]() the boxes Wolfram 15's front end makes of typed text
 - [WolframLanguageGrammar]() the grammar, parameterised over an algebra
 - [WolframLanguageSemantic]() the algebra that builds each expression held
 - [LinearBoxes]() a group of boxes written as linear syntax and read as input, held for [MakeExpression]()

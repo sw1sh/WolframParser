@@ -32,6 +32,7 @@ BrainfuckRun["++++++[>++++++++++<-]>+++++."]  (* "A"                       *)
 ABCRun["max = a - b + b\nprint max", {3, 8}]  (* {8}                     *)
 WolframLanguageHeld["f[x_] := x^2"]  (* {HoldComplete[f[x_] := x^2]}      *)
 WolframLanguageConcrete["a + 1"]     (* CodeParser`ContainerNode[String, {CodeParser`InfixNode[Plus, ..]}, ..] *)
+WolframLanguageBoxes["f[x, y]"]      (* RowBox[{"f", "[", RowBox[{"x", ",", " ", "y"}], "]"}] *)
 ```
 
 Their tests are in `Parser/Tests/Languages/`, which the repository's `run-tests.wls` runs with the rest.

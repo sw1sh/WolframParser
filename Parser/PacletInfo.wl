@@ -108,6 +108,7 @@ PacletObject[<|
                 "Wolfram`Parser`Languages`ABC`ABCSemantic",
                 "Wolfram`Parser`Languages`WolframLanguage`LinearBoxes",
                 "Wolfram`Parser`Languages`WolframLanguage`WolframLanguageAST",
+                "Wolfram`Parser`Languages`WolframLanguage`WolframLanguageBoxes",
                 "Wolfram`Parser`Languages`WolframLanguage`WolframLanguageConcrete",
                 "Wolfram`Parser`Languages`WolframLanguage`WolframLanguageGrammar",
                 "Wolfram`Parser`Languages`WolframLanguage`WolframLanguageHeld",
