@@ -46,6 +46,11 @@ $frontEndBoxes = {
     {"\"a\\\\[Bullet]\"", "\"a\\\\[Bullet]\""},
     {"\\[Alpha] + \\[NotALongName]", RowBox[{"\[Alpha]", " ", "+", " ", RowBox[{"\\[", "NotALongName", "]"}]}]},
     {"f[x] (* a comment *)", RowBox[{RowBox[{"f", "[", "x", "]"}], " ", RowBox[{"(*", " ", RowBox[{"a", " ", "comment"}], " ", "*)"}]}]},
+    {"\"\!\(\*StyleBox[\"prop\",\"TI\"]\)\"", "\"\!\(\*StyleBox[\"prop\",\"TI\"]\)\""},
+    {"c[\"\!\(\*StyleBox[\"prop\",\"TI\"]\)\"]", RowBox[{"c", "[", "\"\\\"\\!\\(\\*StyleBox[\\\"prop\\\", \\\"TI\\\"]\\)\\\"\"", "]"}]},
+    {"The expression ", RowBox[{"The", " ", "expression", " "}]},
+    {"Further output of ", RowBox[{"Further", " ", "output", " ", "of", " "}]},
+    {"f[a b ]", RowBox[{"f", "[", RowBox[{"a", " ", "b"}], " ", "]"}]},
     {"(* line1\nline2 *)", RowBox[{"(*", " ", RowBox[{"line1", "\n", "line2"}], " ", "*)"}]},
     {"f[x] (* a\n  b *)", RowBox[{RowBox[{"f", "[", "x", "]"}], " ", RowBox[{"(*", " ", RowBox[{"a", "\n", "  ", "b"}], " ", "*)"}]}]},
     {"(* a\n(* b *)\nc *)", RowBox[{"(*", " ", RowBox[{"a", "\n", RowBox[{"(*", " ", "b", " ", "*)"}], "\n", "c"}], " ", "*)"}]},
@@ -540,7 +545,7 @@ $frontEndOpen = {
     (* long names: operators of other precedences, unknown names, spaces *)
     "\\[Alpha] + \\[NotALongName]", "\\[Foo]", "a\\[Foo]b", "{\\[Foo], 1}", "a \\[RightArrow] b \\[LeftArrow] c", "a + b \\[PlusMinus] c", "a \\[Element] b \\[Subset] c", "{a\\[RightAngleBracket]}", "(a\\[RightCeiling])", "\\[Integral] f \\[DifferentialD] x + 1", "\\[ContourIntegral] f \\[DifferentialD] z", "\\[Integral]\\[Integral] f \\[DifferentialD] x \\[DifferentialD] y", "\[Integral]f\[DifferentialD]x", "a\\[InvisibleSpace]b", "a\\[NonBreakingSpace]b", "a\\[IndentingNewLine]b", "a \\[DiscreteShift] b",
     (* operator chains the front end keeps flat, and tokens *)
-    "a === b =!= c", "x:_:0", "x:a:b", "t/:a=.", "a~f~b~g~c", "a;; ", "a ;; b ;; c ;; d", "a ;; b ;; ;; c ;; d", "a;;b;;c;;", "f[a ;; b ;;]", "<<a\\:0041b", "a + ", "f[x)", "(a]", "{a)", "(a]b", "(a]+b", "{a, (b]}", "f[(a]]", "[a)", "{(a + b]}", "f[a (b + c]]", "{f[a)}", "1*^", "f[a, \\]", "a ~f~ b ~g", "x_:1:2", "a::1", "a :: b", "a;;b;;", "a;;;;", "a; ;b", "a; ;", "a; \"abc", "(* a \\*) b", "(* ::Package:: \\*)",
+    "c[\"\!\(\*StyleBox[\"prop\",\"TI\"]\)\"]", "a === b =!= c", "x:_:0", "x:a:b", "t/:a=.", "a~f~b~g~c", "a;; ", "a ;; b ;; c ;; d", "a ;; b ;; ;; c ;; d", "a;;b;;c;;", "f[a ;; b ;;]", "<<a\\:0041b", "a + ", "f[x)", "(a]", "{a)", "(a]b", "(a]+b", "{a, (b]}", "f[(a]]", "[a)", "{(a + b]}", "f[a (b + c]]", "{f[a)}", "1*^", "f[a, \\]", "a ~f~ b ~g", "x_:1:2", "a::1", "a :: b", "a;;b;;", "a;;;;", "a; ;b", "a; ;", "a; \"abc", "(* a \\*) b", "(* ::Package:: \\*)",
     (* a newline outside brackets ends the expression, as the kernel reads it *)
     "a /: b\n = c", "a ~f\n~ b", "a;;\n", "a; b\n; c", "a::b\n::c", "a + b\n + c", "a + b\n - c", "a b\n*c", "a == b\n < c", "a.b\n.c", "a\r\nb", "a +\n", "f[x]\n]", "a, b\n, c",
     (* ?? and what follows it *)

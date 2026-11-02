@@ -21,6 +21,8 @@ RelatedGuides: [ParserZoo]
 - A comment is a row of its own, `"(*"`, its text read as code inside brackets, so a newline in it ends no expression, and `"*)"`.
 - A long name the front end knows is its character, in a string too: `\[Lambda]` gives `"λ"`. A `\\` before `[` keeps the `[` as text.
 - A string that stands alone, the whole of *code*, keeps its text as typed, its long names spelled out.
+- Active linear syntax, `\(...\)` in its own characters, is one piece of text in a string, quotes and all.
+- The blank after a product of names written apart, at the end of *code*, is in the product's row.
 - What the front end reads as one token is one string: a pattern such as `x_`, `_h` or `x_.`, a slot such as `#1`, an `Out` such as `%2`, the primes of `y''` and `=.`. A `!!` before an operand is two `!`s.
 - Text that is not Wolfram Language gives the tokens the front end gives: an operator without its operand is that operator alone, and a group the text does not close is its opener with what follows it in one row.
 - A token alone is that string, not a `RowBox`, and empty text gives `""`.

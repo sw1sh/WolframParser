@@ -2462,17 +2462,54 @@ WolframLanguageConcrete[File[f_String]] := With[{bytes = ReadByteArray[f]},
 	FrontEnd`ReparseBoxStructurePacket: the concrete syntax tree's tokens as strings, each node a
 	RowBox of its children. Whitespace, newlines and comments at the edges of a node stand outside
 	it, in the row around it, and a comment is a row of its own, its text read as code. *)
-WolframLanguageBoxes[s_String] := With[{items = frontEndSourceItems[s]}, If[FailureQ[items], items, frontEndRow[items]]]
+WolframLanguageBoxes[s_String] := If[ StringFreeQ[s, $activeLinearOpen],
+	frontEndBoxesOf[s],
+	(* active linear syntax, \(...\) in its private-use characters, is one piece of text to the
+		front end, quotes and all: each span stands for a name while the rest is read *)
+	With[{spans = activeLinearSpans[s]},
+		With[{keys = Table["zzActiveLinear" <> IntegerString[i] <> "zz", {i, Length[spans]}]},
+			Replace[
+				frontEndBoxesOf[StringReplacePart[s, keys, spans]],
+				text_String :> RuleCondition[StringReplace[text, Thread[keys -> (StringTake[s, #] & /@ spans)]]],
+				{0, Infinity}
+			]
+		]
+	]
+]
 
-frontEndSourceItems::usage = "frontEndSourceItems[s] gives the front end's boxes of the top-level items of the source s, in order, or the failure of its concrete syntax tree."
-frontEndSourceItems[s_String] := With[{tree = WolframLanguageConcrete[s]},
+frontEndBoxesOf::usage = "frontEndBoxesOf[s] gives the front end's boxes of the source s."
+frontEndBoxesOf[s_String] := With[{items = frontEndSourceItems[s]}, If[FailureQ[items], items, frontEndRow[items]]]
+
+$activeLinearOpen = FromCharacterCode[63433];
+$activeLinearClose = FromCharacterCode[63424];
+
+activeLinearSpans::usage = "activeLinearSpans[s] gives the {start, end} of each outermost span of active linear syntax in s, from its \\( to the \\) that closes it."
+activeLinearSpans[s_String] := Module[{depth = 0, start = 0, spans = {}},
+	Do[
+		Switch[StringTake[s, {i}],
+			$activeLinearOpen, If[depth === 0, start = i]; depth++,
+			$activeLinearClose, If[depth > 0, depth--; If[depth === 0, AppendTo[spans, {start, i}]]]
+		],
+		{i, StringLength[s]}
+	];
+	spans
+]
+
+frontEndSourceItems::usage = "frontEndSourceItems[s, top] gives the front end's boxes of the top-level items of the source s, in order, or the failure of its concrete syntax tree; top is False for the text of a comment."
+frontEndSourceItems[s_String, top_ : True] := With[{tree = WolframLanguageConcrete[s]},
 	Which[
 		FailureQ[tree], tree,
 		(* a string that stands alone the front end keeps as it is typed, its long names spelled out *)
 		MatchQ[tree[[2]], {CodeParser`LeafNode[String, _, _]}], {s},
-		True, Join @@ (frontEndItems /@ tree[[2]])
+		True, Join @@ (frontEndItems /@ If[top, frontEndTrailingBlank[tree[[2]]], tree[[2]]])
 	]
 ]
+
+(* the blank after a product of names written apart, at the end of the source, is in the product's row *)
+frontEndTrailingBlank::usage = "frontEndTrailingBlank[children] gives the top-level children of a source, the spaces after a closing implicit product moved into it."
+frontEndTrailingBlank[{before___, CodeParser`InfixNode[Times, factors_List, data_], blank : CodeParser`LeafNode[Whitespace, _, _] ..}] /;
+	MemberQ[factors, CodeParser`LeafNode[Token`Fake`ImplicitTimes, _, _]] := {before, CodeParser`InfixNode[Times, Join[factors, {blank}], data]}
+frontEndTrailingBlank[children_List] := children
 
 frontEndTrivia::usage = "frontEndTrivia[box] marks the box of whitespace, a newline or a comment in the items of a node, which go outside the node where they stand at its edge."
 
@@ -2513,9 +2550,9 @@ frontEndCommentItems[body_String] := Replace[
 	If[ StringContainsQ[body, "\n"],
 		Replace[WolframLanguageConcrete["(" <> body <> ")"], {
 			CodeParser`ContainerNode[_, {CodeParser`GroupNode[CodeParser`GroupParen, {_, inner___, _}, _]}, _] :> Join @@ (frontEndItems /@ {inner}),
-			_ :> frontEndSourceItems[body]
+			_ :> frontEndSourceItems[body, False]
 		}],
-		frontEndSourceItems[body]
+		frontEndSourceItems[body, False]
 	],
 	_?FailureQ :> {body}
 ]
@@ -2549,6 +2586,9 @@ frontEndItems[CodeParser`PostfixNode[Derivative, {inner_, CodeParser`LeafNode[_,
 }]}
 (* !! before an operand is two !s to the front end *)
 frontEndItems[CodeParser`PrefixNode[CodeParser`PrefixNot2, {_, rest___}, _]] := frontEndNode[Join[{"!"}, frontEndNode[Join[{"!"}, Join @@ (frontEndItems /@ {rest})]]]]
+(* a product of names written apart keeps a closing blank in its row (frontEndTrailingBlank) *)
+frontEndItems[CodeParser`InfixNode[Times, {factors__, blank : CodeParser`LeafNode[Whitespace, text_String, _]}, _]] /;
+	MemberQ[{factors}, CodeParser`LeafNode[Token`Fake`ImplicitTimes, _, _]] := {frontEndRow[Append[Join @@ (frontEndItems /@ {factors}), text]]}
 frontEndItems[(head : CodeParser`BinaryNode | CodeParser`TernaryNode)[op : Unset | CodeParser`TagUnset,
 	children : {___, CodeParser`LeafNode[Token`Equal, _, _], CodeParser`LeafNode[Token`Dot, _, _], ___}, data_]] :=
 	frontEndItems[head[op, frontEndUnset[children], data]]
