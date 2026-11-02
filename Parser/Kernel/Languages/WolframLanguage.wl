@@ -2466,7 +2466,12 @@ WolframLanguageBoxes[s_String] := With[{items = frontEndSourceItems[s]}, If[Fail
 
 frontEndSourceItems::usage = "frontEndSourceItems[s] gives the front end's boxes of the top-level items of the source s, in order, or the failure of its concrete syntax tree."
 frontEndSourceItems[s_String] := With[{tree = WolframLanguageConcrete[s]},
-	If[FailureQ[tree], tree, Join @@ (frontEndItems /@ tree[[2]])]
+	Which[
+		FailureQ[tree], tree,
+		(* a string that stands alone the front end keeps as it is typed, its long names spelled out *)
+		MatchQ[tree[[2]], {CodeParser`LeafNode[String, _, _]}], {s},
+		True, Join @@ (frontEndItems /@ tree[[2]])
+	]
 ]
 
 frontEndTrivia::usage = "frontEndTrivia[box] marks the box of whitespace, a newline or a comment in the items of a node, which go outside the node where they stand at its edge."
