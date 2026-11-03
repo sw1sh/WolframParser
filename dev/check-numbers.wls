@@ -19,7 +19,9 @@ Needs["Wolfram`Parser`"];
 arguments = If[$ScriptCommandLine =!= {}, Rest[$ScriptCommandLine], Replace[$CommandLine, {{___, "-script", _, rest___} :> {rest}, _ -> {}}]];
 count = If[Length[arguments] >= 1, Interpreter["Integer"][arguments[[1]]], 6000];
 seed = If[Length[arguments] >= 2, Interpreter["Integer"][arguments[[2]]], 1];
-numberValue = Symbol["Wolfram`Parser`Languages`WolframLanguage`Private`numberValue"];
+Needs["Wolfram`Parser`Languages`WolframLanguage`"];
+(* the reader's value of a literal: the one expression it reads from the text *)
+numberValue[s_String] := Replace[Wolfram`Parser`Languages`WolframLanguage`WolframLanguageHeld[s], {{HoldComplete[e_]} :> e, other_ :> other}];
 SeedRandom[seed];
 
 digitsOf[b_, n_] := StringJoin[RandomChoice[Take[Join[CharacterRange["0", "9"], CharacterRange["a", "z"]], b], n]];

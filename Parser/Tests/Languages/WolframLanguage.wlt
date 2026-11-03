@@ -1105,7 +1105,6 @@ $wlNumberCases = {
     {"713`*^316", 7.13`15.954589770191005*^318},
     {"92615557861408081889`*^-327", 9.261555786140807*^-308},
     {"0*^279617642866175", 0},
-    {"1.*^-1355718576299610", Underflow[]},
     {"8^^6.`14", 6.`12.64325981788721}
 };
 Scan[
@@ -1119,6 +1118,11 @@ VerificationTest[
         "8^^1234567012345670123.", "8^^12345670123456701234.", "2^^1" <> StringRepeat["0", 52] <> ".", "2^^1" <> StringRepeat["0", 53] <> "."},
     {False, True, True, False, True, False, True, False},
     TestID -> "wl number: a machine real holds Floor[53 / Log2[b]] + 2 digits of base b, 53 of base 2, never fewer than 17 with a power of the base"]
+VerificationTest[
+    With[{v = First[First[WolframLanguageHeld["1.*^-1355718576299610"]]]}, {v, MachineNumberQ[v], Precision[v]}],
+    {Underflow[], False, 0.},
+    {General::unfl},
+    TestID -> "wl number: 1.*^-1355718576299610 underflows, with the kernel's General::unfl"]
 
 (* SyntaxQ and SyntaxLength as Wolfram 15 gives them for each source *)
 $wlSyntaxCases = {
