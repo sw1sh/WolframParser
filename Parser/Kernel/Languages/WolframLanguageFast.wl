@@ -1847,6 +1847,82 @@ $fastEscapesDeclaration = FunctionDeclaration[fastEscapes,
 (* the typed escape scan run here, fixed at its first use *)
 fastEscapesFunction := fastEscapesFunction = typedFunction[fastEscapes, $fastEscapesDeclaration, {$lexLongNameDeclaration}]
 
+(* The line continuations of a source, as continuationSpans reads them, typed code over its codes:
+	{m, first1, last1, ..., firstm, lastm} for its m runs of continuations, each a \ and a newline, a
+	return or both and the spaces and tabs after it, outside a comment, in code or in a string,
+	where in a string only the run that reaches the end of the source counts; or {-1} for a source
+	with a << or >> in code, whose file name the scan does not read and leaves to continuationSpans's
+	scan. In a comment (* and *) nest and \( escapes its parenthesis; in a string and in code a \
+	escapes the character after it. A first pass counts the runs and a second writes them, so that
+	each element given is written. *)
+$fastContinuationsDeclaration = FunctionDeclaration[fastContinuations,
+	Typed[{"PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
+	Function[{ctCodes},
+		Native`UncheckedBlock[Module[{n = Length[ctCodes], pass = 1, count = 0, at = 1, mode = 0, c = 0, q = 0, declined = 0, out = Native`UncheckedArray[0, 1]},
+			out[[1]] = -1;
+			While[ pass <= 2 && declined == 0,
+				at = 1; mode = 0; count = 0;
+				While[ at <= n && declined == 0,
+					c = ctCodes[[at]];
+					q = at;
+					If[ c == 92 && mode <= 0,
+						While[ q < n && ctCodes[[q]] == 92 && (ctCodes[[q + 1]] == 10 || ctCodes[[q + 1]] == 13),
+							q = q + If[ctCodes[[q + 1]] == 13 && q + 2 <= n && ctCodes[[q + 2]] == 10, 3, 2];
+							While[q <= n && (ctCodes[[q]] == 32 || ctCodes[[q]] == 9 || ctCodes[[q]] == 11 || ctCodes[[q]] == 12), q++]
+						]
+					];
+					Which[
+						mode > 0,
+							Which[
+								c == 40 && at < n && ctCodes[[at + 1]] == 42, mode++; at += 2,
+								c == 42 && at < n && ctCodes[[at + 1]] == 41, mode--; at += 2,
+								c == 92 && at < n && ctCodes[[at + 1]] == 40, at += 2,
+								True, at++
+							],
+						mode < 0,
+							Which[
+								c == 92 && q - 1 == n,
+									count++;
+									If[pass == 2, out[[2 count]] = at; out[[2 count + 1]] = n];
+									at = n + 1,
+								c == 92, at += 2,
+								c == 34, mode = 0; at++,
+								True, at++
+							],
+						True,
+							Which[
+								c == 34, mode = -1; at++,
+								c == 40 && at < n && ctCodes[[at + 1]] == 42, mode = 1; at += 2,
+								(c == 60 || c == 62) && at < n && ctCodes[[at + 1]] == c, declined = 1,
+								c == 92 && q - 1 >= at,
+									count++;
+									If[pass == 2, out[[2 count]] = at; out[[2 count + 1]] = q - 1];
+									at = q,
+								c == 92, at += 2,
+								True, at++
+							]
+					]
+				];
+				If[ pass == 1 && declined == 0, out = Native`UncheckedArray[0, 2 count + 1]; out[[1]] = count];
+				pass++
+			];
+			If[ declined == 1, out = Native`UncheckedArray[0, 1]; out[[1]] = -1];
+			out
+		]]
+	]
+]
+
+(* the typed continuation scan run here, fixed at its first use *)
+fastContinuationsFunction := fastContinuationsFunction = typedFunction[fastContinuations, $fastContinuationsDeclaration]
+
+(* continuationSpans of s by the typed scan: its spans, or None where it leaves the source to the
+	scan a character at a time *)
+typedContinuationSpans::usage = "typedContinuationSpans[s] gives the line continuations of s by the typed scan, or None for a source with a \
+<< or >> in code."
+typedContinuationSpans[s_String] := With[{found = fastContinuationsFunction[Developer`ToPackedArray[ToCharacterCode[s]]]},
+	If[First[found] < 0, None, Partition[Rest[found], 2]]
+]
+
 (* The characters of a string's text, its escapes decoded as $escapes decodes them, typed code over
 	packed integers: the codes of the text between its quotes and the tables of $fastEscapeTable and
 	$fastLongCharTable -> {0, then the codes of its characters}, or {1} for a text with an escape

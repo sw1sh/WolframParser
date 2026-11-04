@@ -1921,10 +1921,16 @@ tokenMarks[_, _String] := {}
 	{first, last} of them in s, those that follow one another one. The scan
 	reads a character or an escape at a time, its state {the codes, where it
 	goes on, its mode, the spans found, a linked list}, the mode 0 in code,
-	-1 in a string and the depth of the comments in one. *)
+	-1 in a string and the depth of the comments in one. The typed scan of
+	WolframLanguageFast.wl, typedContinuationSpans, reads them where it is
+	loaded, in one pass over the codes; it leaves a source with a << or >>
+	in code, whose file name it does not read, to this scan. *)
 continuationSpans::usage = "continuationSpans[s] gives the spans {first, last} of the line continuations of s, those that follow one \
 another one."
-continuationSpans[s_String] := Reverse @ linkedItems @ Last @ NestWhile[continuationStep, {ToCharacterCode[s], 1, 0, {}}, scanOnQ]
+continuationSpans[s_String] := With[{typed = typedContinuationSpans[s]}, If[ListQ[typed], typed, scannedContinuationSpans[s]]]
+
+scannedContinuationSpans::usage = "scannedContinuationSpans[s] gives continuationSpans of s by the scan a character or an escape at a time."
+scannedContinuationSpans[s_String] := Reverse @ linkedItems @ Last @ NestWhile[continuationStep, {ToCharacterCode[s], 1, 0, {}}, scanOnQ]
 
 continuationStep::usage = "continuationStep[{codes, at, mode, spans}] gives the scan's state after the character, or the escape, at at."
 continuationStep[{codes_List, at_Integer, -1, spans_List}] := Which[
@@ -1985,7 +1991,7 @@ continuationAtQ[{codes_List, at_Integer}] := at < Length[codes] && codes[[at]] =
 continuationRunStep::usage = "continuationRunStep[{codes, at}] gives the place after the line continuation at at, and the spaces and tabs \
 after it."
 continuationRunStep[{codes_List, at_Integer}] := With[{after = at + If[codes[[at + 1]] === 13 && at + 2 <= Length[codes] && codes[[at + 2]] === 10, 3, 2]},
-	{codes, after + LengthWhile[Drop[codes, after - 1], MemberQ[{32, 9, 11, 12}, #] &]}
+	{codes, NestWhile[# + 1 &, after, # <= Length[codes] && MemberQ[{32, 9, 11, 12}, codes[[#]]] &]}
 ]
 
 $alphanumericCodes = AssociationThread[Join[Range[48, 57], Range[65, 90], Range[97, 122]] -> True]
