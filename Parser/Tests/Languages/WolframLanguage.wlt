@@ -1122,7 +1122,12 @@ VerificationTest[
     With[{v = First[First[WolframLanguageHeld["1.*^-1355718576299610"]]]}, {v, MachineNumberQ[v], Precision[v]}],
     {Underflow[], False, 0.},
     {General::unfl},
-    TestID -> "wl number: 1.*^-1355718576299610 underflows, with the kernel's General::unfl"]
+    TestID -> "wl number: 1.*^-1355718576299610 underflows, with Wolfram 15's General::unfl"]
+VerificationTest[
+    Precision[First[First[WolframLanguageHeld["1.5`-1"]]]],
+    0.,
+    {Precision::precsm},
+    TestID -> "wl number: a precision below $MinPrecision is $MinPrecision, with Wolfram 15's Precision::precsm"]
 
 (* SyntaxQ and SyntaxLength as Wolfram 15 gives them for each source *)
 $wlSyntaxCases = {

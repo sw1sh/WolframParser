@@ -2268,7 +2268,7 @@ tokenTexts[codes_List, starts_List, ends_List] := FromCharacterCode[Take[codes, 
 (* a leaf's value by the lexer's kind of it *)
 fastLeafValue[1, s_String] := heldName[s]
 fastLeafValue[2, s_String] := blankExpression[s]
-fastLeafValue[3 | 4, s_String] := ToExpression[s, InputForm, HoldComplete]
+fastLeafValue[3 | 4, s_String] := HoldComplete @@ {numberValue[s]}
 fastLeafValue[5, s_String] := HoldComplete @@ {stringValue[s]}
 fastLeafValue[kind_Integer, s_String] := heldLeafValue[$fastLeafKinds[kind], s]
 
