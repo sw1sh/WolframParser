@@ -1476,3 +1476,13 @@ VerificationTest[
             last = ",FontColor->RGBColor[1, 0, 0]]r" <> FromCharacterCode[63424] <> "]" <> FromCharacterCode[63424]},
         {HoldComplete[StringMatchQ[Times[first, ste, last], StringExpression["t", BlankSequence[]]]]}],
     TestID -> "wl string: linear syntax in a string reads as its private-use characters"]
+
+(* a number in a base with a digit too large for it: before its syntax error, the warning the
+   kernel's reader issues as General::digit, the digit's position in the digits after the ^^, the
+   digits and the base, as Wolfram 15.0 gives them *)
+VerificationTest[
+    Replace[WolframLanguageHeldNext[#, 1], {{Failure[_, data_Association], _} :> Lookup[data, "Warnings"], other_ :> other}] & /@
+        {"x + 2^^102", "16^^fg", "8^^9.5", "2^^1.2", "\"2^^9\" + 2^^101"},
+    {{{"digit", 3, "102", 2}}, {{"digit", 2, "fg", 16}}, {{"digit", 1, "9.5", 8}}, {{"digit", 3, "1.2", 2}},
+        {HoldComplete["2^^9" + 5], 16, <|"Warnings" -> {}|>}},
+    TestID -> "wl number: a digit too large for its base warns as Wolfram 15.0's General::digit does"]

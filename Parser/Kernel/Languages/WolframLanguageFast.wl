@@ -2770,16 +2770,52 @@ stoppedData[state_Association, from_Integer, reading_Association, row_Integer] :
 	state["Data"],
 	row -> warned[
 		sourceFailure[state, reading["Stop"]["Failure"], from],
-		tokenWarnings[reading["Codes"], reading["Lexed"], reading["First"], reading["Stop"]["To"], reading["Stop"]["Stop"]]
+		Join[
+			digitWarnings[reading["Codes"], reading["Lexed"], reading["First"]],
+			tokenWarnings[reading["Codes"], reading["Lexed"], reading["First"], reading["Stop"]["To"], reading["Stop"]["Stop"]]
+		]
 	]
 ]
+
+(* The warning the kernel's reader gives before the syntax error of a number in base b whose digits
+	hold one too large for the base [WL 15.0.0]: {"digit", position, digits, b}, the position that
+	digit's in the digits after the ^^, which run over the letters, the digits and a point, a point
+	counted too. The kernel's reader issues it as General::digit. *)
+digitWarnings::usage = "digitWarnings[codes, lexed, from] gives the digit warnings of the numbers in a base from token from of lexed to \
+the end of its line, outside its strings."
+digitWarnings[codes_List, lexed_List, from_Integer] := With[{first = If[from <= tokenCount[lexed], tokenStart[lexed, from], Length[codes] + 1]},
+	With[{last = Replace[FirstPosition[codes[[first ;; ]], 10 | 13, None, {1}], {{k_} :> first + k - 2, None -> Length[codes]}],
+			strings = Cases[Range[from, tokenCount[lexed]], s_ /; tokenKind[lexed, s] === $tkString :> {tokenStart[lexed, s], tokenEnd[lexed, s] - 1}]},
+		Catenate @ Map[
+			baseDigitWarning[codes, #, last] &,
+			Select[Range[first, last - 1], codes[[#]] === 94 && codes[[# + 1]] === 94 && ! AnyTrue[strings, Function[span, span[[1]] <= # <= span[[2]]]] &]
+		]
+	]
+]
+
+baseDigitWarning::usage = "baseDigitWarning[codes, carets, last] gives the digit warning of the number in a base whose ^^ is at carets in \
+the codes, the digits after it to last at most, {} for none."
+baseDigitWarning[codes_List, carets_Integer, last_Integer] := With[
+	{base = Reverse[TakeWhile[Reverse[codes[[ ;; carets - 1]]], 48 <= # <= 57 &]],
+		text = TakeWhile[codes[[carets + 2 ;; last]], 48 <= # <= 57 || 65 <= # <= 90 || 97 <= # <= 122 || # === 46 &]},
+	If[ base === {}, {},
+		With[{b = FromDigits[FromCharacterCode[base]]},
+			With[{bad = FirstPosition[text, c_ /; c =!= 46 && baseDigitCodeValue[c] >= b, None, {1}]},
+				If[ bad === None || ! (2 <= b <= 36), {}, {{"digit", First[bad], FromCharacterCode[text], b}}]
+			]
+		]
+	]
+]
+
+baseDigitCodeValue::usage = "baseDigitCodeValue[c] gives the value of the character code c as a digit of a base: 0 to 9, then a or A as 10 to z or Z as 35."
+baseDigitCodeValue[c_Integer] := Which[48 <= c <= 57, c - 48, 65 <= c <= 90, c - 55, 97 <= c <= 122, c - 87, True, 36]
 
 rowStarts::usage = "rowStarts[rows] gives where the line of each of the rows begins."
 rowStarts[rows_List] := rows[[All, 2]]
 
 (* the statement of the source s whose line begins at pos, 1 or the position the call before gave;
-	a source that holds no comma and no \, and whose first statement, on its first line, cannot be
-	read, is that statement's failure at once, with no warning, and nothing is kept for it *)
+	a source that holds no comma, no \ and no ^^, and whose first statement, on its first line,
+	cannot be read, is that statement's failure at once, with no warning, and nothing is kept for it *)
 WolframLanguageHeldNext[s_String, 1] := With[{failure = quietFailure[s]},
 	{failure, 1} /; FailureQ[failure]
 ]
@@ -2794,9 +2830,9 @@ WolframLanguageHeldNext[s_String, pos_Integer] := With[
 	its first statement, on its first line: the failure of that statement, placed at its own
 	position, with no warning, as no warning comes from such a source; from one reading of its codes,
 	with no association of the reading. *)
-quietFailure::usage = "quietFailure[s] gives the failure of the first statement of the source s, with no warning, where s holds no comma \
-and no \\, no parts of it are kept, and its reading stops in its first statement, on its first line, else None."
-quietFailure[s_String] /; StringContainsQ[s, "," | "\\"] || MemberQ[Lookup[$heldNextStates, "Source"], s] := None
+quietFailure::usage = "quietFailure[s] gives the failure of the first statement of the source s, with no warning, where s holds no comma, \
+no \\ and no ^^, whose digits may warn, no parts of it are kept, and its reading stops in its first statement, on its first line, else None."
+quietFailure[s_String] /; StringContainsQ[s, "," | "\\" | "^^"] || MemberQ[Lookup[$heldNextStates, "Source"], s] := None
 quietFailure[s_String] := With[{codes = ToCharacterCode[s]},
 	{padded = paddedCodes[codes]},
 	firstStopFailure[splitParse[lexedCodes[padded], padded], Length[codes]]
