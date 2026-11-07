@@ -208,6 +208,11 @@ $vmDeclaration := $vmDeclaration = FunctionDeclaration[vmRun,
 										a == 3, ok = If[sp == 0 || (sp < n && vText[[sp]] == 10), 1, 0],
 										a == 4, ok = If[sp == n || vText[[sp + 1]] == 10, 1, 0],
 										a == 6, ok = If[sp == n || (sp == n - 1 && vText[[sp + 1]] == 10), 1, 0],
+										(* an Except of an anchor: where it does not hold *)
+										a == 8, ok = If[sp == 0, 0, 1],
+										a == 9, ok = If[sp == n, 0, 1],
+										a == 10, ok = If[sp == 0 || (sp < n && vText[[sp]] == 10), 0, 1],
+										a == 11, ok = If[sp == n || vText[[sp + 1]] == 10, 0, 1],
 										True,
 											(* a word boundary: a word character on one side alone *)
 											cls = b; before = 0; after = 0;

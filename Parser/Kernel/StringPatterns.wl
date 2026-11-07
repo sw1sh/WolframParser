@@ -74,7 +74,8 @@ Begin["`Private`"]
 										Shortest leaves as it is
 	anchor[name]                        StartOfString, EndOfString, StartOfLine, EndOfLine,
 										WordBoundary, or of a regex "EndOrFinalNewline" or
-										"NotWordBoundary"
+										"NotWordBoundary", or of an Except "NotStartOfString",
+										"NotEndOfString", "NotStartOfLine" or "NotEndOfLine"
 	regular[p]                          p, the program of a RegularExpression, and its parts:
 										capture, captured, lookahead, lookbehind and atomic, as
 										RegularExpressions.wl makes them
@@ -186,6 +187,14 @@ program[Verbatim[Shortest][p_]] := ownPart[shortest[program[p]]]
 program[Verbatim[Longest][p_]] := ownPart[program[p]]
 program[Verbatim[PatternTest][p_, f_]] := tested[program[p], f]
 program[Verbatim[Condition][p_, test_]] := With[{inner = program[p]}, conditioned[inner, HoldComplete[test], programNames[inner]]]
+(* Except of an anchor holds where the anchor does not, and takes no character, as a regex's (?!^):
+	StringReplace["abc", Except[StartOfString] -> "-"] is "a-b-c-"; Except[anchor, p] is p where the
+	anchor does not hold [WL 15.0.0] *)
+program[Verbatim[Except][c : StartOfString | EndOfString | StartOfLine | EndOfLine | WordBoundary]] := anchor[notAnchor[c]]
+program[Verbatim[Except][c : StartOfString | EndOfString | StartOfLine | EndOfLine | WordBoundary, p_]] :=
+	sequence[{anchor[notAnchor[c]], program[p]}]
+notAnchor[WordBoundary] := "NotWordBoundary"
+notAnchor[c_Symbol] := "Not" <> SymbolName[c]
 (* Except takes a pattern of one character: Except[c, p] is p where a character that c does not
 	match comes first [WL 15.0.0] *)
 program[Verbatim[Except][c_]] := With[{inner = Block[{$oneClass = True}, program[c]]},
@@ -724,6 +733,8 @@ anchorQ[WordBoundary, z : subject[_, n_, _], i_Integer] := With[{word = codeIn[{
 (* a regex's $ and \Z: the end, or before a newline that ends the text; \B *)
 anchorQ["EndOrFinalNewline", z : subject[_, n_, _], i_Integer] := i === n || (i === n - 1 && codeAt[z, i] === 10)
 anchorQ["NotWordBoundary", z_subject, i_Integer] := ! anchorQ[WordBoundary, z, i]
+anchorQ[name : "NotStartOfString" | "NotEndOfString" | "NotStartOfLine" | "NotEndOfLine", z_subject, i_Integer] :=
+	! anchorQ[Symbol[StringDrop[name, 3]], z, i]
 
 (* the value of a held test, each name bound to the text it matched, or to "" if it took no part *)
 boundValue[held_HoldComplete, z_subject, b_, names_Association] := ReleaseHold[ReplaceAll[held, bindingRules[z, b, names, "Condition"]]]
@@ -1037,7 +1048,8 @@ generate[tested[p_, f_]] := With[{t = $registers}, $registers += 1; AppendTo[$te
 generate[conditioned[p_, test_, names_]] := (generate[p]; AppendTo[$conditions, {test, names}]; vmEmit[21, Length[$conditions]])
 generate[excluding[codeIn[spec_], p_]] := (vmEmit[18, vmClassIndex[spec]]; generate[p])
 generate[builtIn[_, p_]] := generate[p]
-generate[anchor[name_]] := vmEmit[9, Replace[name, {StartOfString -> 1, EndOfString -> 2, StartOfLine -> 3, EndOfLine -> 4, WordBoundary -> 5, "EndOrFinalNewline" -> 6, "NotWordBoundary" -> 7}],
+generate[anchor[name_]] := vmEmit[9, Replace[name, {StartOfString -> 1, EndOfString -> 2, StartOfLine -> 3, EndOfLine -> 4, WordBoundary -> 5, "EndOrFinalNewline" -> 6, "NotWordBoundary" -> 7,
+	"NotStartOfString" -> 8, "NotEndOfString" -> 9, "NotStartOfLine" -> 10, "NotEndOfLine" -> 11}],
 	If[MatchQ[name, WordBoundary | "NotWordBoundary"], vmClassIndex[{"Named", "regex \\w"}], 0]
 ]
 generate[regular[p_]] := generate[p]

@@ -517,3 +517,20 @@ VerificationTest[
      "a call of a group the regex has not", "a call of a group of a regex in a larger pattern, which Wolfram 15 counts the groups of"},
     TestID -> "string patterns: no program for a call of the whole regex, one that may loop, one of no group, or one in a larger pattern"
 ]
+
+VerificationTest[
+    Table[
+        {StringPatternMatches["abc", {StringPatternProgram[Except[StartOfString]]}, "Each", Method -> method],
+         StringPatternMatches["abc", {StringPatternProgram[Except[WordBoundary]]}, "Each", Method -> method],
+         StringPatternMatches["ab", {StringPatternProgram[Except[StartOfString, "a"]]}, "Each", Method -> method],
+         StringPatternMatches["a\nb", {StringPatternProgram[Except[EndOfLine, x_]]}, "Each", Method -> method],
+         StringPatternMatches["ab", {StringPatternProgram[Except[EndOfString] ~~ "b"]}, "Each", Method -> method]},
+        {method, {Automatic, "Interpreter"}}
+    ],
+    ConstantArray[
+        {{{1, 1, 1, {}}, {2, 2, 1, {}}, {3, 3, 1, {}}}, {{1, 1, 1, {}}, {2, 2, 1, {}}}, {},
+         {{0, 1, 1, {HoldPattern[x] -> "a"}}, {2, 3, 1, {HoldPattern[x] -> "b"}}}, {{1, 2, 1, {}}}},
+        2
+    ],
+    TestID -> "string patterns: Except of an anchor holds where the anchor does not, taking no character, by the typed matcher and the interpreter"
+]
