@@ -1,0 +1,95 @@
+(* Mermaid flowcharts, after flowchart/parser/flow.jison *)
+
+<Flowchart>      ::= <FlowHeader> { <Terminator> [ <FlowStatement> ] }
+<FlowHeader>     ::= <KwFlowchart> [ <Direction> ]
+<KwFlowchart>    ::= ( "flowchart-elk" | "flowchart" | "graph" ) ! <WordChar>
+
+<FlowStatement>  ::= <Comment> | <FlowSubgraph> | <FlowDirection> | <FlowClassDef> | <FlowClass> | <FlowStyle>
+                   | <FlowLinkStyle> | <FlowClick> | <Accessibility> | <FlowChain>
+
+(* subgraph id [title] ... end *)
+<FlowSubgraph>   ::= <KwSubgraph> [ <SubgraphHead> ] { <Terminator> [ <FlowStatement> ] } <KwEnd>
+<SubgraphHead>   ::= <FlowId> "[" <SquareText> "]" | <String> | <LineText>
+<KwSubgraph>     ::= "subgraph" ! <WordChar>
+<FlowDirection>  ::= <KwDirection> <Direction>
+
+(* A --> B & C -- text --> D: nodes, joined by &, chained by links *)
+<FlowChain>      ::= <FlowNodes> { <FlowLink> <FlowNodes> }
+<FlowNodes>      ::= <FlowNode> { "&" <FlowNode> }
+<FlowNode>       ::= <FlowId> [ <FlowShape> ] [ ":::" <FlowId> ]
+
+(* a node's name: a word, with single dashes and dots inside it, that is not the keyword end *)
+<FlowId>         ::= ! <KwEnd> <FlowIdChar> { <FlowIdChar> }
+<FlowIdChar>     ::= <WordChar> | "-" & <WordChar> | "." & <WordChar>
+
+(* the brackets around a node's text give its shape *)
+<FlowShape>      ::= "(((" <RoundText> ")))"
+                   | "((" <RoundText> "))"
+                   | "([" <SquareText> "])"
+                   | "(-" <RoundText> "-)"
+                   | "[[" <SquareText> "]]"
+                   | "[(" <RoundText> ")]"
+                   | "[/" <SlantText> "/]"
+                   | "[/" <SlantText> "\\]"
+                   | "[\\" <SlantText> "\\]"
+                   | "[\\" <SlantText> "/]"
+                   | "{{" <CurlyText> "}}"
+                   | "[" <SquareText> "]"
+                   | "(" <RoundText> ")"
+                   | "{" <CurlyText> "}"
+                   | ">" <SquareText> "]"
+
+<SquareText>     ::= <String> | <SquarePlain>
+<RoundText>      ::= <String> | <RoundPlain>
+<CurlyText>      ::= <String> | <CurlyPlain>
+<SlantText>      ::= <String> | <SlantPlain>
+<SquarePlain>    ::= <SquareChar> { <SquareChar> }
+<RoundPlain>     ::= <RoundChar> { <RoundChar> }
+<CurlyPlain>     ::= <CurlyChar> { <CurlyChar> }
+<SlantPlain>     ::= <SlantChar> { <SlantChar> }
+<SquareChar>     ::= <Any> - ( "]" | "\"" | <NL> )
+<RoundChar>      ::= <Any> - ( ")" | "-)" | "\"" | <NL> )
+<CurlyChar>      ::= <Any> - ( "}" | "\"" | <NL> )
+<SlantChar>      ::= <Any> - ( "/]" | "\\]" | "]" | "\"" | <NL> )
+
+(* a link: an arrow, an arrow with its text between bars, or text between the two halves of
+	an arrow; where a whole arrow can be read, it is *)
+<FlowLink>       ::= <Arrow> "|" <BarText> "|"
+                   | ! <Arrow> <LinkStart> <EdgeText> <LinkEnd>
+                   | <Arrow>
+<Arrow>          ::= [ <LinkHead> ] ( <NormalLine> | <ThickLine> | <DottedLine> ) | <InvisibleLine>
+<LinkStart>      ::= [ <LinkHead> ] ( "--" | "==" | "-." )
+<LinkEnd>        ::= <NormalLine> | <ThickLine> | <DottedLine>
+<LinkHead>       ::= "<" | "x" | "o"
+<NormalLine>     ::= "--" { "-" & <NormalEnd> } <NormalEnd>
+<NormalEnd>      ::= "-" | ">" | "x" | "o"
+<ThickLine>      ::= "==" { "=" & <ThickEnd> } <ThickEnd>
+<ThickEnd>       ::= "=" | ">" | "x" | "o"
+<DottedLine>     ::= [ "-" ] "." { "." } "-" [ ">" | "x" | "o" ]
+<InvisibleLine>  ::= "~~~" { "~" }
+<EdgeText>       ::= <EdgeChar> { <EdgeChar> }
+<EdgeChar>       ::= ! <LinkEnd> ( <Any> - <NL> )
+<BarText>        ::= <String> | <BarPlain>
+<BarPlain>       ::= <BarChar> { <BarChar> }
+<BarChar>        ::= <Any> - ( "|" | "\"" | <NL> )
+
+(* styles *)
+<FlowClassDef>   ::= <KwClassDef> <FlowIdList> <StyleList>
+<FlowClass>      ::= <KwClass> <FlowIdList> <FlowId>
+<FlowStyle>      ::= <KwStyle> <FlowId> <StyleList>
+<FlowLinkStyle>  ::= <KwLinkStyle> <LinkIndices> <StyleList>
+<FlowClick>      ::= <KwClick> <RestOfLine>
+<FlowIdList>     ::= <FlowId> { "," <FlowId> }
+<LinkIndices>    ::= <KwDefault> | <Number> { "," <Number> }
+<StyleList>      ::= <StyleItem> { "," <StyleItem> }
+<StyleItem>      ::= <StyleName> ":" <StyleValue>
+<StyleName>      ::= <StyleNameChar> { <StyleNameChar> }
+<StyleNameChar>  ::= <Letter> | "-"
+<StyleValue>     ::= <StyleChar> { <StyleChar> }
+<StyleChar>      ::= <Any> - ( "," | ";" | <NL> )
+<KwClassDef>     ::= "classDef" ! <WordChar>
+<KwClass>        ::= "class" ! <WordChar>
+<KwStyle>        ::= "style" ! <WordChar>
+<KwLinkStyle>    ::= "linkStyle" ! <WordChar>
+<KwClick>        ::= "click" ! <WordChar>
+<KwDefault>      ::= "default" ! <WordChar>

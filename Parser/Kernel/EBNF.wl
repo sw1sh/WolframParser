@@ -350,8 +350,9 @@ lowerElt[NonTerm[name_String], symMap_, overrides_] :=
 		KeyExistsQ[overrides, name],
 			overrides[name],
 		(* inside a token, a token is its text, not what its action makes of it *)
+		(* the symbol is taken held: that of a token lowered before this one has its parser already *)
 		TrueQ[$ebnfContiguous] && KeyExistsQ[$ebnfTokenText, name],
-			With[{sym = $ebnfTokenText[name]}, ParseRecursive[sym]],
+			Replace[Extract[$ebnfTokenText, Key[name], Hold], Hold[sym_] :> ParseRecursive[sym]],
 		KeyExistsQ[symMap, name],
 			With[{sym = symMap[name]}, ParseRecursive[sym]],
 		True,

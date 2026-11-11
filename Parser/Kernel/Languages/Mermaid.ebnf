@@ -1,0 +1,46 @@
+(* Mermaid: a diagram and the tokens every diagram type shares.
+
+	The grammars of Mermaid are the Jison files of its repository, mermaid-js/mermaid,
+	packages/mermaid/src/diagrams/<type>/parser/*.jison, each a lexer with start conditions
+	and an LALR grammar over its tokens. This file and the one beside it for each diagram type
+	state the same syntax as one PEG in the classic dialect of EBNFParse: a lexer state is the
+	rule that reads the text of that state, and a token the lexer tries first is the alternative
+	written first. <Any> is any one character, bound by the front end.
+
+	Spaces and tabs are skipped between elements, a newline or a semicolon ends a statement,
+	and a line that begins with %% is a comment. *)
+
+<Mermaid>       ::= <Blank> [ <FrontMatter> <Blank> ] <Diagram>
+<Diagram>       ::= <Flowchart> | <Sequence> | <State> | <Class>
+
+<Blank>         ::= { <NL> | <Comment> }
+<NL>            ::= [ "\r" ] "\n"
+<Terminator>    ::= <NL> | ";"
+<Comment>       ::= "%%" { <Any> - <NL> }
+
+(* YAML between two lines of three dashes, of which the title is read *)
+<FrontMatter>   ::= "---" <NL> { <FrontLine> <NL> } "---"
+<FrontLine>     ::= ! "---" { <Any> - <NL> }
+
+<Accessibility> ::= <KwAccessible> ":" <RestOfLine>
+<KwAccessible>  ::= ( "accTitle" | "accDescr" ) ! <WordChar>
+
+(* text *)
+<String>        ::= "\"" { <Any> - "\"" } "\""
+<RestOfLine>    ::= { <Any> - <NL> }
+<LineText>      ::= <LineChar> { <LineChar> }
+<LineChar>      ::= <Any> - ( <NL> | ";" )
+<Number>        ::= <Digit> { <Digit> }
+<Digit>         ::= "0" | ... | "9"
+<Letter>        ::= "a" | ... | "z" | "A" | ... | "Z"
+
+(* a word: any characters but spaces and the punctuation Mermaid gives a meaning *)
+<Word>          ::= <WordChar> { <WordChar> }
+<WordChar>      ::= <Any> - <Special>
+<Special>       ::= " " | "\t" | "\n" | "\r" | "[" | "]" | "(" | ")" | "{" | "}" | "<" | ">" | "|" | "&" | ";"
+                  | ":" | "," | "\"" | "-" | "=" | "." | "~" | "@" | "%" | "^" | "/" | "\\" | "`" | "'" | "*" | "+" | "#"
+
+(* a direction, as a header or a direction statement gives it *)
+<Direction>     ::= ( "TB" | "TD" | "BT" | "LR" | "RL" ) ! <WordChar>
+<KwDirection>   ::= "direction" ! <WordChar>
+<KwEnd>         ::= "end" ! <WordChar>
