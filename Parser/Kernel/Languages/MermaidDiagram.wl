@@ -50,7 +50,7 @@ textAt[text_String, {x_, y_}, color_, size_ : $fontSize, style___] := With[{line
 		Function[{line, index},
 			Text[
 				Style[line, FontSize -> fontScale[size], FontFamily -> $fontFamily, FontColor -> color, style],
-				{x, y - 1.3 size (First[index] - (Length[lines] + 1) / 2)}
+				{x, y - (1.3 size (First[index] - (Length[lines] + 1) / 2))}
 			]
 		],
 		lines
@@ -152,8 +152,8 @@ shapeOutline["Hexagon", {cx_, cy_}, {w_, h_}] := With[{d = h / 4},
 ]
 (* the four corners of a slanted box: how far the top and the bottom edge are pulled in on each side *)
 slanted[{cx_, cy_}, {w_, h_}, {topLeft_, topRight_, bottomRight_, bottomLeft_}] := With[{d = 0.3 h}, {
-	{cx - w / 2 + d topLeft, cy + h / 2}, {cx + w / 2 - d topRight, cy + h / 2},
-	{cx + w / 2 - d bottomRight, cy - h / 2}, {cx - w / 2 + d bottomLeft, cy - h / 2}
+	{cx - w / 2 + d topLeft, cy + h / 2}, {cx + w / 2 - (d topRight), cy + h / 2},
+	{cx + w / 2 - (d bottomRight), cy - h / 2}, {cx - w / 2 + d bottomLeft, cy - h / 2}
 }]
 shapeOutline["Parallelogram", center_, size_] := slanted[center, size, {1, 0, 1, 0}]
 shapeOutline["ParallelogramAlt", center_, size_] := slanted[center, size, {0, 1, 0, 1}]
@@ -229,7 +229,7 @@ boundaryPoint[outline_List, center_, toward_] := With[{direction = toward - cent
 	]
 ]
 
-cross[{ax_, ay_}, {bx_, by_}] := ax by - ay bx
+cross[{ax_, ay_}, {bx_, by_}] := ax by - (ay bx)
 
 (* how far along a ray from origin the segment from p to q is crossed, None where it is not *)
 rayHit[origin_, direction_, p_, q_] := With[{denominator = cross[direction, q - p]},
@@ -571,21 +571,21 @@ shift["Stubs", corner_][points_] := Map[corner + # &, points]
 
 (* the head of a link at a point, pointing along a unit direction *)
 headPrimitives["Arrow", point_, direction_, color_] := With[{normal = {-1, 1} Reverse[direction]},
-	{FaceForm[color], EdgeForm[Directive[color, AbsoluteThickness[0.8], JoinForm["Round"]]], Polygon[{point, point - 10 direction + 4 normal, point - 8 direction, point - 10 direction - 4 normal}]}
+	{FaceForm[color], EdgeForm[Directive[color, AbsoluteThickness[0.8], JoinForm["Round"]]], Polygon[{point, point - (10 direction) + 4 normal, point - (8 direction), point - (10 direction) - (4 normal)}]}
 ]
 headPrimitives["Open", point_, direction_, color_] := With[{normal = {-1, 1} Reverse[direction]},
-	{color, AbsoluteThickness[1.3], CapForm["Round"], JoinForm["Round"], Line[{point - 10 direction + 5 normal, point, point - 10 direction - 5 normal}]}
+	{color, AbsoluteThickness[1.3], CapForm["Round"], JoinForm["Round"], Line[{point - (10 direction) + 5 normal, point, point - (10 direction) - (5 normal)}]}
 ]
 headPrimitives["Triangle", point_, direction_, color_] := With[{normal = {-1, 1} Reverse[direction]},
-	{FaceForm[$theme["NodeFill"]], EdgeForm[Directive[color, AbsoluteThickness[1.2], JoinForm["Round"]]], Polygon[{point, point - 13 direction + 7 normal, point - 13 direction - 7 normal}]}
+	{FaceForm[$theme["NodeFill"]], EdgeForm[Directive[color, AbsoluteThickness[1.2], JoinForm["Round"]]], Polygon[{point, point - (13 direction) + 7 normal, point - (13 direction) - (7 normal)}]}
 ]
 headPrimitives[kind : "Diamond" | "DiamondOpen", point_, direction_, color_] := With[{normal = {-1, 1} Reverse[direction]},
 	{FaceForm[If[kind === "Diamond", color, $theme["NodeFill"]]], EdgeForm[Directive[color, AbsoluteThickness[1.2], JoinForm["Round"]]],
-		Polygon[{point, point - 8 direction + 5 normal, point - 16 direction, point - 8 direction - 5 normal}]}
+		Polygon[{point, point - (8 direction) + 5 normal, point - (16 direction), point - (8 direction) - (5 normal)}]}
 ]
-headPrimitives["Circle", point_, direction_, color_] := {FaceForm[color], EdgeForm[None], Disk[point - 4.5 direction, 4.5]}
-headPrimitives["Cross", point_, direction_, color_] := With[{normal = {-1, 1} Reverse[direction], middle = point - 6 direction},
-	{color, AbsoluteThickness[1.6], CapForm["Round"], Line[{middle - 4.5 direction - 4.5 normal, middle + 4.5 direction + 4.5 normal}], Line[{middle - 4.5 direction + 4.5 normal, middle + 4.5 direction - 4.5 normal}]}
+headPrimitives["Circle", point_, direction_, color_] := {FaceForm[color], EdgeForm[None], Disk[point - (4.5 direction), 4.5]}
+headPrimitives["Cross", point_, direction_, color_] := With[{normal = {-1, 1} Reverse[direction], middle = point - (6 direction)},
+	{color, AbsoluteThickness[1.6], CapForm["Round"], Line[{middle - (4.5 direction) - (4.5 normal), middle + 4.5 direction + 4.5 normal}], Line[{middle - (4.5 direction) + 4.5 normal, middle + 4.5 direction - (4.5 normal)}]}
 ]
 headPrimitives[_, _, _, _] := {}
 
@@ -613,7 +613,7 @@ smoothCurve[points_List] := With[{padded = Join[{First[points]}, points, {Last[p
 	BezierCurve[Prepend[
 		Catenate[
 			Function[{before, from, to, after},
-				{from + Norm[to - from] / 3 unit[to - before], to - Norm[to - from] / 3 unit[after - from], to}
+				{from + Norm[to - from] / 3 unit[to - before], to - (Norm[to - from] / 3 unit[after - from]), to}
 			] @@@ Partition[padded, 4, 1]
 		],
 		First[points]
@@ -632,7 +632,7 @@ linkPrimitives[link_, route_, outlines_, placed_] := Module[{
 	points = Join[{start}, Select[route["Points"], Norm[# - start] > 14 && Norm[# - end] > 14 &], {end}];
 	startDirection = unit[start - points[[2]]];
 	endDirection = unit[end - points[[-2]]];
-	points = ReplacePart[points, {1 -> start - headLength[link["Tail"]] startDirection, -1 -> end - headLength[link["Head"]] endDirection}];
+	points = ReplacePart[points, {1 -> start - (headLength[link["Tail"]] startDirection), -1 -> end - (headLength[link["Head"]] endDirection)}];
 	If[link["Line"] === "Invisible",
 		{},
 		{
@@ -647,7 +647,7 @@ linkPrimitives[link_, route_, outlines_, placed_] := Module[{
 
 (* the text at an end of a link, a multiplicity: beside the line, clear of the head *)
 endLabel[text_String, point_, direction_, head_] :=
-	textAt[text, point - (head + 12) direction + (6 + First[textSize[text, $fontSize - 2]] / 2) {-1, 1} Reverse[direction], $theme["Text"], $fontSize - 2]
+	textAt[text, point - ((head + 12) direction) + (6 + First[textSize[text, $fontSize - 2]] / 2) {-1, 1} Reverse[direction], $theme["Text"], $fontSize - 2]
 endLabel[_, _, _, _] := {}
 
 (* a link from a box to itself: a loop at its side *)
@@ -857,12 +857,12 @@ classBox[data_][class_] := Module[{
 					shapePrimitives["Rectangle", center, size, style],
 					{style["Edge"], Map[Line[{{left, top - #}, {left + width, top - #}}] &, Rest[tops]]},
 					MapIndexed[
-						textAt[#1, {First[center], top - 5 - row (First[#2] - 0.5)}, style["Text"], $fontSize, If[First[#2] === Length[head], FontWeight -> "DemiBold", FontSlant -> "Italic"]] &,
+						textAt[#1, {First[center], top - 5 - (row (First[#2] - 0.5))}, style["Text"], $fontSize, If[First[#2] === Length[head], FontWeight -> "DemiBold", FontSlant -> "Italic"]] &,
 						head
 					],
 					MapThread[
 						Function[{lines, partTop},
-							MapIndexed[textFrom[#1, {left + 10, top - partTop - 5 - row (First[#2] - 0.5)}, style["Text"]] &, lines]
+							MapIndexed[textFrom[#1, {left + 10, top - partTop - 5 - (row (First[#2] - 0.5))}, style["Text"]] &, lines]
 						],
 						{Rest[parts], Rest[tops]}
 					]
@@ -975,7 +975,7 @@ sequencePrimitives[data_] := Module[{
 									y += Last[size] + 10;
 									With[{direction = {Sign[to - from], 0.}},
 										Sow[{
-											{directives, Line[{{from, -y} + headLength[event["Tail"]] direction, {to, -y} - headLength[event["Head"]] direction}]},
+											{directives, Line[{{from, -y} + headLength[event["Tail"]] direction, {to, -y} - (headLength[event["Head"]] direction)}]},
 											headPrimitives[event["Head"], {to, -y}, direction, color],
 											headPrimitives[event["Tail"], {from, -y}, -direction, color],
 											If[event["Text"] === "", {}, textAt[event["Text"], {(from + to) / 2, -y + Last[size] / 2 + 5}, $theme["Text"]]],
