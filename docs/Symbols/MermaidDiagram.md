@@ -8,7 +8,7 @@ URI: Wolfram/Parser/ref/MermaidDiagram
 Keywords: [Mermaid, diagram, flowchart, sequence diagram, state diagram, class diagram, graph layout, Markdown, light and dark]
 SeeAlso: [MermaidRead, MermaidGraph, MermaidAST, MermaidGrammar, MermaidEBNF, Graphics]
 RelatedGuides: [WolframParser]
-RelatedTutorials: [ParserZoo, ParsingBNFGrammars]
+RelatedTutorials: [MermaidDiagrams, ParserZoo, ParsingBNFGrammars]
 ---
 ## Usage
 

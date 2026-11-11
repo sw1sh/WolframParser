@@ -67,9 +67,13 @@ $theme = <|
 	"NodeEdge" -> LightDarkSwitched[RGBColor[0.42, 0.47, 0.82], RGBColor[0.56, 0.62, 0.95]],
 	"Text" -> LightDarkSwitched[GrayLevel[0.1], GrayLevel[0.93]],
 	"Line" -> LightDarkSwitched[GrayLevel[0.3], GrayLevel[0.78]],
-	"GroupFill" -> LightDarkSwitched[RGBColor[0.5, 0.5, 0.56, 0.09], RGBColor[0.75, 0.78, 1., 0.07]],
+	(* a group's face and the ground of a link's text are drawn with an Opacity beside them: a color that holds its own
+		opacity loses it inside LightDarkSwitched in a dark notebook *)
+	"GroupFill" -> LightDarkSwitched[RGBColor[0.5, 0.5, 0.56], RGBColor[0.75, 0.78, 1.]],
 	"GroupEdge" -> LightDarkSwitched[GrayLevel[0.62], GrayLevel[0.46]],
 	"LabelFill" -> LightDarkSwitched[GrayLevel[0.93], GrayLevel[0.24]],
+	(* the ground under the text of a link: near a notebook's own background, so the text reads as a gap in the line *)
+	"Ground" -> LightDarkSwitched[GrayLevel[0.995], GrayLevel[0.1]],
 	"NoteFill" -> LightDarkSwitched[RGBColor[1., 0.96, 0.76], RGBColor[0.33, 0.3, 0.14]],
 	"NoteEdge" -> LightDarkSwitched[RGBColor[0.78, 0.7, 0.3], RGBColor[0.66, 0.6, 0.3]],
 	"Solid" -> LightDarkSwitched[GrayLevel[0.2], GrayLevel[0.85]]
@@ -664,7 +668,7 @@ loopPrimitives[link_, {center : {cx_, cy_}, {w_, h_}}] := With[{
 
 labelPrimitives[text_String, center_] := With[{size = textSize[text, $fontSize - 1] + {8, 3}},
 	{
-		{FaceForm[$theme["LabelFill"]], EdgeForm[None], Polygon[roundedOutline[center, size, 4]]},
+		{Opacity[0.88], FaceForm[$theme["Ground"]], EdgeForm[None], Polygon[roundedOutline[center, size, 4]]},
 		textAt[text, center, $theme["Text"], $fontSize - 1]
 	}
 ]
@@ -673,7 +677,8 @@ groupPrimitives[group_, {center : {cx_, cy_}, size : {w_, h_}}] := With[{
 	style = shapeStyle[group["Style"], $theme["GroupFill"], $theme["GroupEdge"], $theme["Text"]]
 },
 	{
-		{FaceForm[style["Face"]], EdgeForm[style["Edge"]], Polygon[roundedOutline[center, size, 6]]},
+		{If[KeyExistsQ[group["Style"], "fill"], Opacity[1], Opacity[0.09]], FaceForm[style["Face"]], EdgeForm[None], Polygon[roundedOutline[center, size, 6]]},
+		{FaceForm[None], EdgeForm[style["Edge"]], Polygon[roundedOutline[center, size, 6]]},
 		If[group["Title"] === "", {}, textFrom[group["Title"], {cx - w / 2 + 12, cy + h / 2 - $groupPadding / 2 - Last[textSize[group["Title"]]] / 2}, style["Text"], $fontSize, FontWeight -> "DemiBold"]]
 	}
 ]
@@ -1068,7 +1073,7 @@ numberPrimitives[number_, {x_, y_}] := {
 (* the text of a block or a branch between brackets, on a ground of its own, since a lifeline may pass behind it *)
 bracketLabel[text_String, {x_, y_}] := With[{size = textSize["[" <> text <> "]", $fontSize - 1]},
 	{
-		{FaceForm[$theme["LabelFill"]], EdgeForm[None], Polygon[roundedOutline[{x + First[size] / 2, y}, size + {6, 2}, 3]]},
+		{Opacity[0.88], FaceForm[$theme["Ground"]], EdgeForm[None], Polygon[roundedOutline[{x + First[size] / 2, y}, size + {6, 2}, 3]]},
 		textFrom["[" <> text <> "]", {x, y}, $theme["Text"], $fontSize - 1]
 	}
 ]
@@ -1077,7 +1082,7 @@ bracketLabel[text_String, {x_, y_}] := With[{size = textSize["[" <> text <> "]",
 blockFrame[block_, x1_, x2_, y_] := With[{tab = First[textSize[block["Kind"], $fontSize - 1]] + 14},
 	{
 		If[block["Kind"] === "rect",
-			{FaceForm[$theme["GroupFill"]], EdgeForm[None], Rectangle[{x1, -y}, {x2, -block["Top"]}]},
+			{Opacity[0.09], FaceForm[$theme["GroupFill"]], EdgeForm[None], Rectangle[{x1, -y}, {x2, -block["Top"]}]},
 			{
 				{FaceForm[None], EdgeForm[Directive[$theme["GroupEdge"], AbsoluteThickness[1.1]]], Rectangle[{x1, -y}, {x2, -block["Top"]}]},
 				{FaceForm[$theme["LabelFill"]], EdgeForm[Directive[$theme["GroupEdge"], AbsoluteThickness[1.1]]],

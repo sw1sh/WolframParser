@@ -8,7 +8,7 @@ URI: Wolfram/Parser/ref/MermaidSemantic
 Keywords: [Mermaid, algebra, semantic, parser zoo]
 SeeAlso: [MermaidGrammar, MermaidRead, MermaidAST, ASTAlgebra]
 RelatedGuides: [WolframParser]
-RelatedTutorials: [ParserZoo, ParsingBNFGrammars]
+RelatedTutorials: [MermaidDiagrams, ParserZoo, ParsingBNFGrammars]
 ---
 ## Usage
 

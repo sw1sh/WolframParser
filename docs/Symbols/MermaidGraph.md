@@ -8,7 +8,7 @@ URI: Wolfram/Parser/ref/MermaidGraph
 Keywords: [Mermaid, graph, flowchart, state diagram, class diagram, vertices, edges]
 SeeAlso: [MermaidDiagram, MermaidRead, Graph]
 RelatedGuides: [WolframParser]
-RelatedTutorials: [ParserZoo, ParsingBNFGrammars]
+RelatedTutorials: [MermaidDiagrams, ParserZoo, ParsingBNFGrammars]
 ---
 ## Usage
 

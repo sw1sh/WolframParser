@@ -8,7 +8,7 @@ URI: Wolfram/Parser/guide/WolframParser
 Description: A general, fast, composable parser library for the Wolfram Language - Parse* combinators around a single ParserCombinator wrapper, GrammarRules-compatible declarative grammars, FunctionCompile-backed local execution.
 Keywords: [parser, parsing, grammar, combinator, ParserCombinator, GrammarRules, FunctionCompile, LaTeX, KaTeX, TPTP, DSL]
 RelatedGuides: [StringManipulation]
-RelatedTutorials: [ParserLandscape, DesignAndCompilationStrategy, ParsingGrammarRules, LaTeXMathParserImplementation, ParsingBNFGrammars, ParsingTPTP, ParserZoo, ParsingABC, ParsingWolframLanguage]
+RelatedTutorials: [ParserLandscape, DesignAndCompilationStrategy, ParsingGrammarRules, LaTeXMathParserImplementation, ParsingBNFGrammars, ParsingTPTP, ParserZoo, ParsingABC, MermaidDiagrams, ParsingWolframLanguage]
 Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_combinator)", "[Parsing expression grammar (Wikipedia)](https://en.wikipedia.org/wiki/Parsing_expression_grammar)"]
 ---
 
@@ -85,6 +85,13 @@ Links: ["[Parser combinator (Wikipedia)](https://en.wikipedia.org/wiki/Parser_co
 - [EBNFDeclarations]() return the declarations of a classic grammar, its lines that begin with `%`, by keyword
 - [TPTPImport]() import TPTP theorem-prover formulas (FOF / CNF / THF) or an SZS derivation
 - [TPTPExport]() render an SZS-output derivation back to TPTP text
+
+### Mermaid diagrams
+
+- [MermaidDiagram]() draw a Mermaid flowchart, sequence diagram, state diagram or class diagram as [Graphics]()
+- [MermaidRead]() read a Mermaid diagram to plain data: its nodes, edges and groups
+- [MermaidGraph]() the [Graph]() of a flowchart, a state diagram or a class diagram
+- [MermaidEBNF]() the grammar of Mermaid diagrams that [EBNFParse]() reads
 
 ### Markdown
 

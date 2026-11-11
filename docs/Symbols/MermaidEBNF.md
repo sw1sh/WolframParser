@@ -8,7 +8,7 @@ URI: Wolfram/Parser/ref/MermaidEBNF
 Keywords: [Mermaid, EBNF, BNF, grammar, PEG, Jison, EBNFParse, parser generator]
 SeeAlso: [MermaidGrammar, EBNFParse, EBNFRules, MermaidRead, ABCBNF]
 RelatedGuides: [WolframParser]
-RelatedTutorials: [ParserZoo, ParsingBNFGrammars]
+RelatedTutorials: [MermaidDiagrams, ParserZoo, ParsingBNFGrammars]
 ---
 ## Usage
 

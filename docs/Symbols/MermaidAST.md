@@ -8,7 +8,7 @@ URI: Wolfram/Parser/ref/MermaidAST
 Keywords: [Mermaid, AST, syntax tree, source positions, parser zoo]
 SeeAlso: [MermaidRead, MermaidGrammar, MermaidDiagram, ASTAlgebra, ASTStripSource, CallNode, LeafNode]
 RelatedGuides: [WolframParser]
-RelatedTutorials: [ParserZoo, ParsingBNFGrammars]
+RelatedTutorials: [MermaidDiagrams, ParserZoo, ParsingBNFGrammars]
 ---
 ## Usage
 

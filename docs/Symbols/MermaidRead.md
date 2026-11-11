@@ -8,7 +8,7 @@ URI: Wolfram/Parser/ref/MermaidRead
 Keywords: [Mermaid, diagram, flowchart, sequence diagram, state diagram, class diagram, reader, parser zoo]
 SeeAlso: [MermaidDiagram, MermaidGraph, MermaidAST, MermaidGrammar, MermaidSemantic, MermaidEBNF]
 RelatedGuides: [WolframParser]
-RelatedTutorials: [ParserZoo, ParsingBNFGrammars]
+RelatedTutorials: [MermaidDiagrams, ParserZoo, ParsingBNFGrammars]
 ---
 ## Usage
 

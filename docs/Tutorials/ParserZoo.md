@@ -156,7 +156,7 @@ ABCRun["fact = fact(t - 1) * t + (1 - t)\nprint fact", {5}]
 
 ### Mermaid
 
-The diagram language of Markdown documents: a header line that names the diagram's type, then a statement to a line. Mermaid publishes its syntax as Jison files, a lexer with start conditions and an LALR grammar for each diagram type; [MermaidEBNF]() states it as one PEG for [EBNFParse](), and the front end reads flowcharts, sequence diagrams, state diagrams and class diagrams. The meaningful run is a picture: [MermaidDiagram]() lays the diagram out in layers and draws it as [Graphics](), in colors that switch with the notebook's appearance.
+The diagram language of Markdown documents: a header line that names the diagram's type, then a statement to a line. Mermaid publishes its syntax as Jison files, a lexer with start conditions and an LALR grammar for each diagram type; [MermaidEBNF]() states it as one PEG for [EBNFParse](), and the front end reads flowcharts, sequence diagrams, state diagrams and class diagrams. The meaningful run is a picture: [MermaidDiagram]() lays the diagram out in layers and draws it as [Graphics](), in colors that switch with the notebook's appearance. [Drawing Mermaid Diagrams](paclet:Wolfram/Parser/tutorial/MermaidDiagrams) is a gallery of them.
 
 - [MermaidAST]() parse to a standard AST, a [CallNode]() per statement
 - [MermaidRead]() read a diagram to plain data: its nodes, edges and groups

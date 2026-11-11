@@ -8,7 +8,7 @@ URI: Wolfram/Parser/ref/MermaidGrammar
 Keywords: [Mermaid, grammar, algebra, EBNF, PEG, parser zoo]
 SeeAlso: [MermaidEBNF, MermaidSemantic, MermaidAST, MermaidRead, EBNFParse]
 RelatedGuides: [WolframParser]
-RelatedTutorials: [ParserZoo, ParsingBNFGrammars]
+RelatedTutorials: [MermaidDiagrams, ParserZoo, ParsingBNFGrammars]
 ---
 ## Usage
 
