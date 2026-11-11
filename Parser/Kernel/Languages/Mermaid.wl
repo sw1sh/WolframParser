@@ -34,7 +34,7 @@ Begin["`Private`"]
 (*The grammar: Mermaid.ebnf and a file for each diagram type, read by EBNFParse*)
 
 $mermaidDirectory = DirectoryName[$InputFileName]
-$mermaidGrammarFiles = {"Mermaid", "MermaidFlowchart"}
+$mermaidGrammarFiles = {"Mermaid", "MermaidFlowchart", "MermaidSequence", "MermaidState", "MermaidClass"}
 
 (* the exact text of a file: Import as "Text" drops a final newline, ReadString leaves UTF-8 undecoded *)
 readText[file_String] := ByteArrayToString[ReadByteArray[file], "UTF-8"]
@@ -54,15 +54,14 @@ $mermaidTokens = {
 	"FlowId", "SquarePlain", "RoundPlain", "CurlyPlain", "SlantPlain", "Arrow", "LinkStart", "LinkEnd",
 	"EdgeText", "BarPlain", "StyleName", "StyleValue",
 	(* sequence diagram *)
-	"KwSequence", "KwParticipant", "KwActor", "KwAs", "KwNote", "KwOver", "KwLeftOf", "KwRightOf", "KwActivate",
-	"KwDeactivate", "KwAutonumber", "KwTitle", "KwBlock", "KwBranch", "KwBox", "KwCreate", "KwDestroy", "KwLinks",
-	"ActorName", "AliasName", "SignalArrow", "Activation", "MessageText",
+	"KwSequence", "KwParticipant", "KwAs", "KwNote", "KwOver", "KwSideOf", "KwActivate", "KwAutonumber", "KwTitle",
+	"KwBlock", "KwBranch", "KwBox", "KwCreate", "KwDestroy", "KwLinks", "ActorName", "SignalArrow", "Activation",
 	(* state diagram *)
-	"KwStateDiagram", "KwState", "KwStateNote", "KwEndNote", "KwSide", "KwOf", "StateId", "StateStar", "StateArrow",
-	"StateKind", "StateDivider", "NoteLine", "KwHide",
+	"KwStateDiagram", "KwState", "KwEndNote", "StateId", "StateStar", "StateArrow", "StateKind", "StateDivider",
+	"NoteLine", "KwHide",
 	(* class diagram *)
-	"KwClassDiagram", "KwClassBlock", "KwNamespace", "KwNoteFor", "ClassName", "Generic", "Relation", "MemberText",
-	"Annotation", "BackQuoted", "KwCssClass"
+	"KwClassDiagram", "KwNamespace", "KwFor", "ClassName", "Generic", "Relation", "MemberText", "Annotation",
+	"BackQuoted", "KwCssClass"
 }
 
 MermaidGrammar[alg_] := Module[{parsers, blank = ParseMany[ParseCharacter[" " | "\t" | "\n" | "\r"]]},
@@ -164,9 +163,101 @@ flowchartActions[alg_] := <|
 linkIndices[alg_, default_String] := {alg["Leaf"]["Keyword", default]}
 linkIndices[alg_, first_, more_List] := separated[first, more]
 
-sequenceActions[alg_] := <||>
-stateActions[alg_] := <||>
-classActions[alg_] := <||>
+(* ::Subsection:: *)
+(*Sequence diagram*)
+
+keyword[alg_] := Function[text, alg["Leaf"]["Keyword", text]]
+
+(* an optional text, as a part of its own *)
+labeled[alg_, kind_String, text_] := If[MissingQ[text], text, node[alg, kind, {text}]]
+
+sequenceActions[alg_] := <|
+	"Sequence" -> Function[{keyword, body}, node[alg, "Sequence", statements[body]]],
+	"SeqParticipant" -> Function[{create, kind, name, alias},
+		node[alg, "Participant", {kind, name, If[MissingQ[alias], alias, node[alg, "Alias", {Last[alias]}]]}]
+	],
+	"KwParticipant" -> keyword[alg],
+	"ActorName" -> leaf[alg, "Identifier"],
+	"SeqDestroy" -> Function[{keyword, name}, node[alg, "Destroy", {name}]],
+	"SeqMessage" -> Function[{from, arrow, activation, to, colon, text},
+		node[alg, "Message", {from, arrow, to, labeled[alg, "Activation", activation], labeled[alg, "Text", text]}]
+	],
+	"SignalArrow" -> leaf[alg, "Operator"],
+	"Activation" -> leaf[alg, "Operator"],
+	"SeqNote" -> Function[{keyword, placement, colon, text}, node[alg, "Note", {placement, labeled[alg, "Text", text]}]],
+	"NotePlacement" -> Function[Null, node[alg, "Placement", notePlacement[##]]],
+	"KwOver" -> keyword[alg],
+	"KwSideOf" -> keyword[alg],
+	"SeqActivation" -> Function[{keyword, name}, node[alg, "Activation", {keyword, name}]],
+	"KwActivate" -> keyword[alg],
+	"SeqAutonumber" -> Function[{keyword, text}, node[alg, "Autonumber", {text}]],
+	"SeqTitle" -> Function[{keyword, colon, text}, node[alg, "Title", {text}]],
+	"SeqLinks" -> Function[{keyword, text}, node[alg, "Links", {text}]],
+	"SeqBlock" -> Function[{keyword, label, body, end}, node[alg, "Block", Join[{keyword, labeled[alg, "Label", label]}, statements[body]]]],
+	"SeqBranch" -> Function[{keyword, label}, node[alg, "Branch", {keyword, labeled[alg, "Label", label]}]],
+	"KwBlock" -> keyword[alg],
+	"KwBranch" -> keyword[alg],
+	"SeqBox" -> Function[{keyword, label, body, end}, node[alg, "Box", Prepend[statements[body], labeled[alg, "Label", label]]]]
+|>
+
+notePlacement[side_, name_] := {side, name}
+notePlacement[over_, name_, other_] := DeleteCases[{over, name, If[MissingQ[other], other, Last[other]]}, _Missing]
+(* ::Subsection:: *)
+(*State diagram*)
+
+stateActions[alg_] := <|
+	"State" -> Function[{keyword, body}, node[alg, "State", statements[body]]],
+	"StateDirection" -> Function[{keyword, direction}, node[alg, "Direction", {direction}]],
+	"StateTransition" -> Function[{from, arrow, to, label}, node[alg, "Transition", {from, to, If[MissingQ[label], label, node[alg, "Label", {Last[label]}]]}]],
+	"StateDescription" -> Function[{state, label}, node[alg, "Describe", {state, If[MissingQ[label], label, node[alg, "Label", {Last[label]}]]}]],
+	"StateRef" -> Function[{state, class}, node[alg, "Ref", {state, If[MissingQ[class], class, node[alg, "Class", {Last[class]}]]}]],
+	"StateStar" -> leaf[alg, "Keyword"],
+	"StateId" -> leaf[alg, "Identifier"],
+	"StateDeclaration" -> Function[Null, node[alg, "Declare", stateDeclaration[alg, ##]]],
+	"StateBody" -> Function[{open, body, close}, node[alg, "Body", statements[body]]],
+	"StateKind" -> leaf[alg, "Keyword"],
+	"StateDivider" -> Function[text, node[alg, "Divider", {}]],
+	"StateNote" -> Function[Null, node[alg, "Note", stateNote[alg, ##]]],
+	"NoteLine" -> leaf[alg, "Text"],
+	"StateHide" -> Function[{keyword, text}, dropped]
+|>
+
+stateDeclaration[alg_, keyword_, label_, as_, id_, body_] := {id, node[alg, "Label", {label}], body}
+stateDeclaration[alg_, keyword_, id_, more_] := {id, more}
+
+stateNote[alg_, keyword_, side_, id_, ":", text_] := {alg["Leaf"]["Keyword", side], id, text}
+stateNote[alg_, keyword_, side_, id_, lines_List, newline_, end_] := Join[{alg["Leaf"]["Keyword", side], id}, Map[Last, lines]]
+
+(* ::Subsection:: *)
+(*Class diagram*)
+
+classActions[alg_] := <|
+	"Class" -> Function[{keyword, body}, node[alg, "Class", statements[body]]],
+	"ClassDirection" -> Function[{keyword, direction}, node[alg, "Direction", {direction}]],
+	"ClassBlock" -> Function[{keyword, class, label, style, body},
+		node[alg, "Declare", {class, label, If[MissingQ[style], style, node[alg, "Style", {Last[style]}]], body}]
+	],
+	"ClassRef" -> Function[{name, generic}, node[alg, "Ref", {name, labeled[alg, "Generic", generic]}]],
+	"ClassName" -> leaf[alg, "Identifier"],
+	"BackQuoted" -> leaf[alg, "String"],
+	"Generic" -> leaf[alg, "String"],
+	"ClassLabel" -> Function[{open, label, close}, node[alg, "Label", {label}]],
+	"ClassBody" -> Function[{open, first, more, close}, node[alg, "Body", DeleteCases[Prepend[Map[Last, more], first], _Missing | dropped]]],
+	"MemberText" -> leaf[alg, "Text"],
+	"Annotation" -> leaf[alg, "Annotation"],
+	"ClassAnnotate" -> Function[{annotation, class}, node[alg, "Annotate", {annotation, class}]],
+	"ClassRelation" -> Function[{from, fromLabel, relation, toLabel, to, label},
+		node[alg, "Relation", {
+			from, relation, to, labeled[alg, "FromLabel", fromLabel], labeled[alg, "ToLabel", toLabel],
+			If[MissingQ[label], label, node[alg, "Label", {Last[label]}]]
+		}]
+	],
+	"Relation" -> leaf[alg, "Operator"],
+	"ClassMember" -> Function[{class, colon, text}, node[alg, "Member", {class, text}]],
+	"ClassNote" -> Function[Null, node[alg, "Note", Cases[{##}, Except[_String ? (StringMatchQ[#, "note" | "Note" | "for"] &)]]]],
+	"ClassNamespace" -> Function[{keyword, name, open, body, close}, node[alg, "Namespace", Prepend[statements[body], name]]],
+	"ClassCss" -> Function[{keyword, names, class}, node[alg, "CssClass", {names, class}]]
+|>
 
 (* ::Section:: *)
 (*The standard AST: a composite is a CallNode headed by its kind*)
@@ -184,10 +275,14 @@ MermaidSemantic = <|
 		"String", labelText[StringTake[text, {2, -2}]],
 		"Text", labelText[text],
 		"Integer", FromDigits[text],
+		"Annotation", $annotationMark <> StringTrim[StringTake[text, {3, -3}]],
 		_, text
 	]],
 	"Node" -> Function[{kind, parts}, kind -> parts]
 |>
+
+(* what an annotation's text starts with in the meaningful tree, where a class body holds it beside the members *)
+$annotationMark = "<<>>"
 
 (* the text of a label: trimmed, the backticks of a Markdown string and its emphasis marks taken off,
 	a line break where the label writes <br> *)
@@ -223,6 +318,242 @@ frontTitle[{"FrontMatter" -> lines_List, _}] := FirstCase[
 	None
 ]
 frontTitle[_] := None
+
+(* ::Subsection:: *)
+(*State diagram*)
+
+(* A state diagram: its states by name, in order, and its transitions. [*] in a state, or at the top, is
+	that scope's start where a transition leaves it and its end where one enters it. *)
+readDiagram["State" -> parts_List, title_] := Module[{
+	state = Fold[stateStatement[None], <|"States" -> <||>, "Transitions" -> {}, "Notes" -> {}, "ClassDefinitions" -> <||>, "Direction" -> "TB"|>, parts]
+},
+	<|
+		"Type" -> "State",
+		"Title" -> title,
+		"Direction" -> state["Direction"],
+		"States" -> state["States"],
+		"Transitions" -> state["Transitions"],
+		"Notes" -> state["Notes"],
+		"ClassDefinitions" -> state["ClassDefinitions"]
+	|>
+]
+
+(* the name of the state a reference means in a scope, and its kind where the reference alone tells it *)
+stateName[scope_, "[*]", end_] := {If[scope === None, "root", scope] <> If[end === "From", "_start", "_end"], If[end === "From", "Start", "End"]}
+stateName[_, id_String, _] := {id, "State"}
+
+(* a state seen in a scope: made if new, with what this mention adds *)
+stateSeen[scope_, changes_Association][state_, {id_String, kind_String}] := With[{
+	old = Lookup[state["States"], id, <|"Label" -> If[kind === "State", id, ""], "Kind" -> kind, "Parent" -> scope, "Descriptions" -> {}, "Classes" -> {}, "Style" -> <||>|>]
+},
+	put[state, {"States", id}, Join[old, KeyDrop[changes, {"Classes", "Description"}], <|
+		"Classes" -> Union[old["Classes"], Lookup[changes, "Classes", {}]],
+		"Descriptions" -> Join[old["Descriptions"], Lookup[changes, "Description", {}]]
+	|>]]
+]
+
+stateReference[scope_, end_][state_, "Ref" -> {id_String, rest___}] :=
+	stateSeen[scope, <|"Classes" -> Cases[{rest}, ("Class" -> {class_}) :> class]|>][state, stateName[scope, id, end]]
+
+stateStatement[scope_][state_, "Transition" -> {from : ("Ref" -> {fromId_, ___}), to : ("Ref" -> {toId_, ___}), rest___}] := With[{
+	next = stateReference[scope, "To"][stateReference[scope, "From"][state, from], to]
+},
+	put[next, {"Transitions"}, Append[next["Transitions"], <|
+		"From" -> First[stateName[scope, fromId, "From"]], "To" -> First[stateName[scope, toId, "To"]],
+		"Label" -> FirstCase[{rest}, ("Label" -> {text_}) :> text, None]
+	|>]]
+]
+
+stateStatement[scope_][state_, "Describe" -> {reference : ("Ref" -> {id_String, ___}), rest___}] := With[{
+	next = stateReference[scope, "From"][state, reference]
+},
+	stateSeen[scope, <|"Description" -> Cases[{rest}, ("Label" -> {text_}) :> text]|>][next, stateName[scope, id, "From"]]
+]
+
+stateStatement[scope_][state_, "Declare" -> {id_String, rest___}] := Module[{
+	label = FirstCase[{rest}, ("Label" -> {text_}) :> text, None],
+	kind = FirstCase[{rest}, text_String :> Capitalize[StringTrim[text, "<<" | ">>" | "[[" | "]]"]], None],
+	body = FirstCase[{rest}, ("Body" -> statements_List) :> statements, None],
+	next
+},
+	next = stateSeen[scope, Association[
+		If[label === None, {}, "Label" -> label],
+		Which[kind =!= None, "Kind" -> kind, body =!= None, "Kind" -> "Composite", True, {}]
+	]][state, {id, "State"}];
+	If[body === None, next, Fold[stateStatement[id], next, body]]
+]
+
+stateStatement[_][state_, "Note" -> {side_String, id_String, lines___String}] :=
+	put[state, {"Notes"}, Append[state["Notes"], <|"State" -> id, "Side" -> If[StringStartsQ[side, "left"], "Left", "Right"], "Text" -> StringRiffle[{lines}, "\n"]|>]]
+
+stateStatement[None][state_, "Direction" -> {direction_String}] := put[state, {"Direction"}, Replace[direction, "TD" -> "TB"]]
+
+stateStatement[_][state_, "ClassDef" -> {"Names" -> names_List, "Styles" -> styles_List}] :=
+	put[state, {"ClassDefinitions"}, Join[state["ClassDefinitions"], AssociationMap[styleRules[styles] &, names]]]
+
+stateStatement[scope_][state_, "ClassOf" -> {"Names" -> names_List, class_String}] :=
+	Fold[stateSeen[scope, <|"Classes" -> {class}|>][#1, {#2, "State"}] &, state, names]
+
+stateStatement[scope_][state_, "StyleOf" -> {id_String, "Styles" -> styles_List}] := With[{next = stateSeen[scope, <||>][state, {id, "State"}]},
+	put[next, {"States", id, "Style"}, Join[next["States", id, "Style"], styleRules[styles]]]
+]
+
+stateStatement[_][state_, _] := state
+
+(* ::Subsection:: *)
+(*Class diagram*)
+
+(* A class diagram: its classes by name, each with its annotations, attributes and methods, and its relations *)
+readDiagram["Class" -> parts_List, title_] := Module[{
+	state = Fold[classStatement[None], <|"Classes" -> <||>, "Relations" -> {}, "Notes" -> {}, "Namespaces" -> <||>, "ClassDefinitions" -> <||>, "Direction" -> "TB"|>, parts]
+},
+	<|
+		"Type" -> "Class",
+		"Title" -> title,
+		"Direction" -> state["Direction"],
+		"Classes" -> state["Classes"],
+		"Relations" -> state["Relations"],
+		"Notes" -> state["Notes"],
+		"Namespaces" -> state["Namespaces"],
+		"ClassDefinitions" -> state["ClassDefinitions"]
+	|>
+]
+
+(* the name of a class and the name it shows, a generic parameter between angle brackets *)
+className["Ref" -> {name_String, rest___}] := StringTrim[name, "`"]
+classTitle["Ref" -> {name_String, rest___}] := StringTrim[name, "`"] <> FirstCase[{rest}, ("Generic" -> {generic_}) :> "<" <> generic <> ">", ""]
+
+genericText[text_String] := StringReplace[text, "~" ~~ Shortest[inner__] ~~ "~" :> "<" <> inner <> ">"]
+
+classSeen[namespace_][state_, reference_] := If[KeyExistsQ[state["Classes"], className[reference]],
+	state,
+	put[state, {"Classes", className[reference]}, <|
+		"Label" -> classTitle[reference], "Annotations" -> {}, "Attributes" -> {}, "Methods" -> {}, "Parent" -> namespace, "Classes" -> {}, "Style" -> <||>
+	|>]
+]
+
+classAdd[state_, name_String, key_String, values_List] := put[state, {"Classes", name, key}, Join[state["Classes", name, key], values]]
+
+(* a member with parentheses is a method, any other an attribute *)
+classMembers[state_, name_String, members_List] := classAdd[
+	classAdd[state, name, "Methods", genericText /@ Select[members, StringContainsQ["("]]],
+	name, "Attributes", genericText /@ Select[members, ! StringContainsQ[#, "("] &]
+]
+
+$relationEnds = <|"<|" -> "Triangle", "|>" -> "Triangle", "<" -> "Open", ">" -> "Open", "*" -> "Diamond", "o" -> "DiamondOpen", "()" -> "Circle", "" -> "None"|>
+
+classStatement[namespace_][state_, "Declare" -> {reference : ("Ref" -> _), rest___}] := Module[{
+	name = className[reference],
+	next = classSeen[namespace][state, reference],
+	body = FirstCase[{rest}, ("Body" -> lines_List) :> lines, {}]
+},
+	next = Replace[FirstCase[{rest}, ("Label" -> {text_}) :> text, None], {None -> next, text_ :> put[next, {"Classes", name, "Label"}, text]}];
+	next = classAdd[next, name, "Classes", Cases[{rest}, ("Style" -> {class_}) :> class]];
+	next = classAdd[next, name, "Annotations", Cases[body, text_String /; StringStartsQ[text, $annotationMark] :> StringDrop[text, StringLength[$annotationMark]]]];
+	classMembers[next, name, Select[body, ! StringStartsQ[#, $annotationMark] &]]
+]
+
+classStatement[namespace_][state_, "Member" -> {reference : ("Ref" -> _), text_String}] :=
+	classMembers[classSeen[namespace][state, reference], className[reference], {text}]
+
+classStatement[namespace_][state_, "Annotate" -> {annotation_String, reference : ("Ref" -> _)}] :=
+	classAdd[classSeen[namespace][state, reference], className[reference], "Annotations", {StringDrop[annotation, StringLength[$annotationMark]]}]
+
+classStatement[namespace_][state_, "Relation" -> {from : ("Ref" -> _), relation_String, to : ("Ref" -> _), rest___}] := With[{
+	next = classSeen[namespace][classSeen[namespace][state, from], to],
+	ends = First[StringCases[relation, StartOfString ~~ start : ("<|" | "<" | "*" | "o" | "()" | "") ~~ line : ("--" | "..") ~~ end___ ~~ EndOfString :> {start, line, end}]]
+},
+	put[next, {"Relations"}, Append[next["Relations"], <|
+		"From" -> className[from], "To" -> className[to],
+		"Line" -> If[ends[[2]] === "..", "Dotted", "Solid"],
+		"Head" -> $relationEnds[ends[[3]]], "Tail" -> $relationEnds[ends[[1]]],
+		"Label" -> FirstCase[{rest}, ("Label" -> {text_}) :> text, None],
+		"FromLabel" -> FirstCase[{rest}, ("FromLabel" -> {text_}) :> text, None],
+		"ToLabel" -> FirstCase[{rest}, ("ToLabel" -> {text_}) :> text, None]
+	|>]]
+]
+
+classStatement[namespace_][state_, "Note" -> {reference : ("Ref" -> _), text_String}] :=
+	put[state, {"Notes"}, Append[state["Notes"], <|"Class" -> className[reference], "Text" -> text|>]]
+classStatement[namespace_][state_, "Note" -> {text_String}] := put[state, {"Notes"}, Append[state["Notes"], <|"Class" -> None, "Text" -> text|>]]
+
+classStatement[None][state_, "Namespace" -> {name_String, body___}] :=
+	Fold[classStatement[name], put[state, {"Namespaces", name}, <|"Title" -> name, "Parent" -> None, "Direction" -> None, "Style" -> <||>|>], {body}]
+
+classStatement[None][state_, "Direction" -> {direction_String}] := put[state, {"Direction"}, Replace[direction, "TD" -> "TB"]]
+
+classStatement[_][state_, "ClassDef" -> {"Names" -> names_List, "Styles" -> styles_List}] :=
+	put[state, {"ClassDefinitions"}, Join[state["ClassDefinitions"], AssociationMap[styleRules[styles] &, names]]]
+
+classStatement[namespace_][state_, "StyleOf" -> {id_String, "Styles" -> styles_List}] := With[{next = classSeen[namespace][state, "Ref" -> {id}]},
+	put[next, {"Classes", id, "Style"}, Join[next["Classes", id, "Style"], styleRules[styles]]]
+]
+
+classStatement[_][state_, _] := state
+
+(* ::Subsection:: *)
+(*Sequence diagram*)
+
+(* A sequence diagram: its participants by name, those declared and then those a message or a note
+	first names, and its events in order. A block is the events from its "BlockStart" to its "BlockEnd". *)
+readDiagram["Sequence" -> parts_List, title_] := Module[{events = Catenate[sequenceEvents /@ parts], declared, named},
+	declared = Association @ Cases[events, KeyValuePattern[{"Event" -> "Participant", "Name" -> name_, "Label" -> label_, "Kind" -> kind_}] :> name -> <|"Label" -> label, "Kind" -> kind|>];
+	named = DeleteDuplicates @ Catenate @ Cases[events, event_ /; MatchQ[event["Event"], "Message" | "Note" | "Activate" | "Deactivate" | "Participant"] :>
+		Switch[event["Event"],
+			"Message", {event["From"], event["To"]},
+			"Note", event["Participants"],
+			"Participant", {event["Name"]},
+			_, {event["Participant"]}
+		]
+	];
+	<|
+		"Type" -> "Sequence",
+		"Title" -> FirstCase[events, KeyValuePattern[{"Event" -> "Title", "Text" -> text_}] :> text, title],
+		"Participants" -> AssociationMap[Lookup[declared, #, <|"Label" -> #, "Kind" -> "Participant"|>] &, named],
+		"Autonumber" -> MemberQ[events, KeyValuePattern["Event" -> "Autonumber"]],
+		"Events" -> DeleteCases[events, KeyValuePattern["Event" -> "Participant" | "Title" | "Autonumber"]]
+	|>
+]
+
+$signalArrows = <|
+	"->>" -> {"Solid", "Arrow", "None"}, "-->>" -> {"Dotted", "Arrow", "None"}, "->" -> {"Solid", "None", "None"},
+	"-->" -> {"Dotted", "None", "None"}, "-x" -> {"Solid", "Cross", "None"}, "--x" -> {"Dotted", "Cross", "None"},
+	"-)" -> {"Solid", "Open", "None"}, "--)" -> {"Dotted", "Open", "None"}, "<<->>" -> {"Solid", "Arrow", "Arrow"},
+	"<<-->>" -> {"Dotted", "Arrow", "Arrow"}
+|>
+
+sequenceEvents["Participant" -> {kind_String, name_String, rest___}] := {<|
+	"Event" -> "Participant", "Name" -> name, "Label" -> FirstCase[{rest}, ("Alias" -> {alias_}) :> alias, name],
+	"Kind" -> If[kind === "actor", "Actor", "Participant"]
+|>}
+sequenceEvents["Message" -> {from_String, arrow_String, to_String, rest___}] := Join[
+	{<|"Event" -> "Message", "From" -> from, "To" -> to, "Text" -> FirstCase[{rest}, ("Text" -> {text_}) :> text, ""],
+		AssociationThread[{"Line", "Head", "Tail"}, $signalArrows[arrow]]|>},
+	Replace[FirstCase[{rest}, ("Activation" -> {sign_}) :> sign, None], {
+		"+" -> {<|"Event" -> "Activate", "Participant" -> to|>},
+		"-" -> {<|"Event" -> "Deactivate", "Participant" -> from|>},
+		None -> {}
+	}]
+]
+sequenceEvents["Note" -> {"Placement" -> {side_String, names__String}, rest___}] := {<|
+	"Event" -> "Note",
+	"Placement" -> Which[side === "over", "Over", StringStartsQ[side, "left"], "LeftOf", True, "RightOf"],
+	"Participants" -> {names},
+	"Text" -> FirstCase[{rest}, ("Text" -> {text_}) :> text, ""]
+|>}
+sequenceEvents["Activation" -> {keyword_String, name_String}] :=
+	{<|"Event" -> If[keyword === "activate", "Activate", "Deactivate"], "Participant" -> name|>}
+sequenceEvents["Title" -> {text_String}] := {<|"Event" -> "Title", "Text" -> text|>}
+sequenceEvents["Autonumber" -> _] := {<|"Event" -> "Autonumber"|>}
+sequenceEvents["Block" -> {kind_String, rest___}] := Join[
+	{<|"Event" -> "BlockStart", "Kind" -> kind, "Label" -> FirstCase[{rest}, ("Label" -> {text_}) :> text, ""]|>},
+	Catenate[sequenceEvents /@ DeleteCases[{rest}, "Label" -> _]],
+	{<|"Event" -> "BlockEnd"|>}
+]
+sequenceEvents["Branch" -> {kind_String, rest___}] :=
+	{<|"Event" -> "BlockBranch", "Kind" -> kind, "Label" -> FirstCase[{rest}, ("Label" -> {text_}) :> text, ""]|>}
+sequenceEvents["Box" -> parts_List] := Catenate[sequenceEvents /@ DeleteCases[parts, "Label" -> _]]
+sequenceEvents[_] := {}
 
 (* ::Subsection:: *)
 (*Flowchart*)

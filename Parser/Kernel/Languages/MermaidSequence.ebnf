@@ -1,0 +1,48 @@
+(* Mermaid sequence diagrams, after sequence/parser/sequenceDiagram.jison *)
+
+<Sequence>       ::= <KwSequence> { <Terminator> [ <SeqStatement> ] }
+<KwSequence>     ::= "sequenceDiagram" ! <WordChar>
+
+<SeqStatement>   ::= <Comment> | <SeqParticipant> | <SeqNote> | <SeqActivation> | <SeqAutonumber> | <SeqTitle>
+                   | <SeqBlock> | <SeqBox> | <SeqDestroy> | <SeqLinks> | <Accessibility> | <SeqMessage>
+
+(* participant Name as Alias; create comes before the participant a message makes *)
+<SeqParticipant> ::= [ <KwCreate> ] <KwParticipant> <ActorName> [ <KwAs> <LineText> ]
+<KwParticipant>  ::= ( "participant" | "actor" ) ! <WordChar>
+<KwCreate>       ::= "create" ! <WordChar>
+<KwAs>           ::= "as" ! <WordChar>
+<SeqDestroy>     ::= <KwDestroy> <ActorName>
+<KwDestroy>      ::= "destroy" ! <WordChar>
+
+(* a name may hold spaces and single dashes; it stops before as, and before an arrow *)
+<ActorName>      ::= <ActorChar> { <ActorChar> | " " ! <KwAs> & <ActorChar> | "-" ! <ArrowEnd> & <ActorChar> }
+<ActorChar>      ::= <Any> - ( " " | "\t" | "\n" | "\r" | "<" | ">" | ":" | "," | ";" | "@" | "+" | "-" | "(" | ")" | "/" | "\\" | "#" | "%" )
+<ArrowEnd>       ::= "x" | ")" | "-" | ">"
+
+(* Alice ->> +Bob: text *)
+<SeqMessage>     ::= ! <KwEnd> <ActorName> <SignalArrow> [ <Activation> ] <ActorName> ":" [ <LineText> ]
+<SignalArrow>    ::= "<<-->>" | "<<->>" | "-->>" | "->>" | "--x" | "-x" | "--)" | "-)" | "-->" | "->"
+<Activation>     ::= "+" | "-"
+
+<SeqNote>        ::= <KwNote> <NotePlacement> ":" [ <LineText> ]
+<NotePlacement>  ::= <KwOver> <ActorName> [ "," <ActorName> ] | <KwSideOf> <ActorName>
+<KwNote>         ::= ( "Note" | "note" ) ! <WordChar>
+<KwOver>         ::= "over" ! <WordChar>
+<KwSideOf>       ::= ( "left" | "right" ) " " { " " } "of" ! <WordChar>
+
+<SeqActivation>  ::= <KwActivate> <ActorName>
+<KwActivate>     ::= ( "activate" | "deactivate" ) ! <WordChar>
+<SeqAutonumber>  ::= <KwAutonumber> <RestOfLine>
+<KwAutonumber>   ::= "autonumber" ! <WordChar>
+<SeqTitle>       ::= <KwTitle> [ ":" ] <LineText>
+<KwTitle>        ::= "title" ! <WordChar>
+<SeqLinks>       ::= <KwLinks> <RestOfLine>
+<KwLinks>        ::= ( "links" | "link" | "properties" | "details" ) ! <WordChar>
+
+(* loop, alt ... else, opt, par ... and, critical ... option, break and rect hold statements up to end *)
+<SeqBlock>       ::= <KwBlock> [ <LineText> ] { <Terminator> [ <SeqBranch> | <SeqStatement> ] } <KwEnd>
+<SeqBranch>      ::= <KwBranch> [ <LineText> ]
+<KwBlock>        ::= ( "loop" | "alt" | "opt" | "par_over" | "par" | "critical" | "break" | "rect" ) ! <WordChar>
+<KwBranch>       ::= ( "else" | "and" | "option" ) ! <WordChar>
+<SeqBox>         ::= <KwBox> [ <LineText> ] { <Terminator> [ <SeqStatement> ] } <KwEnd>
+<KwBox>          ::= "box" ! <WordChar>

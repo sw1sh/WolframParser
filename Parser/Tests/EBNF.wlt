@@ -480,3 +480,9 @@ VerificationTest[
     ],
     <|"name" -> {}, "number" -> {}, "string" -> {}, "comment" -> {}|>,
     TestID -> "EBNF tokens: a compiled rule matches what the rule matches read as a PEG, its classes from the reader"]
+
+VerificationTest[
+    Module[{g = EBNFParse["<stop> ::= \"end\"\n<name> ::= ! <stop> <letter> { <letter> }\n<letter> ::= \"a\" | ... | \"z\"", "Dialect" -> "Classic", "Tokens" -> {"stop", "name"}]},
+        {Parse[g["name"], "abc"], FailureQ[Parse[g["name"], "end"]]}],
+    {"abc", True},
+    TestID -> "EBNF classic: a token refers to a token defined before it"]

@@ -1,0 +1,40 @@
+(* Mermaid class diagrams, after class/parser/classDiagram.jison *)
+
+<Class>            ::= <KwClassDiagram> { <Terminator> [ <ClassStatement> ] }
+<KwClassDiagram>   ::= ( "classDiagram-v2" | "classDiagram" ) ! <WordChar>
+
+<ClassStatement>   ::= <Comment> | <ClassDirection> | <ClassNamespace> | <ClassBlock> | <ClassNote> | <ClassAnnotate>
+                     | <FlowClassDef> | <FlowStyle> | <ClassCss> | <FlowClick> | <Accessibility> | <ClassRelation> | <ClassMember>
+
+<ClassDirection>   ::= <KwDirection> <Direction>
+
+(* class Name~T~ ["label"] { members }; a member with parentheses is a method *)
+<ClassBlock>       ::= <KwClass> <ClassRef> [ <ClassLabel> ] [ ":::" <Word> ] [ <ClassBody> ]
+<ClassRef>         ::= ( <ClassName> | <BackQuoted> ) [ <Generic> ]
+<ClassName>        ::= <FlowIdChar> { <FlowIdChar> }
+<BackQuoted>       ::= "`" { <Any> - ( "`" | <NL> ) } "`"
+<Generic>          ::= "~" { <Any> - ( "~" | <NL> ) } "~"
+<ClassLabel>       ::= "[" <String> "]"
+<ClassBody>        ::= "{" [ <ClassBodyLine> ] { <NL> [ <ClassBodyLine> ] } "}"
+<ClassBodyLine>    ::= <Comment> | <Annotation> | <MemberText>
+<MemberText>       ::= <MemberChar> { <MemberChar> }
+<MemberChar>       ::= <Any> - ( <NL> | "}" )
+<Annotation>       ::= "<<" { <Any> - ( ">>" | <NL> ) } ">>"
+<ClassAnnotate>    ::= <Annotation> <ClassRef>
+
+(* Animal "1" <|-- "many" Duck : text; the ends of the line say what the relation is *)
+<ClassRelation>    ::= <ClassRef> [ <String> ] <Relation> [ <String> ] <ClassRef> [ ":" <LineText> ]
+<Relation>         ::= [ <RelationStart> ] <RelationLine> [ <RelationEnd> ]
+<RelationStart>    ::= "<|" | "<" | "*" | "o" | "()"
+<RelationEnd>      ::= "|>" | ">" | "*" | "o" ! <WordChar> | "()"
+<RelationLine>     ::= "--" | ".."
+
+(* Name : member *)
+<ClassMember>      ::= <ClassRef> ":" <LineText>
+
+<ClassNote>        ::= <KwNote> <KwFor> <ClassRef> <String> | <KwNote> <String>
+<KwFor>            ::= "for" ! <WordChar>
+<ClassNamespace>   ::= <KwNamespace> <ClassName> "{" { <Terminator> [ <ClassStatement> ] } "}"
+<KwNamespace>      ::= "namespace" ! <WordChar>
+<ClassCss>         ::= <KwCssClass> <String> <Word>
+<KwCssClass>       ::= "cssClass" ! <WordChar>

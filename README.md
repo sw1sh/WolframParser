@@ -42,7 +42,8 @@ KaTeX's screenshotter corpus ([`LaTeX.wl`](Parser/Kernel/LaTeX.wl)), a Markdown 
 ([`TPTP.wl`](Parser/Kernel/TPTP.wl)), the engine of string patterns
 ([`StringPatterns.wl`](Parser/Kernel/StringPatterns.wl)), and the AST vocabulary — `LeafNode` / `CallNode` /
 … / `ToCodeParser` ([`AST.wl`](Parser/Kernel/AST.wl)). A `Languages/` showcase builds six
-example front-ends (Calculator, JSON, Lisp, Lambda, Brainfuck, ABC), plus OpenQASM and the Wolfram Language itself, on the core;
+example front-ends (Calculator, JSON, Lisp, Lambda, Brainfuck, ABC), plus OpenQASM, Mermaid and the Wolfram Language itself, on the core;
+`MermaidDiagram` draws a Mermaid flowchart, sequence diagram, state diagram or class diagram as `Graphics`, read by a grammar and laid out in the kernel;
 `WolframLanguageHeld` reads the 7,000 sources of a Wolfram installation as the kernel's reader does, by a compiled lexer and
 a compiled parser over packed tokens, and `WolframLanguageHeldNext` reads a source one statement at a time, as `ToExpression`
 does, each statement's names made only when it is read and the kernel's syntax warnings with it; `WolframLanguageProgram`

@@ -1,0 +1,37 @@
+(* Mermaid state diagrams, after state/parser/stateDiagram.jison *)
+
+<State>            ::= <KwStateDiagram> { <Terminator> [ <StateStatement> ] }
+<KwStateDiagram>   ::= ( "stateDiagram-v2" | "stateDiagram" ) ! <WordChar>
+
+<StateStatement>   ::= <Comment> | <StateDirection> | <StateDeclaration> | <StateNote> | <StateHide> | <StateDivider>
+                     | <FlowClassDef> | <FlowClass> | <FlowStyle> | <Accessibility> | <StateTransition> | <StateDescription>
+
+<StateDirection>   ::= <KwDirection> <Direction>
+
+(* [*] --> Still : text; [*] is the start where a transition leaves it and the end where one enters it *)
+<StateTransition>  ::= <StateRef> <StateArrow> <StateRef> [ ":" <LineText> ]
+<StateDescription> ::= <StateRef> [ ":" <LineText> ]
+<StateRef>         ::= ( <StateStar> | <StateId> ) [ ":::" <StateId> ]
+<StateStar>        ::= "[*]"
+<StateId>          ::= <FlowIdChar> { <FlowIdChar> }
+<StateArrow>       ::= "-->"
+
+(* state "text" as name, state name <<choice>>, and a composite state: state name { ... } *)
+<StateDeclaration> ::= <KwState> <String> <KwAs> <StateId> [ <StateBody> ]
+                     | <KwState> <StateId> <StateKind>
+                     | <KwState> <StateId> [ <StateBody> ]
+<StateBody>        ::= "{" { <Terminator> [ <StateStatement> ] } "}"
+<StateKind>        ::= "<<fork>>" | "<<join>>" | "<<choice>>" | "[[fork]]" | "[[join]]" | "[[choice]]"
+<KwState>          ::= "state" ! <WordChar>
+
+(* the line -- between the regions of a concurrent state *)
+<StateDivider>     ::= "--" ! ( "-" | ">" )
+
+(* note right of name : text, or the lines up to end note *)
+<StateNote>        ::= <KwNote> <KwSideOf> <StateId> { <NL> <NoteLine> } <NL> <KwEndNote>
+                     | <KwNote> <KwSideOf> <StateId> ":" <LineText>
+<NoteLine>         ::= ! <KwEndNote> { <Any> - <NL> }
+<KwEndNote>        ::= "end" " " { " " } "note" ! <WordChar>
+
+<StateHide>        ::= <KwHide> <RestOfLine>
+<KwHide>           ::= ( "hide" | "scale" ) ! <WordChar>

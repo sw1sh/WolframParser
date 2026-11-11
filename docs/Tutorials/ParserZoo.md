@@ -3,7 +3,7 @@ Template: TechNote
 Name: ParserZoo
 Title: The Parser Zoo - language front-ends over a shared algebra
 Context: Wolfram`Parser`
-ContextPath: [Wolfram`Parser`Languages`Calculator`, Wolfram`Parser`Languages`JSON`, Wolfram`Parser`Languages`Lisp`, Wolfram`Parser`Languages`Lambda`, Wolfram`Parser`Languages`Brainfuck`, Wolfram`Parser`Languages`ABC`, Wolfram`Parser`Languages`WolframLanguage`]
+ContextPath: [Wolfram`Parser`Languages`Calculator`, Wolfram`Parser`Languages`JSON`, Wolfram`Parser`Languages`Lisp`, Wolfram`Parser`Languages`Lambda`, Wolfram`Parser`Languages`Brainfuck`, Wolfram`Parser`Languages`ABC`, Wolfram`Parser`Languages`Mermaid`, Wolfram`Parser`Languages`WolframLanguage`]
 Paclet: Wolfram/Parser
 URI: Wolfram/Parser/tutorial/ParserZoo
 Description: "A showcase suite that battle-tests Wolfram/Parser by building a spread of language front-ends - calculator, JSON, Lisp, lambda calculus, Brainfuck, ABC, the Wolfram Language itself - each grammar written once over a shared algebra and run two ways: with the language's meaningful actions, or with the shared ASTAlgebra to get a standard, CodeParser-shaped syntax tree."
@@ -153,6 +153,25 @@ ABCRun["fact = fact(t - 1) * t + (1 - t)\nprint fact", {5}]
 ```
 
 <!-- => {120} -->
+
+### Mermaid
+
+The diagram language of Markdown documents: a header line that names the diagram's type, then a statement to a line. Mermaid publishes its syntax as Jison files, a lexer with start conditions and an LALR grammar for each diagram type; [MermaidEBNF]() states it as one PEG for [EBNFParse](), and the front end reads flowcharts, sequence diagrams, state diagrams and class diagrams. The meaningful run is a picture: [MermaidDiagram]() lays the diagram out in layers and draws it as [Graphics](), in colors that switch with the notebook's appearance.
+
+- [MermaidAST]() parse to a standard AST, a [CallNode]() per statement
+- [MermaidRead]() read a diagram to plain data: its nodes, edges and groups
+- [MermaidDiagram]() draw a diagram as [Graphics]()
+- [MermaidGraph]() the [Graph]() of a flowchart, a state diagram or a class diagram
+- [MermaidGrammar]() the parser [EBNFParse]() generates from the grammar, parameterised over an algebra
+- [MermaidEBNF]() the grammar
+- [MermaidSemantic]() the algebra that builds the diagram as nested rules
+
+```wl
+MermaidDiagram["graph LR
+    A[Source] --> B{Parses?}
+    B -->|yes| C([Drawing])
+    B -->|no| D[Failure]"]
+```
 
 ### Wolfram Language
 

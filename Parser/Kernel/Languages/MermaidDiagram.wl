@@ -26,17 +26,17 @@ $fontSize = 13
 $fontFamily = "Source Sans Pro"
 
 (* the width of a character, in units of the font size *)
-characterWidth[character_String] := Which[
-	StringMatchQ[character, "i" | "j" | "l" | "I" | "." | "," | ":" | ";" | "'" | "|" | "!"], 0.27,
-	StringMatchQ[character, "f" | "t" | "r" | " " | "(" | ")" | "[" | "]" | "{" | "}" | "-" | "/" | "\\" | "*" | "\""], 0.34,
-	StringMatchQ[character, "m" | "w" | "M" | "W" | "@" | "%"], 0.84,
-	StringMatchQ[character, CharacterRange["A", "Z"]], 0.62,
-	StringMatchQ[character, CharacterRange["a", "z"] | DigitCharacter], 0.52,
-	First[ToCharacterCode[character]] >= 11904, 1.,
-	True, 0.58
+$characterWidths = Association[
+	Thread[CharacterRange["A", "Z"] -> 0.6],
+	Thread[Join[CharacterRange["a", "z"], CharacterRange["0", "9"]] -> 0.5],
+	Thread[Characters["ijlI.,:;'|!"] -> 0.25],
+	Thread[Characters["ftr ()[]{}-/\\*\""] -> 0.33],
+	Thread[Characters["mwMW@%"] -> 0.8]
 ]
 
-lineWidth[line_String, size_] := 1.08 size Total[characterWidth /@ Characters[line]]
+characterWidth[character_String] := Lookup[$characterWidths, character, If[First[ToCharacterCode[character]] >= 11904, 1., 0.56]]
+
+lineWidth[line_String, size_] := size Total[characterWidth /@ Characters[line]]
 
 (* the {width, height} a text takes at a font size *)
 textSize[text_String, size_ : $fontSize] := With[{lines = StringSplit[text, "\n", All]},
@@ -638,10 +638,17 @@ linkPrimitives[link_, route_, outlines_, placed_] := Module[{
 		{
 			{lineDirectives[link, $theme["Line"]], smoothCurve[points]},
 			headPrimitives[link["Head"], end, endDirection, color],
-			headPrimitives[link["Tail"], start, startDirection, color]
+			headPrimitives[link["Tail"], start, startDirection, color],
+			endLabel[Lookup[link, "FromLabel", None], start, startDirection, headLength[link["Tail"]]],
+			endLabel[Lookup[link, "ToLabel", None], end, endDirection, headLength[link["Head"]]]
 		}
 	]
 ]
+
+(* the text at an end of a link, a multiplicity: beside the line, clear of the head *)
+endLabel[text_String, point_, direction_, head_] :=
+	textAt[text, point - (head + 12) direction + (6 + First[textSize[text, $fontSize - 2]] / 2) {-1, 1} Reverse[direction], $theme["Text"], $fontSize - 2]
+endLabel[_, _, _, _] := {}
 
 (* a link from a box to itself: a loop at its side *)
 loopPrimitives[link_, {center : {cx_, cy_}, {w_, h_}}] := With[{
@@ -772,6 +779,324 @@ flowScene[data_] := <|
 |>
 
 (* ::Section:: *)
+(*State diagrams*)
+
+(* a note: a box of its own, joined to what it is about by a dotted line *)
+noteBox[text_String, parent_] := With[{size = textSize[text] + {20, 14}},
+	<|
+		"Size" -> size, "Parent" -> parent, "Kind" -> "Rectangle",
+		"Draw" -> Function[center, {
+			{FaceForm[$theme["NoteFill"]], EdgeForm[Directive[$theme["NoteEdge"], AbsoluteThickness[1]]], Polygon[roundedOutline[center, size, 3]]},
+			textAt[text, center, $theme["Text"]]
+		}]
+	|>
+]
+
+noteLink[from_, to_] := <|"From" -> from, "To" -> to, "Length" -> 1, "Label" -> None, "Line" -> "Dotted", "Head" -> "None", "Tail" -> "None", "Style" -> <||>|>
+
+stateBox[data_, direction_][state_] := With[{
+	style = shapeStyle[mergedStyle[data, state], $theme["NodeFill"], $theme["NodeEdge"], $theme["Text"]],
+	text = If[state["Descriptions"] === {}, state["Label"], StringRiffle[If[state["Label"] === "" || Length[state["Descriptions"]] === 1, state["Descriptions"], Prepend[state["Descriptions"], state["Label"]]], "\n"]]
+},
+	With[{
+		kind = Replace[state["Kind"], {"State" -> "Rounded", "Fork" | "Join" -> "Bar"}],
+		size = Switch[state["Kind"],
+			"Start", {16, 16},
+			"End", {20, 20},
+			"Choice", {30, 30},
+			"Fork" | "Join", If[MatchQ[direction, "LR" | "RL"], {8, 70}, {70, 8}],
+			_, shapeSize["Rounded", textSize[text]]
+		]
+	},
+		<|
+			"Size" -> size, "Parent" -> state["Parent"], "Kind" -> kind,
+			"Draw" -> Function[center, {
+				shapePrimitives[kind, center, size, style],
+				If[state["Kind"] === "State", textAt[text, center, style["Text"]], {}]
+			}]
+		|>
+	]
+]
+
+stateScene[data_] := With[{
+	composite = Select[data["States"], #Kind === "Composite" &],
+	notes = Association @ MapIndexed["note_" <> ToString[First[#2]] -> #1 &, data["Notes"]]
+},
+	<|
+		"Direction" -> data["Direction"],
+		"Boxes" -> Join[
+			Map[stateBox[data, data["Direction"]], KeyDrop[data["States"], Keys[composite]]],
+			Map[noteBox[#Text, Lookup[data["States"], #State, <|"Parent" -> None|>]["Parent"]] &, notes]
+		],
+		"Groups" -> Map[<|"Title" -> #Label, "Parent" -> #Parent, "Direction" -> None, "Style" -> mergedStyle[data, #]|> &, composite],
+		"Links" -> Join[
+			Map[<|"From" -> #From, "To" -> #To, "Length" -> 1, "Label" -> #Label, "Line" -> "Normal", "Head" -> "Arrow", "Tail" -> "None", "Style" -> <||>|> &, data["Transitions"]],
+			KeyValueMap[noteLink[#2["State"], #1] &, notes]
+		]
+	|>
+]
+
+(* ::Section:: *)
+(*Class diagrams*)
+
+(* a class: its name under its annotations, then its attributes, then its methods, a line between the parts *)
+classBox[data_][class_] := Module[{
+	style = shapeStyle[mergedStyle[data, class], $theme["NodeFill"], $theme["NodeEdge"], $theme["Text"]],
+	head = Append[Map["\[LeftGuillemet]" <> # <> "\[RightGuillemet]" &, class["Annotations"]], class["Label"]],
+	row = 1.35 $fontSize, width, parts, heights, size
+},
+	parts = {head, class["Attributes"], class["Methods"]};
+	width = Max[Max[First[textSize[#]] & /@ Catenate[parts], 40] + 32, First[textSize[class["Label"], $fontSize + 1]] + 28];
+	heights = Map[Max[Length[#], 0.6] row + 10 &, parts];
+	size = {width, Total[heights]};
+	<|
+		"Size" -> size, "Parent" -> class["Parent"], "Kind" -> "Rectangle",
+		"Draw" -> Function[center,
+			With[{left = First[center] - width / 2, top = Last[center] + Last[size] / 2, tops = Accumulate[Prepend[Most[heights], 0]]},
+				{
+					shapePrimitives["Rectangle", center, size, style],
+					{style["Edge"], Map[Line[{{left, top - #}, {left + width, top - #}}] &, Rest[tops]]},
+					MapIndexed[
+						textAt[#1, {First[center], top - 5 - row (First[#2] - 0.5)}, style["Text"], $fontSize, If[First[#2] === Length[head], FontWeight -> "DemiBold", FontSlant -> "Italic"]] &,
+						head
+					],
+					MapThread[
+						Function[{lines, partTop},
+							MapIndexed[textFrom[#1, {left + 10, top - partTop - 5 - row (First[#2] - 0.5)}, style["Text"]] &, lines]
+						],
+						{Rest[parts], Rest[tops]}
+					]
+				}
+			]
+		]
+	|>
+]
+
+classScene[data_] := With[{notes = Association @ MapIndexed["note_" <> ToString[First[#2]] -> #1 &, data["Notes"]]},
+	<|
+		"Direction" -> data["Direction"],
+		"Boxes" -> Join[Map[classBox[data], data["Classes"]], Map[noteBox[#Text, None] &, notes]],
+		"Groups" -> data["Namespaces"],
+		"Links" -> Join[
+			Map[Join[#, <|"Length" -> 1, "Line" -> Replace[#Line, "Solid" -> "Normal"], "Style" -> <||>|>] &, data["Relations"]],
+			Cases[Normal[notes], (name_ -> note_) /; note["Class"] =!= None :> noteLink[note["Class"], name]]
+		]
+	|>
+]
+
+(* ::Section:: *)
+(*Sequence diagrams*)
+
+(* A column for each participant, in order, and a row for each event, down the page. The primitives
+	are sown by layer: the frames of blocks, the lifelines and activation bars, the messages, the notes. *)
+
+$headerHeight = 38
+
+participantSize[participant_] := {Max[First[textSize[participant["Label"]]] + 28, 72], $headerHeight}
+
+(* the header of a participant, its box centered at a point; an actor is a figure over its name *)
+participantPrimitives[participant_, {x_, y_}] := If[participant["Kind"] === "Actor",
+	{
+		{$theme["NodeEdge"], AbsoluteThickness[1.4], CapForm["Round"],
+			Line[{{x, y + 6}, {x, y - 3}}], Line[{{x - 9, y + 3}, {x + 9, y + 3}}], Line[{{x - 8, y - 12}, {x, y - 3}, {x + 8, y - 12}}]},
+		{FaceForm[$theme["NodeFill"]], EdgeForm[Directive[$theme["NodeEdge"], AbsoluteThickness[1.4]]], Disk[{x, y + 11}, 5.5]},
+		textAt[participant["Label"], {x, y - 22}, $theme["Text"]]
+	},
+	{
+		{FaceForm[$theme["NodeFill"]], EdgeForm[Directive[$theme["NodeEdge"], AbsoluteThickness[1.2]]], Polygon[roundedOutline[{x, y}, participantSize[participant], 4]]},
+		textAt[participant["Label"], {x, y}, $theme["Text"]]
+	}
+]
+
+(* the centers of the columns: neighbors far enough apart for their headers and for the text that goes between them *)
+columnCenters[data_] := Module[{
+	names = Keys[data["Participants"]], widths, index, between, spans, centers
+},
+	widths = First @* participantSize /@ Values[data["Participants"]];
+	index = AssociationThread[names, Range[Length[names]]];
+	between = Table[(widths[[i]] + widths[[i + 1]]) / 2 + 28, {i, Length[names] - 1}];
+	(* what each event needs between the columns it lies on: {first column, last column, width} *)
+	spans = Cases[data["Events"], event_ :> With[{width = First[textSize[Lookup[event, "Text", ""]]]},
+		Switch[{event["Event"], Lookup[event, "Placement", None]},
+			{"Message", _}, With[{a = index[event["From"]], b = index[event["To"]]}, If[a === b, {a, a + 1, width + 62}, {Min[a, b], Max[a, b], width + 36}]],
+			{"Note", "RightOf"}, With[{a = index[First[event["Participants"]]]}, {a, a + 1, width + 44}],
+			{"Note", "LeftOf"}, With[{a = index[First[event["Participants"]]]}, {a - 1, a, width + 44}],
+			_, Nothing
+		]
+	]];
+	between = Fold[
+		Function[{gaps, span},
+			With[{range = Range[Max[span[[1]], 1], Min[span[[2]] - 1, Length[gaps]]]},
+				If[range === {} || Total[gaps[[range]]] >= span[[3]], gaps, ReplacePart[gaps, Thread[range -> gaps[[range]] + (span[[3]] - Total[gaps[[range]]]) / Length[range]]]]
+			]
+		],
+		between,
+		SortBy[spans, #[[2]] - #[[1]] &]
+	];
+	centers = Accumulate[Prepend[between, 0.]];
+	AssociationThread[names, centers]
+]
+
+sequencePrimitives[data_] := Module[{
+	columns = columnCenters[data], y, lastLine, active = <||>, blocks = {}, number = 0, left, right, grow, sown, primitives, bottom,
+	header = $headerHeight + If[MemberQ[Values[data["Participants"]][[All, "Kind"]], "Actor"], 12, 0]
+},
+	If[Length[columns] === 0, Return[{{}, {0, 0}}, Module]];
+	left = Min[KeyValueMap[columns[#1] - First[participantSize[#2]] / 2 &, data["Participants"]]];
+	right = Max[KeyValueMap[columns[#1] + First[participantSize[#2]] / 2 &, data["Participants"]]];
+	(* what is drawn from x1 to x2 widens the drawing and every open block *)
+	grow[x1_, x2_] := (
+		left = Min[left, x1];
+		right = Max[right, x2];
+		blocks = Map[Append[#, {"Left" -> Min[#Left, x1], "Right" -> Max[#Right, x2]}] &, blocks]
+	);
+	y = header + 16;
+	lastLine = y;
+	sown = Reap[
+		Scan[
+			Function[event,
+				Switch[event["Event"],
+					"Message",
+						number++;
+						With[{from = columns[event["From"]], to = columns[event["To"]], size = textSize[event["Text"]], color = $theme["Line"]},
+							With[{directives = Directive[color, AbsoluteThickness[1.3], If[event["Line"] === "Dotted", AbsoluteDashing[{3, 3}], AbsoluteDashing[{}]], CapForm["Round"], JoinForm["Round"]]},
+								If[from == to,
+									y += 8;
+									Sow[{
+										{directives, Line[{{from, -y}, {from + 34, -y}, {from + 34, -y - 22}, {from + headLength[event["Head"]], -y - 22}}]},
+										headPrimitives[event["Head"], {from, -y - 22}, {-1., 0.}, color],
+										If[event["Text"] === "", {}, textFrom[event["Text"], {from + 42, -y - 11}, $theme["Text"]]],
+										If[TrueQ[data["Autonumber"]], numberPrimitives[number, {from, -y}], {}]
+									}, "Messages"];
+									grow[from - 10, from + 48 + First[size]];
+									y += 22;
+									lastLine = y;
+									y += 16,
+									y += Last[size] + 10;
+									With[{direction = {Sign[to - from], 0.}},
+										Sow[{
+											{directives, Line[{{from, -y} + headLength[event["Tail"]] direction, {to, -y} - headLength[event["Head"]] direction}]},
+											headPrimitives[event["Head"], {to, -y}, direction, color],
+											headPrimitives[event["Tail"], {from, -y}, -direction, color],
+											If[event["Text"] === "", {}, textAt[event["Text"], {(from + to) / 2, -y + Last[size] / 2 + 5}, $theme["Text"]]],
+											If[TrueQ[data["Autonumber"]], numberPrimitives[number, {from, -y}], {}]
+										}, "Messages"]
+									];
+									grow[Min[from, to] - 10, Max[from, to] + 10];
+									lastLine = y;
+									y += 16
+								]
+							]
+						],
+					"Note",
+						With[{size = textSize[event["Text"]] + {18, 12}, xs = columns /@ event["Participants"]},
+							With[{span = Switch[event["Placement"],
+								"RightOf", {First[xs] + 14, First[xs] + 14 + First[size]},
+								"LeftOf", {First[xs] - 14 - First[size], First[xs] - 14},
+								_, With[{width = Max[First[size], Max[xs] - Min[xs] + 40]}, Mean[xs] + {-width, width} / 2]
+							]},
+								y += 4;
+								Sow[{
+									{FaceForm[$theme["NoteFill"]], EdgeForm[Directive[$theme["NoteEdge"], AbsoluteThickness[1]]], Polygon[roundedOutline[{Mean[span], -y - Last[size] / 2}, {span[[2]] - span[[1]], Last[size]}, 3]]},
+									textAt[event["Text"], {Mean[span], -y - Last[size] / 2}, $theme["Text"]]
+								}, "Notes"];
+								grow @@ span;
+								y += Last[size] + 14
+							]
+						],
+					"Activate",
+						active[event["Participant"]] = Append[Lookup[active, event["Participant"], {}], lastLine],
+					"Deactivate",
+						With[{open = Lookup[active, event["Participant"], {}]},
+							If[open =!= {},
+								Sow[activationBar[columns[event["Participant"]], Last[open], lastLine, Length[open]], "Bars"];
+								active[event["Participant"]] = Most[open]
+							]
+						],
+					"BlockStart",
+						y += 6;
+						blocks = Append[blocks, <|"Top" -> y, "Kind" -> event["Kind"], "Label" -> event["Label"], "Left" -> Infinity, "Right" -> -Infinity, "Branches" -> {}|>];
+						y += 28,
+					"BlockBranch",
+						If[blocks =!= {},
+							y += 2;
+							blocks = Append[Most[blocks], Append[Last[blocks], "Branches" -> Append[Last[blocks]["Branches"], {y, event["Label"]}]]];
+							y += 24
+						],
+					"BlockEnd",
+						If[blocks =!= {},
+							With[{block = Last[blocks]},
+								With[{x1 = If[block["Left"] === Infinity, Min[columns] - 20, block["Left"]] - 50, x2 = If[block["Right"] === -Infinity, Max[columns] + 20, block["Right"]] + 12},
+									blocks = Most[blocks];
+									Sow[blockFrame[block, x1, x2, y], "Frames"];
+									grow[x1, x2];
+									y += 14
+								]
+							]
+						],
+					_,
+						Null
+				]
+			],
+			data["Events"]
+		],
+		{"Frames", "Bars", "Messages", "Notes"}
+	];
+	bottom = y + 6;
+	primitives = {
+		KeyValueMap[{$theme["GroupEdge"], AbsoluteThickness[1], AbsoluteDashing[{4, 4}], Line[{{columns[#1], -header}, {columns[#1], -bottom}}]} &, data["Participants"]],
+		sown[[2, 2]],
+		(* a participant still active at the end is active to the end *)
+		KeyValueMap[Function[{name, open}, MapIndexed[activationBar[columns[name], #1, bottom - 6, First[#2]] &, open]], active],
+		sown[[2, 1]],
+		sown[[2, 3]],
+		sown[[2, 4]],
+		KeyValueMap[participantPrimitives[#2, {columns[#1], -header + $headerHeight / 2}] &, data["Participants"]],
+		KeyValueMap[participantPrimitives[#2, {columns[#1], -bottom - $headerHeight / 2 - If[#2["Kind"] === "Actor", 12, 0]}] &, data["Participants"]]
+	};
+	{Translate[primitives, {-left, 0}], {right - left, bottom + header}}
+]
+
+activationBar[x_, top_, bottom_, depth_] :=
+	{FaceForm[$theme["LabelFill"]], EdgeForm[Directive[$theme["NodeEdge"], AbsoluteThickness[1]]], Rectangle[{x - 5 + 4 (depth - 1), -Max[bottom, top + 8]}, {x + 5 + 4 (depth - 1), -top}]}
+
+numberPrimitives[number_, {x_, y_}] := {
+	{FaceForm[$theme["Solid"]], EdgeForm[None], Disk[{x, y}, 8]},
+	textAt[ToString[number], {x, y}, LightDarkSwitched[GrayLevel[1], GrayLevel[0.1]], $fontSize - 3, FontWeight -> "DemiBold"]
+}
+
+(* the text of a block or a branch between brackets, on a ground of its own, since a lifeline may pass behind it *)
+bracketLabel[text_String, {x_, y_}] := With[{size = textSize["[" <> text <> "]", $fontSize - 1]},
+	{
+		{FaceForm[$theme["LabelFill"]], EdgeForm[None], Polygon[roundedOutline[{x + First[size] / 2, y}, size + {6, 2}, 3]]},
+		textFrom["[" <> text <> "]", {x, y}, $theme["Text"], $fontSize - 1]
+	}
+]
+
+(* the frame of a block from its top to y: its kind in a tab at the corner, its label beside it, a dashed line at each branch *)
+blockFrame[block_, x1_, x2_, y_] := With[{tab = First[textSize[block["Kind"], $fontSize - 1]] + 14},
+	{
+		If[block["Kind"] === "rect",
+			{FaceForm[$theme["GroupFill"]], EdgeForm[None], Rectangle[{x1, -y}, {x2, -block["Top"]}]},
+			{
+				{FaceForm[None], EdgeForm[Directive[$theme["GroupEdge"], AbsoluteThickness[1.1]]], Rectangle[{x1, -y}, {x2, -block["Top"]}]},
+				{FaceForm[$theme["LabelFill"]], EdgeForm[Directive[$theme["GroupEdge"], AbsoluteThickness[1.1]]],
+					Polygon[{{x1, -block["Top"]}, {x1 + tab, -block["Top"]}, {x1 + tab, -block["Top"] - 13}, {x1 + tab - 7, -block["Top"] - 20}, {x1, -block["Top"] - 20}}]},
+				textFrom[block["Kind"], {x1 + 6, -block["Top"] - 10}, $theme["Text"], $fontSize - 1, FontWeight -> "DemiBold"],
+				If[block["Label"] === "", {}, bracketLabel[block["Label"], {x1 + tab + 8, -block["Top"] - 10}]],
+				Map[
+					{
+						{$theme["GroupEdge"], AbsoluteThickness[1], AbsoluteDashing[{4, 3}], Line[{{x1, -First[#]}, {x2, -First[#]}}]},
+						If[Last[#] === "", {}, bracketLabel[Last[#], {x1 + 8, -First[#] - 12}]]
+					} &,
+					block["Branches"]
+				]
+			}
+		]
+	}
+]
+
+(* ::Section:: *)
 (*MermaidDiagram and MermaidGraph*)
 
 Options[MermaidDiagram] = Options[Graphics]
@@ -783,21 +1108,33 @@ MermaidDiagram[source_String, options : OptionsPattern[]] := With[{data = Mermai
 MermaidDiagram[data_Association, options : OptionsPattern[]] /; data["Type"] === "Flowchart" :=
 	drawing[Sequence @@ scenePrimitives[flowScene[data]], data["Title"], {options}]
 
+MermaidDiagram[data_Association, options : OptionsPattern[]] /; data["Type"] === "State" :=
+	drawing[Sequence @@ scenePrimitives[stateScene[data]], data["Title"], {options}]
+
+MermaidDiagram[data_Association, options : OptionsPattern[]] /; data["Type"] === "Class" :=
+	drawing[Sequence @@ scenePrimitives[classScene[data]], data["Title"], {options}]
+
+MermaidDiagram[data_Association, options : OptionsPattern[]] /; data["Type"] === "Sequence" :=
+	drawing[Sequence @@ sequencePrimitives[data], data["Title"], {options}]
+
 (* the Graph of a diagram of boxes and links: a vertex for each box, labeled, and a directed edge for each link *)
 MermaidGraph[source_String, options : OptionsPattern[Graph]] := With[{data = MermaidRead[source]},
 	If[FailureQ[data], data, MermaidGraph[data, options]]
 ]
 
-MermaidGraph[data_Association, options : OptionsPattern[Graph]] /; data["Type"] === "Flowchart" := With[{
-	vertices = Union[Keys[data["Nodes"]], Catenate[{#From, #To} & /@ data["Edges"]]]
+MermaidGraph[data_Association, options : OptionsPattern[Graph]] /; MatchQ[data["Type"], "Flowchart" | "State" | "Class"] := With[{
+	boxes = data[Replace[data["Type"], {"Flowchart" -> "Nodes", "State" -> "States", "Class" -> "Classes"}]],
+	links = data[Replace[data["Type"], {"Flowchart" -> "Edges", "State" -> "Transitions", "Class" -> "Relations"}]]
 },
-	Graph[
-		vertices,
-		DirectedEdge[#From, #To] & /@ data["Edges"],
-		options,
-		VertexLabels -> Map[# -> Lookup[data["Nodes"], #, <|"Label" -> #|>]["Label"] &, vertices],
-		EdgeLabels -> DeleteDuplicatesBy[Cases[data["Edges"], edge_ /; StringQ[edge["Label"]] :> DirectedEdge[edge["From"], edge["To"]] -> edge["Label"]], First],
-		GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Replace[data["Direction"], {"TB" -> Top, "BT" -> Bottom, "LR" -> Left, "RL" -> Right}]}
+	With[{vertices = DeleteDuplicates[Join[Keys[boxes], Catenate[{#From, #To} & /@ links]]]},
+		Graph[
+			vertices,
+			DirectedEdge[#From, #To] & /@ links,
+			options,
+			VertexLabels -> Map[# -> Lookup[boxes, #, <|"Label" -> #|>]["Label"] &, vertices],
+			EdgeLabels -> DeleteDuplicatesBy[Cases[links, link_ /; StringQ[link["Label"]] :> DirectedEdge[link["From"], link["To"]] -> link["Label"]], First],
+			GraphLayout -> {"LayeredDigraphEmbedding", "Orientation" -> Replace[data["Direction"], {"TB" -> Top, "BT" -> Bottom, "LR" -> Left, "RL" -> Right}]}
+		]
 	]
 ]
 
