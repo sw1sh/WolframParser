@@ -1358,3 +1358,125 @@ VerificationTest[
     {ParserCombinator, True, {}},
     TestID -> "LaTeX: the compiled parser asset is current and agrees with the grammar"
 ]
+
+
+(* === kets, bras, moduli and norms in every group (WolframInstitute/MarkdownToNotebook#113) ===
+   A ket is a bar, its content and a lone \rangle, so each row of the grammar
+   that can hold one reads a loose closing delimiter. The sweep crosses every
+   Dirac and bar construct with every delimiter form: each parses, and folds to
+   the templates it folds to on its own. *)
+
+latexDiracConstructs = {
+    {"|x\\rangle", {"Ket"}}, {"\\langle x|", {"Bra"}}, {"\\langle x|y\\rangle", {"BraKet"}},
+    {"\\langle x|A|y\\rangle", {"Bra", "Ket"}}, {"|x\\rangle\\langle y|", {"Bra", "Ket"}},
+    {"|x|", {}}, {"|\\langle x|y\\rangle|^2", {"BraKet"}}, {"|\\langle x|A|y\\rangle|", {"Bra", "Ket"}},
+    {"\\|x\\|", {}}, {"\\||x\\rangle\\|^2", {"Ket"}},
+    {"\\frac{a}{2}|x\\rangle+b|y\\rangle", {"Ket", "Ket"}}, {"|\\frac{a}{2}\\rangle", {"Ket"}}, {"\\langle\\frac{a}{2}|", {"Bra"}},
+    {"|{-\\alpha}\\rangle", {"Ket"}}, {"|x\\rangle^{\\otimes n}", {"Ket"}}, {"|\\psi\\rangle_{AB}", {"Ket"}}, {"\\lvert x\\rangle", {"Ket"}},
+    {"\\langle x|+\\langle y|", {"Bra", "Bra"}}, {"a\\langle x|-b\\langle y|", {"Bra", "Bra"}},
+    {"\\langle x|\\otimes\\langle y|", {"Bra", "Bra"}}, {"\\langle x|\\langle y|", {"Bra", "Bra"}},
+    {"|x\\rangle\\langle x|+|y\\rangle\\langle y|", {"Bra", "Bra", "Ket", "Ket"}},
+    {"\\cos\\frac{\\vartheta}{2}|0\\rangle+\\sin\\frac{\\vartheta}{2}|1\\rangle", {"Ket", "Ket"}},
+    {"2|s\\rangle\\langle s|-1", {"Bra", "Ket"}},
+    {"\\left|x\\right\\rangle", {}}, {"\\left\\langle x\\right|", {}}, {"\\lvert x\\rvert", {}}, {"\\lVert x\\rVert", {}},
+    {"\\lfloor x\\rfloor+|y\\rangle", {"Ket"}}, {"\\lceil x\\rceil\\rfloor", {}},
+    {"x\\in[0,1)", {}}, {"(a,b]\\cup[c,d)", {}}
+}
+latexDelimiterForms = {
+    # &, "(" <> # <> ")" &, "[" <> # <> "]" &, "\\{" <> # <> "\\}" &, "{" <> # <> "}" &,
+    "\\left(" <> # <> "\\right)" &, "\\left[" <> # <> "\\right]" &, "\\left\\{" <> # <> "\\right\\}" &,
+    "\\left|" <> # <> "\\right|" &, "\\left\\|" <> # <> "\\right\\|" &, "\\left." <> # <> "\\right)" &,
+    "\\left\\langle " <> # <> "\\right\\rangle" &,
+    "\\bigl(" <> # <> "\\bigr)" &, "\\Big[" <> # <> "\\Big]" &, "\\bigg\\{" <> # <> "\\bigg\\}" &, "\\Bigg(" <> # <> "\\Bigg)" &,
+    "\\frac{" <> # <> "}{2}" &, "\\frac{1}{" <> # <> "}" &, "x_{" <> # <> "}" &, "e^{" <> # <> "}" &, "\\sqrt{" <> # <> "}" &,
+    "\\sqrt[" <> # <> "]{2}" &, "\\text{if }" <> # &, "\\sum_k" <> # &,
+    "\\begin{pmatrix}" <> # <> " & 1 \\\\ 0 & 1\\end{pmatrix}" &, "\\begin{cases}" <> # <> " & x>0 \\\\ 0 & x<0\\end{cases}" &,
+    "\\begin{aligned} a &= " <> # <> " \\\\ &= 0\\end{aligned}" &,
+    "\\left(a\\left[" <> # <> "\\right]\\right)" &, "(a+\\left(" <> # <> "\\right))" &, "\\left(a(" <> # <> ")\\right)" &,
+    "(a[" <> # <> "])" &, "\\left\\{\\frac{1}{2}\\left(" <> # <> "\\right)\\right\\}" &
+}
+latexTemplates[boxes_] := Sort @ Cases[boxes, TemplateBox[_, name_String] :> name, {0, Infinity}]
+
+VerificationTest[
+    (* each construct, on its own, folds to its templates *)
+    Select[latexDiracConstructs, latexTemplates[LaTeXMathParse[First[#]]] =!= Last[#] &],
+    {},
+    TestID -> "LaTeX #113: each Dirac and bar construct folds to its templates"
+]
+
+VerificationTest[
+    (* and does so inside every delimiter form; none fails to parse *)
+    Select[
+        Flatten[Outer[{#2[First[#1]], Last[#1]} &, latexDiracConstructs, latexDelimiterForms, 1], 1],
+        With[{boxes = LaTeXMathParse[First[#]]}, FailureQ[boxes] || latexTemplates[boxes] =!= Last[#]] &
+    ][[All, 1]],
+    {},
+    TestID -> "LaTeX #113: every Dirac and bar construct parses and folds inside every delimiter form"
+]
+
+VerificationTest[
+    (* a modulus and a norm keep their bars inside every delimiter form *)
+    {Select[latexDelimiterForms, Count[LaTeXMathParse[#["|x|+1"]], "\[LeftBracketingBar]" | "\[RightBracketingBar]", {0, Infinity}] < 2 &] // Length,
+     Select[latexDelimiterForms, Count[LaTeXMathParse[#["\\|x\\|+1"]], "\[DoubleVerticalBar]", {0, Infinity}] < 2 &] // Length,
+     Select[latexDelimiterForms, Count[LaTeXMathParse[#["\\lVert x\\rVert+1"]], "\[LeftDoubleBracketingBar]" | "\[RightDoubleBracketingBar]", {0, Infinity}] < 2 &] // Length},
+    {0, 0, 0},
+    TestID -> "LaTeX #113: a modulus and a norm keep their bars inside every delimiter form"
+]
+
+VerificationTest[
+    {LaTeXMathParse["\\left(|0\\rangle\\right)"], LaTeXMathParse["\\left(a|0\\rangle\\right)"], LaTeXMathParse["\\left(|0\\rangle+|1\\rangle\\right)"],
+     LaTeXMathParse["(|0\\rangle+|1\\rangle)"], LaTeXMathParse["\\left[\\langle x|+\\langle y|\\right]"]},
+    {RowBox[{"(", TemplateBox[{"0"}, "Ket"], ")"}],
+     RowBox[{"(", StyleBox["a", "TI"], TemplateBox[{"0"}, "Ket"], ")"}],
+     RowBox[{"(", TemplateBox[{"0"}, "Ket"], "+", TemplateBox[{"1"}, "Ket"], ")"}],
+     RowBox[{StyleBox["(", SpanMaxSize -> 1], TemplateBox[{"0"}, "Ket"], "+", TemplateBox[{"1"}, "Ket"], StyleBox[")", SpanMaxSize -> 1]}],
+     RowBox[{"[", TemplateBox[{StyleBox["x", "TI"]}, "Bra"], "+", TemplateBox[{StyleBox["y", "TI"]}, "Bra"], "]"}]},
+    TestID -> "LaTeX #113: kets and bras inside \\left( \\right), ( ) and \\left[ \\right]"
+]
+
+VerificationTest[
+    (* the slide deck's formulas *)
+    Map[
+        latexTemplates[LaTeXMathParse[#]] &,
+        {"|\\psi(0)\\rangle=\\left(\\cos\\frac{\\vartheta}{2}|0\\rangle+\\sin\\frac{\\vartheta}{2}|1\\rangle\\right)\\otimes\\left(\\sin\\frac{\\vartheta}{2}|0\\rangle+\\cos\\frac{\\vartheta}{2}|1\\rangle\\right)",
+         "|\\psi\\rangle=\\mathcal N\\left(|\\alpha\\rangle+e^{i\\varphi}|{-\\alpha}\\rangle\\right)",
+         "H=\\sum_kE_k|k\\rangle\\langle k|+V\\sum_k\\left(|i\\rangle\\langle k|+|k\\rangle\\langle i|\\right)",
+         "G=\\left(2|s\\rangle\\langle s|-1\\right)O",
+         "|\\psi\\rangle\\propto D(\\beta\\cos\\theta)\\left[\\cos\\theta\\,(1-|\\beta|^2\\sin^2\\theta)\\,|0\\rangle-\\beta\\sin^2\\theta\\,|1\\rangle\\right]"}
+    ],
+    {{"Ket", "Ket", "Ket", "Ket", "Ket"}, {"Ket", "Ket", "Ket"}, {"Bra", "Bra", "Bra", "Ket", "Ket", "Ket"}, {"Bra", "Ket"}, {"Ket", "Ket", "Ket"}},
+    TestID -> "LaTeX #113: the deck formulas with kets inside \\left \\right parse and fold"
+]
+
+VerificationTest[
+    (* two bars around an unclosed angle are the bars of two bras, and a modulus
+       stays a modulus *)
+    {LaTeXMathParse["\\langle x|+\\langle y|"],
+     Count[LaTeXMathParse["|-x|+|a\\langle b\\rangle|"], "\[LeftBracketingBar]", {0, Infinity}],
+     latexTemplates[LaTeXMathParse["\\langle x^2|y|\\rangle"]]},
+    {RowBox[{TemplateBox[{StyleBox["x", "TI"]}, "Bra"], "+", TemplateBox[{StyleBox["y", "TI"]}, "Bra"]}], 2, {}},
+    TestID -> "LaTeX #113: a sum of bras is no modulus"
+]
+
+VerificationTest[
+    (* a loose delimiter is content of a matrix cell and of \left..\right *)
+    {LaTeXMathParse["\\begin{cases} 1 & x\\in[0,1) \\\\ 0 & x\\in(1,2]\\end{cases}"] // FailureQ,
+     LaTeXMathParse["\\left(x\\in[0,1)\\right)"] // FailureQ,
+     LaTeXMathParse["\\begin{pmatrix}|0\\rangle \\\\ |1\\rangle\\end{pmatrix}"]},
+    {False, False, RowBox[{"(", GridBox[{{TemplateBox[{"0"}, "Ket"]}, {TemplateBox[{"1"}, "Ket"]}}], ")"}]},
+    TestID -> "LaTeX #113: half-open intervals and kets in a matrix cell"
+]
+
+VerificationTest[
+    (* the compiled parser reads these as the interpreted grammar does *)
+    Select[
+        Join[
+            First /@ latexDiracConstructs,
+            Table[form["|x\\rangle\\langle y|+\\langle x|A|y\\rangle"], {form, latexDelimiterForms}]
+        ],
+        Parse[Wolfram`Parser`LaTeXPrivate`loadCompiledLatexParser[], Wolfram`Parser`LaTeXPrivate`preprocessLaTeX[#]] =!=
+            Parse[LaTeXMathParser, Wolfram`Parser`LaTeXPrivate`preprocessLaTeX[#]] &
+    ],
+    {},
+    TestID -> "LaTeX #113: the compiled parser agrees with the grammar on the Dirac sweep"
+]

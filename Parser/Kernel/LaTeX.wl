@@ -210,7 +210,7 @@ bracedArg = ParseBetween[
 	ParseChoice[ParseRecursive[outerRow], ParseSucceed[""]],
 	literal["}"]
 ]
-bracketedArg = ParseBetween[literal["["], ParseRecursive[topRow], literal["]"]]
+bracketedArg = ParseBetween[literal["["], ParseRecursive[fenceRow], literal["]"]]
 
 
 (* ::Section:: *)
@@ -343,24 +343,34 @@ puncToken = ParseAction[
 	attachScripts[#1, #2] &
 ] | tildeToken
 
-(* Tokens valid ONLY at the outermost top level - intentionally
-	unbalanced delimiters: the closing `)` `]` from `\left. + a \right)`,
-	and the OPENING `(` `[` left behind by an unmatched `\big(` (e.g.
-	`x^{\big(}`).  They are kept out of puncToken so they don't leak into
-	parenAtom's / bracketAtom's inner row - balanced `(x)` / `[x]` still
-	win via expr (tried first); only a genuinely unmatched delimiter
-	falls through to here and renders as a bare glyph. *)
+(* Loose delimiters: one that no atom pairs up renders as its bare glyph.
+	- closerToken: a closing bracket command (guarded out of commandAtom) with
+	no opener before it, above all the \rangle of a ket |0\rangle, which is a
+	bar, its content and a lone \rangle.  fixedFence (defined below, evaluated
+	lazily) keeps it from stretching to a tall sibling, e.g. the \rangle of
+	`\lvert\psi\rangle` next to a fraction.
+	- outerPuncToken: these and the bare ( ) [ ] that are intentionally
+	unbalanced - the closing `)` of `\left. + a \right)`, a half-open interval
+	`[0,1)`, the `(` left behind by an unmatched `\big(`.
+	A balanced `(x)` / `[x]` / `\langle x\rangle` still wins via expr (tried
+	first); only a genuinely unmatched delimiter falls through to here.
+
+	Which row reads which: a row reads every loose delimiter except the ones the
+	atom around it closes on.
+	- outerRow, the row of the top level, of a braced group and of
+	\left..\right (which closes on the \right keyword), reads them all, and so
+	does a matrix cell (cellRow), which ends at & or a row break;
+	- fenceRow, the row inside ( ), [ ] and an optional argument, reads the
+	closing commands and leaves ) and ] to its own closer;
+	- topRow, the row inside \langle..\rangle and the other matchfix pairs,
+	reads none, so that it stops at its closer.
+	A ket therefore reads the same in every group: \left(|0\rangle\right),
+	(|0\rangle), [|0\rangle], a matrix cell, a fraction. *)
 (* The trailing ParseMany[postfixRef] lets a script attach to an unmatched
 	closer - `|0\rangle^{\otimes 10}` puts the power on the \rangle glyph,
 	exactly where TeX puts it (issue #26). *)
-outerPuncToken = ParseAction[
+closerToken = ParseAction[
 	ParseChoice[
-		ParseAction[literal[")"] | literal["]"] | literal["("] | literal["["], #1 &],
-		(* unmatched closing bracket commands (guarded out of commandAtom)
-			render as their bare glyph here, like an unmatched ) / ] *)
-		(* fixedFence (defined below, evaluated lazily): a bare closer doesn't
-			stretch to a tall sibling - e.g. the \rangle in the ket
-			`\lvert\psi\rangle` next to a fraction. *)
 		ParseAction[literal["\\rangle"], fixedFence["\[RightAngleBracket]"] &],
 		ParseAction[literal["\\rceil"],  fixedFence["\[RightCeiling]"] &],
 		ParseAction[literal["\\rfloor"], fixedFence["\[RightFloor]"] &],
@@ -369,18 +379,18 @@ outerPuncToken = ParseAction[
 	] ~~ ParseMany[postfixRef],
 	attachScripts[#1, #2] &
 ]
-(* matrix cells use a slightly looser row that accepts the closing
-	delimiters ) and ] as bare tokens, so `3\times)` or `[a]` typo
-	trailers don't abort the cell. The closes are kept OUT of `mathRow`
-	itself so the recursive inner row of parenAtom / bracketAtom still
-	has a ) / ] available for its literal close to consume. *)
-cellPuncToken = ParseAction[
-	(literal[")"] | literal["]"]) ~~ ParseMany[postfixRef],
-	attachScripts[#1, #2] &
+outerPuncToken = ParseChoice[
+	ParseAction[
+		ParseAction[literal[")"] | literal["]"] | literal["("] | literal["["], #1 &] ~~ ParseMany[postfixRef],
+		attachScripts[#1, #2] &
+	],
+	closerToken
 ]
 
+(* a matrix cell reads every loose delimiter: `3\times)`, a ket `|0\rangle`,
+	the half-open interval of `x\in[0,1)` in a cases row *)
 cellRow = ParseAction[
-	ParseSome[ParseChoice[mathToken, ParseRecursive[cellPuncToken]]],
+	ParseSome[ParseChoice[mathToken, ParseRecursive[outerPuncToken]]],
 	rowOf
 ]
 
@@ -1841,11 +1851,10 @@ commandArity[name_String] := Lookup[$commandArity, name, 1]
 
 (* parenthesised subexpression: emits the parens as part of the box so
 	they render visually, unlike `{...}` which is structural-only. Inner
-	is topRow so `(x \\ y)` and `(a, b $c$ d)` survive - real-world TeX
-	does sometimes put a row break or math toggle inside delimited
-	groups. The recursive inner ROW must be topRow (not outerRow) so
-	the closing ) is still available for our literal[")"] to consume,
-	rather than being eaten as outerPuncToken. *)
+	is fenceRow so `(x \\ y)`, `(a, b $c$ d)` and a ket `(|0\rangle)` survive -
+	real-world TeX does sometimes put a row break or math toggle inside
+	delimited groups. The inner row leaves the closing ) to the literal[")"]
+	here (see the loose delimiters above). *)
 (* A bare fence (one the user typed directly, not via \left...\right) is
 	FIXED-size in LaTeX - it never grows to its content.  The front end, though,
 	auto-stretches a bracket character to the tallest thing in its RowBox, so a
@@ -1856,19 +1865,22 @@ commandArity[name_String] := Lookup[$commandArity, name, 1]
 fixedFence[c_] := StyleBox[c, SpanMaxSize -> 1]
 
 parenAtom = ParseAction[
-	literal["("] ~~ ParseRecursive[topRow] ~~ literal[")"],
+	literal["("] ~~ ParseRecursive[fenceRow] ~~ literal[")"],
 	RowBox[{fixedFence["("], #2, fixedFence[")"]}] &
 ]
 
 bracketAtom = ParseAction[
-	literal["["] ~~ ParseRecursive[topRow] ~~ literal["]"],
+	literal["["] ~~ ParseRecursive[fenceRow] ~~ literal["]"],
 	RowBox[{fixedFence["["], #2, fixedFence["]"]}] &
 ]
 
 (* \left X content \right Y - any X, Y delimiter pair, including the
 	mismatched forms TeX permits (\left(...\right]) and the null-delim
 	form \left. and \right. (which we render as the empty string). The
-	inner content is topRow so line breaks / math toggles survive. *)
+	inner content is outerRow, the row of the top level: the group closes on
+	the \right keyword, which no token reads, so every loose delimiter is
+	content here - the \rangle of a ket in \left(|0\rangle+|1\rangle\right),
+	the bracket of \left([0,1)\right) - as are line breaks and math toggles. *)
 delimMacro = ParseChoice[
 	literal["("], literal[")"], literal["["], literal["]"],
 	literal["|"], literal["<"], literal[">"], literal["."], literal["/"],
@@ -1913,7 +1925,7 @@ barDelimL[g_] := g /. {"|" -> "\[LeftBracketingBar]", "\[DoubleVerticalBar]" -> 
 barDelimR[g_] := g /. {"|" -> "\[RightBracketingBar]", "\[DoubleVerticalBar]" -> "\[RightDoubleBracketingBar]"}
 leftRightAtom = ParseAction[
 	ParseLiteral["\\left"] ~~ ws ~~ delimMacro ~~ ws ~~
-		ParseRecursive[topRow] ~~
+		ParseRecursive[outerRow] ~~
 		ParseLiteral["\\right"] ~~ ws ~~ delimMacro,
 	With[{l = barDelimL[delimGlyph[#3]], r = barDelimR[delimGlyph[#8]]},
 		RowBox[Select[{l, #5, r}, # =!= "" &]]
@@ -1941,9 +1953,22 @@ endsItalicQ[RowBox[parts_List]] := parts =!= {} && endsItalicQ[Last[parts]]
 endsItalicQ[_] := False
 italicCorr[content_] := If[endsItalicQ[content], "\[VeryThinSpace]", Nothing]
 
+(* Two bars around an opening angle that nothing closes are no modulus: they are
+	the closing bars of two bras, as in \langle x|+\langle y| and
+	\langle x|\otimes\langle y|, where the bars enclose "+\langle y".  Such a pair
+	stays the two loose bars a bar is elsewhere (puncToken), for diracTemplates
+	to fold each bra. *)
+openAngleQ[inner_] := With[{parts = rowParts[inner]},
+	Count[parts, fixedFence["\[LeftAngleBracket]"]] > Count[parts, fixedFence["\[RightAngleBracket]"]]
+]
 absAtom = ParseAction[
 	literal["|"] ~~ ParseRecursive[sumExpr] ~~ literal["|"],
-	With[{inner = innerBox[#2]}, RowBox[{"\[LeftBracketingBar]", inner, italicCorr[inner], "\[RightBracketingBar]"}]] &
+	With[{inner = innerBox[#2]},
+		If[openAngleQ[inner],
+			RowBox[Join[{fixedFence["|"]}, rowParts[inner], {fixedFence["|"]}]],
+			RowBox[{"\[LeftBracketingBar]", inner, italicCorr[inner], "\[RightBracketingBar]"}]
+		]
+	] &
 ]
 (* No matchfix normAtom for `\|...\|`: unlike `|`, `\|` is also a valid
 	standalone atom (-> double-bar glyph), so a matchfix inner sumExpr
@@ -2019,7 +2044,7 @@ postfix = ParseChoice[
 
 (* Combine a base box with the postfix scripts collected after it
 	({"sub"|"sup", box} pairs).  Shared by factor and the bare-token
-	paths (puncToken / outerPuncToken / cellPuncToken, issue #26); an
+	paths (puncToken / outerPuncToken / closerToken, issue #26); an
 	empty posts list returns the base unchanged.  Scripts after a commandRun
 	sit on its last box (\sin{x}^2 squares the x, as in TeX), and the content
 	after a command that is itself a script follows the scripted base
@@ -2221,16 +2246,17 @@ topRow = ParseAction[
 	rowOf
 ]
 
-(* outerRow is topRow + outerPuncToken; used ONLY as the LaTeXMathParser
-	entry point so that unbalanced ) and ] from \left./\right)-style
-	inputs render as bare characters at the document level. outerPuncToken
-	is kept OUT of topRow because the recursive inner rows in parenAtom /
-	bracketAtom / bracketedArg need to leave the literal close delimiter
-	for their own literal["]"] / literal[")"] to consume. *)
+(* outerRow is topRow + outerPuncToken, and fenceRow is topRow + closerToken:
+	see the loose delimiters above for which row reads which. *)
 outerToken = ParseChoice[topToken, ParseRecursive[outerPuncToken]]
 
 outerRow = ParseAction[
 	ParseSome[outerToken],
+	rowOf
+]
+
+fenceRow = ParseAction[
+	ParseSome[ParseChoice[topToken, ParseRecursive[closerToken]]],
 	rowOf
 ]
 
