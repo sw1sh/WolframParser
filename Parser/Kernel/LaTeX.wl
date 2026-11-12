@@ -123,12 +123,14 @@ uprightUnicodeSymbols[boxes_] := boxes /. StyleBox[s_String, "TI"] /; bareUnicod
 
 
 (* ::Section:: *)
-(*Command (\name, optional [bracketed] arg, any number of {braced} args)*)
+(*Command (\name, then a [bracketed] group and {braced} groups)*)
 
 (* A command name is a backslash followed by either one-or-more letters
 	(\frac, \mathbb, \alpha, ...) OR a single non-letter character
 	(\{, \}, \,, \;, \$, \%, \&, \#, \_, the escaped punctuation /
-	spacing commands). *)
+	spacing commands).  The grammar reads the bracketed group and every braced
+	group after a name without knowing the command; dispatchCommand gives the
+	command the ones it takes and keeps the rest as content after it. *)
 
 commandName = ParseChoice[
 	ParseAction[
@@ -138,7 +140,7 @@ commandName = ParseChoice[
 	ParseAction[
 		ParseLiteral["\\"] ~~ ParseCharacter[
 			"{" | "}" | "$" | "%" | "&" | "#" | "_" | "," | ";" | ":" | " " | "!" |
-				"'" | "." | "`" | "\"" | "=" | "|"
+				"'" | "." | "`" | "\"" | "=" | "|" | "~" | ">"
 		],
 		Function[{slash, c}, slash <> c]
 	]
@@ -152,18 +154,14 @@ exprRef = ParseRecursive[expr]
 	bare-token productions here can carry scripts (issue #26). *)
 postfixRef = ParseRecursive[postfix]
 
-(* Argument forms: optional [arg], then any number of {arg}s. Drop the
-	trailing whitespace's value with #1, #2, #3 (skipping the 4th). *)
-(* commandAtom must not swallow \begin / \end - those are environment
-	delimiters handled by environmentAtom. The leading NotFollowedBy
-	guard returns Null (consumes nothing), so the dispatch args shift to
-	#2 / #3 / #4. *)
-(* commandAtom must not swallow the env-delimiter forms \begin{...},
-	\end{...}, the \cr row break, or the \right that closes a
-	leftRightAtom. The guard is keyed on the *exact* shapes so user
-	macros like \endExp, \crfoo, or \rightarrow are unaffected:
+(* commandAtom leaves \begin{...} and \end{...} to environmentAtom, the \cr
+	row break to the rows, and the \right that closes a leftRightAtom. The
+	guard is keyed on the exact shapes, so user macros like \endExp, \crfoo,
+	or \rightarrow are unaffected:
 	- \begin / \end: only blocked when followed (past ws) by {
-	- \cr / \right: only blocked when followed by a non-letter *)
+	- \cr / \right: only blocked when followed by a non-letter
+	The guard consumes nothing and gives Null, so the name, the bracketed group
+	and the braced groups are #2, #3 and #4. *)
 (* `wsBeforeArg` lets `\sqrt {a b}` (or `\frac { a } { b }`) parse: TeX
 	accepts whitespace between a command and its `[...]` / `{...}` args,
 	so a strict no-whitespace rule misses real-world inputs. We allow
@@ -229,10 +227,30 @@ envName = ParseAction[
 	StringJoin[#2] &
 ]
 
-(* Row separators: \\, \\[1ex] (optional length spec), or \cr.
-	The bracketed length is consumed and ignored. *)
+(* The [length] after a row break, as in \\[1ex], \\[-2.5pt] and
+	\\[\jot]: a number with a TeX unit, or a length register with a number before
+	it or none.  It is read and has no effect on the boxes.  Any other bracket
+	after a row break is the content of the next row: the commutator of
+	"a &= b \\ [A,B] &= 0" is kept. *)
+lengthUnit = ParseChoice @@ (ParseLiteral /@ {"pt", "em", "ex", "mm", "cm", "in", "bp", "pc", "dd", "cc", "sp", "mu", "px"})
+lengthRegister = ParseLiteral["\\"] ~~ ParseChoice @@ (ParseLiteral /@ {
+	"baselineskip", "normalbaselineskip", "lineskip", "parskip", "jot",
+	"smallskipamount", "medskipamount", "bigskipamount",
+	"abovedisplayskip", "belowdisplayskip", "arraycolsep", "tabcolsep", "fboxsep"
+}) ~~ ParseNotFollowedBy[letter]
+lengthNumber = ParseChoice[
+	ParseSome[digit] ~~ Optional[ParseLiteral["."] ~~ ParseMany[digit]],
+	ParseLiteral["."] ~~ ParseSome[digit]
+]
+lengthArg = ParseAction[
+	literal["["] ~~ Optional[literal["+"] | literal["-"]] ~~
+		ParseChoice[lengthNumber ~~ ws ~~ (lengthUnit | lengthRegister), lengthRegister] ~~ ws ~~ literal["]"],
+	Null &
+]
+
+(* Row separators: \\, \\[1ex] (with its length), or \cr. *)
 rowSep = ParseAction[
-	(literal["\\\\"] | literal["\\cr"]) ~~ Optional[bracketedArgRef] ~~ ws,
+	(literal["\\\\"] | literal["\\cr"]) ~~ Optional[lengthArg] ~~ ws,
 	Null &
 ]
 colSep = ParseAction[literal["&"], Null &]
@@ -363,7 +381,7 @@ cellPuncToken = ParseAction[
 
 cellRow = ParseAction[
 	ParseSome[ParseChoice[mathToken, ParseRecursive[cellPuncToken]]],
-	If[Length[{##}] === 1, #1, RowBox[{##}]] &
+	rowOf
 ]
 
 (* cellRow is tried BEFORE the cellLeadingOp form because cellLeadingOp
@@ -383,17 +401,42 @@ matrixCell = ParseChoice[
 matrixRow  = ParseSepBy[matrixCell, colSep]
 matrixBody = ParseSepBy[matrixRow, rowSep]
 
-(* `\begin{matrix*}[l] ... \end{matrix*}` and the `array{c|r}`-style
-	column-spec arg appear AFTER the `\begin{name}`. The braced
-	arg captures `{c|r}`; the bracketed arg captures `[l]` / `[r]` for
-	matrix* / pmatrix* alignment. Both are consumed and dropped - we
-	render every alignment-variant as a default-aligned grid. *)
+(* An environment name may be followed by a [bracketed] option and a {braced}
+	argument: \begin{array}[t]{c|r}, \begin{pmatrix*}[r], \begin{aligned}[t],
+	\begin{alignat}{2}.  The grammar reads both after any name; an environment
+	that takes one ($envOptionNames, $envArgumentNames) drops it, as every
+	alignment variant renders as a default-aligned grid, and after any other
+	environment it is the start of the first cell:
+	\begin{pmatrix}[A,B] & 0 \\ 0 & 1\end{pmatrix} keeps its commutator. *)
 environmentAtom = ParseAction[
 	ParseLiteral["\\begin"] ~~ ws ~~ envName ~~ ws ~~
-		Optional[bracedArgRef] ~~ ws ~~ Optional[bracketedArgRef] ~~
+		Optional[bracketedArgRef] ~~ ws ~~ Optional[bracedArgRef] ~~ ws ~~
 		matrixBody ~~ ParseLiteral["\\end"] ~~ ws ~~ envName,
-	buildEnv[#3, #8] &
+	buildEnv[#3, envRows[#3, #5, #7, #9]] &
 ]
+
+$envOptionNames = {
+	"array", "darray", "tabular", "subarray", "aligned", "alignedat", "gathered", "split",
+	"matrix*", "pmatrix*", "bmatrix*", "Bmatrix*", "vmatrix*", "Vmatrix*",
+	"smallmatrix*", "psmallmatrix*", "bsmallmatrix*", "Bsmallmatrix*", "vsmallmatrix*", "Vsmallmatrix*"
+}
+$envArgumentNames = {
+	"array", "darray", "tabular", "subarray", "alignat", "alignat*", "alignedat", "xalignat", "xxalignat"
+}
+
+(* the rows of an environment, the option and the argument it does not take put
+	back at the start of its first cell *)
+envRows[name_String, option_, argument_, rows_List] := With[
+	{kept = Join[
+		If[MemberQ[$envOptionNames, name], {}, bracketContent[option]],
+		If[MissingQ[argument] || argument === "" || MemberQ[$envArgumentNames, name], {}, {argument}]
+	]},
+	If[kept === {}, rows, cellPrepended[rows, kept]]
+]
+cellPrepended[{}, kept_List] := {{rowOf @@ kept}}
+cellPrepended[{{}, rest___}, kept_List] := {{rowOf @@ kept}, rest}
+cellPrepended[{{first_, cells___}, rest___}, kept_List] :=
+	{{rowOf @@ Join[kept, DeleteCases[rowParts[first], ""]], cells}, rest}
 
 (* True for a row that carries no content: empty, or every cell is the
 	empty-string the `ParseSucceed[""]` fallback emits. *)
@@ -447,14 +490,59 @@ buildEnv[name_String, rowsIn_List] :=
 (* Each handler takes (optArg, reqArgs_List) and returns a box.
 	Add a handler to extend the parser. *)
 
-dispatchCommand[name_String, opt_, req_List] :=
-	Block[{handler = commandHandlers[name]},
-		If[ MissingQ[handler],
-			(* unknown command - emit the name verbatim followed by its args *)
-			RowBox[Prepend[req, name]],
-			handler[opt, req]
-		]
+dispatchCommand[name_String, opt_, req_List] := dispatched[name, commandHandlers[name], opt, req]
+
+(* The groups the grammar reads after a command name are the command's own only as
+	far as the command takes them:
+	- a [bracketed] group belongs to a command with an optional argument
+	($optionalArgCommands: \sqrt[3]{x}, \xrightarrow[below]{above}, \smash[b]{x}).
+	After any other command it is content, and it ends the command's arguments,
+	as in t\in[0,h], \exp[r(ab)], \,[\sigma_z,\rho] and \{[a,b]\};
+	- of the {braced} groups a command takes as many as commandArity gives, none
+	for a symbol, a Greek letter, an operator name or a space (\Delta{t},
+	\exp{(x)}, \times{10}), and the groups past them are content
+	(\hat{H}{x}, \frac{a}{b}{c}).
+	The content left over follows the command's box in a commandRun, which
+	becomes a row of the two (rowOf, rowParts) and whose last box takes the
+	scripts written after it (attachScripts).  An unknown command stands as
+	its name with everything read after it. *)
+dispatched[name_String, _Missing, opt_, req_List] := commandThen[RowBox[{name}], Join[bracketContent[opt], req]]
+dispatched[name_String, handler_, opt_, req_List] /; MissingQ[opt] || optionalArgCommandQ[name] :=
+	With[{n = Min[commandArity[name], Length[req]]}, commandThen[handler[opt, Take[req, n]], Drop[req, n]]]
+dispatched[name_String, handler_, opt_, req_List] :=
+	commandThen[handler[Missing["NoMatch"], {}], Join[bracketContent[opt], req]]
+
+(* a bracketed group read as content: the box bracketAtom gives it *)
+bracketContent[_Missing] := {}
+bracketContent[inner_] := {RowBox[{fixedFence["["], inner, fixedFence["]"]}]}
+
+(* A command's box with the content read after it, a commandRun, or the box alone
+	where nothing is.  An empty group adds nothing (\Gamma{}^i), and an operator
+	name gets the thin space of a function application before what follows, as
+	\exp (x) does. *)
+commandThen[box_, extras_List] := With[{rest = DeleteCases[extras, ""]},
+	Which[
+		rest === {}, box,
+		funcAtomQ[box], commandRun[box, "\[ThinSpace]", Sequence @@ rest],
+		True, commandRun[box, Sequence @@ rest]
 	]
+]
+
+(* A commandRun as one box: the row that the command and the content after it
+	make when written as separate atoms (\Delta{t} as \Delta t). *)
+runRow[commandRun[xs__]] := RowBox[Join @@ (rowParts /@ {xs})]
+
+(* the boxes of a row, each commandRun among them as its row *)
+rowOf[boxes___] := With[{parts = Replace[{boxes}, run_commandRun :> runRow[run], {1}]},
+	If[Length[parts] === 1, First[parts], RowBox[parts]]
+]
+
+(* what an atom reads between its delimiters, a commandRun as its row *)
+innerBox[run_commandRun] := runRow[run]
+innerBox[box_] := box
+
+(* a commandRun that reaches a box other than a row *)
+spliceCommandRuns[boxes_] := boxes //. run_commandRun :> runRow[run]
 
 commandHandlers[_String] := Missing["NotFound"]
 
@@ -894,11 +982,8 @@ styleScopeHandler = Function[{opt, req},
 	go. The grammar reads each one as an atom of its own, so the `_lo^hi` after
 	it attaches to that atom rather than to the operator. The handler leaves a
 	limitsMark atom there, and attachLimitModifiers (a post-parse pass) moves
-	the scripts back onto the operator in the placement the modifier names. A
-	brace group the greedy command parser consumed is re-emitted after it. *)
-limitsModifierHandler[kind_String] := Function[{opt, req},
-	If[Length[req] === 0, limitsMark[kind], RowBox[Prepend[req, limitsMark[kind]]]]
-]
+	the scripts back onto the operator in the placement the modifier names. *)
+limitsModifierHandler[kind_String] := Function[{opt, req}, limitsMark[kind]]
 commandHandlers["\\limits"] = limitsModifierHandler["limits"]
 commandHandlers["\\nolimits"] = limitsModifierHandler["nolimits"]
 commandHandlers["\\displaylimits"] = limitsModifierHandler["displaylimits"]
@@ -1390,27 +1475,21 @@ xarrowHandler[arrow_String] := Function[{opt, req},
 		UnderoverscriptBox[arrow, below, above]
 	]
 ]
-commandHandlers["\\xrightarrow"]            = xarrowHandler["\[LongRightArrow]"]
-commandHandlers["\\xleftarrow"]             = xarrowHandler["\[LongLeftArrow]"]
-commandHandlers["\\xRightarrow"]            = xarrowHandler["\[DoubleLongRightArrow]"]
-commandHandlers["\\xLeftarrow"]             = xarrowHandler["\[DoubleLongLeftArrow]"]
-commandHandlers["\\xleftrightarrow"]        = xarrowHandler["\[LongLeftRightArrow]"]
-commandHandlers["\\xLeftrightarrow"]        = xarrowHandler["\[DoubleLongLeftRightArrow]"]
-commandHandlers["\\xhookleftarrow"]         = xarrowHandler["\[LongLeftArrow]"]
-commandHandlers["\\xhookrightarrow"]        = xarrowHandler["\[LongRightArrow]"]
-commandHandlers["\\xmapsto"]                = xarrowHandler["\[Function]"]
-commandHandlers["\\xrightharpoonup"]        = xarrowHandler["\[RightArrow]"]
-commandHandlers["\\xrightharpoondown"]      = xarrowHandler["\[RightArrow]"]
-commandHandlers["\\xleftharpoonup"]         = xarrowHandler["\[LeftArrow]"]
-commandHandlers["\\xleftharpoondown"]       = xarrowHandler["\[LeftArrow]"]
-commandHandlers["\\xrightleftharpoons"]     = xarrowHandler["\[Equilibrium]"]
-commandHandlers["\\xleftrightharpoons"]     = xarrowHandler["\[Equilibrium]"]
-commandHandlers["\\xrightequilibrium"]      = xarrowHandler["\[Equilibrium]"]
-commandHandlers["\\xleftequilibrium"]       = xarrowHandler["\[ReverseEquilibrium]"]
-commandHandlers["\\xrightleftarrows"]       = xarrowHandler["\[LeftRightArrow]"]
-commandHandlers["\\xtwoheadrightarrow"]     = xarrowHandler["\[LongRightArrow]"]
-commandHandlers["\\xtwoheadleftarrow"]      = xarrowHandler["\[LongLeftArrow]"]
-commandHandlers["\\xtofrom"]                = xarrowHandler["\[LeftRightArrow]"]
+$xarrowGlyphs = <|
+	"\\xrightarrow" -> "\[LongRightArrow]", "\\xleftarrow" -> "\[LongLeftArrow]",
+	"\\xRightarrow" -> "\[DoubleLongRightArrow]", "\\xLeftarrow" -> "\[DoubleLongLeftArrow]",
+	"\\xleftrightarrow" -> "\[LongLeftRightArrow]", "\\xLeftrightarrow" -> "\[DoubleLongLeftRightArrow]",
+	"\\xhookleftarrow" -> "\[LongLeftArrow]", "\\xhookrightarrow" -> "\[LongRightArrow]",
+	"\\xmapsto" -> "\[Function]",
+	"\\xrightharpoonup" -> "\[RightArrow]", "\\xrightharpoondown" -> "\[RightArrow]",
+	"\\xleftharpoonup" -> "\[LeftArrow]", "\\xleftharpoondown" -> "\[LeftArrow]",
+	"\\xrightleftharpoons" -> "\[Equilibrium]", "\\xleftrightharpoons" -> "\[Equilibrium]",
+	"\\xrightequilibrium" -> "\[Equilibrium]", "\\xleftequilibrium" -> "\[ReverseEquilibrium]",
+	"\\xrightleftarrows" -> "\[LeftRightArrow]",
+	"\\xtwoheadrightarrow" -> "\[LongRightArrow]", "\\xtwoheadleftarrow" -> "\[LongLeftArrow]",
+	"\\xtofrom" -> "\[LeftRightArrow]"
+|>
+KeyValueMap[(commandHandlers[#1] = xarrowHandler[#2]) &, $xarrowGlyphs]
 (* Capital `\Overrightarrow` variant - KaTeX uses both. *)
 commandHandlers["\\Overrightarrow"]         = commandHandlers["\\overrightarrow"]
 
@@ -1606,15 +1685,7 @@ Scan[
 	the handler bodies evaluate lazily, so the forward reference is fine. *)
 Scan[
 	Function[name,
-		commandHandlers[name] = Function[{opt, req},
-			(* A standalone fence takes no argument, but commandAtom greedily consumes
-				any following "{group}" as a req; re-emit it after the fence glyph
-				instead of dropping it, so `\langle{X}|` -> ⟨X| -> Bra[X] rather than
-				⟨| with X lost (issue #49). *)
-			If[req === {}, fixedFence[namedSymbolChars[name]],
-				RowBox[Prepend[req, fixedFence[namedSymbolChars[name]]]]
-			]
-		]
+		commandHandlers[name] = Function[{opt, req}, fixedFence[namedSymbolChars[name]]]
 	],
 	{"\\langle", "\\rangle", "\\lvert", "\\rvert", "\\lVert", "\\rVert",
 	"\\lceil", "\\rceil", "\\lfloor", "\\rfloor"
@@ -1717,6 +1788,52 @@ funcAtomQ[StyleBox[n_String, FontSlant -> "Plain"]] := MemberQ[functionNames, n]
 funcAtomQ[(SubscriptBox | SuperscriptBox | SubsuperscriptBox)[base_, ___]] := funcAtomQ[base]
 funcAtomQ[RowBox[parts_List]] := parts =!= {} && funcAtomQ[Last[parts]]
 funcAtomQ[_] := False
+
+
+(* ::Section:: *)
+(*The arguments a command takes*)
+
+(* The commands with an optional [bracketed] argument: \sqrt and the extensible
+	arrows read it; the others take one in LaTeX that has no effect on the boxes
+	(\smash[b]{x}, \rule[-1ex]{1em}{2ex}, \cfrac[l]{a}{b}, \color[HTML]{...}).
+	After every other command a [ opens a bracket of the formula. *)
+$optionalArgCommands = Join[
+	{"\\sqrt"}, Keys[$xarrowGlyphs],
+	{"\\smash", "\\rule", "\\cfrac", "\\includegraphics",
+	"\\linebreak", "\\nolinebreak", "\\displaybreak",
+	"\\color", "\\textcolor", "\\colorbox", "\\fcolorbox",
+	"\\overbracket", "\\underbracket"
+	}
+]
+optionalArgCommandQ[name_String] := MemberQ[$optionalArgCommands, name]
+
+(* How many {braced} arguments a command takes.  A symbol, a Greek letter, a text
+	symbol, an operator name, a space and a mark such as \limits or \hline take
+	none; the commands below take the number given; a definition takes all that
+	follow; every other command with a handler takes one. *)
+$noArgCommands = Join[
+	Keys[namedSymbolChars], Keys[greekChars], Keys[textSymbolChars], ("\\" <> # &) /@ functionNames,
+	{"\\,", "\\thinspace", "\\:", "\\>", "\\medspace", "\\;", "\\thickspace", "\\enspace",
+	"\\!", "\\negthinspace", "\\negmedspace", "\\negthickspace",
+	"\\nonumber", "\\notag", "\\eqno", "\\leqno", "\\hline", "\\hdashline",
+	"\\newline", "\\linebreak", "\\nolinebreak", "\\nobreak", "\\allowbreak",
+	"\\noindent", "\\indent", "\\displaybreak",
+	"\\smallskip", "\\medskip", "\\bigskip", "\\strut", "\\mathstrut",
+	"\\bmod", "\\limits", "\\nolimits", "\\displaylimits"
+	}
+]
+$commandArity = Join[
+	AssociationMap[0 &, $noArgCommands],
+	AssociationMap[2 &, {
+		"\\frac", "\\tfrac", "\\dfrac", "\\cfrac", "\\binom", "\\tbinom", "\\dbinom",
+		"\\stackrel", "\\overset", "\\underset", "\\atopfrac", "\\bracefrac", "\\brackfrac",
+		"\\rule", "\\raisebox", "\\color", "\\textcolor", "\\colorbox",
+		"\\htmlId", "\\htmlClass", "\\htmlStyle", "\\htmlData"
+	}],
+	<|"\\fcolorbox" -> 3, "\\mathchoice" -> 4, "\\genfrac" -> 6|>,
+	AssociationMap[Infinity &, {"\\def", "\\gdef", "\\newcommand", "\\renewcommand"}]
+]
+commandArity[name_String] := Lookup[$commandArity, name, 1]
 
 
 (* ::Section:: *)
@@ -1826,7 +1943,7 @@ italicCorr[content_] := If[endsItalicQ[content], "\[VeryThinSpace]", Nothing]
 
 absAtom = ParseAction[
 	literal["|"] ~~ ParseRecursive[sumExpr] ~~ literal["|"],
-	RowBox[{"\[LeftBracketingBar]", #2, italicCorr[#2], "\[RightBracketingBar]"}] &
+	With[{inner = innerBox[#2]}, RowBox[{"\[LeftBracketingBar]", inner, italicCorr[inner], "\[RightBracketingBar]"}]] &
 ]
 (* No matchfix normAtom for `\|...\|`: unlike `|`, `\|` is also a valid
 	standalone atom (-> double-bar glyph), so a matchfix inner sumExpr
@@ -1903,7 +2020,15 @@ postfix = ParseChoice[
 (* Combine a base box with the postfix scripts collected after it
 	({"sub"|"sup", box} pairs).  Shared by factor and the bare-token
 	paths (puncToken / outerPuncToken / cellPuncToken, issue #26); an
-	empty posts list returns the base unchanged. *)
+	empty posts list returns the base unchanged.  Scripts after a commandRun
+	sit on its last box (\sin{x}^2 squares the x, as in TeX), and the content
+	after a command that is itself a script follows the scripted base
+	(x_\alpha{y} is x with the subscript alpha, then y). *)
+attachScripts[commandRun[pre__, last_], posts_List] := commandRun[pre, attachScripts[last, posts]]
+attachScripts[base_, posts_List] /; MemberQ[posts, {_, _commandRun}] := commandRun[
+	attachScripts[base, Replace[posts, {k_, commandRun[first_, __]} :> {k, first}, {1}]],
+	Sequence @@ Cases[posts, {_, commandRun[_, rest__]} :> rest]
+]
 attachScripts[base_, posts_List] := Module[{sub, sups},
 	sub = FirstCase[posts, {"sub", v_} :> v, Missing[]];
 	sups = Cases[posts, {"sup", v_} :> v];
@@ -1937,6 +2062,7 @@ factor = ParseAction[
 	any existing RowBox operands so chains stay flat
 	(`RowBox[{a, b, c}]`, not nested pairs). *)
 rowParts[RowBox[l_List]] := l
+rowParts[run_commandRun] := First[runRow[run]]
 rowParts[x_] := {x}
 rowJoin[a_, b_] := RowBox[Join[rowParts[a], rowParts[b]]]
 rowJoin[a_, mid_, b_] := RowBox[Join[rowParts[a], {mid}, rowParts[b]]]
@@ -2060,7 +2186,7 @@ mathToken = ParseChoice[
 
 mathRow = ParseAction[
 	ParseSome[mathToken],
-	If[Length[{##}] === 1, #1, RowBox[{##}]] &
+	rowOf
 ]
 
 (* topRow: like mathRow, but additionally tolerates the things that
@@ -2077,7 +2203,7 @@ mathRow = ParseAction[
 	a GridBox.  The marker never survives to output - applyLineBreaks
 	removes every occurrence. *)
 linebreakToken = ParseAction[
-	(literal["\\\\"] | literal["\\cr"]) ~~ Optional[bracketedArgRef] ~~ ws,
+	(literal["\\\\"] | literal["\\cr"]) ~~ Optional[lengthArg] ~~ ws,
 	$lineBreakMark &
 ]
 dollarToken = ParseAction[literal["$"], "" &]
@@ -2092,7 +2218,7 @@ topToken = ParseChoice[
 
 topRow = ParseAction[
 	ParseSome[topToken],
-	If[Length[{##}] === 1, #1, RowBox[{##}]] &
+	rowOf
 ]
 
 (* outerRow is topRow + outerPuncToken; used ONLY as the LaTeXMathParser
@@ -2105,7 +2231,7 @@ outerToken = ParseChoice[topToken, ParseRecursive[outerPuncToken]]
 
 outerRow = ParseAction[
 	ParseSome[outerToken],
-	If[Length[{##}] === 1, #1, RowBox[{##}]] &
+	rowOf
 ]
 
 
@@ -2299,9 +2425,10 @@ bracketedOpt[{codes_List, _, brackets_Association}, from_Integer] := With[{at = 
 	]
 ]
 
-(* Each registered short-arg command, its optional [...] argument kept as it is, which the parser
-	reads by Optional[bracketedArgRef], takes its arguments, each braced; a command whose arguments
-	run past the source keeps the rest of the source as it is. *)
+(* Each registered short-arg command takes its arguments, each braced; the optional [...] argument
+	of one that has one ($optionalArgCommands) is kept as it is, for the parser to read, and after any
+	other a [ is the argument, as in TeX; a command whose arguments run past the source keeps the rest
+	of the source as it is. *)
 expandShorthand[s_String] := With[{codes = ToCharacterCode[s]},
 	piecesText @ Fold[shorthandStep, {{codes, braceClosers[codes], pairClosers[codes, 91, 93]}, {}, 1}, StringPosition[s, $shortNameRegex]]
 ]
@@ -2310,7 +2437,8 @@ shorthandStep::usage = "shorthandStep[{source, pieces, at}, {start, end}] gives 
 where it begins at at or past it."
 shorthandStep[state : {_, _, at_Integer}, {start_Integer, _Integer}] /; start < at := state
 shorthandStep[{source : {codes_List, _, _}, pieces_List, at_Integer}, {start_Integer, end_Integer}] := With[
-	{name = codesText[codes, {start + 1, end}], opt = bracketedOpt[source, end + 1]},
+	{name = codesText[codes, {start + 1, end}]},
+	{opt = If[optionalArgCommandQ["\\" <> name], bracketedOpt[source, end + 1], {"", end + 1}]},
 	shorthandApplied[source, pieces, at, start, "\\" <> name <> First[opt],
 		shorthandArguments[source, If[MemberQ[$twoArgShortNames, name], 2, 1], argToken[source, Last[opt]]]
 	]
@@ -3212,7 +3340,7 @@ LaTeXMathParse[source_String] := Module[
 			otherwise leak the private symbol into output. *)
 		diracTemplates @ uprightUnicodeSymbols @ bareCommas @ suppressCommaSpaceBetweenDigits @
 			stripEmptyRowChildren @ applyLineBreaks @ restoreSideScripts @ displaySizeBigOps @
-				bigOpDisplayLimits @ attachLimitModifiers[r] /. $lineBreakMark -> ""
+				bigOpDisplayLimits @ attachLimitModifiers @ spliceCommandRuns[r] /. $lineBreakMark -> ""
 	]
 ]
 

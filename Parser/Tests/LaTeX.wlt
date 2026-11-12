@@ -1179,3 +1179,182 @@ VerificationTest[
     {"\\eta", "x^{2}"},
     TestID -> "ExportLaTeX: TeXAssistantTemplate"
 ]
+
+
+(* === the arguments a command takes (WolframInstitute/MarkdownToNotebook#114) ===
+   A [bracketed] group belongs to a command with an optional argument, and a
+   {braced} group to a command as far as it takes arguments; every other group
+   after a command is content of the formula, and none is dropped. The sweeps
+   run over the reader's whole command table. *)
+
+latexHandlerNames[] := Cases[DownValues[Wolfram`Parser`LaTeXPrivate`commandHandlers],
+    (Verbatim[HoldPattern][_[name_String]] :> _) :> name]
+latexArity[name_String] := Wolfram`Parser`LaTeXPrivate`commandArity[name]
+latexFenceCount[boxes_, fence_String] := Count[boxes, StyleBox[fence, SpanMaxSize -> 1], {0, Infinity}]
+(* the commutator [q,w] is in the boxes, once, with both its letters *)
+latexKeepsBracketQ[boxes_] := ! FailureQ[boxes] &&
+    latexFenceCount[boxes, "["] === 1 && latexFenceCount[boxes, "]"] === 1 &&
+    ! FreeQ[boxes, StyleBox["q", "TI"]] && ! FreeQ[boxes, StyleBox["w", "TI"]]
+(* the group {(z)} is in the boxes *)
+latexKeepsGroupQ[boxes_] := ! FailureQ[boxes] &&
+    latexFenceCount[boxes, "("] === 1 && latexFenceCount[boxes, ")"] === 1 && ! FreeQ[boxes, StyleBox["z", "TI"]]
+(* a command with the braced arguments it takes *)
+latexSaturated[name_String] := name <> StringRepeat["{u}", latexArity[name]]
+
+VerificationTest[
+    (* the issue's formulas: each keeps its bracket, as the same formula does
+       with {} between the command and the bracket *)
+    Map[
+        {latexFenceCount[LaTeXMathParse[First[#]], "["], LaTeXMathParse[First[#]] === LaTeXMathParse[Last[#]]} &,
+        {{"t\\in[0,h]", "t\\in{}[0,h]"}, {"t \\in [0,h]", "t \\in{} [0,h]"}, {"\\exp[r(ab)]", "\\exp{}[r(ab)]"},
+         {"-i\\sqrt\\gamma\\,[\\sigma_z,\\rho]\\circ dW", "-i\\sqrt\\gamma\\,{}[\\sigma_z,\\rho]\\circ dW"},
+         {"\\{[a,b]\\}", "\\{{}[a,b]\\}"}, {"\\|[a]\\|", "\\|{}[a]\\|"}, {"\\langle[A,B]\\rangle", "\\langle{}[A,B]\\rangle"},
+         {"\\hbar\\omega[a^\\dagger,a]", "\\hbar\\omega{}[a^\\dagger,a]"}}
+    ],
+    ConstantArray[{1, True}, 8],
+    TestID -> "LaTeX #114: a [ after a command is a bracket of the formula"
+]
+
+VerificationTest[
+    LaTeXMathParse["t\\in[0,h]"],
+    RowBox[{StyleBox["t", "TI"], "\[Element]",
+        StyleBox["[", SpanMaxSize -> 1], RowBox[{"0", ",", StyleBox["h", "TI"]}], StyleBox["]", SpanMaxSize -> 1]}],
+    TestID -> "LaTeX #114: t\\in[0,h] boxes"
+]
+
+VerificationTest[
+    (* a bracket after an operator name reads as a parenthesis does *)
+    (LaTeXMathParse["\\exp[r(ab)]+\\ln[x]"] /. {StyleBox["[", o__] :> StyleBox["(", o], StyleBox["]", o__] :> StyleBox[")", o]}) ===
+        LaTeXMathParse["\\exp(r(ab))+\\ln(x)"],
+    True,
+    TestID -> "LaTeX #114: \\exp[..] is \\exp(..) with brackets"
+]
+
+VerificationTest[
+    (* every command of the reader's table that takes no optional argument,
+       with the braced arguments it takes, keeps a bracket written after it *)
+    Select[
+        Complement[latexHandlerNames[], Wolfram`Parser`LaTeXPrivate`$optionalArgCommands,
+            Select[latexHandlerNames[], latexArity[#] === Infinity &]],
+        ! latexKeepsBracketQ[LaTeXMathParse["x " <> latexSaturated[#] <> "[q,w] y"]] &
+    ],
+    {},
+    TestID -> "LaTeX #114: no command of the table drops a bracket after it"
+]
+
+VerificationTest[
+    (* and keeps a braced group written after the arguments it takes *)
+    Select[
+        Select[latexHandlerNames[], latexArity[#] =!= Infinity &],
+        ! latexKeepsGroupQ[LaTeXMathParse["x " <> latexSaturated[#] <> "{(z)} y"]] &
+    ],
+    {},
+    TestID -> "LaTeX #114: no command of the table drops a group after its arguments"
+]
+
+VerificationTest[
+    (* an unknown command stands as its name, with the bracket and the groups after it *)
+    {LaTeXMathParse["\\unknownmacro[q,w]{(z)}"] // latexKeepsBracketQ, LaTeXMathParse["\\unknownmacro[q,w]{(z)}"] // latexKeepsGroupQ,
+     LaTeXMathParse["\\unknownmacro{a}"]},
+    {True, True, RowBox[{"\\unknownmacro", StyleBox["a", "TI"]}]},
+    TestID -> "LaTeX #114: an unknown command keeps what follows it"
+]
+
+VerificationTest[
+    (* the commands with an optional argument take theirs: it is no bracket of the formula *)
+    {LaTeXMathParse["\\sqrt[3]{x}"],
+     DeleteDuplicates @ Map[
+        Function[name, MatchQ[LaTeXMathParse[name <> "[q]{w}"], UnderoverscriptBox[_String, StyleBox["q", "TI"], StyleBox["w", "TI"]]]],
+        Keys[Wolfram`Parser`LaTeXPrivate`$xarrowGlyphs]
+     ],
+     Map[latexFenceCount[LaTeXMathParse[#], "["] &,
+        {"\\smash[b]{x}", "\\rule[-1ex]{2em}{1em}", "\\cfrac[l]{a}{b}", "\\color[HTML]{red}{x}", "\\sqrt[n]{x}", "a\\linebreak[4]b"}]},
+    {RadicalBox[StyleBox["x", "TI"], "3"], {True}, {0, 0, 0, 0, 0, 0}},
+    TestID -> "LaTeX #114: \\sqrt, the extensible arrows and their kin take an optional argument"
+]
+
+VerificationTest[
+    (* TeX gives a command without an optional argument the [ itself *)
+    LaTeXMathParse["\\hat[x]"] === LaTeXMathParse["\\hat{[}x]"],
+    True,
+    TestID -> "LaTeX #114: \\hat[ accents the bracket"
+]
+
+VerificationTest[
+    (* a symbol, a Greek letter or an operator name takes no braced argument:
+       the group is content, and scripts after it sit on the group *)
+    {LaTeXMathParse["\\Delta{t}"], LaTeXMathParse["\\sin{x}^2"] === LaTeXMathParse["\\sin x^2"],
+     LaTeXMathParse["2\\times{10}^{-3}"] === LaTeXMathParse["2\\times 10^{-3}"],
+     LaTeXMathParse["\\exp{(x)}"] === LaTeXMathParse["\\exp (x)"],
+     LaTeXMathParse["\\Gamma{}^i_{jk}"] === LaTeXMathParse["\\Gamma^i_{jk}"],
+     LaTeXMathParse["x_\\alpha{y}"] === LaTeXMathParse["x_\\alpha y"],
+     LaTeXMathParse["|\\Delta{t}|"] === LaTeXMathParse["|\\Delta t|"]},
+    {RowBox[{"\[CapitalDelta]", StyleBox["t", "TI"]}], True, True, True, True, True, True},
+    TestID -> "LaTeX #114: a group after a command without arguments is content"
+]
+
+VerificationTest[
+    (* a command takes as many groups as it has arguments *)
+    {LaTeXMathParse["\\hat{H}{x}"] === LaTeXMathParse["\\hat{H} x"], LaTeXMathParse["\\frac{a}{b}{c}"] === LaTeXMathParse["\\frac{a}{b} c"],
+     LaTeXMathParse["\\mathcal{L}{\\rho}"] === LaTeXMathParse["\\mathcal{L}\\rho"], LaTeXMathParse["\\text{a}{b}"] === LaTeXMathParse["\\text{a}b"],
+     LaTeXMathParse["d \\mod{56}"]},
+    {True, True, True, True, RowBox[{StyleBox["d", "TI"], StyleBox["mod", FontSlant -> "Plain"], "\[ThinSpace]", "56"}]},
+    TestID -> "LaTeX #114: a group past a command's arguments is content"
+]
+
+VerificationTest[
+    (* an environment that takes no option or argument keeps a bracket or a group
+       at the start of its first cell *)
+    {Select[
+        {"matrix", "pmatrix", "bmatrix", "Bmatrix", "vmatrix", "Vmatrix", "smallmatrix", "psmallmatrix", "cases", "dcases", "rcases",
+         "align", "align*", "eqnarray", "gather", "gathered*", "equation", "multline", "flalign"},
+        ! latexKeepsBracketQ[LaTeXMathParse["\\begin{" <> # <> "}[q,w] & 0 \\\\ 0 & 1\\end{" <> # <> "}"]] &
+     ],
+     Select[
+        {"matrix", "pmatrix", "bmatrix", "cases", "align", "aligned", "gathered", "split", "pmatrix*"},
+        ! latexKeepsGroupQ[LaTeXMathParse["\\begin{" <> # <> "}{(z)} & 0 \\\\ 0 & 1\\end{" <> # <> "}"]] &
+     ],
+     LaTeXMathParse["\\begin{pmatrix}[A,B] & 0 \\\\ 0 & 1\\end{pmatrix}"] === LaTeXMathParse["\\begin{pmatrix}{}[A,B] & 0 \\\\ 0 & 1\\end{pmatrix}"]},
+    {{}, {}, True},
+    TestID -> "LaTeX #114: a bracket or a group after \\begin{name} is content"
+]
+
+VerificationTest[
+    (* the environments with an option or an argument take theirs, in LaTeX's order *)
+    {LaTeXMathParse["\\begin{array}[t]{c|r} a & b\\end{array}"], LaTeXMathParse["\\begin{pmatrix*}[r] a & b\\end{pmatrix*}"],
+     LaTeXMathParse["\\begin{aligned}[t] a &= b\\end{aligned}"] === LaTeXMathParse["\\begin{aligned} a &= b\\end{aligned}"],
+     LaTeXMathParse["\\begin{alignat}{2} a &= b\\end{alignat}"] === LaTeXMathParse["\\begin{alignat} a &= b\\end{alignat}"]},
+    {GridBox[{{StyleBox["a", "TI"], StyleBox["b", "TI"]}}], RowBox[{"(", GridBox[{{StyleBox["a", "TI"], StyleBox["b", "TI"]}}], ")"}], True, True},
+    TestID -> "LaTeX #114: array, the starred matrices and their kin take an option or an argument"
+]
+
+VerificationTest[
+    (* after a row break only a length is the break's own; any other bracket
+       opens the next row *)
+    {Map[
+        LaTeXMathParse["\\begin{aligned} a &= b \\\\" <> # <> " c &= d\\end{aligned}"] === LaTeXMathParse["\\begin{aligned} a &= b \\\\ c &= d\\end{aligned}"] &,
+        {"[1ex]", "[-2.5pt]", " [.5em]", "[2\\baselineskip]", "[\\jot]", "[ 3 mu ]"}
+     ],
+     Map[latexKeepsBracketQ[LaTeXMathParse[#]] &,
+        {"\\begin{aligned} a &= b \\\\ [q,w] &= 0\\end{aligned}", "\\begin{aligned} a &= b \\\\[q,w] &= 0\\end{aligned}",
+         "\\begin{pmatrix} a \\\\ [q,w] \\end{pmatrix}", "a \\\\ [q,w]", "a \\cr [q,w]", "\\begin{aligned} a &= b \\\\ [q,w]_{-} &= 0\\end{aligned}"}
+     ],
+     LaTeXMathParse["a\\\\[1ex]b"]},
+    {{True, True, True, True, True, True}, {True, True, True, True, True, True}, GridBox[{{StyleBox["a", "TI"]}, {StyleBox["b", "TI"]}}]},
+    TestID -> "LaTeX #114: a row break takes a length, and no other bracket"
+]
+
+VerificationTest[
+    (* the shipped PEG-VM program is the current grammar's, and reads ASCII input
+       as the interpreted grammar does *)
+    {Head[Wolfram`Parser`LaTeXPrivate`loadCompiledLatexParser[]],
+     Wolfram`Parser`LaTeXPrivate`latexParserFor["t\\in[0,h]"] === Wolfram`Parser`LaTeXPrivate`loadCompiledLatexParser[],
+     Select[
+        {"t\\in[0,h]", "\\exp[r(ab)]", "-i\\sqrt\\gamma\\,[\\sigma_z,\\rho]\\circ dW", "\\begin{aligned} a &= b \\\\ [A,B] &= 0 \\\\[1ex] c &= d\\end{aligned}",
+         "\\begin{array}[t]{cc} a & b\\end{array}", "\\frac{a}{b}{c}", "\\sqrt[3]{x}", "\\xrightarrow[a]{b}"},
+        Parse[Wolfram`Parser`LaTeXPrivate`loadCompiledLatexParser[], Wolfram`Parser`LaTeXPrivate`preprocessLaTeX[#]] =!=
+            Parse[LaTeXMathParser, Wolfram`Parser`LaTeXPrivate`preprocessLaTeX[#]] &
+     ]},
+    {ParserCombinator, True, {}},
+    TestID -> "LaTeX: the compiled parser asset is current and agrees with the grammar"
+]
