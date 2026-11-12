@@ -1554,12 +1554,123 @@ VerificationTest[
 
 VerificationTest[
     (* the delimiter names of plain TeX, alone and after \left *)
-    {LaTeXMathParse["a\\vert b"], LaTeXMathParse["\\lbrace a\\rbrace"] === LaTeXMathParse["\\{a\\}"],
+    {LaTeXMathParse["a\\vert b"] === LaTeXMathParse["a|b"], LaTeXMathParse["\\lbrace a\\rbrace"] === LaTeXMathParse["\\{a\\}"],
      LaTeXMathParse["\\left\\vert x\\right\\vert"] === LaTeXMathParse["\\left|x\\right|"],
      LaTeXMathParse["\\left\\Vert x\\right\\Vert"] === LaTeXMathParse["\\left\\|x\\right\\|"],
      LaTeXMathParse["\\left\\lbrace x\\right\\rbrace"] === LaTeXMathParse["\\left\\{x\\right\\}"],
      LaTeXMathParse["\\left\\lbrack x\\right\\rbrack"] === LaTeXMathParse["\\left[x\\right]"],
      LaTeXMathParse["\\left<x\\right>"] === LaTeXMathParse["\\left\\langle x\\right\\rangle"]},
-    {RowBox[{StyleBox["a", "TI"], "|", StyleBox["b", "TI"]}], True, True, True, True, True, True},
+    {True, True, True, True, True, True, True},
     TestID -> "LaTeX #115: \\vert, \\Vert, \\lbrace, \\lbrack and < > are delimiters"
+]
+
+
+(* === ExportLaTeX has a command for every symbol the reader reads (WolframInstitute/MarkdownToNotebook#111) ===
+   LaTeXMathParse[ExportLaTeX[boxes]] gives the boxes back, and the TeX is plain
+   ASCII: no symbol goes back as a bare Unicode glyph, which reads as an
+   ordinary character and loses its size, its limits or itself. The sweeps run
+   over the reader's whole table of commands without arguments. *)
+
+latexRoundTrip[tex_String] := With[{boxes = LaTeXMathParse[tex]},
+    With[{back = ExportLaTeX[boxes]},
+        <|"Same" -> (StringQ[back] && LaTeXMathParse[back] === boxes), "ASCII" -> (StringQ[back] && Max[ToCharacterCode[back], 0] < 128), "TeX" -> back|>
+    ]
+]
+latexRoundTripQ[tex_String] := With[{r = latexRoundTrip[tex]}, r["Same"] && r["ASCII"]]
+(* The two commands ExportLaTeX writes as a synonym of another look: "\\ " is the
+   space " " that Wolfram boxes hold between tokens, written as a thin space,
+   and \degree is written ^\circ, which LaTeX reads without a package. *)
+latexExportSynonyms = {"\\ ", "\\degree"}
+
+VerificationTest[
+    ExportLaTeX /@ LaTeXMathParse /@ {"\\oint f", "\\oint_C f", "\\oiint_S f", "\\oiiint_V f", "\\iint f", "\\iiint_D f", "\\int_a^b f", "\\oint\\limits_C f"},
+    {"\\oint f", "\\oint _{C}f", "\\oiint _{S}f", "\\oiiint _{V}f", "\\iint f", "\\iiint _{D}f", "\\int _{a}^{b}f", "\\oint\\limits_{C}f"},
+    TestID -> "ExportLaTeX #111: the contour and multiple integrals are written as their commands"
+]
+
+VerificationTest[
+    Select[{"\\oint f", "\\oint_C f", "\\oiint_S f", "\\oiiint_V f", "\\iint f", "\\iiint_D f", "\\int_a^b f", "\\oint\\limits_C f", "\\iint\\limits_D f",
+        "\\sum_{i=1}^n x_i", "\\prod_i^n", "\\coprod_i", "\\bigcup_i A_i", "\\bigcap_i", "\\bigoplus_i", "\\bigotimes_i", "\\bigsqcup_i", "\\bigvee_i", "\\bigwedge_i",
+        "\\sum\\nolimits_i^n x", "\\lim_{x\\to 0} f", "\\max_i a_i", "\\limsup_{n} a_n"},
+        ! latexRoundTripQ[#] &],
+    {},
+    TestID -> "ExportLaTeX #111: every big operator reads back to its boxes, bare and with limits"
+]
+
+VerificationTest[
+    (* every command of the reader's table that takes no argument: alone, where it
+       gives a box, and between two letters *)
+    Select[
+        Complement[Wolfram`Parser`LaTeXPrivate`$noArgCommands, latexExportSynonyms],
+        Function[name, (LaTeXMathParse[name] =!= "" && ! latexRoundTripQ[name]) || ! latexRoundTripQ["x " <> name <> " y"]]
+    ],
+    {},
+    TestID -> "ExportLaTeX #111: every symbol, letter, operator name and space of the reader's table round-trips"
+]
+
+VerificationTest[
+    (* and the table is not empty of what the issue names *)
+    {Length[Wolfram`Parser`LaTeXPrivate`$noArgCommands] > 300,
+     SubsetQ[Wolfram`Parser`LaTeXPrivate`$noArgCommands, {"\\oint", "\\oiint", "\\oiiint", "\\iint", "\\iiint", "\\alpha", "\\sin", "\\quad", "\\AA"}],
+     Lookup[Wolfram`Parser`$mathTeX, {"\[ContourIntegral]", "\[ContourIntegral]\[ContourIntegral]", "\[Integral]\[Integral]\[Integral]"}],
+     ExportLaTeX /@ LaTeXMathParse /@ latexExportSynonyms},
+    {True, True, {"\\oint ", "\\oiint ", "\\iiint "}, {"\\, ", "^\\circ "}},
+    TestID -> "ExportLaTeX #111: the reverse table holds the integrals; the two synonyms"
+]
+
+VerificationTest[
+    (* a glyph of the Private Use Area is written as its command, not dropped *)
+    ExportLaTeX /@ LaTeXMathParse /@ {"x\\mapsto y", "a\\mid b", "x\\to y", "x\\rightarrow y", "\\lVert x\\rVert", "\\left\\|x\\right\\|"},
+    {"x\\mapsto y", "a\\mid b", "x\\to y", "x\\rightarrow y", "\\lVert x\\rVert ", "\\lVert x\\rVert "},
+    TestID -> "ExportLaTeX #111: \\mapsto, \\mid and the bars of a norm are written"
+]
+
+VerificationTest[
+    (* the variant letters keep their look: TeX's \epsilon is the lunate letter *)
+    {LaTeXMathParse["\\epsilon"], LaTeXMathParse["\\varepsilon"],
+     ExportLaTeX /@ LaTeXMathParse /@ {"\\epsilon", "\\varepsilon", "\\phi", "\\varphi", "\\theta", "\\vartheta", "\\rho", "\\varrho", "\\pi", "\\varpi", "\\kappa", "\\varkappa", "\\sigma", "\\varsigma"}},
+    {StyleBox["\[Epsilon]", "TI"], "\[CurlyEpsilon]",
+     {"\\epsilon ", "\\varepsilon ", "\\phi ", "\\varphi ", "\\theta ", "\\vartheta ", "\\rho ", "\\varrho ", "\\pi ", "\\varpi ", "\\kappa ", "\\varkappa ", "\\sigma ", "\\varsigma "}},
+    TestID -> "ExportLaTeX #111: a Greek letter and its variant are written as themselves"
+]
+
+VerificationTest[
+    (* each symbol command has a glyph of its own where TeX has one *)
+    Length[DeleteDuplicates[LaTeXMathParse /@ #]] & /@ {{"\\otimes", "\\oslash"}, {"\\ast", "\\star"}, {"\\notin", "\\complement"}, {"\\varsigma", "\\Finv"}, {"\\wr", "\\mid"}},
+    {2, 2, 2, 2, 2},
+    TestID -> "LaTeX #111: \\oslash, \\ast, \\star, \\complement, \\Finv and \\wr have their own glyphs"
+]
+
+VerificationTest[
+    (* upright text and the font commands: no control word is made of the text *)
+    {ExportLaTeX /@ LaTeXMathParse /@ {"\\text{if }x", "\\mathrm{d}x", "\\operatorname{erf}(x)", "\\mathbf{v}", "\\mathsf{A}", "\\mathtt{x1}", "\\mathit{ab}", "\\sin x", "a \\bmod b"},
+     Select[{"\\text{if }x", "\\text{a b}", "\\mathrm{d}x", "\\mathrm{Tr}", "\\operatorname{erf}(x)", "\\mathbf{v}", "\\textbf{a b}", "\\mathsf{A}", "\\mathtt{x1}", "\\mathit{ab}",
+        "\\boldsymbol{\\alpha}", "\\mathbb{R}", "\\mathcal{L}", "\\mathfrak{g}", "\\sin x", "\\log_2 n", "a \\bmod b"}, ! latexRoundTripQ[#] &]},
+    {{"\\text{if }x", "\\mathrm{d}x", "\\mathrm{erf}(x)", "\\mathbf{v}", "\\mathsf{A}", "\\mathtt{x1}", "\\mathit{ab}", "\\sin x", "a\\mod b"}, {}},
+    TestID -> "ExportLaTeX #111: upright text and the font commands round-trip"
+]
+
+VerificationTest[
+    (* accents, braces, roots, fractions, fences, sized delimiters and extensible arrows *)
+    Select[
+        Join[
+            {"\\hat{x}", "\\widehat{xy}", "\\tilde{x}", "\\bar{x}", "\\overline{AB}", "\\vec{v}", "\\dot{x}", "\\ddot{x}", "\\check{x}", "\\breve{x}",
+             "\\acute{x}", "\\grave{x}", "\\mathring{x}", "\\overrightarrow{AB}", "\\overleftarrow{AB}", "\\overleftrightarrow{AB}",
+             "\\underline{x}", "\\utilde{x}", "\\overbrace{a+b}", "\\underbrace{a+b}", "\\overbrace{a+b}^{n}", "\\underbrace{a+b}_{n}",
+             "\\frac{a}{b}", "\\sqrt{x}", "\\sqrt[3]{x}", "\\binom{n}{k}", "\\boxed{x}", "\\cancel{x}", "\\stackrel{?}{=}", "\\overset{a}{b}",
+             "\\lvert x\\rvert", "\\lVert x\\rVert", "\\langle x\\rangle", "\\lfloor x\\rfloor", "\\lceil x\\rceil", "\\{x\\}", "(x)", "[x]", "|x|",
+             "\\Big(0,\\,-\\sum_n p_n\\Big)", "\\bigl[x\\bigr]", "\\bigg\\{x\\bigg\\}", "\\Bigg\\langle x\\Bigg\\rangle", "a\\big/b", "\\Big|x\\Big|", "\\big\\|x\\big\\|"},
+            Flatten[{# <> "{a}", # <> "[b]{a}"} & /@ Keys[Wolfram`Parser`LaTeXPrivate`$xarrowGlyphs]]
+        ],
+        ! latexRoundTripQ[#] &
+    ],
+    {},
+    TestID -> "ExportLaTeX #111: accents, braces, fences, sized delimiters and extensible arrows round-trip"
+]
+
+VerificationTest[
+    (* the characters TeX reads as syntax, and each space *)
+    ExportLaTeX /@ LaTeXMathParse /@ {"\\$", "\\%", "\\&", "\\#", "\\_", "\\{", "\\}", "a\\,b", "a\\:b", "a\\;b", "a\\!b", "a\\quad b", "a\\qquad b", "a~b", "f'"},
+    {"\\$", "\\%", "\\&", "\\#", "\\_", "\\{", "\\}", "a\\, b", "a\\: b", "a\\; b", "a\\! b", "a\\quad b", "a\\qquad b", "a~b", "f^{\\prime }"},
+    TestID -> "ExportLaTeX #111: escaped characters, spaces and the prime"
 ]

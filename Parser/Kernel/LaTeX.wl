@@ -1583,14 +1583,14 @@ namedSymbolChars = <|
 	"\\quad"    -> "\[NonBreakingSpace]\[NonBreakingSpace]",
 	"\\qquad"   -> "\[NonBreakingSpace]\[NonBreakingSpace]\[NonBreakingSpace]\[NonBreakingSpace]",
 	(* extra binary operators *)
-	"\\div"     -> "\[Divide]",        "\\ast"   -> "\[Star]",
-	"\\star"    -> "\[FivePointedStar]", "\\bullet" -> "\[Bullet]",
+	"\\div"     -> "\[Divide]",        "\\ast"   -> "\:2217",
+	"\\star"    -> "\[Star]",          "\\bullet" -> "\[Bullet]",
 	"\\ominus"  -> "\[CircleMinus]",   "\\odot"  -> "\[CircleDot]",
-	"\\oslash"  -> "\[CircleTimes]",   "\\wedge" -> "\[Wedge]",
+	"\\oslash"  -> "\:2298",           "\\wedge" -> "\[Wedge]",
 	"\\vee"     -> "\[Vee]",           "\\sqcap" -> "\[SquareIntersection]",
 	"\\sqcup"   -> "\[SquareUnion]",   "\\uplus" -> "\[UnionPlus]",
 	"\\amalg"   -> "\[Coproduct]",     "\\dagger" -> "\[Dagger]",
-	"\\ddagger" -> "\[DoubleDagger]",  "\\wr"    -> "\[Wolf]",
+	"\\ddagger" -> "\[DoubleDagger]",  "\\wr"    -> "\:2240",
 	(* big operators *)
 	"\\bigcup"  -> "\[Union]",         "\\bigcap" -> "\[Intersection]",
 	"\\bigoplus" -> "\[CirclePlus]",   "\\bigotimes" -> "\[CircleTimes]",
@@ -1645,8 +1645,8 @@ namedSymbolChars = <|
 	"\\clubsuit" -> "\[ClubSuit]",     "\\spadesuit" -> "\[SpadeSuit]",
 	"\\heartsuit" -> "\[HeartSuit]",   "\\diamondsuit" -> "\[DiamondSuit]",
 	"\\surd"    -> "\[Sqrt]",          "\\ell" -> "\[ScriptL]",
-	"\\wp"      -> "\[WeierstrassP]",   "\\Finv" -> "\[FinalSigma]",
-	"\\complement" -> "\[NotElement]", "\\degree" -> "\[Degree]",
+	"\\wp"      -> "\[WeierstrassP]",   "\\Finv" -> "\:2132",
+	"\\complement" -> "\:2201",       "\\degree" -> "\[Degree]",
 	"\\prime"   -> "\[Prime]",         "\\backslash" -> "\[Backslash]",
 	"\\lnot"    -> "\[Not]",
 	"\\gtrsim"  -> "\[GreaterTilde]",  "\\lesssim" -> "\[LessTilde]",
@@ -1682,8 +1682,9 @@ namedSymbolChars = <|
 	"\\pounds"  -> "\[Sterling]",
 	"\\textdollar" -> "$",
 	"\\minuso"  -> "\[CircleMinus]",
-	(* \varepsilon variant *)
-	"\\varepsilon" -> "\[Epsilon]",
+	(* the variant letters: TeX's \epsilon is the lunate \[Epsilon] and its
+		\varepsilon the \[CurlyEpsilon], as ExportLaTeX writes them back *)
+	"\\varepsilon" -> "\[CurlyEpsilon]",
 	"\\varphi"     -> "\[CurlyPhi]",
 	"\\varrho"     -> "\[CurlyRho]",
 	"\\varsigma"   -> "\[FinalSigma]",
@@ -1710,7 +1711,7 @@ Scan[
 		commandHandlers[name] = Function[{opt, req}, fixedFence[namedSymbolChars[name]]]
 	],
 	{"\\langle", "\\rangle", "\\lvert", "\\rvert", "\\lVert", "\\rVert",
-	"\\lceil", "\\rceil", "\\lfloor", "\\rfloor"
+	"\\lceil", "\\rceil", "\\lfloor", "\\rfloor", "\\vert"
 	}
 ]
 
@@ -1724,7 +1725,7 @@ Scan[
 greekChars = <|
 	"\\alpha" -> "\[Alpha]",   "\\beta"  -> "\[Beta]",
 	"\\gamma" -> "\[Gamma]",   "\\delta" -> "\[Delta]",
-	"\\epsilon" -> "\[CurlyEpsilon]",
+	"\\epsilon" -> "\[Epsilon]",
 	"\\zeta" -> "\[Zeta]",     "\\eta"   -> "\[Eta]",
 	"\\theta" -> "\[Theta]",   "\\iota"  -> "\[Iota]",
 	"\\kappa" -> "\[Kappa]",   "\\lambda" -> "\[Lambda]",
@@ -3516,8 +3517,28 @@ normCharCode[n_Integer] := Which[
 (* exposed for reuse: PUA/formal glyph -> canonical Unicode (prose-safe) *)
 Wolfram`Parser`normStr[s_String] := StringJoin[normCharCode /@ ToCharacterCode[s]]
 
-(* exposed for reuse: canonical Unicode glyph -> TeX command (math mode) *)
-Wolfram`Parser`$mathTeX = Join[<|
+(* The reader's symbol table read backwards: each glyph a symbol command or a
+	Greek letter reads to, by the first command of the table that reads to it,
+	so that ExportLaTeX has a command for every symbol LaTeXMathParse reads
+	(\oint, \iint, \cdots, \Rightarrow, \prec, \ell, ...) and none goes back
+	as a bare Unicode glyph.  A glyph that is plain ASCII, or only spaces, has
+	its own ExportLaTeX rule below.  The entries of $mathTeX written out take
+	precedence: they choose among synonyms (\le over \leq). *)
+asciiOrSpaceQ[glyph_String] := AllTrue[ToCharacterCode[glyph], # < 128 || # === 160 &]
+commandGlyphTeX[table_Association] := Association @ KeyValueMap[#2 -> #1 <> " " &,
+	Select[Reverse[table], ! asciiOrSpaceQ[#] &]
+]
+$readerTeX := $readerTeX = Join[commandGlyphTeX[greekChars], commandGlyphTeX[namedSymbolChars]]
+
+(* the text symbols (\AA, \o, \ss, ...), for ExportLaTeX alone: $mathTeX is
+	also applied to prose, where these are letters *)
+$textSymbolTeX := $textSymbolTeX = commandGlyphTeX[FromCharacterCode /@ textSymbolChars]
+
+(* exposed for reuse: canonical Unicode glyph -> TeX command (math mode).  The
+	keys run longest first, so that a rule list made of them reads a run of
+	integral signs as \iint or \oiint before it reads one as \int. *)
+Wolfram`Parser`$mathTeX = KeySortBy[-StringLength[#] &] @ Join[$readerTeX, <|
+	"\[Coproduct]" -> "\\coprod ", "\[RightArrow]" -> "\\rightarrow ",
 	"\[Alpha]" -> "\\alpha ", "\[Beta]" -> "\\beta ", "\[Gamma]" -> "\\gamma ",
 	"\[Delta]" -> "\\delta ", "\[Epsilon]" -> "\\epsilon ", "\[CurlyEpsilon]" -> "\\varepsilon ",
 	"\[Zeta]" -> "\\zeta ", "\[Eta]" -> "\\eta ", "\[Theta]" -> "\\theta ",
@@ -3555,7 +3576,7 @@ Wolfram`Parser`$mathTeX = Join[<|
 	"\[Superset]" -> "\\supset ", "\[SupersetEqual]" -> "\\supseteq ",
 	"\[Union]" -> "\\cup ", "\[Intersection]" -> "\\cap ", "\[EmptySet]" -> "\\emptyset ",
 	"\[ForAll]" -> "\\forall ", "\[Exists]" -> "\\exists ",
-	"\[And]" -> "\\wedge ", "\[Or]" -> "\\vee ", "\[Not]" -> "\\neg ",
+	"\[And]" -> "\\land ", "\[Or]" -> "\\lor ", "\[Not]" -> "\\neg ",
 	"\[LeftArrow]" -> "\\leftarrow ", "\[LeftRightArrow]" -> "\\leftrightarrow ",
 	"\[Implies]" -> "\\implies ", "\[RightTeeArrow]" -> "\\mapsto ",
 	"\[Angle]" -> "\\angle ", "\[Degree]" -> "^\\circ "
@@ -3591,14 +3612,73 @@ ExportLaTeX["lcm"] := "\\operatorname{lcm} "
 ExportLaTeX["{"] := "\\{"
 ExportLaTeX["}"] := "\\}"
 ExportLaTeX["\[Rule]"] := "\\to "
-ExportLaTeX["\[RightArrow]"] := "\\to "
+(* the characters TeX reads as syntax, and the logos *)
+ExportLaTeX["$"] := "\\$"
+ExportLaTeX["%"] := "\\%"
+ExportLaTeX["&"] := "\\&"
+ExportLaTeX["#"] := "\\#"
+ExportLaTeX["_"] := "\\_"
+ExportLaTeX["KaTeX"] := "\\KaTeX "
+ExportLaTeX["LaTeX"] := "\\LaTeX "
+ExportLaTeX["TeX"] := "\\TeX "
+(* the spaces LaTeXMathParse reads, each by its own command; any other run of
+	white space is a thin space.  A very thin space is the italic correction
+	the reader puts before a closing delimiter, which TeX adds by itself. *)
+ExportLaTeX["\[MediumSpace]"] := "\\: "
+ExportLaTeX["\[ThickSpace]"] := "\\; "
+ExportLaTeX["\[NegativeThinSpace]"] := "\\! "
+ExportLaTeX["\[NegativeMediumSpace]"] := "\\negmedspace "
+ExportLaTeX["\[NegativeThickSpace]"] := "\\negthickspace "
+ExportLaTeX["\[VeryThinSpace]"] := ""
+ExportLaTeX["\[NonBreakingSpace]"] := "~"
+ExportLaTeX["\[NonBreakingSpace]\[NonBreakingSpace]"] := "\\quad "
+ExportLaTeX["\[NonBreakingSpace]\[NonBreakingSpace]\[NonBreakingSpace]\[NonBreakingSpace]"] := "\\qquad "
 ExportLaTeX[s_String /; s =!= "" && StringMatchQ[s, Whitespace]] := "\\, "
-ExportLaTeX[s_String] := StringReplace[StringReplace[normStr[s], $mathAsciiOps], Normal @ $mathTeX]
+(* A glyph of the Private Use Area that the reader's table reads to (the \mapsto
+	arrow, the \mid bar, ...) and the double bars of a norm are written as their
+	commands before normStr drops what is left of that area. *)
+$privateUseTeX := $privateUseTeX = Join[
+	Normal @ KeySelect[Join[$textSymbolTeX, $mathTeX], StringContainsQ[#, _?(57344 <= First[ToCharacterCode[#]] <= 63743 &)] &],
+	{"\[LeftDoubleBracketingBar]" -> "\\lVert ", "\[RightDoubleBracketingBar]" -> "\\rVert "}
+]
+ExportLaTeX[s_String] := StringReplace[
+	StringReplace[normStr[StringReplace[s, $privateUseTeX]], $mathAsciiOps],
+	Join[Normal @ $mathTeX, Normal @ $textSymbolTeX]
+]
 ExportLaTeX[StyleBox[s_String, "TI", ___]] /; StringMatchQ[s, RegularExpression["[a-zA-Z]{2,}"]] :=
 	"\\mathit{" <> s <> "}"
 plainOpQ[StyleBox[_String, opts___]] := ! FreeQ[{opts}, FontSlant -> "Plain"]
 plainOpQ[_] := False
-ExportLaTeX[b : StyleBox[s_String, ___]] /; plainOpQ[b] := "\\" <> s <> " "
+(* Upright text.  An operator name the reader has a command for (\sin, \lim,
+	\mod, ...) is that command; any other is the argument of the font command
+	that reads back to the same box: \mathrm, \mathbf, \mathsf or \mathtt for
+	letters and digits, and the \text command of the font for text with spaces
+	or punctuation, where a space reads back as the no-break space it is. *)
+uprightFont[opts_List] := Which[
+	MemberQ[opts, FontWeight -> "Bold"], {"\\mathbf", "\\textbf"},
+	MemberQ[opts, FontFamily -> "Courier"], {"\\mathtt", "\\texttt"},
+	MemberQ[opts, FontFamily -> "Helvetica"], {"\\mathsf", "\\textsf"},
+	True, {"\\mathrm", "\\text"}
+]
+textTeX[s_String] := StringReplace[s, {
+	"\[NonBreakingSpace]" -> " ", "\\" -> "\\textbackslash ",
+	c : ("#" | "$" | "%" | "&" | "_" | "{" | "}") :> "\\" <> c
+}]
+ExportLaTeX[b : StyleBox[s_String, opts___]] /; plainOpQ[b] := Which[
+	MemberQ[functionNames, s] && uprightFont[{opts}] === {"\\mathrm", "\\text"}, "\\" <> s <> " ",
+	StringMatchQ[s, (LetterCharacter | DigitCharacter) ..] && Max[ToCharacterCode[s]] < 128, First[uprightFont[{opts}]] <> "{" <> s <> "}",
+	True, Last[uprightFont[{opts}]] <> "{" <> textTeX[s] <> "}"
+]
+ExportLaTeX[StyleBox[s_String, FontSlant -> "Italic"]] /; StringMatchQ[s, RegularExpression["[a-zA-Z]{2,}"]] := "\\mathit{" <> s <> "}"
+(* a delimiter sized by \big, \Big, \bigg or \Bigg *)
+$bigCommands = <|1.2 -> "\\big", 1.8 -> "\\Big", 2.4 -> "\\bigg", 3. -> "\\Bigg"|>
+ExportLaTeX[StyleBox[glyph_String, FontSize -> ratio_ Inherited, SpanMinSize -> 1, SpanMaxSize -> 1]] /; KeyExistsQ[$bigCommands, N[ratio]] :=
+	$bigCommands[N[ratio]] <> ExportLaTeX[glyph]
+(* the bars of \lvert..\rvert and \lVert..\rVert, fixed in size where the reader
+	pairs them; \left|..\right| and |..| carry the plain glyphs *)
+ExportLaTeX[StyleBox["\[LeftBracketingBar]", SpanMaxSize -> 1]] := "\\lvert "
+ExportLaTeX[StyleBox["\[RightBracketingBar]", SpanMaxSize -> 1]] := "\\rvert "
+ExportLaTeX[StyleBox["\[DoubleVerticalBar]", SpanMaxSize -> 1]] := "\\rVert "
 ExportLaTeX[StyleBox[s_, ___]] := ExportLaTeX[s]
 ExportLaTeX[FractionBox[a_, b_, ___]] := "\\frac{" <> ExportLaTeX[a] <> "}{" <> ExportLaTeX[b] <> "}"
 scriptBase[box_] := Replace[
@@ -3637,10 +3717,30 @@ ExportLaTeX[SuperscriptBox[a_, b_, ___]] := scriptBase[a] <> "^{" <> ExportLaTeX
 ExportLaTeX[SubsuperscriptBox[a_, b_, c_, ___]] := scriptBase[a] <> "_{" <> ExportLaTeX[b] <> "}^{" <> ExportLaTeX[c] <> "}"
 ExportLaTeX[SqrtBox[a_, ___]] := "\\sqrt{" <> ExportLaTeX[a] <> "}"
 ExportLaTeX[RadicalBox[a_, b_, ___]] := "\\sqrt[" <> ExportLaTeX[b] <> "]{" <> ExportLaTeX[a] <> "}"
+(* the accents and the braces the reader sets over or under their argument, each
+	by a command that reads back to the same box *)
+$overAccentTeX = <|
+	"^" -> "\\hat", "_" -> "\\overline", "\[RightVector]" -> "\\vec", "~" -> "\\tilde",
+	"." -> "\\dot", ".." -> "\\ddot", "\[Hacek]" -> "\\check", "\[Breve]" -> "\\breve",
+	FromCharacterCode[180] -> "\\acute", FromCharacterCode[96] -> "\\grave", "\[SmallCircle]" -> "\\mathring",
+	"\[RightArrow]" -> "\\overrightarrow", "\[LeftArrow]" -> "\\overleftarrow", "\[LeftRightArrow]" -> "\\overleftrightarrow",
+	"\[OverBrace]" -> "\\overbrace", "\[OverBracket]" -> "\\overbracket"
+|>
+$underAccentTeX = <|
+	"_" -> "\\underline", "~" -> "\\utilde", "\[UnderBrace]" -> "\\underbrace", "\[UnderBracket]" -> "\\underbracket"
+|>
+ExportLaTeX[UnderscriptBox[a_, g_String, ___]] /; KeyExistsQ[$underAccentTeX, g] := $underAccentTeX[g] <> "{" <> ExportLaTeX[a] <> "}"
 ExportLaTeX[UnderscriptBox[a_, b_, ___]] := ExportLaTeX[a] <> "_{" <> ExportLaTeX[b] <> "}"
-ExportLaTeX[OverscriptBox[a_, "^", ___]] := "\\hat{" <> ExportLaTeX[a] <> "}"
-ExportLaTeX[OverscriptBox[a_, "_", ___]] := "\\overline{" <> ExportLaTeX[a] <> "}"
-ExportLaTeX[OverscriptBox[a_, "\[RightVector]" | "\[RightArrow]", ___]] := "\\vec{" <> ExportLaTeX[a] <> "}"
+ExportLaTeX[OverscriptBox[a_, g_String, ___]] /; KeyExistsQ[$overAccentTeX, g] := $overAccentTeX[g] <> "{" <> ExportLaTeX[a] <> "}"
+(* an extensible arrow, by the first command of the reader's table that draws it,
+	with what stands under it as the optional argument *)
+$xarrowTeX := $xarrowTeX = Association[Reverse[KeyValueMap[#2 -> #1 &, $xarrowGlyphs]]]
+ExportLaTeX[UnderoverscriptBox[arrow_String, below_, above_]] /; KeyExistsQ[$xarrowTeX, arrow] :=
+	$xarrowTeX[arrow] <> If[below === "", "", "[" <> ExportLaTeX[below] <> "]"] <> "{" <> ExportLaTeX[above] <> "}"
+ExportLaTeX[StyleBox[x_, FontWeight -> "Bold"]] := "\\boldsymbol{" <> ExportLaTeX[x] <> "}"
+ExportLaTeX[TemplateBox[{n_, k_}, "Binomial"]] := "\\binom{" <> ExportLaTeX[n] <> "}{" <> ExportLaTeX[k] <> "}"
+ExportLaTeX[FrameBox[x_]] := "\\boxed{" <> ExportLaTeX[x] <> "}"
+ExportLaTeX[StyleBox[x_, FontVariations -> {"StrikeThrough" -> True}]] := "\\cancel{" <> ExportLaTeX[x] <> "}"
 ExportLaTeX[OverscriptBox[a_, b_, ___]] := "\\overset{" <> ExportLaTeX[b] <> "}{" <> ExportLaTeX[a] <> "}"
 ExportLaTeX[UnderoverscriptBox[a_, b_, c_, ___]] := ExportLaTeX[a] <> "_{" <> ExportLaTeX[b] <> "}^{" <> ExportLaTeX[c] <> "}"
 ExportLaTeX[ButtonBox[n_, ___]] := ExportLaTeX[n]
@@ -3668,8 +3768,12 @@ ExportLaTeX[matrixEnvBox[env_String, g_GridBox]] := "\\begin{" <> env <> "}" <> 
 fuseMatrixFences[xs_List] := SequenceReplace[xs,
 	{o_, g_GridBox, c_} /; StringQ[matrixEnvFor[o, c]] :> matrixEnvBox[matrixEnvFor[o, c], g]
 ]
+(* an operator name, bare or with its scripts or limits: the reader puts the
+	space of a function application after it, so the space is not written *)
+operatorBoxQ[b_] := plainOpQ[b] ||
+	MatchQ[b, (SubscriptBox | SuperscriptBox | SubsuperscriptBox | UnderscriptBox | OverscriptBox | UnderoverscriptBox)[_?plainOpQ, __]]
 ExportLaTeX[RowBox[xs_List]] := StringJoin[ExportLaTeX /@
-	fuseMatrixFences @ SequenceReplace[xs, {op_?plainOpQ, " " | "\[ThinSpace]" | "\[MediumSpace]" | "\[InvisibleSpace]"} :> op]
+	fuseMatrixFences @ SequenceReplace[xs, {op_?operatorBoxQ, " " | "\[ThinSpace]" | "\[MediumSpace]" | "\[InvisibleSpace]"} :> op]
 ]
 ExportLaTeX[FormBox[box_, ___]] := ExportLaTeX[box]
 ExportLaTeX[TagBox[x_, ___]] := ExportLaTeX[x]
