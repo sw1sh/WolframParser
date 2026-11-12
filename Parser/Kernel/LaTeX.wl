@@ -1379,25 +1379,34 @@ lineBreakSegments[body_] := Module[{parts},
 (* Sized delimiters from \big / \Big / \bigg / \Bigg (and their l/r/m
 	variants).  preprocessLaTeX rewrites `\Big(` -> `\xbigII{(}` etc.,
 	routing the delimiter here so we can scale it.  KaTeX grows the
-	delimiter ~1.2 / 1.8 / 2.4 / 3.0x of the SURROUNDING text size.
+	delimiter ~1.2 / 1.8 / 2.4 / 3.0x of the SURROUNDING text size, and the
+	size is fixed: \Big( is as tall whatever stands next to it.
 	FontSize -> r Inherited multiplies the inherited font size, so the
 	delimiter stays r times its neighbours under any viewer zoom and
 	still resolves inside a standalone Rasterize (issue #27).  Do NOT
-	swap this back to Magnification: that is an absolute screen-zoom
+	swap this for Magnification: that is an absolute screen-zoom
 	setting, not a relative scale, so under a zoomed viewer the glyph
 	stays pinned at e.g. 1.2x absolute and renders SMALLER than the
 	scaled-up body text.  FontSize -> Scaled[r] is also wrong - it
 	resolves against the window/canvas and explodes a standalone
-	Rasterize.  The `.` null delimiter never reaches here - dropped
-	upstream. *)
+	Rasterize.
+	SpanMinSize -> 1 and SpanMaxSize -> 1 hold the glyph at that font size.
+	Without them the front end stretches a ( ) [ ] { } / to the tallest box of
+	its own RowBox, and the two glyphs of a pair sit in different rows as soon
+	as a comma stands between them, so \Big(0,\,-\sum_n p_n\Big) came out with
+	a small ( and a ) as tall as the sum.  The span sizes alone, without
+	FontSize, do not size a delimiter: the front end draws a stretched one in
+	steps, and 1.2 looks like no change.  Every delimiter takes the same box,
+	a bar or an angle (a fixedFence glyph where it stands alone) included.
+	The `.` null delimiter never reaches here - dropped upstream. *)
 $xbigRatio = <|"I" -> 1.2, "II" -> 1.8, "III" -> 2.4, "IV" -> 3.0|>
+sizedDelimiter[_, ""] := ""
+sizedDelimiter[ratio_, StyleBox[glyph_String, SpanMaxSize -> 1]] := sizedDelimiter[ratio, glyph]
+sizedDelimiter[ratio_, angle : "<" | ">"] := sizedDelimiter[ratio, delimGlyph[angle]]
+sizedDelimiter[ratio_, glyph_] := StyleBox[glyph, FontSize -> ratio Inherited, SpanMinSize -> 1, SpanMaxSize -> 1]
 Scan[
 	Function[lvl,
-		commandHandlers["\\xbig" <> lvl] = Function[{opt, req},
-			With[{d = First[req, ""]},
-				If[d === "", "", StyleBox[d, FontSize -> $xbigRatio[lvl] Inherited]]
-			]
-		]
+		commandHandlers["\\xbig" <> lvl] = Function[{opt, req}, sizedDelimiter[$xbigRatio[lvl], First[req, ""]]]
 	],
 	{"I", "II", "III", "IV"}
 ]
@@ -1664,6 +1673,9 @@ namedSymbolChars = <|
 	(* delimiter aliases used as `\lvert` / `\rvert` *)
 	"\\lvert"   -> "|",          "\\rvert"   -> "|",
 	"\\lVert"   -> "\[DoubleVerticalBar]", "\\rVert" -> "\[DoubleVerticalBar]",
+	"\\vert"    -> "|",          "\\Vert"    -> "\[DoubleVerticalBar]",
+	"\\lbrace"  -> "{",          "\\rbrace"  -> "}",
+	"\\lbrack"  -> "[",          "\\rbrack"  -> "]",
 	(* miscellaneous symbols - some have no WL named character so we
 		use Unicode literals (FromCharacterCode handles them either way). *)
 	"\\maltese" -> FromCharacterCode[10016],   (* MALTESE CROSS U+2720 *)
@@ -1890,6 +1902,9 @@ delimMacro = ParseChoice[
 	literal["\\lfloor"], literal["\\rfloor"],
 	literal["\\lvert"],  literal["\\rvert"],
 	literal["\\lVert"],  literal["\\rVert"],
+	literal["\\vert"],   literal["\\Vert"],
+	literal["\\lbrace"], literal["\\rbrace"],
+	literal["\\lbrack"], literal["\\rbrack"],
 	literal["\\|"], literal["\\backslash"], literal["\\uparrow"],
 	literal["\\downarrow"], literal["\\updownarrow"],
 	literal["\\Uparrow"], literal["\\Downarrow"], literal["\\Updownarrow"]
@@ -1909,6 +1924,14 @@ delimGlyph["\\rvert"]   = "|"
 delimGlyph["\\lVert"]   = "\[DoubleVerticalBar]"
 delimGlyph["\\rVert"]   = "\[DoubleVerticalBar]"
 delimGlyph["\\|"]       = "\[DoubleVerticalBar]"
+delimGlyph["\\vert"]    = "|"
+delimGlyph["\\Vert"]    = "\[DoubleVerticalBar]"
+delimGlyph["\\lbrace"]  = "{"
+delimGlyph["\\rbrace"]  = "}"
+delimGlyph["\\lbrack"]  = "["
+delimGlyph["\\rbrack"]  = "]"
+delimGlyph["<"]         = "\[LeftAngleBracket]"
+delimGlyph[">"]         = "\[RightAngleBracket]"
 delimGlyph["\\backslash"] = "\\"
 delimGlyph["\\uparrow"]     = "\[UpArrow]"
 delimGlyph["\\downarrow"]   = "\[DownArrow]"
@@ -2945,19 +2968,19 @@ preprocessLaTeX[s_String] :=
 			"\\\\(?:big|bigl|bigr|bigm|Big|Bigl|Bigr|Bigm|bigg|biggl|biggr|biggm|Bigg|Biggl|Biggr|Biggm|middle)\\s*\\."
 		] -> "",
 		RegularExpression[
-			"\\\\(?:big|bigl|bigr|bigm)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/])"
+			"\\\\(?:big|bigl|bigr|bigm)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/<>])"
 		] -> "\\xbigI{$1}",
 		RegularExpression[
-			"\\\\(?:Big|Bigl|Bigr|Bigm)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/])"
+			"\\\\(?:Big|Bigl|Bigr|Bigm)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/<>])"
 		] -> "\\xbigII{$1}",
 		RegularExpression[
-			"\\\\(?:bigg|biggl|biggr|biggm)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/])"
+			"\\\\(?:bigg|biggl|biggr|biggm)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/<>])"
 		] -> "\\xbigIII{$1}",
 		RegularExpression[
-			"\\\\(?:Bigg|Biggl|Biggr|Biggm)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/])"
+			"\\\\(?:Bigg|Biggl|Biggr|Biggm)\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/<>])"
 		] -> "\\xbigIV{$1}",
 		RegularExpression[
-			"\\\\middle\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/])"
+			"\\\\middle\\s*(\\\\[a-zA-Z]+|\\\\[^a-zA-Z]|[()\\[\\]{}|/<>])"
 		] -> "$1",
 		RegularExpression[
 			"\\\\(?:big|bigl|bigr|bigm|Big|Bigl|Bigr|Bigm|bigg|biggl|biggr|biggm|Bigg|Biggl|Biggr|Biggm|middle)(?![a-zA-Z])"

@@ -616,9 +616,9 @@ VerificationTest[
        grammar's bare-delimiter fallback. *)
     LaTeXMathParse["\\bigl( a \\bigr)"],
     RowBox[{
-        StyleBox["(", FontSize -> 1.2 Inherited],
+        StyleBox["(", FontSize -> 1.2 Inherited, SpanMinSize -> 1, SpanMaxSize -> 1],
         StyleBox["a", "TI"],
-        StyleBox[")", FontSize -> 1.2 Inherited]
+        StyleBox[")", FontSize -> 1.2 Inherited, SpanMinSize -> 1, SpanMaxSize -> 1]
     }],
     TestID -> "KaTeX delimiters: \\bigl ... \\bigr keep + size their delim"
 ]
@@ -626,14 +626,14 @@ VerificationTest[
 VerificationTest[
     (* unmatched \big( in a superscript: sized paren stays visible *)
     LaTeXMathParse["x^{\\big(}"],
-    SuperscriptBox[StyleBox["x", "TI"], StyleBox["(", FontSize -> 1.2 Inherited]],
+    SuperscriptBox[StyleBox["x", "TI"], StyleBox["(", FontSize -> 1.2 Inherited, SpanMinSize -> 1, SpanMaxSize -> 1]],
     TestID -> "KaTeX delimiters: unmatched \\big( renders sized paren"
 ]
 
 VerificationTest[
     (* \Big\uparrow: arrow glyph, sized up at the \Big level (1.8x) *)
     LaTeXMathParse["a_{\\Big\\uparrow}"],
-    SubscriptBox[StyleBox["a", "TI"], StyleBox["\[UpArrow]", FontSize -> 1.8 Inherited]],
+    SubscriptBox[StyleBox["a", "TI"], StyleBox["\[UpArrow]", FontSize -> 1.8 Inherited, SpanMinSize -> 1, SpanMaxSize -> 1]],
     TestID -> "KaTeX delimiters: \\Big\\uparrow sizes the arrow"
 ]
 
@@ -1479,4 +1479,87 @@ VerificationTest[
     ],
     {},
     TestID -> "LaTeX #113: the compiled parser agrees with the grammar on the Dirac sweep"
+]
+
+
+(* === sized delimiters (WolframInstitute/MarkdownToNotebook#115) ===
+   \big, \Big, \bigg and \Bigg give a delimiter a fixed size, 1.2, 1.8, 2.4 and
+   3.0 times the text, whatever stands next to it: the glyph is held at that
+   font size, so the two sides of a pair are equal with a tall sum between
+   them, and with a comma that puts them in different rows. *)
+
+latexSized[glyph_String, ratio_] := StyleBox[glyph, FontSize -> ratio Inherited, SpanMinSize -> 1, SpanMaxSize -> 1]
+latexSizedGlyphs[boxes_] := Cases[boxes, StyleBox[glyph_, FontSize -> ratio_ Inherited, SpanMinSize -> 1, SpanMaxSize -> 1] :> {glyph, ratio}, {0, Infinity}]
+latexBigSizes = {{"big", 1.2}, {"Big", 1.8}, {"bigg", 2.4}, {"Bigg", 3.0}}
+latexBigPairs = {
+    {"(", ")", "(", ")"}, {"[", "]", "[", "]"}, {"\\{", "\\}", "{", "}"}, {"\\lbrace ", "\\rbrace ", "{", "}"}, {"\\lbrack ", "\\rbrack ", "[", "]"},
+    {"|", "|", "|", "|"}, {"\\vert ", "\\vert ", "|", "|"}, {"\\lvert ", "\\rvert ", "|", "|"},
+    {"\\|", "\\|", "\[DoubleVerticalBar]", "\[DoubleVerticalBar]"}, {"\\Vert ", "\\Vert ", "\[DoubleVerticalBar]", "\[DoubleVerticalBar]"},
+    {"\\lVert ", "\\rVert ", "\[DoubleVerticalBar]", "\[DoubleVerticalBar]"},
+    {"\\langle ", "\\rangle ", "\[LeftAngleBracket]", "\[RightAngleBracket]"}, {"<", ">", "\[LeftAngleBracket]", "\[RightAngleBracket]"},
+    {"\\lfloor ", "\\rfloor ", "\[LeftFloor]", "\[RightFloor]"}, {"\\lceil ", "\\rceil ", "\[LeftCeiling]", "\[RightCeiling]"},
+    {"/", "\\backslash ", "/", "\[Backslash]"}, {"\\uparrow ", "\\Downarrow ", "\[UpArrow]", "\[DoubleDownArrow]"}
+}
+
+VerificationTest[
+    LaTeXMathParse["\\max\\Big(0,\\,-\\sum_n p_n(t)\\,W_n(r)\\Big)"] // latexSizedGlyphs,
+    {{"(", 1.8}, {")", 1.8}},
+    TestID -> "LaTeX #115: \\Big( .. \\Big) around a comma and a sum is one size on both sides"
+]
+
+VerificationTest[
+    LaTeXMathParse["\\bigl(x\\bigr)"],
+    RowBox[{latexSized["(", 1.2], StyleBox["x", "TI"], latexSized[")", 1.2]}],
+    TestID -> "LaTeX #115: \\bigl( x \\bigr) boxes"
+]
+
+VerificationTest[
+    (* every delimiter, at every size, written plain, as l/r and as m, with a tall
+       sum and a comma between the two: each side is the glyph at the size *)
+    Select[
+        Flatten[
+            Table[
+                {StringJoin["\\", First[size], First[side], pair[[1]], "0,\\,-\\sum_{n=1}^{N}\\frac{a_n}{2}", "\\", First[size], Last[side], pair[[2]]],
+                 {{pair[[3]], Last[size]}, {pair[[4]], Last[size]}}},
+                {size, latexBigSizes}, {pair, latexBigPairs}, {side, {{"", ""}, {"l", "r"}, {"m", "m"}}}
+            ],
+            2
+        ],
+        latexSizedGlyphs[LaTeXMathParse[First[#]]] =!= Last[#] &
+    ][[All, 1]],
+    {},
+    TestID -> "LaTeX #115: every sized delimiter is held at its size, both sides of a pair alike"
+]
+
+VerificationTest[
+    (* a sized delimiter alone, the null delimiter, and one in a script *)
+    {LaTeXMathParse["a\\big/b"], LaTeXMathParse["\\bigl.x\\Bigr)"], LaTeXMathParse["x^{\\big(}"], LaTeXMathParse["a\\bigm|b"]},
+    {RowBox[{StyleBox["a", "TI"], latexSized["/", 1.2], StyleBox["b", "TI"]}],
+     RowBox[{StyleBox["x", "TI"], latexSized[")", 1.8]}],
+     SuperscriptBox[StyleBox["x", "TI"], latexSized["(", 1.2]],
+     RowBox[{StyleBox["a", "TI"], latexSized["|", 1.2], StyleBox["b", "TI"]}]},
+    TestID -> "LaTeX #115: a lone sized delimiter, the null delimiter, a script"
+]
+
+VerificationTest[
+    (* \left..\right stretches with its content and a plain ( ) stays at text
+       size: neither carries a font size *)
+    {LaTeXMathParse["\\max\\left(0,\\,x\\right)"], LaTeXMathParse["(x)"],
+     FreeQ[{LaTeXMathParse["\\left(\\sum_n x_n\\right)"], LaTeXMathParse["(\\sum_n x_n)"]}, FontSize -> _. Inherited]},
+    {RowBox[{StyleBox["max", FontSlant -> "Plain"], "\[ThinSpace]", "(", RowBox[{"0", ",", RowBox[{"\[ThinSpace]", StyleBox["x", "TI"]}]}], ")"}],
+     RowBox[{StyleBox["(", SpanMaxSize -> 1], StyleBox["x", "TI"], StyleBox[")", SpanMaxSize -> 1]}],
+     True},
+    TestID -> "LaTeX #115: \\left( \\right) and a plain ( ) keep their boxes"
+]
+
+VerificationTest[
+    (* the delimiter names of plain TeX, alone and after \left *)
+    {LaTeXMathParse["a\\vert b"], LaTeXMathParse["\\lbrace a\\rbrace"] === LaTeXMathParse["\\{a\\}"],
+     LaTeXMathParse["\\left\\vert x\\right\\vert"] === LaTeXMathParse["\\left|x\\right|"],
+     LaTeXMathParse["\\left\\Vert x\\right\\Vert"] === LaTeXMathParse["\\left\\|x\\right\\|"],
+     LaTeXMathParse["\\left\\lbrace x\\right\\rbrace"] === LaTeXMathParse["\\left\\{x\\right\\}"],
+     LaTeXMathParse["\\left\\lbrack x\\right\\rbrack"] === LaTeXMathParse["\\left[x\\right]"],
+     LaTeXMathParse["\\left<x\\right>"] === LaTeXMathParse["\\left\\langle x\\right\\rangle"]},
+    {RowBox[{StyleBox["a", "TI"], "|", StyleBox["b", "TI"]}], True, True, True, True, True, True},
+    TestID -> "LaTeX #115: \\vert, \\Vert, \\lbrace, \\lbrack and < > are delimiters"
 ]
