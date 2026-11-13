@@ -55,8 +55,10 @@ $mathmlEntities := $mathmlEntities = Association[Map[
 $xmlns = "http://www.w3.org/2000/xmlns/"
 $xmlNamespace = "http://www.w3.org/XML/1998/namespace"
 
-(* every function reports under MathMLBoxes, the one the others read through *)
-note[tag_String, args___] := (Message[MessageName[MathMLBoxes, tag], args]; Null)
+(* every function reports under MathMLBoxes, the one the others read through; a kernel that reads MathML by this
+   reader names in $messageHeads the symbol each of its messages is issued under, by tag *)
+$messageHeads = <||>
+note[tag_String, args___] := With[{head = Lookup[$messageHeads, tag, MathMLBoxes]}, Message[MessageName[head, tag], args]; Null]
 
 (* the document of a text: XMLObject["Document"][prolog, element, epilog], or $Failed *)
 document[text_String] := Catch[
@@ -1251,11 +1253,12 @@ MathMLHeld[source : _String | $symbolic] := Replace[both[source], {{_, held_} :>
 
 MathMLExpression[source : _String | $symbolic] := Replace[both[source], {{_, held_HoldComplete} :> ReleaseHold[held], _ -> $Failed}]
 
-$importElements = {"Boxes", "Expression", "HeldExpression", "XMLElement", "XMLObject"}
+$importElements = {"Boxes", "Expression", "HeldExpression", "Summary", "XMLElement", "XMLObject"}
 
 MathMLImport[source_String] := MathMLImport[source, "Boxes"]
 MathMLImport[source_String, "Elements"] := $importElements
 MathMLImport[source_String, "Boxes"] := MathMLBoxes[source]
+MathMLImport[source_String, "Summary"] := Dataset[<|"Format" -> "MathML"|>]
 MathMLImport[source_String, "HeldExpression"] := MathMLHeld[source]
 (* boxes that do not read are given as they are, in their ErrorBox *)
 MathMLImport[source_String, "Expression"] := Replace[both[source], {{_, held_HoldComplete} :> ReleaseHold[held], {_, unread_} :> unread}]

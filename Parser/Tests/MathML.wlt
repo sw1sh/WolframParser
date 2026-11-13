@@ -120,7 +120,7 @@ VerificationTest[MathMLHeld["<math><mi>x</mi>"], HoldComplete[$Failed], {MathMLB
 VerificationTest[MathMLExpression["<math><mrow><mn>1</mn><mo>+</mo><mn>2</mn></mrow></math>"], 3, TestID -> "mathml expression: evaluated"]
 VerificationTest[MathMLExpression["<math><apply><sin/><apply><divide/><pi/><cn>2</cn></apply></apply></math>"], 1, TestID -> "mathml expression: content"]
 VerificationTest[MathMLExpression["<math><mrow><mi>x</mi><mo>+</mo></mrow></math>"], $Failed, TestID -> "mathml expression: boxes that do not read"]
-VerificationTest[MathMLImport["<math><mi>x</mi></math>", "Elements"], {"Boxes", "Expression", "HeldExpression", "XMLElement", "XMLObject"},
+VerificationTest[MathMLImport["<math><mi>x</mi></math>", "Elements"], {"Boxes", "Expression", "HeldExpression", "Summary", "XMLElement", "XMLObject"},
     TestID -> "mathml import: the elements"]
 VerificationTest[MathMLImport["<math><mi>x</mi></math>"], MathMLBoxes["<math><mi>x</mi></math>"], TestID -> "mathml import: boxes where no element is named"]
 VerificationTest[MathMLImport["<math><mn>2</mn><mo>+</mo><mn>2</mn></math>", "HeldExpression"], HoldComplete[2 + 2], TestID -> "mathml import: HeldExpression"]
@@ -153,3 +153,14 @@ VerificationTest[mathmlParity["xml", "XMLElement", MathMLImport[#, "XMLElement"]
 VerificationTest[mathmlParity["xml", "XMLObject", MathMLImport[#, "XMLObject"] &], {119, 123}, TestID -> "mathml parity: xml corpus, XMLObject"]
 VerificationTest[mathmlParity["xml", "Boxes", MathMLBoxes], {120, 123}, TestID -> "mathml parity: xml corpus, boxes"]
 VerificationTest[mathmlParity["xml", "Held", MathMLHeld], {119, 123}, TestID -> "mathml parity: xml corpus, held expressions"]
+
+VerificationTest[Normal[MathMLImport["<math><mi>x</mi></math>", "Summary"]], <|"Format" -> "MathML"|>, TestID -> "mathml import: the summary names the format"]
+
+(* a kernel that reads MathML by this reader issues a message under the symbol it names for the tag *)
+mathmlHead::nmmlr = "`1`"
+VerificationTest[
+    Block[{Wolfram`Parser`MathMLPrivate`$messageHeads = <|"nmmlr" -> mathmlHead|>}, MathMLBoxes["<p>x</p>"]],
+    $Failed, {mathmlHead::nmmlr},
+    TestID -> "mathml messages: a tag is issued under the symbol named for it"
+]
+VerificationTest[MathMLBoxes["<p>x</p>"], $Failed, {MathMLBoxes::nmmlr}, TestID -> "mathml messages: under MathMLBoxes otherwise"]

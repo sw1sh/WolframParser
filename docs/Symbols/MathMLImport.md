@@ -17,7 +17,7 @@ RelatedGuides: [WolframParser]
 
 ## Details & Options
 
-- The elements are `"Boxes"`, `"Expression"`, `"HeldExpression"`, `"XMLElement"` and `"XMLObject"`, and `"Elements"` lists them.
+- The elements are `"Boxes"`, `"Expression"`, `"HeldExpression"`, `"Summary"`, `"XMLElement"` and `"XMLObject"`, and `"Elements"` lists them.
 - `"Boxes"` is [MathMLBoxes]() and `"HeldExpression"` is [MathMLHeld](). `"Expression"` is the held expression released; boxes that do not read are given in their [ErrorBox](), where [MathMLExpression]() gives [$Failed]().
 - `"XMLElement"` is the root as Wolfram 15 has it: each name without its prefix, a namespace declaration of the root under the prefix it declares, an attribute with a prefix under `{namespace, name}`, text with its runs of whitespace one space and none at its ends, and no comment or processing instruction.
 - `"XMLObject"` is `XMLObject["Document"][prolog, element, epilog]`, the comments before and after the root in its prolog and epilog. It has no document type, which in Wolfram 15 names a file of the installation.
@@ -30,7 +30,7 @@ The elements:
 MathMLImport["<math><mi>x</mi></math>", "Elements"]
 ```
 
-<!-- => {"Boxes", "Expression", "HeldExpression", "XMLElement", "XMLObject"} -->
+<!-- => {"Boxes", "Expression", "HeldExpression", "Summary", "XMLElement", "XMLObject"} -->
 
 The held expression:
 
