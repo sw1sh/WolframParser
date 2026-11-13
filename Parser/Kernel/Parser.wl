@@ -2476,7 +2476,15 @@ Which[
 	If[! MemberQ[$Packages, "Wolfram`Parser`"], AppendTo[$Packages, "Wolfram`Parser`"]];
 	Get[FileNameJoin[{DirectoryName[$InputFileName], "Languages", "WolframLanguage.wl"}]];
 	Get[FileNameJoin[{DirectoryName[$InputFileName], "Languages", "WolframLanguageFast.wl"}]];
-	Get[FileNameJoin[{DirectoryName[$InputFileName], "Languages", "WolframLanguageTokens.wl"}]],
+	(* the tokens are an editor's, which a kernel that only reads does not call: their file loads at the first
+		call of WolframLanguageTokens, whose definitions then follow this one, which no longer holds *)
+	Wolfram`Parser`Private`$tokensFile = FileNameJoin[{DirectoryName[$InputFileName], "Languages", "WolframLanguageTokens.wl"}];
+	Wolfram`Parser`Private`loadTokens[] := With[{file = Wolfram`Parser`Private`$tokensFile},
+		Wolfram`Parser`Private`$tokensFile = None;
+		StringQ[file] && (Get[file]; True)
+	];
+	Wolfram`Parser`Languages`WolframLanguage`WolframLanguageTokens[Wolfram`Parser`Private`arguments___] /; Wolfram`Parser`Private`loadTokens[] :=
+		Wolfram`Parser`Languages`WolframLanguage`WolframLanguageTokens[Wolfram`Parser`Private`arguments],
 	TrueQ[Wolfram`Parser`Private`$ebnfOnly],
 	Get[FileNameJoin[{DirectoryName[$InputFileName], "EBNF.wl"}]],
 	True,
