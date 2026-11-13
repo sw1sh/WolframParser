@@ -96,6 +96,9 @@ fastLongOp[name_String] := Which[
 		0
 ]
 
+(* \[DifferentialD] and \[CapitalDifferentialD], as operators *)
+$fastDifferentials := $fastDifferentials = Alternatives @@ Select[Map[Lookup[$fastOperatorIds, #, fastLongOp[#]] &, {"DifferentialD", "CapitalDifferentialD"}], Positive]
+
 (* the operators of one, two and three ASCII characters, and of a character
 	past ASCII, by their codes *)
 $fastOp1 := $fastOp1 = Developer`ToPackedArray @ ReplacePart[ConstantArray[0, 65536], Normal @ Association @ Join[
@@ -228,6 +231,9 @@ stoppedFailure[lexed_List, t_Integer] := Which[
 		fastFailure[tokenStart[lexed, t], False],
 	operatorBeforeQ[lexed, t, $fastGet | $fastPut | $fastPutAppend],
 		fastFailure[tokenStart[lexed, t - 1], False],
+	(* a differential with nothing after it is the kernel's error, where another prefix operator's source ends too early *)
+	operatorBeforeQ[lexed, t, $fastDifferentials],
+		fastFailure[tokenStart[lexed, t], False],
 	True,
 		fastFailure[tokenStart[lexed, t], True]
 ]

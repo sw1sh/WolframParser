@@ -29,8 +29,8 @@ MathMLBoxes::incrt = "The MathML has the root tag \"`1`\" instead of the tag \"m
 MathMLBoxes::unkntag = "The tag \"`1`\" is not a MathML element that can stand here."
 MathMLBoxes::unknstrc = "`1` is not a valid MathML structure."
 MathMLBoxes::msngargs = "The element `1` has fewer children than it takes."
-MathMLBoxes::bmml = "The string, `1`, occurred without a surrounding XML tag."
-MathMLBoxes::nmmlr = "The root element `1` is not an element of MathML."
+MathMLBoxes::bmml = "The `1`, `2`, occurred without a surrounding XML tag."
+MathMLBoxes::nmmlr = "The root element `2` is not an element of MathML."
 
 Begin["`MathMLPrivate`"]
 
@@ -56,7 +56,8 @@ $xmlns = "http://www.w3.org/2000/xmlns/"
 $xmlNamespace = "http://www.w3.org/XML/1998/namespace"
 
 (* every function reports under MathMLBoxes, the one the others read through; a kernel that reads MathML by this
-   reader names in $messageHeads the symbol each of its messages is issued under, by tag *)
+   reader names in $messageHeads the symbol each of its messages is issued under, by tag; nmmlr has the root and
+   its name, bmml the kind of what stands bare and its value, as the messages of Wolfram 15.0 have *)
 $messageHeads = <||>
 note[tag_String, args___] := With[{head = Lookup[$messageHeads, tag, MathMLBoxes]}, Message[MessageName[head, tag], args]; Null]
 
@@ -678,7 +679,7 @@ own[element : XMLElement[name_String, attributes_, content_List]] := Which[
 		result_ :> {result}
 	}]
 ]
-items[string_String] := (note["bmml", string]; lexed["\"" <> string <> "\""])
+items[string_String] := (note["bmml", "string", string]; lexed["\"" <> string <> "\""])
 
 (* what Wolfram 15 makes of an element it does not know, or one with the wrong children: name(children) *)
 unknown[element : XMLElement[name_String, _, {}]] := (note["unkntag", name]; lexed[name])
@@ -1242,7 +1243,7 @@ $symbolic = _XMLElement | XMLObject["Document"][_, _XMLElement, _, ___]
 (* {boxes, held} of a source, or $Failed where it is no document *)
 both[source_] := Replace[read[source], {
 	(* a root that is no element of MathML is not read *)
-	XMLObject["Document"][_, root : XMLElement[Except["math"], __], _, ___] /; kind[root] === None :> (note["nmmlr", First[root]]; $Failed),
+	XMLObject["Document"][_, root : XMLElement[Except["math"], __], _, ___] /; kind[root] === None :> (note["nmmlr", root, First[root]]; $Failed),
 	XMLObject["Document"][_, root_, _, ___] :> converted[root],
 	_ -> $Failed
 }]

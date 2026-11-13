@@ -1486,3 +1486,10 @@ VerificationTest[
     {{{"digit", 3, "102", 2}}, {{"digit", 2, "fg", 16}}, {{"digit", 1, "9.5", 8}}, {{"digit", 3, "1.2", 2}},
         {HoldComplete["2^^9" + 5], 16, <|"Warnings" -> {}|>}},
     TestID -> "wl number: a digit too large for its base warns as Wolfram 15.0's General::digit does"]
+
+(* a differential that ends the source is an error, as Wolfram 15.0 reads it (SyntaxLength 1, ToExpression::sntx), where "-" is incomplete *)
+VerificationTest[
+    Map[WolframLanguageHeld[#]["Incomplete"] &, {FromCharacterCode[63308], FromCharacterCode[63307], "x " <> FromCharacterCode[63308], "(" <> FromCharacterCode[63308], "-"}],
+    {False, False, False, False, True},
+    TestID -> "wl held: a differential ending the source is an error, not an incomplete expression"
+]
