@@ -389,7 +389,8 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 							r = lexSlot[lexCodes, lexClasses, lexLongOps, i, n]; j = Quotient[r, 2]; status = Mod[r, 2]; kind = 6,
 						c == 37,
 							While[j <= n && lexCodes[[j]] == 37, j++];
-							While[j <= n && 48 <= lexCodes[[j]] <= 57, j++];
+							(* digits belong to one % alone: %%1 is %% and then 1 *)
+							If[j == i + 1, While[j <= n && 48 <= lexCodes[[j]] <= 57, j++]];
 							kind = 7,
 						c == 39, While[j <= n && lexCodes[[j]] == 39, j++]; kind = 19,
 						c == 40, kind = 10,
@@ -1102,7 +1103,12 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 						If[se == t && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]], i = pSpecial[[22]]];
 						(* right after the words of a query that begins its statement, an operator that is a prefix one
 							too begins a factor, as Wolfram 15's kernel reads ?a+b as Information["a"]*(+b) *)
-						If[wq == t && pTok[[5 t - 2]] == 9 && pPrefix[[2 pTok[[5 t - 1]] + 1]] > 0, i = pSpecial[[22]]];
+						If[wq == t && pTok[[5 t - 2]] == 9 && (pPrefix[[2 pTok[[5 t - 1]] + 1]] > 0 || pTok[[5 t - 1]] == pSpecial[[14]]), i = pSpecial[[22]]];
+						(* ?? right after an operand is no pattern test: a query, a factor of a product, a??b a times ??b *)
+						If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[14]] && pTok[[5 t + 3]] == 9 && pTok[[5 t + 4]] == pSpecial[[14]] &&
+								pTok[[5 t + 5]] == pTok[[5 t + 1]],
+							i = pSpecial[[22]]
+						];
 						If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && nls[[t]] == 1) &&
 								((out[[3 on]] == 1 && out[[3 on + 1]] == 2 && pCodes[[pTok[[5 out[[3 on + 2]] + 1]] - 1]] != 46) || out[[3 on]] == 23),
 							t++; sp++; base = 8 (sp - 1); fr[[base + 1]] = 3; fr[[base + 2]] = pHeads[[7]];
@@ -1330,9 +1336,13 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 										out[[3 on + 1]] = 100
 									];
 									fr[[base + 2]] = fr[[base + 2]] + 1;
-									If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[4]] && ! (brackets == 0 && nls[[t]] == 1),
-										t++; fr[[base + 3]] = t; fr[[base + 4]] = on; pMin = pSpecial[[17]]; pRbp = 100000; pPlain = 0; mode = 1,
-										on++; out[[3 on]] = 14; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3
+									(* the operand begins right where its :: ends: a:: b is no Wolfram Language *)
+									If[ pTok[[5 fr[[base + 3]]]] != pTok[[5 fr[[base + 3]] - 4]],
+										If[fr[[base + 3]] > far, far = fr[[base + 3]]]; mode = 5,
+										If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[4]] && ! (brackets == 0 && nls[[t]] == 1),
+											t++; fr[[base + 3]] = t; fr[[base + 4]] = on; pMin = pSpecial[[17]]; pRbp = 100000; pPlain = 0; mode = 1,
+											on++; out[[3 on]] = 14; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3
+										]
 									],
 								True, mode = 5
 							]

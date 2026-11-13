@@ -12,6 +12,12 @@
       isolates that abort so the rest of the suite still completes. *)
 $ProgressReporting = False
 
+(* on a machine other work shares, WOLFRAM_THREADS caps the threads of the kernel's parallel
+   numerics, which a test's packed arithmetic would otherwise spread over every core *)
+With[{threads = Interpreter["Integer"][Replace[Environment["WOLFRAM_THREADS"], Except[_String] -> ""]]},
+    If[ IntegerQ[threads] && threads > 0, SetSystemOptions["ParallelOptions" -> "ParallelThreadNumber" -> threads]]
+]
+
 dir = DirectoryName[$InputFileName]
 PacletDirectoryLoad[FileNameJoin[{dir, "Parser"}]]
 Needs["Wolfram`Parser`"]

@@ -369,7 +369,7 @@ expressionParser[alg_, ws_, wsAll_, nested_] := Module[
 			]]
 		],
 		(* as a notebook reads it, an operand after each ::, the parts one message name *)
-		ParseAction[ParseSome[ParseAction[after[ParseLiteral["::"], wsAll] ~~ RecRef[messageOperand], #2 &]],
+		ParseAction[ParseSome[ParseAction[ParseLiteral["::"] ~~ RecRef[messageOperand], #2 &]],
 			Function[With[{parts = {##}}, Function[s, alg["Infix"]["MessageName", Prepend[parts, s]]]]]
 		]
 	];
@@ -2201,6 +2201,9 @@ escapeStep[{codes_List, at_Integer, 0, escapes_List}] := Which[
 		{codes, at + 2, 1, escapes},
 	codes[[at]] === 92 && escapeWidth[codes, at] > 0,
 		{codes, at + 2 + escapeWidth[codes, at], 0, {escapeOf[codes, at, escapeWidth[codes, at]], escapes}},
+	(* \ooo, three octal digits: the character of that code, \101 an A *)
+	codes[[at]] === 92 && octalEscapeQ[codes, at],
+		{codes, at + 4, 0, {{{at, at + 3}, FromCharacterCode[FromDigits[FromCharacterCode[Take[codes, {at + 1, at + 3}]], 8]]}, escapes}},
 	(* a \ and the character it escapes *)
 	codes[[at]] === 92,
 		{codes, at + 2, 0, escapes},
@@ -2215,6 +2218,9 @@ there."
 escapeWidth[codes_List, at_Integer] := With[{width = If[at < Length[codes], Switch[codes[[at + 1]], 58, 4, 46, 2, 124, 6, _, 0], 0]},
 	If[width > 0 && at + 1 + width <= Length[codes] && hexadecimalCodeQ[Take[codes, {at + 2, at + 1 + width}]], width, 0]
 ]
+
+octalEscapeQ::usage = "octalEscapeQ[codes, at] is True where three octal digits follow the \\ at at."
+octalEscapeQ[codes_List, at_Integer] := at + 3 <= Length[codes] && AllTrue[Take[codes, {at + 1, at + 3}], 48 <= # <= 55 &]
 
 hexadecimalCodeQ::usage = "hexadecimalCodeQ[codes] is True where the codes are hexadecimal digits that name a character."
 hexadecimalCodeQ[codes_List] := AllTrue[codes, KeyExistsQ[$hexadecimalCodes, #] &] && FromDigits[FromCharacterCode[codes], 16] <= 1114111
@@ -2250,7 +2256,7 @@ there."
 longNameEnd[codes_List, at_Integer] := If[at <= Length[codes] && codes[[at]] === 93, {codes, at + 1, True}, {codes, at, False}]
 
 characterEscapes::usage = "characterEscapes[s] gives the character escapes of s outside its strings and comments, {} for none."
-characterEscapes[s_String] := If[StringContainsQ[s, "\\:" | "\\." | "\\|"], escapeSpans[s], {}]
+characterEscapes[s_String] := If[StringContainsQ[s, "\\:" | "\\." | "\\|" | ("\\" ~~ DigitCharacter)], escapeSpans[s], {}]
 
 
 (* s as the readers read it, without its line continuations and with each character escape its

@@ -1231,7 +1231,6 @@ $wlMessageNames = {
     {"a::2^c", List[HoldComplete[Power[MessageName[a, "2"], c]]]},
     {"a::#", List[HoldComplete[MessageName[a, "#"]]]},
     {"a::%", List[HoldComplete[MessageName[a, "%"]]]},
-    {"a:: b", List[HoldComplete[MessageName[a, "b"]]]},
     {"a::b::c::d::e", List[HoldComplete[MessageName[a, "b", "c", "d", "e"]]]},
     {"x::y::1", List[HoldComplete[MessageName[x, "y", "1"]]]},
     {"a::(b)", List[HoldComplete[MessageName[a, b]]]},
@@ -1511,4 +1510,43 @@ VerificationTest[
     Lookup[WolframLanguageTokens["a/.5"], "Text"],
     {"a", "/", ".5"},
     TestID -> "wl tokens: /. before a digit is / and a number"
+]
+
+(* differences from Wolfram 15.0 its kernel and its front end agree on *)
+VerificationTest[
+    Map[WolframLanguageHeld, {"%%1", "%1", "%%%2", "a%%1"}],
+    {{HoldComplete[%% 1]}, {HoldComplete[%1]}, {HoldComplete[%%% 2]}, {HoldComplete[a %% 1]}},
+    TestID -> "wl held: digits belong to one % alone"
+]
+VerificationTest[
+    Map[WolframLanguageHeld, {"\\101", "x\\101", "\\101[1]", "a\\0531", "1\\060", "\"a\\101\" \\102"}],
+    {{HoldComplete[A]}, {HoldComplete[xA]}, {HoldComplete[A[1]]}, {HoldComplete[a + 1]}, {HoldComplete[10]}, {HoldComplete["aA" B]}},
+    TestID -> "wl held: three octal digits after a \\ outside a string are a character"
+]
+VerificationTest[
+    Map[FailureQ[WolframLanguageHeld[#]] &, {"\\1", "a\\18", "\\053"}],
+    {True, True, True},
+    TestID -> "wl held: a \\ with fewer than three octal digits, or an operator's character alone, reads as nothing"
+]
+VerificationTest[
+    Map[WolframLanguageHeld, {"a??b", "a ??b", "(a)??b", "a?b??c", "a ? ?b", "a?b"}],
+    {{HoldComplete[a Information["b", LongForm -> True]]}, {HoldComplete[a Information["b", LongForm -> True]]}, {HoldComplete[a Information["b", LongForm -> True]]},
+        {HoldComplete[a?b Information["c", LongForm -> True]]}, {HoldComplete[PatternTest[a, Information["b", LongForm -> False]]]}, {HoldComplete[a?b]}},
+    TestID -> "wl held: ?? after an operand is a query, a factor of a product"
+]
+VerificationTest[
+    Map[WolframLanguageHeld, {"?a?b", "?a ?b", "?a??b"}],
+    {{HoldComplete[Information["a", LongForm -> False] Information["b", LongForm -> False]]}, {HoldComplete[Information["a", LongForm -> False] Information["b", LongForm -> False]]},
+        {HoldComplete[Information["a", LongForm -> False] Information["b", LongForm -> True]]}},
+    TestID -> "wl held: a ? after the words of a query that begins its statement is a second query"
+]
+VerificationTest[
+    {Map[FailureQ[WolframLanguageHeld[#]] &, {"a:: b", "a::  b", "a::b:: c", "a:: \"b\"", "f[a:: b]"}], WolframLanguageHeld["a::b::c"], WolframLanguageHeld["x::usage = \"s\""]},
+    {{True, True, True, True, True}, {HoldComplete[a::b::c]}, {HoldComplete[x::usage = "s"]}},
+    TestID -> "wl held: a message name's tag begins right after its ::"
+]
+VerificationTest[
+    Block[{Wolfram`Parser`Languages`WolframLanguage`Private`$fastHeldReader = False}, {FailureQ[WolframLanguageHeld["a:: b"]], WolframLanguageHeld["a::b::c"]}],
+    {True, {HoldComplete[a::b::c]}},
+    TestID -> "wl held, grammar: a message name's tag begins right after its ::"
 ]
