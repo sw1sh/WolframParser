@@ -1,0 +1,123 @@
+(* XML 1.0: a document, as a MathML reader meets it.
+
+	The grammar is that of the W3C Recommendation "Extensible Markup Language (XML) 1.0 (Fifth
+	Edition)", https://www.w3.org/TR/xml/, its productions under their published names, stated as
+	one PEG in the classic dialect of EBNFParse: where two alternatives of the Recommendation
+	begin alike, as EmptyElemTag and STag do, they are one rule that reads the shared part once,
+	and text that must stop before a delimiter of several characters, as character data does
+	before "]]>", is runs of the characters that cannot begin it and, one at a time, those that
+	can where the delimiter does not follow.
+
+	Whitespace is written out, as XML's is significant: the front end skips none. The rules the
+	%tokens lines name are matched as regular expressions and give the text they matched.
+	The well-formedness constraints a grammar cannot state, an end tag naming its start tag, an
+	attribute given once, a prefix bound, are the front end's.
+
+	The document type declaration is read to its end and its internal subset is kept as text:
+	no markup declaration in it is read. *)
+
+%tokens S Name VersionNum EncName YesNo CharData AttTextDQ AttTextSQ Decimal Hex
+%tokens CommentText PIText CDataText SystemTextDQ SystemTextSQ PubidTextDQ PubidTextSQ SubsetText
+
+(* [2] Char: any Unicode character but the C0 controls other than tab, newline and return,
+   U+FFFE and U+FFFF. The surrogates, which the Recommendation leaves out and no decoded text
+   holds, are not told apart here: a regular expression cannot name them. *)
+%class Tab        range 9 10
+%class Return     range 13 13
+%class Plane0     range 32 65533
+%class Planes     range 65536 1114111
+
+(* [4] NameStartChar past ASCII *)
+%class NameStartA range 192 214
+%class NameStartB range 216 246
+%class NameStartC range 248 767
+%class NameStartD range 880 893
+%class NameStartE range 895 8191
+%class NameStartF range 8204 8205
+%class NameStartG range 8304 8591
+%class NameStartH range 11264 12271
+%class NameStartI range 12289 55295
+%class NameStartJ range 63744 64975
+%class NameStartK range 65008 65533
+%class NameStartL range 65536 983039
+
+(* [4a] NameChar past ASCII, beyond the characters that start a name *)
+%class NameMiddleDot  range 183 183
+%class NameCombining  range 768 879
+%class NameTie        range 8255 8256
+
+(* [1] document *)
+<Document>      ::= <Prolog> <Element> { <Misc> }
+
+(* [22] prolog, [23] XMLDecl, [24] VersionInfo, [25] Eq, [80] EncodingDecl, [32] SDDecl *)
+<Prolog>        ::= [ <XMLDecl> ] { <Misc> } [ <DoctypeDecl> { <Misc> } ]
+<XMLDecl>       ::= "<?xml" <VersionInfo> [ <EncodingDecl> ] [ <SDDecl> ] [ <S> ] "?>"
+<VersionInfo>   ::= <S> "version" <Eq> ( "'" <VersionNum> "'" | '"' <VersionNum> '"' )
+<EncodingDecl>  ::= <S> "encoding" <Eq> ( '"' <EncName> '"' | "'" <EncName> "'" )
+<SDDecl>        ::= <S> "standalone" <Eq> ( "'" <YesNo> "'" | '"' <YesNo> '"' )
+<Eq>            ::= [ <S> ] "=" [ <S> ]
+<VersionNum>    ::= "1." <Digit> { <Digit> }
+<EncName>       ::= <Letter> { <Letter> | <Digit> | "." | "_" | "-" }
+<YesNo>         ::= "yes" | "no"
+
+(* [27] Misc, [15] Comment, [16] PI, [17] PITarget *)
+<Misc>          ::= <Comment> | <PI> | <S>
+<Comment>       ::= "<!--" <CommentText> "-->"
+<CommentText>   ::= { ( <Char> - "-" ) | "-" ( <Char> - "-" ) }
+<PI>            ::= "<?" <PITarget> [ <S> <PIText> ] "?>"
+<PITarget>      ::= ! ( ( "X" | "x" ) ( "M" | "m" ) ( "L" | "l" ) ! <NameChar> ) <Name>
+<PIText>        ::= { <PIChar> { <PIChar> } | "?" ! ">" }
+<PIChar>        ::= <Char> - "?"
+
+(* [28] doctypedecl, [75] ExternalID, [11] SystemLiteral, [12] PubidLiteral, [28b] intSubset *)
+<DoctypeDecl>   ::= "<!DOCTYPE" <S> <Name> [ <S> <ExternalID> ] [ <S> ] [ "[" <SubsetText> "]" [ <S> ] ] ">"
+<ExternalID>    ::= "SYSTEM" <S> <SystemLiteral> | "PUBLIC" <S> <PubidLiteral> <S> <SystemLiteral>
+<SystemLiteral> ::= '"' <SystemTextDQ> '"' | "'" <SystemTextSQ> "'"
+<SystemTextDQ>  ::= { <Char> - '"' }
+<SystemTextSQ>  ::= { <Char> - "'" }
+<PubidLiteral>  ::= '"' <PubidTextDQ> '"' | "'" <PubidTextSQ> "'"
+<PubidTextDQ>   ::= { <PubidChar> | "'" }
+<PubidTextSQ>   ::= { <PubidChar> }
+<PubidChar>     ::= " " | "\r" | "\n" | <Letter> | <Digit> | "-" | "(" | ")" | "+" | "," | "." | "/" | ":" | "=" | "?" | ";" | "!" | "*" | "#" | "@" | "$" | "_" | "%"
+<SubsetText>    ::= { <Char> - "]" }
+
+(* [39] element, [40] STag, [42] ETag, [44] EmptyElemTag: a start tag and what follows it,
+   an empty element's "/>", or the content and the end tag *)
+<Element>       ::= "<" <Name> { <S> <Attribute> } [ <S> ] ( "/>" | ">" <Content> <ETag> )
+<ETag>          ::= "</" <Name> [ <S> ] ">"
+
+(* [41] Attribute, [10] AttValue *)
+<Attribute>     ::= <Name> <Eq> <AttValue>
+<AttValue>      ::= '"' { <AttTextDQ> | <Reference> } '"' | "'" { <AttTextSQ> | <Reference> } "'"
+<AttTextDQ>     ::= <AttCharDQ> { <AttCharDQ> }
+<AttTextSQ>     ::= <AttCharSQ> { <AttCharSQ> }
+<AttCharDQ>     ::= <Char> - ( "<" | "&" | '"' )
+<AttCharSQ>     ::= <Char> - ( "<" | "&" | "'" )
+
+(* [43] content, [14] CharData, [18] CDSect *)
+<Content>       ::= { <CharData> | <Element> | <Reference> | <CDSect> | <PI> | <Comment> }
+<CharData>      ::= <DataRun> { <DataRun> }
+<DataRun>       ::= <DataChar> { <DataChar> } | "]" ! "]>"
+<DataChar>      ::= <Char> - ( "<" | "&" | "]" )
+<CDSect>        ::= "<![CDATA[" <CDataText> "]]>"
+<CDataText>     ::= { <CDataChar> { <CDataChar> } | "]" ! "]>" }
+<CDataChar>     ::= <Char> - "]"
+
+(* [67] Reference, [68] EntityRef, [66] CharRef *)
+<Reference>     ::= <CharRef> | <EntityRef>
+<EntityRef>     ::= "&" <Name> ";"
+<CharRef>       ::= "&#x" <Hex> ";" | "&#" <Decimal> ";"
+<Decimal>       ::= <Digit> { <Digit> }
+<Hex>           ::= <HexDigit> { <HexDigit> }
+
+(* [3] S, [5] Name, [4] NameStartChar, [4a] NameChar *)
+<S>             ::= <SpaceChar> { <SpaceChar> }
+<SpaceChar>     ::= " " | "\t" | "\r" | "\n"
+<Name>          ::= <NameStartChar> { <NameChar> }
+<NameStartChar> ::= ":" | "_" | <Letter> | <NameStartA> | <NameStartB> | <NameStartC> | <NameStartD> | <NameStartE> | <NameStartF>
+                  | <NameStartG> | <NameStartH> | <NameStartI> | <NameStartJ> | <NameStartK> | <NameStartL>
+<NameChar>      ::= <NameStartChar> | "-" | "." | <Digit> | <NameMiddleDot> | <NameCombining> | <NameTie>
+<Char>          ::= <Tab> | <Return> | <Plane0> | <Planes>
+<Letter>        ::= "a" | ... | "z" | "A" | ... | "Z"
+<Digit>         ::= "0" | ... | "9"
+<HexDigit>      ::= <Digit> | "a" | ... | "f" | "A" | ... | "F"

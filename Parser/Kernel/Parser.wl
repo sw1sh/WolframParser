@@ -2486,5 +2486,7 @@ Which[
 	Get[FileNameJoin[{DirectoryName[$InputFileName], "Markdown.wl"}]];
 	Get[FileNameJoin[{DirectoryName[$InputFileName], "StringPatterns.wl"}]];
 	If[! MemberQ[$Packages, "Wolfram`Parser`"], AppendTo[$Packages, "Wolfram`Parser`"]];
-	Get[FileNameJoin[{DirectoryName[$InputFileName], "Languages", "init.wl"}]]
+	Get[FileNameJoin[{DirectoryName[$InputFileName], "Languages", "init.wl"}]];
+	(* the MathML reader reads through two of the languages: XML and the Wolfram Language *)
+	Get[FileNameJoin[{DirectoryName[$InputFileName], "MathML.wl"}]]
 ];
