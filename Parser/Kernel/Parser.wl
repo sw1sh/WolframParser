@@ -2475,7 +2475,8 @@ Which[
 	TrueQ[Wolfram`Parser`Private`$wolframLanguageOnly],
 	If[! MemberQ[$Packages, "Wolfram`Parser`"], AppendTo[$Packages, "Wolfram`Parser`"]];
 	Get[FileNameJoin[{DirectoryName[$InputFileName], "Languages", "WolframLanguage.wl"}]];
-	Get[FileNameJoin[{DirectoryName[$InputFileName], "Languages", "WolframLanguageFast.wl"}]],
+	Get[FileNameJoin[{DirectoryName[$InputFileName], "Languages", "WolframLanguageFast.wl"}]];
+	Get[FileNameJoin[{DirectoryName[$InputFileName], "Languages", "WolframLanguageTokens.wl"}]],
 	TrueQ[Wolfram`Parser`Private`$ebnfOnly],
 	Get[FileNameJoin[{DirectoryName[$InputFileName], "EBNF.wl"}]],
 	True,

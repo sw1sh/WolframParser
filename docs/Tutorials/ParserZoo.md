@@ -182,6 +182,7 @@ The Wolfram Language itself, as a package file is written: its operators at the 
 - [WolframLanguageProgram]() the program of a source that reads whole with no warning, all its statements' instructions and leaves, for a builder of its own
 - [WolframLanguageSyntaxQ]() test whether a source reads, as [SyntaxQ]() does, building no expression
 - [WolframLanguageSyntaxLength]() count the characters at the start of a source that read, as [SyntaxLength]() does
+- [WolframLanguageTokens]() the tokens of any text, whitespace and comments among them and every character in one, for an editor that colors text as it is typed
 - [WolframLanguageAST]() parse to a standard AST, each operator named by its head
 - [WolframLanguageConcrete]() parse to the concrete syntax tree [CodeParser]() gives, every character in a leaf
 - [WolframLanguageBoxes]() the boxes Wolfram 15's front end makes of typed text
