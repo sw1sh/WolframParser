@@ -1493,3 +1493,22 @@ VerificationTest[
     {False, False, False, False, True},
     TestID -> "wl held: a differential ending the source is an error, not an incomplete expression"
 ]
+
+(* /. right before a digit is / and a number, as Wolfram 15.0 and its front end read it: 1/.5 is 2. *)
+VerificationTest[
+    Map[WolframLanguageHeld, {"1/.5", "a/.1", "a/.2x", "a /.5", "a/.5/.b", "a/.b", "a/. 5", "a//.5", "a/..5"}],
+    {{HoldComplete[1/.5]}, {HoldComplete[a/.1]}, {HoldComplete[a/.2 x]}, {HoldComplete[a/.5]}, {HoldComplete[a/.5 /. b]},
+        {HoldComplete[a /. b]}, {HoldComplete[a /. 5]}, {HoldComplete[a //. 5]}, {HoldComplete[a /. .5]}},
+    TestID -> "wl held: /. before a digit is a division by a number"
+]
+VerificationTest[
+    Map[WolframLanguageBoxes, {"a/.5", "a/.2x", "a/.5/.b", "a/.b", "a//.5", "a/..5"}],
+    {RowBox[{"a", "/", ".5"}], RowBox[{RowBox[{"a", "/", ".2"}], "x"}], RowBox[{RowBox[{"a", "/", ".5"}], "/.", "b"}],
+        RowBox[{"a", "/.", "b"}], RowBox[{"a", "//.", "5"}], RowBox[{"a", "/.", ".5"}]},
+    TestID -> "wl boxes: /. before a digit is / and a number"
+]
+VerificationTest[
+    Lookup[WolframLanguageTokens["a/.5"], "Text"],
+    {"a", "/", ".5"},
+    TestID -> "wl tokens: /. before a digit is / and a number"
+]

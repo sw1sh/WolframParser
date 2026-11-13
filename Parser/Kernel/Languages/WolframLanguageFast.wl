@@ -160,7 +160,7 @@ $fastLongCharTable := $fastLongCharTable = longNameTable[Map[First[ToCharacterCo
 $fastOpenAssociation = fastOp["<|"]; $fastCloseAssociation = fastOp["|>"]
 $fastGet = fastOp["<<"]; $fastPut = fastOp[">>"]; $fastPutAppend = fastOp[">>>"]
 $fastSpecial := $fastSpecial = Developer`ToPackedArray[{$fastOpenAssociation, $fastCloseAssociation, $fastGet, $fastPut, $fastPutAppend, fastOp["=."], fastOp["="],
-	$fastSpaceId, $fastInvisibleCommaId, $fastNewlineId
+	$fastSpaceId, $fastInvisibleCommaId, $fastNewlineId, fastOp["/."], fastOp["/"]
 }]
 
 (* ::Section:: *)
@@ -277,7 +277,8 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 		Native`UncheckedBlock[Module[{n = Length[lexCodes] - 3, out, k = 0, i = 1, j = 0, c = 0, c2 = 0, cl = 0, nl = 0, kind = 0, op = 0, file = 0,
 				status = 0, done = 0, scanning = 0, m = 0, a = 0, len = 0, base = 0, start = 0, tick = 0, r = 0, e2 = 0, lnAt = 0, lnVal = 0, nest = 0, pk = 0,
 				spOpen = lexSpecial[[1]], spClose = lexSpecial[[2]], spGet = lexSpecial[[3]], spPut = lexSpecial[[4]], spPutAppend = lexSpecial[[5]],
-				spUnset = lexSpecial[[6]], spSet = lexSpecial[[7]], spSpace = lexSpecial[[8]], spComma = lexSpecial[[9]], spNewline = lexSpecial[[10]]
+				spUnset = lexSpecial[[6]], spSet = lexSpecial[[7]], spSpace = lexSpecial[[8]], spComma = lexSpecial[[9]], spNewline = lexSpecial[[10]],
+				spReplaceAll = lexSpecial[[11]], spDivide = lexSpecial[[12]]
 		},
 			out = Native`UncheckedArray[0, 5 n + 7];
 			While[ done == 0,
@@ -431,6 +432,8 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 							];
 							(* =. before a digit: =, then a number *)
 							If[op == spUnset && i + 2 <= n && 48 <= lexCodes[[i + 2]] <= 57, op = spSet; len = 1];
+							(* /. before a digit: /, then a number, a/.5 a divided by .5 *)
+							If[op == spReplaceAll && i + 2 <= n && 48 <= lexCodes[[i + 2]] <= 57, op = spDivide; len = 1];
 							j = i + len;
 							Which[
 								op == 0, status = 1; j = i,

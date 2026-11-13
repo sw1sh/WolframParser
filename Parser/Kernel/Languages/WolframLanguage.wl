@@ -109,14 +109,21 @@ $operatorCharacters := $operatorCharacters = Select[Flatten[Values[$longNameOper
 	input. CodeParser has no free-form input, so the concrete grammar cuts none. *)
 longest[s_String] := longest[s, $operatorSpellings, freeformCutQ]
 longest[s_String, all_List] := longest[s, all, False &]
+(* /. right before a digit is / and a number, a/.5 a divided by .5: there /. is no operator, and
+	no longer one of / *)
+longest["/.", all_List, cutQ_] := ParseAction[ParseLiteral["/."] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]], "/." &]
 longest[s_String, all_List, cutQ_] := With[{more = Select[all, StringStartsQ[#, s] && # =!= s &]},
 	If[ more === {} && ! cutQ[s],
 		ParseLiteral[s],
 		ParseAction[ParseLiteral[s] ~~ ParseNotFollowedBy[ParseChoice @@ Join[
 			If[cutQ[s], {ParseLiteral["["]}, {}],
-			Map[If[ cutQ[#],
-				ParseLiteral[StringDrop[#, StringLength[s]]] ~~ ParseNotFollowedBy[ParseLiteral["["]],
-				ParseLiteral[StringDrop[#, StringLength[s]]]
+			Map[Which[
+				cutQ[#],
+					ParseLiteral[StringDrop[#, StringLength[s]]] ~~ ParseNotFollowedBy[ParseLiteral["["]],
+				# === "/.",
+					ParseLiteral[StringDrop[#, StringLength[s]]] ~~ ParseNotFollowedBy[ParseCharacter[DigitCharacter]],
+				True,
+					ParseLiteral[StringDrop[#, StringLength[s]]]
 			] &, more
 			]
 		]], s &
