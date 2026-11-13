@@ -43,6 +43,7 @@ KaTeX's screenshotter corpus ([`LaTeX.wl`](Parser/Kernel/LaTeX.wl)), a Markdown 
 ([`StringPatterns.wl`](Parser/Kernel/StringPatterns.wl)), and the AST vocabulary — `LeafNode` / `CallNode` /
 … / `ToCodeParser` ([`AST.wl`](Parser/Kernel/AST.wl)). A `Languages/` showcase builds six
 example front-ends (Calculator, JSON, Lisp, Lambda, Brainfuck, ABC), plus OpenQASM, Mermaid and the Wolfram Language itself, on the core;
+`MathMLBoxes`, `MathMLHeld` and `MathMLImport` read MathML to boxes and to expressions as Wolfram 15 does, through a grammar of XML ([`MathML.wl`](Parser/Kernel/MathML.wl));
 `MermaidDiagram` draws a Mermaid flowchart, sequence diagram, state diagram or class diagram as `Graphics`, read by a grammar and laid out in the kernel;
 `WolframLanguageHeld` reads the 7,000 sources of a Wolfram installation as the kernel's reader does, by a compiled lexer and
 a compiled parser over packed tokens, and `WolframLanguageHeldNext` reads a source one statement at a time, as `ToExpression`
@@ -73,7 +74,7 @@ deploys the paclet resource and publishes the documentation site, and
 WolframParser/
 |-- Parser/                         the paclet
 |   |-- PacletInfo.wl
-|   |-- Kernel/                     AST.wl EBNF.wl LaTeX.wl Markdown.wl Parser.wl StringPatterns.wl StringPatternsVM.wl TPTP.wl
+|   |-- Kernel/                     AST.wl EBNF.wl LaTeX.wl Markdown.wl MathML.wl Parser.wl StringPatterns.wl StringPatternsVM.wl TPTP.wl
 |   |                               WolframLanguageReader.wl CharacterClasses.wl CharacterClassRuns.wl (+ Languages/)
 |   |-- Assets/                     hero.png, LaTeXMathParserCompiled.wxf
 |   |-- Tests/                      *.wlt, per subsystem
