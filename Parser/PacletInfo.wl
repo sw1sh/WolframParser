@@ -6,7 +6,7 @@ PacletObject[<|
     "Creator" -> "Nikolay Murzin, Claude (Anthropic)",
     "PublisherID" -> "Wolfram",
     "License" -> "MIT",
-    "Version" -> "1.8.1",
+    "Version" -> "1.9.0",
     "WolframVersion" -> "14.0+",
     "PrimaryContext" -> "Wolfram`Parser`",
     "Extensions" -> {
