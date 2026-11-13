@@ -1034,7 +1034,12 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 							(* a query that does not begin its statement, as a notebook reads it: ? and the expression
 								after it, all that binds more tightly than =, a word of one token its text, and ?? and a
 								word of one token; frame 15 {??, first token, instructions} *)
-							k == 9 && o == pSpecial[[14]] && t != stmt,
+							(* but ?? right after an operand, a factor of a product, has its words as one that begins
+								its statement has them: a??b c is a times ??b c *)
+							k == 9 && o == pSpecial[[14]] && t != stmt &&
+									! (pTok[[5 t + 3]] == 9 && pTok[[5 t + 4]] == pSpecial[[14]] && pTok[[5 t + 5]] == pTok[[5 t + 1]] &&
+										((1 <= pTok[[5 t - 7]] && pTok[[5 t - 7]] <= 7) || pTok[[5 t - 7]] == 11 || pTok[[5 t - 7]] == 13 || pTok[[5 t - 7]] == 15 ||
+											pTok[[5 t - 7]] == 17 || pTok[[5 t - 7]] == 19)),
 								t++; lg = 0;
 								If[pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[14]] && pTok[[5 t]] == pTok[[5 t - 4]], lg = 1; t++];
 								sp++; base = 8 (sp - 1); fr[[base + 1]] = 15; fr[[base + 2]] = lg; fr[[base + 3]] = t; fr[[base + 4]] = on;

@@ -1550,3 +1550,12 @@ VerificationTest[
     {True, {HoldComplete[a::b::c]}},
     TestID -> "wl held, grammar: a message name's tag begins right after its ::"
 ]
+
+VerificationTest[
+    Map[WolframLanguageHeld, {"a??b c", "a?b??c d", "a ??b c;d", "a??b*", "x=??a", "f[a??b]", "a??\"s\""}],
+    {{HoldComplete[a Information["b c", LongForm -> True]]}, {HoldComplete[a?b Information["c d", LongForm -> True]]},
+        {HoldComplete[a Information["b c", LongForm -> True]; d]}, {HoldComplete[a Information["b*", LongForm -> True]]},
+        {HoldComplete[x = Information["a", LongForm -> True]]}, {HoldComplete[f[a Information["b", LongForm -> True]]]},
+        {HoldComplete[a Information["s", LongForm -> True]]}},
+    TestID -> "wl held: ?? has its words wherever it stands, as at the beginning of a statement"
+]
