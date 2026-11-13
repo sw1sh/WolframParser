@@ -226,14 +226,15 @@ heldSource[source_String] := heldSource[source] = Block[{$Context = "Wolfram`Par
    whitespace items that stand there. *)
 rowBox[{}] := ""
 rowBox[{item_}] := itemBox[item]
-rowBox[items_List] := Module[{solid, gaps, grouped, place = 0, result},
+rowBox[items_List] := Module[{solid, gaps, grouped, place = 0, result, all = items},
 	solid = Flatten[Position[items, _token | _atom, {1}, Heads -> False]];
 	If[ solid === {}, Return[RowBox[Map[itemBox, items]]]];
 	(* the whitespace items before the first solid one, between each two, and after the last *)
 	gaps = Map[Map[itemBox, items[[#[[1]] + 1 ;; #[[2]] - 1]]] &, Partition[Join[{0}, solid, {Length[items] + 1}], 2, 1]];
 	grouped = groupedSource[spelled[items[[solid]], {}, Flatten[Position[Differences[solid], Except[1], {1}, Heads -> False]] + 1]];
 	If[ Count[grouped, _String, {0, Infinity}] =!= 2 Length[solid] - 1 && Length[solid] > 1, Return[RowBox[Map[itemBox, items]]]];
-	result = placed[grouped, Function[If[OddQ[++place], itemBox[items[[solid[[(place + 1) / 2]]]]], Splice[gaps[[place / 2 + 1]]]]]];
+	(* the items go by a variable: written into the function, a # of theirs would be its slot *)
+	result = placed[grouped, Function[If[OddQ[++place], itemBox[all[[solid[[(place + 1) / 2]]]]], Splice[gaps[[place / 2 + 1]]]]]];
 	result = Replace[Flatten[{First[gaps], result, Last[gaps]}], {{one_} :> one, several_ :> RowBox[several]}];
 	result
 ]
