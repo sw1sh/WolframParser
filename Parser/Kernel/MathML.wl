@@ -981,7 +981,7 @@ kernelBoxes[boxes_] := Replace[boxes, RowBox[{only_}] :> only]
 
 contentAtom[element_] := With[{held = expression[element]},
 	If[ held === None,
-		Replace[unknown[unapplied[element]], several_List :> atom[rowBox[several], rowHeld[several]]],
+		Replace[unknownContent[element], several_List :> atom[rowBox[several], rowHeld[several]]],
 		With[{boxes = If[$beside, kernelBoxes, notebookBoxes][Replace[held, HoldComplete[e_] :> MakeBoxes[e, TraditionalForm]]]},
 			atom[boxes, boxHeld[boxes]]]
 	]
@@ -1017,6 +1017,15 @@ gridOptions[options_List] := Module[{old = Association[Cases[options, HoldPatter
 unapplied[XMLElement["apply" | "reln", _, {XMLElement[name_String, _, {}], rest___}]] :=
 	XMLElement[name, {}, Replace[{rest}, XMLElement["bvar", _, {v_}] :> v, {1}]]
 unapplied[element_] := element
+
+(* an element applied that is no element of content MathML is an unknown tag, as it is alone; any other content that
+   does not read is an unknown structure *)
+unknownContent[element : XMLElement["apply" | "reln", _, {head : XMLElement[name_String, _, {}], ___}]] /; ! contentQ[head] :=
+	Replace[unapplied[element], XMLElement[_, _, content_List] :> (
+		note["unkntag", name];
+		Join[lexed[name], {token["("]}, Riffle[Map[argument, content], token[","]], {token[")"]}]
+	)]
+unknownContent[element_] := unknown[unapplied[element]]
 
 (* the expression of an element in HoldComplete, or None where it is not one Wolfram 15 reads *)
 expression[XMLElement[name_String, _, {}]] /; KeyExistsQ[$contentConstants, name] := $contentConstants[name]

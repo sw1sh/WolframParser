@@ -164,3 +164,9 @@ VerificationTest[
     TestID -> "mathml messages: a tag is issued under the symbol named for it"
 ]
 VerificationTest[MathMLBoxes["<p>x</p>"], $Failed, {MathMLBoxes::nmmlr}, TestID -> "mathml messages: under MathMLBoxes otherwise"]
+
+VerificationTest[
+    MathMLExpression["<math><apply><foo/><ci>x</ci></apply></math>"] // ToString[#, InputForm] &,
+    "foo[x]", {MathMLBoxes::unkntag},
+    TestID -> "mathml content: an unknown element applied is an unknown tag"
+]
