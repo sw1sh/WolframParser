@@ -2292,9 +2292,12 @@ leafTexts::usage = "leafTexts[codes, lexed, tokens, ordered, cuts] gives the tex
 from the codes in one pass by the lengths cuts where ordered is True."
 leafTexts[_List, _List, {}, _, _] := {}
 leafTexts[codes_List, lexed_List, tokens_List, _, _] /; Length[tokens] <= 8 := tokenText[codes, lexed, #] & /@ tokens
-leafTexts[codes_List, lexed_List, tokens_List, True, cuts_List] := Take[
-	FromCharacterCode @ TakeList[Take[codes, {tokenStart[lexed, First[tokens]], tokenEnd[lexed, Last[tokens]] - 1}], cuts],
-	{1, -1, 2}
+(* in order: the text from the first to the last cut once, each token's piece of it taken by its
+	span, as StringTake makes many short strings fastest; cuts, the lengths of the pieces and of the
+	gaps between them, are not needed for it *)
+leafTexts[codes_List, lexed_List, tokens_List, True, _] := With[
+	{first = tokenStart[lexed, First[tokens]], starts = tokenStarts[lexed, tokens], ends = tokenEnds[lexed, tokens]},
+	StringTake[FromCharacterCode[Take[codes, {first, Last[ends] - 1}]], Transpose[{starts - first + 1, ends - first}]]
 ]
 leafTexts[codes_List, lexed_List, tokens_List, False, _] := tokenTexts[codes, tokenStarts[lexed, tokens], tokenEnds[lexed, tokens]]
 
