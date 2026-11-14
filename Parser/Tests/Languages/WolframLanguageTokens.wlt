@@ -241,10 +241,13 @@ VerificationTest[
     {},
     TestID -> "tokens: the paclet's sources have no error, nothing incomplete and no bracket without its partner"]
 
-(* the source as the lexer reads it is the readers' *)
+(* the source as the lexer reads it is the readers', and so are the positions in the source of its
+   characters, which the readers keep as runs *)
 wlSourceSame[s_String] := With[{read = wlPrivate["readSource"][s], mine = wlPrivate["tokenSource"][s, ToCharacterCode[s]]},
-    ToCharacterCode[First[read]] === Normal[First[mine]] && read[[2]] === Replace[mine[[2]], kept_List :> Normal[kept]]
+    ToCharacterCode[First[read]] === Normal[First[mine]] && wlKeptPositions[read[[2]]] === Replace[mine[[2]], kept_List :> Normal[kept]]
 ]
+wlKeptPositions[None] := None
+wlKeptPositions[kept_] := Normal[wlPrivate["keptAt"][kept, Range[wlPrivate["keptCount"][kept]]]]
 
 VerificationTest[
     Select[Join[ByteArrayToString[ReadByteArray[#], "UTF-8"] & /@ Select[wlCorpus, StringEndsQ[#, ".wl"] &],
