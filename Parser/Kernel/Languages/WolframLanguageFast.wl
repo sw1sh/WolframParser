@@ -3466,14 +3466,18 @@ WolframLanguageSyntaxLength[s_String] := Replace[syntaxStop[s], None -> StringLe
 	and one with a form this does not build give None, and the grammar reads them. *)
 $fastConcreteReader = True
 
+(* where this does not build a source: the grammar reads it; $fastConcreteWhy says why, for the checks *)
+fastFallback[] := fastFallback["unbuilt form"]
+fastFallback[why_String] := ($fastConcreteWhy = why; Throw[None, fastConcrete])
+
 fastConcrete::usage = "fastConcrete[s] gives the children of the ContainerNode of the source s as the concrete grammar reads them, built \
 from the reader's tokens and program, or None for a source this does not build."
 fastConcrete[s_String] := Catch[
-	If[ StringContainsQ[s, "\\"] && readSource[s][[2]] =!= None, Throw[None, fastConcrete]];
+	If[ StringContainsQ[s, "\\"] && readSource[s][[2]] =!= None, fastFallback["line continuation or character escape"]];
 	With[{codes = ToCharacterCode[s]},
 		With[{padded = paddedCodes[codes]},
 			With[{split = splitParse[lexedCodes[padded], padded]},
-				If[ parseStatus[Last[split]] =!= 0, Throw[None, fastConcrete]];
+				If[ parseStatus[Last[split]] =!= 0, fastFallback["the reader stops in it"]];
 				concreteBuilt[codes, First[split], programInstructions[Last[split]]]
 			]
 		]
@@ -3497,7 +3501,11 @@ concreteBuilt[codes_List, lexed_List, instructions_List] := Block[
 		Function[step, With[{code = step[[1]], a = step[[2]], b = step[[3]]},
 			Switch[code,
 				1, stack = {{concreteLeafOf[a, b], b, b, $cEnds[[b]]}, stack}; $cLast = Max[$cLast, b],
-				25, statements = {First[stack], statements}; stack = Last[stack],
+				25,
+					(* a statement after the first that begins with an operator a chain takes: CodeParser
+						reads it on, past the newline, as the front end does not *)
+					If[ statements =!= {} && $cKinds[[a]] === 9 && KeyExistsQ[$concreteInfixForms, concreteTokenText[a]], fastFallback["statement begins with an infix operator"]];
+					statements = {First[stack], statements}; stack = Last[stack],
 				6, relations = {a, relations},
 				7, stack = concreteStep[7, a, b, stack]; relations = Nest[Last, relations, a - 1],
 				_, stack = concreteStep[code, a, b, stack]
@@ -3515,14 +3523,14 @@ newNode[shell_] := ($cNodeCount++; $cNodes[$cNodeCount] = shell; concreteRef[$cN
 resolvedTree[e_] := e /. concreteRef[i_Integer] :> resolvedTree[$cNodes[i]]
 
 (* the text of token t and the leaf of an operator, a bracket or a comma *)
-tokenText[t_Integer] := FromCharacterCode[$cCodes[[$cStarts[[t]] ;; $cEnds[[t]] - 1]]]
+concreteTokenText[t_Integer] := FromCharacterCode[$cCodes[[$cStarts[[t]] ;; $cEnds[[t]] - 1]]]
 operatorLeafOf[t_Integer] := Switch[$cKinds[[t]],
-	9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18, tokenLeaf[tokenText[t]],
-	_, Throw[None, fastConcrete]
+	9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18, tokenLeaf[concreteTokenText[t]],
+	_, fastFallback["operatorLeafOf 1"]
 ]
 
 (* the leaf of token t, of the leaf kind of the parser's program *)
-concreteLeafOf[kind_Integer, t_Integer] := With[{text = tokenText[t]},
+concreteLeafOf[kind_Integer, t_Integer] := With[{text = concreteTokenText[t]},
 	Switch[kind,
 		1, concreteLeaf[Symbol, text],
 		2, concreteBlank[text],
@@ -3530,7 +3538,7 @@ concreteLeafOf[kind_Integer, t_Integer] := With[{text = tokenText[t]},
 		5 | 8 | 100, concreteLeaf[String, text],
 		6, If[StringStartsQ[text, "##"], slotNode["##", missingIfEmpty[StringDrop[text, 2]]], slotNode["#", missingIfEmpty[StringDrop[text, 1]]]],
 		7, Which[text === "%", tokenLeaf["%"], StringMatchQ[text, "%" ~~ DigitCharacter ..], outNode["%", StringDrop[text, 1]], True, concreteLeaf[Token`PercentPercent, text]],
-		_, Throw[None, fastConcrete]
+		_, fastFallback["concreteLeafOf 1"]
 	]
 ]
 missingIfEmpty[""] := Missing[]
@@ -3538,7 +3546,7 @@ missingIfEmpty[s_String] := s
 
 concreteBlank[text_String] := Replace[
 	StringCases[text, RegularExpression["^([^_]*)(___|__|_\\.|_)(.*)$"] :> {"$1", "$2", "$3"}],
-	{{{name_, underscores_, head_}} :> blankNode[missingIfEmpty[name], underscores, missingIfEmpty[head]], _ :> Throw[None, fastConcrete]}
+	{{{name_, underscores_, head_}} :> blankNode[missingIfEmpty[name], underscores, missingIfEmpty[head]], _ :> fastFallback["concreteBlank 1"]}
 ]
 
 (* The whitespace, newlines and comments of the text between two tokens, each a leaf as the grammar
@@ -3557,12 +3565,12 @@ gapLeaves[gap_List] := Module[{i = 1, n = Length[gap], out = {}, depth, j},
 						True, j++
 					]
 				];
-				If[depth > 0, Throw[None, fastConcrete]];
+				If[depth > 0, fastFallback["gapLeaves 1"]];
 				out = {out, concreteLeaf[Token`Comment, FromCharacterCode[gap[[i ;; j - 1]]]]}; i = j,
 			gap[[i]] === 13 && i < n && gap[[i + 1]] === 10, out = {out, concreteLeaf[Token`Newline, "\r\n"]}; i += 2,
 			gap[[i]] === 10 || gap[[i]] === 13, out = {out, concreteLeaf[Token`Newline, FromCharacterCode[gap[[i]]]]}; i++,
 			gap[[i]] === 32 || gap[[i]] === 9, out = {out, concreteLeaf[Whitespace, FromCharacterCode[gap[[i]]]]}; i++,
-			True, Throw[None, fastConcrete]
+			True, fastFallback["gapLeaves 2"]
 		]
 	];
 	Flatten[out]
@@ -3579,7 +3587,7 @@ gapsLeaves[texts_List] := With[{plain = StringCases[texts, $gapLeafRules]},
 		Which[
 			#1 === "", {},
 			StringContainsQ[#1, "(*"], gapLeaves[ToCharacterCode[#1]],
-			MemberQ[#2, $gapUnread], Throw[None, fastConcrete],
+			MemberQ[#2, $gapUnread], fastFallback["gapsLeaves 1"],
 			True, #2
 		] &,
 		{texts, plain}
@@ -3631,7 +3639,7 @@ assembledPieces[pieces_List] := Module[{out = {}, pos = None, first = None, last
 ]
 pieceStart[{"Item", item_}] := $cStarts[[item[[2]]]]
 pieceStart[{"Token", t_}] := $cStarts[[t]]
-pieceStart[{"Fake", _}] := Throw[None, fastConcrete]
+pieceStart[{"Fake", _}] := fastFallback["pieceStart 1"]
 
 (* The pieces of a node of the items from its first token to its last, in one pass: the tokens no item
 	holds before each item, and a made-up token first of all where it begins the node, else after the
@@ -3664,6 +3672,7 @@ piecesOf[items_List, first_Integer, last_Integer] := Module[{t = first, n = Leng
 (* the node CodeParser makes of an operator spelled s: {its node's head, its tag}, by the syntax's
 	operators and the long names CodeParser reads *)
 $concreteInfixForms := $concreteInfixForms = Join[
+	AssociationThread[$minusSpellings -> Table[{CodeParser`InfixNode, Plus}, Length[$minusSpellings]]],
 	Association @ Catenate @ Map[
 		Function[row, Map[# -> {If[row["Form"] === "InfixN", CodeParser`InfixNode, CodeParser`BinaryNode], concreteHead[row]} &, spellings[row["Spelling"]]]],
 		Select[$syntaxOperators, MemberQ[{"InfixN", "InfixL", "InfixR", "Optional"}, #["Form"]] && #["Spelling"] =!= "" &]
@@ -3682,6 +3691,8 @@ $concretePostfixTags := $concretePostfixTags = Join[
 	Association @ Catenate @ Map[Function[r, Map[# -> r[[3]] &, longNameSpellings[r[[1]]]]], $longNameTable["Postfix"]]
 ]
 
+$concreteTagPattern = RegularExpression["[A-Za-z$`][A-Za-z0-9$`]*|\"(?:[^\"\\\\]|\\\\.)*\""]
+
 fakeItem[token_] := {concreteLeaf[token, ""], 0, 0, 0}
 
 (* a node of the items, the tokens between them its operators: its first token the first item's,
@@ -3693,7 +3704,7 @@ nodeOfPieces[head_, tag_, pieces_List] := Module[{built = assembledPieces[pieces
 	{newNode[head[tag, built[[1]], <||>]], built[[2]], built[[3]], built[[4]]}
 ]
 nodePieces[items_List] := Module[{reals = Select[items, #[[2]] =!= 0 &]},
-	If[reals === {}, Throw[None, fastConcrete]];
+	If[reals === {}, fastFallback["nodePieces 1"]];
 	piecesOf[items, First[reals][[2]] - LengthWhile[items, #[[2]] === 0 &], Last[reals][[3]] + LengthWhile[Reverse[items], #[[2]] === 0 &]]
 ]
 
@@ -3704,20 +3715,22 @@ infixItem[items0_List] := Module[{items = items0, pieces, forms},
 	items = Prepend[
 		Table[
 			With[{it = items[[i]]},
-				If[ Length[it] >= 5 && it[[5, 1]] === "Prefix" && it[[2]] === items[[i - 1]][[3]] + 1 && tokenText[it[[2]]] === "-", it[[5, 2]], it]
+				If[ Length[it] >= 5 && it[[5, 1]] === "Prefix" && it[[2]] === items[[i - 1]][[3]] + 1 && MemberQ[$minusSpellings, concreteTokenText[it[[2]]]], it[[5, 2]], it]
 			],
 			{i, 2, Length[items]}
 		],
 		First[items]
 	];
 	pieces = piecesOf[items, First[items][[2]], Last[items][[3]]];
-	forms = DeleteDuplicates[Lookup[$concreteInfixForms, Cases[pieces, {"Token", t_} :> tokenText[t]], Throw[None, fastConcrete]]];
+	forms = DeleteDuplicates[Lookup[$concreteInfixForms, Cases[pieces, {"Token", t_} :> concreteTokenText[t]], fastFallback["infixItem 1"]]];
 	Which[
 		forms === {} || Length[forms] === 1 && forms[[1, 2]] === Times, nodeOfPieces[CodeParser`InfixNode, Times, implicitTimes[pieces]],
 		Length[forms] === 1, nodeOfPieces[forms[[1, 1]], forms[[1, 2]], pieces],
-		True, Throw[None, fastConcrete]
+		True, fastFallback["infixItem 2"]
 	]
 ]
+$minusSpellings = {"-", "\\[Minus]", FromCharacterCode[8722]}
+
 implicitTimes[pieces_List] := Catenate @ MapThread[
 	If[#1[[1]] === "Item" && #2[[1]] === "Item", {#1, {"Fake", concreteLeaf[Token`Fake`ImplicitTimes, ""]}}, {#1}] &,
 	{pieces, Append[Rest[pieces], {"End"}]}
@@ -3725,22 +3738,22 @@ implicitTimes[pieces_List] := Catenate @ MapThread[
 
 prefixItem[stack_List] := With[{x = First[stack]},
 	With[{op = x[[2]] - 1},
-		If[op < 1 || $cKinds[[op]] =!= 9, Throw[None, fastConcrete]];
+		If[op < 1 || $cKinds[[op]] =!= 9, fastFallback["prefixItem 1"]];
 		With[{built = assembledPieces[{{"Token", op}, {"Item", x}}]},
-			{{newNode[CodeParser`PrefixNode[Lookup[$concretePrefixTags, tokenText[op], Throw[None, fastConcrete]], built[[1]], <||>]], op, built[[3]], built[[4]], {"Prefix", x}}, Last[stack]}
+			{{newNode[CodeParser`PrefixNode[Lookup[$concretePrefixTags, concreteTokenText[op], fastFallback["prefixItem 2"]], built[[1]], <||>]], op, built[[3]], built[[4]], {"Prefix", x}}, Last[stack]}
 		]
 	]
 ]
 
 postfixItem[stack_List] := With[{x = First[stack]},
 	With[{op = x[[3]] + 1},
-		If[op > $cCount || $cKinds[[op]] =!= 9, Throw[None, fastConcrete]];
+		If[op > $cCount || $cKinds[[op]] =!= 9, fastFallback["postfixItem 1"]];
 		$cLast = Max[$cLast, op];
-		With[{text = tokenText[op], built = assembledPieces[{{"Item", x}, {"Token", op}}]},
+		With[{text = concreteTokenText[op], built = assembledPieces[{{"Item", x}, {"Token", op}}]},
 			If[ StringStartsQ[text, "="] && StringEndsQ[text, "."],
 				(* =., the = and the . its leaves, trivia between *)
 				{{newNode[CodeParser`BinaryNode[Unset, Join[Most[built[[1]]], {tokenLeaf["="]}, gapLeaves[ToCharacterCode[StringTake[text, {2, -2}]]], {tokenLeaf["."]}], <||>]], x[[2]], op, $cEnds[[op]]}, Last[stack]},
-				{{newNode[CodeParser`PostfixNode[Lookup[$concretePostfixTags, text, Throw[None, fastConcrete]], built[[1]], <||>]], x[[2]], op, $cEnds[[op]]}, Last[stack]}
+				{{newNode[CodeParser`PostfixNode[Lookup[$concretePostfixTags, text, fastFallback["postfixItem 2"]], built[[1]], <||>]], x[[2]], op, $cEnds[[op]]}, Last[stack]}
 			]
 		]
 	]
@@ -3748,7 +3761,7 @@ postfixItem[stack_List] := With[{x = First[stack]},
 
 derivativeItem[n_Integer, stack_List] := With[{x = First[stack]},
 	With[{primes = x[[3]] + 1},
-		If[primes > $cCount || $cKinds[[primes]] =!= 19 || $cEnds[[x[[3]]]] =!= $cStarts[[primes]], Throw[None, fastConcrete]];
+		If[primes > $cCount || $cKinds[[primes]] =!= 19 || $cEnds[[x[[3]]]] =!= $cStarts[[primes]], fastFallback["derivativeItem 1"]];
 		$cLast = Max[$cLast, primes];
 		{{newNode[Nest[CodeParser`PostfixNode[Derivative, {#, concreteLeaf[Token`SingleQuote, "'"]}, <||>] &, x[[1]], n]], x[[2]], primes, $cEnds[[primes]]}, Last[stack]}
 	]
@@ -3757,7 +3770,7 @@ derivativeItem[n_Integer, stack_List] := With[{x = First[stack]},
 (* f[a, b]: the call's group, its arguments in a Comma node where there are two or more *)
 callItem[items_List] := With[{h = First[items], args = Rest[items]},
 	With[{open = h[[3]] + 1, close = If[args === {}, h[[3]] + 2, Last[args][[3]] + 1]},
-		If[close > $cCount || $cKinds[[open]] =!= 12 || $cKinds[[close]] =!= 13, Throw[None, fastConcrete]];
+		If[close > $cCount || $cKinds[[open]] =!= 12 || $cKinds[[close]] =!= 13, fastFallback["callItem 1"]];
 		With[{group = groupNodeItem[CodeParser`GroupSquare, open, args, close]},
 			{newNode[CodeParser`CallNode[Join[{h[[1]]}, triviaLeaves[h[[4]], $cStarts[[open]]]], group[[1]], <||>]], h[[2]], close, $cEnds[[close]]}
 		]
@@ -3768,13 +3781,16 @@ callItem[items_List] := With[{h = First[items], args = Rest[items]},
 partItem[items_List] := With[{h = First[items], args = Rest[items]},
 	With[{outer = h[[3]] + 1, inner = h[[3]] + 2, innerClose = Last[args][[3]] + 1},
 		If[innerClose + 1 > $cCount || $cKinds[[outer]] =!= 12 || $cKinds[[inner]] =!= 12 || $cKinds[[innerClose]] =!= 13 || $cKinds[[innerClose + 1]] =!= 13,
-			Throw[None, fastConcrete]];
+			fastFallback["partItem 1"]];
 		With[{group = groupNodeItem[CodeParser`GroupSquare, outer, {groupNodeItem[CodeParser`GroupSquare, inner, args, innerClose]}, innerClose + 1]},
 			{newNode[CodeParser`CallNode[Join[{h[[1]]}, triviaLeaves[h[[4]], $cStarts[[outer]]]], group[[1]], <||>]], h[[2]], innerClose + 1, $cEnds[[innerClose + 1]]}
 		]
 	]
 ]
 
+(* a group of expressions between commas, one left out among them, is an error CodeParser marks: the
+	grammar reads it *)
+groupNodeItem[tag_, open_Integer, items_List, close_Integer] /; MemberQ[items[[All, 2]], 0] := fastFallback["groupNodeItem 1"]
 groupNodeItem[tag_, open_Integer, items_List, close_Integer] := With[
 	{built = assembledPieces[Join[{{"Token", open}}, If[Length[items] > 1, {{"Item", nodeItem[CodeParser`InfixNode, CodeParser`Comma, items]}}, {"Item", #} & /@ items], {{"Token", close}}]]},
 	$cLast = Max[$cLast, close];
@@ -3785,20 +3801,20 @@ $groupKinds = <|"List" -> {List, 14, 15}, "Association" -> {Association, 16, 17}
 groupKindOf[a_Integer] := Which[
 	a === $fastParenHead, $groupKinds["Paren"],
 	KeyExistsQ[$groupKinds, $fastHeadNames[[a]]], $groupKinds[$fastHeadNames[[a]]],
-	True, Throw[None, fastConcrete]
+	True, fastFallback["groupKindOf 1"]
 ]
 
-groupItem[a_Integer, items_List] := With[{kind = groupKindOf[a]},
+concreteGroupItem[a_Integer, items_List] := With[{kind = groupKindOf[a]},
 	With[{open = First[items][[2]] - 1, close = Last[items][[3]] + 1},
-		If[open < 1 || close > $cCount || $cKinds[[open]] =!= kind[[2]] || $cKinds[[close]] =!= kind[[3]], Throw[None, fastConcrete]];
+		If[open < 1 || close > $cCount || $cKinds[[open]] =!= kind[[2]] || $cKinds[[close]] =!= kind[[3]], fastFallback["concreteGroupItem 1"]];
 		groupNodeItem[kind[[1]], open, items, close]
 	]
 ]
 
 (* {}: its opener the first token of its kind after all read so far *)
 emptyGroupItem[a_Integer] := With[{kind = groupKindOf[a]},
-	With[{open = SelectFirst[Range[$cLast + 1, $cCount - 1], $cKinds[[#]] === kind[[2]] &, Throw[None, fastConcrete]]},
-		If[$cKinds[[open + 1]] =!= kind[[3]], Throw[None, fastConcrete]];
+	With[{open = SelectFirst[Range[$cLast + 1, $cCount - 1], $cKinds[[#]] === kind[[2]] &, fastFallback["emptyGroupItem 1"]]},
+		If[$cKinds[[open + 1]] =!= kind[[3]], fastFallback["emptyGroupItem 2"]];
 		groupNodeItem[kind[[1]], open, {}, open + 1]
 	]
 ]
@@ -3811,27 +3827,31 @@ concreteStep[code_Integer, a_Integer, b_Integer, stack_List] := Switch[code,
 	7, With[{t = linkedTop[stack, a]}, {infixItem[t[[1]]], t[[2]]}],
 	23, With[{t = linkedTop[stack, 2]}, {nodeItem[CodeParser`BinaryNode, Pattern, t[[1]]], t[[2]]}],
 	8, With[{t = linkedTop[stack, a + 1]}, {callItem[t[[1]]], t[[2]]}],
-	9, If[ b === 0, {emptyGroupItem[a], stack}, With[{t = linkedTop[stack, b]}, {groupItem[a, t[[1]]], t[[2]]}]],
+	9, If[ b === 0, {emptyGroupItem[a], stack}, With[{t = linkedTop[stack, b]}, {concreteGroupItem[a, t[[1]]], t[[2]]}]],
 	10, With[{t = linkedTop[stack, a + 1]}, {partItem[t[[1]]], t[[2]]}],
 	11, {fakeItem[Token`Fake`ImplicitNull], stack},
 	12, {fakeItem[Token`Fake`ImplicitAll], stack},
 	13, {fakeItem[Token`Fake`ImplicitOne], stack},
-	14, With[{t = linkedTop[stack, a]}, {nodeItem[CodeParser`InfixNode, MessageName, t[[1]]], t[[2]]}],
+	14, With[{t = linkedTop[stack, a]},
+		(* a::b, each tag a name or a whole string, as CodeParser's; any other the grammar reads *)
+		If[ ! AllTrue[Rest[t[[1]]], #[[2]] > 0 && StringMatchQ[concreteTokenText[#[[2]]], $concreteTagPattern] &], fastFallback["concreteStep 1"]];
+		{nodeItem[CodeParser`InfixNode, MessageName, t[[1]]], t[[2]]}
+	],
 	16, derivativeItem[a, stack],
 	17, With[{t = linkedTop[stack, 3]}, {nodeItem[CodeParser`TernaryNode, CodeParser`TernaryTilde, t[[1]]], t[[2]]}],
 	18, With[{t = linkedTop[stack, a]}, {nodeItem[If[a === 2, CodeParser`BinaryNode, CodeParser`TernaryNode], Span, t[[1]]], t[[2]]}],
 	19, With[{t = linkedTop[stack, a]}, {nodeItem[CodeParser`InfixNode, CompoundExpression, t[[1]]], t[[2]]}],
 	20, If[ a === 1 || a === 0,
 		With[{t = linkedTop[stack, 3]}, {nodeItem[CodeParser`TernaryNode, If[a === 1, TagSetDelayed, TagSet], t[[1]]], t[[2]]}],
-		Throw[None, fastConcrete]
+		fastFallback["concreteStep 2"]
 	],
 	22, With[{x = First[stack]},
-		If[x[[2]] < 2 || $cKinds[[x[[2]] - 1]] =!= 9, Throw[None, fastConcrete]];
+		If[x[[2]] < 2 || $cKinds[[x[[2]] - 1]] =!= 9, fastFallback["concreteStep 3"]];
 		With[{built = assembledPieces[{{"Token", x[[2]] - 1}, {"Item", x}}]},
 			{{newNode[CodeParser`PrefixNode[Get, built[[1]], <||>]], x[[2]] - 1, built[[3]], built[[4]]}, Last[stack]}
 		]
 	],
-	_, Throw[None, fastConcrete]
+	_, fastFallback["program code " <> IntegerString[code]]
 ]
 
 (* the source's statements and the trivia before, between and after them *)
