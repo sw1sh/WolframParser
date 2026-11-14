@@ -3155,7 +3155,16 @@ flatParts[flat_List] := With[
 	the typed stages each in turn do. *)
 flatProgram::usage = "flatProgram[s] gives the program of the source s in one packed array, {0, the program's length, the program, the \
 parts, then the source's codes}, or None."
-flatProgram[s_String] := flatOf[fastProgramTextFunction, s]
+flatProgram[s_String] := flatOf[fastProgramTextFunction, continuedSource[s]]
+
+(* A source with line continuations reads as the source without them: CodeParser reads it as though
+	each \, its newline and the spaces and tabs after it, outside a string, a comment and a file name,
+	were not there (continuationSpans), so the program of that source is the program of this one, which
+	the stages read, its codes those its builder reads. A file that Put wrote holds one at each line it
+	broke; one inside a string is the string's to read, as before. *)
+continuedSource::usage = "continuedSource[s] gives the source s without its line continuations outside strings, comments and file \
+names, as the reader reads it."
+continuedSource[s_String] := With[{spans = lineContinuations[s]}, If[spans === {}, s, StringReplacePart[s, "", spans]]]
 
 flatOf::usage = "flatOf[f, s] gives the program of the source s by the typed program f, or by the typed stages where f is None or leaves \
 the source to them."
