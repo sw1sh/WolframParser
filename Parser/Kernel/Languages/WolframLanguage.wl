@@ -2170,9 +2170,58 @@ $fileCharacterCodes = Join[$alphanumericCodes, AssociationThread[ToCharacterCode
 lineContinuations::usage = "lineContinuations[s] gives the spans of the line continuations of s, {} for none."
 lineContinuations[s_String] := If[StringContainsQ[s, "\\\n" | "\\\r"], continuationSpans[s], {}]
 
-(* the positions in s of the characters read without its line continuations *)
-keptPositions::usage = "keptPositions[s, spans] gives the positions in s of its characters outside the spans."
-keptPositions[s_String, spans_List] := Complement[Range[StringLength[s]], Catenate[Range @@@ spans]]
+(* The positions in s of the characters read, n of them, as runs: for each run of characters left
+	out, where the characters after it begin in the text read and how many characters were left out
+	up to its end, {at, out, at, out, ...}, packed. The character at c of the text read is at c + out
+	in s, out that of the last run at or before c, 0 before the first. A run per line continuation
+	and escape, never a position per character. *)
+keptRuns::usage = "keptRuns[runs, n] stands for the positions in a source of the n characters read of it, runs {at, out, ...}: for each \
+run left out, where the characters after it begin in the text read and how many were left out up to its end."
+
+keptOf::usage = "keptOf[length, spans] gives the keptRuns of a source of that length read without the spans {first, last} of it."
+keptOf[length_Integer, spans_List] := With[{runs = mergedSpans[SortBy[spans, First]]},
+	With[{out = Accumulate[runs[[All, 2]] - runs[[All, 1]] + 1]},
+		keptRuns[Developer`ToPackedArray[Flatten[Transpose[{runs[[All, 1]] - Prepend[Most[out], 0], out}]]], length - Last[out]]
+	]
+]
+
+(* spans sorted by their first position, those that overlap made one: a span begins a new one where it
+	begins past the reach of all those before it *)
+mergedSpans::usage = "mergedSpans[spans] gives the spans, sorted by their first position, those that overlap made one."
+mergedSpans[spans_List] := With[{firsts = spans[[All, 1]], reach = FoldList[Max, spans[[All, 2]]]},
+	With[{starts = Flatten[Position[Prepend[UnitStep[Rest[firsts] - Most[reach] - 1], 1], 1]]},
+		Transpose[{firsts[[starts]], reach[[Append[Rest[starts] - 1, Length[firsts]]]]}]
+	]
+]
+
+keptCount::usage = "keptCount[kept] gives how many characters were read."
+keptCount[keptRuns[_List, n_Integer]] := n
+
+keptAt::usage = "keptAt[kept, c] gives the position in the source of the character at c of the text read, or the positions of the \
+characters at the positions cs."
+keptAt[keptRuns[runs_List, _], c_Integer] := c + leftOut[runs, c]
+keptAt[keptRuns[runs_List, _], cs_List] := cs + leftOutAll[runs, cs]
+
+(* the characters left out before the character at c of the text read: those up to the last run at
+	or before c, found by halving *)
+leftOut::usage = "leftOut[runs, c] gives how many characters were left out before the character at c of the text read."
+leftOut[runs_List, c_Integer] := Module[{lo = 0, hi = Quotient[Length[runs], 2], mid},
+	While[ lo < hi,
+		mid = Quotient[lo + hi + 1, 2];
+		If[runs[[2 mid - 1]] <= c, lo = mid, hi = mid - 1]
+	];
+	If[lo === 0, 0, runs[[2 lo]]]
+]
+
+(* the same at each of the positions cs, from one ordering of the runs' places with them: the runs at
+	or before a position are those ordered before it, a run's place 2 at and a position's 2 c + 1 *)
+leftOutAll::usage = "leftOutAll[runs, cs] gives how many characters were left out before each character at the positions cs of the \
+text read."
+leftOutAll[runs_List, cs_List] := With[{count = Quotient[Length[runs], 2]},
+	With[{order = Ordering[Join[2 runs[[1 ;; ;; 2]], 2 cs + 1]]},
+		Prepend[runs[[2 ;; ;; 2]], 0][[Accumulate[UnitStep[count - order]][[Ordering[order][[count + 1 ;;]]]] + 1]]
+	]
+]
 
 (* ::Section:: *)
 (*Character escapes*)
@@ -2260,13 +2309,13 @@ characterEscapes[s_String] := If[StringContainsQ[s, "\\:" | "\\." | "\\|" | ("\\
 
 
 (* s as the readers read it, without its line continuations and with each character escape its
-	character, and the positions in s of its characters, None where they are all of s's *)
+	character, and the keptRuns of the positions in s of its characters, None where they are all of s's *)
 readSource[s_String] /; !StringContainsQ[s, "\\"] := {s, None}
 readSource[s_String] := With[{spans = lineContinuations[s], escapes = characterEscapes[s]},
 	If[ spans === {} && escapes === {}, {s, None},
 		With[{edits = SortBy[Join[Thread[{spans, ""}], escapes], #[[1, 1]] &]},
 			{StringReplacePart[s, edits[[All, 2]], edits[[All, 1]]],
-			Complement[Range[StringLength[s]], Catenate[Range @@@ Join[spans, Map[{#[[1]] + 1, #[[2]]} &, escapes[[All, 1]]]]]]
+			keptOf[StringLength[s], Join[spans, Map[{#[[1]] + 1, #[[2]]} &, escapes[[All, 1]]]]]
 			}
 		]
 	]
@@ -2275,15 +2324,15 @@ readSource[s_String] := With[{spans = lineContinuations[s], escapes = characterE
 (* offsets into the source read without its line continuations made
 	offsets into the source: a node begins where the continuations before
 	its first character do, and ends past its last character *)
-continuedOffsets[tree_, kept_List] := With[{at = Function[o, If[o === 1, 1, kept[[o - 1]] + 1]]},
+continuedOffsets[tree_, kept_keptRuns] := With[{at = Function[o, If[o === 1, 1, keptAt[kept, o - 1] + 1]]},
 	tree /. (a_Association /; MatchQ[Lookup[a, "Source"], {_Integer, _Integer}]) :> Append[a, "Source" -> Map[at, a["Source"]]]
 ]
 
 (* a failure at a character of the source read without its line
 	continuations, placed at that character of the source *)
-continuedFailure[f_Failure, kept_List, s_String] := With[{at = f["Position"]},
+continuedFailure[f_Failure, kept_keptRuns, s_String] := With[{at = f["Position"]},
 	If[ IntegerQ[at],
-		With[{p = If[at <= Length[kept], kept[[at]], StringLength[s] + 1]},
+		With[{p = If[at <= keptCount[kept], keptAt[kept, at], StringLength[s] + 1]},
 			Failure[f[[1]], Join[f[[2]], <|"Position" -> p, "MessageParameters" -> Append[Lookup[f[[2]], "MessageParameters", <||>], "Position" -> p]|>]]
 		],
 		f
@@ -2291,32 +2340,37 @@ continuedFailure[f_Failure, kept_List, s_String] := With[{at = f["Position"]},
 ]
 
 (* the leaves of a tree read from s without its line continuations, each
-	given its text in s: kept is the positions in s of the characters read *)
+	given its text in s: kept is the keptRuns of the positions in s of the characters read, looked up
+	for every leaf at once *)
 continuedLeaves::usage = "continuedLeaves[children, s, kept] gives the nodes children, read from s without its line continuations, each \
-leaf given its text in s, kept the positions in s of the characters read."
-continuedLeaves[children_List, s_String, kept_List] := With[
+leaf given its text in s, kept the keptRuns of the positions in s of the characters read."
+continuedLeaves[children_List, s_String, kept_keptRuns] := With[
 	{positions = Position[children, (CodeParser`LeafNode | CodeParser`ErrorNode)[_, _String, _], Infinity, Heads -> False]},
 	{leaves = Extract[children, positions]},
+	{lengths = Developer`ToPackedArray[leafTextLength /@ leaves]},
+	{before = Most[Accumulate[Prepend[lengths, 0]]]},
 	ReplacePart[
 		children,
-		Thread[positions -> MapThread[continuedLeaf[#1, #2, s, kept] &, {leaves, Most[Accumulate[Prepend[leafTextLength /@ leaves, 0]]]}]]
+		Thread[positions -> MapThread[
+			continuedLeaf[#1, s, #2, #3, If[#4 === 0, 1, #5 + 1]] &,
+			{leaves, keptAt[kept, before + 1], keptAt[kept, before + lengths], before, keptAt[kept, before]}
+		]]
 	]
 ]
 
 leafTextLength::usage = "leafTextLength[leaf] gives the length of the text of a leaf."
 leafTextLength[_[_, t_String, _]] := StringLength[t]
 
-(* a leaf whose text begins after the characters before characters read, its text in s: those of
-	the line continuations before and in it too, where any are *)
-continuedLeaf::usage = "continuedLeaf[leaf, before, s, kept] gives the leaf, the characters read before it before, with its text in s."
-continuedLeaf[leaf : (CodeParser`LeafNode | CodeParser`ErrorNode)[_, "", _], _Integer, _String, _List] := leaf
-continuedLeaf[(head : CodeParser`LeafNode | CodeParser`ErrorNode)[k_, t_String, m_], before_Integer, s_String, kept_List] := With[
-	{first = kept[[before + 1]], last = kept[[before + StringLength[t]]], from = If[before === 0, 1, kept[[before]] + 1]},
+(* a leaf its text in s: its first character read at first, its last at last, and the line
+	continuations before it from from on, its text those and the continuations in it too, where any are *)
+continuedLeaf::usage = "continuedLeaf[leaf, s, first, last, from] gives the leaf with its text in s, its characters read from first to \
+last in s and the line continuations before it from from on."
+continuedLeaf[leaf : (CodeParser`LeafNode | CodeParser`ErrorNode)[_, "", _], _String, _Integer, _Integer, _Integer] := leaf
+continuedLeaf[(head : CodeParser`LeafNode | CodeParser`ErrorNode)[k_, t_String, m_], s_String, first_Integer, last_Integer, from_Integer] :=
 	If[from === first && last - first + 1 === StringLength[t],
 		head[k, t, m],
 		head[k, StringTake[s, {from, last}], Append[m, continuedBy -> first - from]]
 	]
-]
 
 (* ::Section:: *)
 (*What CodeParser reads again*)
@@ -2466,7 +2520,7 @@ WolframLanguageConcrete[s_String] := With[{spans = lineContinuations[s]},
 		With[{r = parsed[$concreteGrammar, s]},
 			If[FailureQ[r], r, reparsed[withSource[CodeParser`ContainerNode[String, r, <||>]], s]]
 		],
-		With[{r = parsed[$concreteGrammar, StringReplacePart[s, "", spans]], kept = keptPositions[s, spans]},
+		With[{r = parsed[$concreteGrammar, StringReplacePart[s, "", spans]], kept = keptOf[StringLength[s], spans]},
 			If[ FailureQ[r],
 				continuedFailure[r, kept, s],
 				reparsed[withSource[CodeParser`ContainerNode[String, continuedLeaves[r, s, kept], <||>], spans[[-1, 2]] === StringLength[s]], s]

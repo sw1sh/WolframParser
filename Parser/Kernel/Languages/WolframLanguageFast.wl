@@ -1521,10 +1521,10 @@ $fastLinesDeclaration = FunctionDeclaration[fastLines,
 	] @
 	Function[{lnCodes, lnLexed, lnProg, lnWarn, lnClasses, lnNames, lnKept, lnParams},
 		Native`UncheckedBlock[Module[{nUse = lnParams[[1]], end = lnParams[[2]], pending = lnParams[[3]], seg = lnParams[[4]], stop = lnParams[[5]], offset = lnParams[[6]],
-				srcLen = lnParams[[7]], pendingStart = lnParams[[8]], keptLen = lnParams[[9]], n = Length[lnCodes] - 3,
+				srcLen = lnParams[[7]], pendingStart = lnParams[[8]], runCount = lnParams[[9]], n = Length[lnCodes] - 3,
 				js, nS = 0, j = 0, g = 0, lo = 0, hi = 0, p = 0, c = 0, depth = 0, k = 0, a = 0, len = 0, match = 0, q = 0,
 				pass = 1, total = 0, out, rows = 0, slot = 1, breaks = 0, at = 0, ti = 0, fI = 0, lI = 0, fT = 0, tA = 0, kind = 0, base = 0,
-				post = 1, r = 0, col = 0, v = 0
+				post = 1, r = 0, col = 0, v = 0, kLo = 0, kHi = 0, kMid = 0
 		},
 			js = Table[0, {nUse + 1}];
 			j = 1;
@@ -1615,7 +1615,15 @@ $fastLinesDeclaration = FunctionDeclaration[fastLines,
 				col = 2;
 				While[ col <= 3,
 					v = out[[2 + 9 (r - 1) + col]] + offset;
-					If[keptLen > 0, v = If[v <= keptLen, lnKept[[v]], srcLen + v - keptLen]];
+					(* lnKept is the runs left out, {at, out, ...}: v gains the out of the last run at or before it *)
+					If[ runCount > 0,
+						kLo = 0; kHi = runCount;
+						While[ kLo < kHi,
+							kMid = Quotient[kLo + kHi + 1, 2];
+							If[lnKept[[2 kMid - 1]] <= v, kLo = kMid, kHi = kMid - 1]
+						];
+						If[kLo > 0, v = v + lnKept[[2 kLo]]]
+					];
 					out[[2 + 9 (r - 1) + col]] = v;
 					col++
 				];
@@ -2691,8 +2699,7 @@ sourcePosition::usage = "sourcePosition[state, c] gives the position in the stat
 line continuations."
 sourcePosition[state_Association, c_Integer] := sourcePosition[state["Kept"], StringLength[state["Source"]], c]
 sourcePosition[None, _Integer, c_Integer] := c
-sourcePosition[kept_List, _Integer, c_Integer] /; c <= Length[kept] := kept[[c]]
-sourcePosition[kept_List, length_Integer, c_Integer] := length + c - Length[kept]
+sourcePosition[kept_keptRuns, _Integer, c_Integer] := keptAt[kept, c]
 
 (* a failure of the source read from its character from on, without its line continuations, at the
 	character of the source it is at *)
@@ -2790,7 +2797,7 @@ segmentRows[state_Association, from_Integer, reading_Association, segment_Associ
 				from - 1,
 				StringLength[state["Source"]],
 				0,
-				If[state["Kept"] === None, 0, Length[state["Kept"]]]
+				keptRunCount[state["Kept"]]
 			}]
 		],
 		2
@@ -2798,9 +2805,13 @@ segmentRows[state_Association, from_Integer, reading_Association, segment_Associ
 	9
 ]
 
-packedKept::usage = "packedKept[kept] gives the positions kept as fastLines takes them, packed, {0} for None or none."
-packedKept[None | {}] := $fastNoKept
-packedKept[kept_List] := Developer`ToPackedArray[kept]
+packedKept::usage = "packedKept[kept] gives the runs of the keptRuns kept as fastLines takes them, packed, {0} for None."
+packedKept[None] := $fastNoKept
+packedKept[keptRuns[runs_List, _]] := Developer`ToPackedArray[runs]
+
+keptRunCount::usage = "keptRunCount[kept] gives the number of runs of the keptRuns kept, 0 for None."
+keptRunCount[None] := 0
+keptRunCount[keptRuns[runs_List, _]] := Quotient[Length[runs], 2]
 
 readingEnd::usage = "readingEnd[reading] gives where the statements of the reading end: the first token of the line reading stops in, \
 or past its codes."
@@ -3253,8 +3264,8 @@ stringTokens[lexed_List] := Flatten @ Position[tokenKinds[lexed], $tkString]
 	the first line at the newline before it;
 	- before a long name no character has, or a malformed name, from the name it is in;
 	and at the end of the source where a comment, a string or a name of these is its first token.
-	A place is {the codes of the source read without its line continuations, the positions in the
-	source of their characters or None, the source's length}. *)
+	A place is {the codes of the source read without its line continuations, the keptRuns of the
+	positions in the source of their characters or None, the source's length}. *)
 syntaxStop::usage = "syntaxStop[s] gives where reading the source s stops, as SyntaxLength counts the characters before it, or None where \
 it reads."
 syntaxStop[s_String] := With[
@@ -3351,15 +3362,13 @@ $fastAssignments := $fastAssignments = fastOp /@ {"=", ":=", "=."}
 sourcePlace::usage = "sourcePlace[place, c] gives the position in the source of the character at c of it read without its line \
 continuations."
 sourcePlace[{_List, None, _Integer}, c_Integer] := c
-sourcePlace[{codes_List, kept_List, length_Integer}, c_Integer] := Which[
+sourcePlace[{codes_List, kept_keptRuns, _Integer}, c_Integer] := Which[
 	c === 1,
 		1,
-	c > Length[kept],
-		length + c - Length[kept],
-	wordCodeQ[codes[[c - 1]]],
-		kept[[c]],
+	c > keptCount[kept] || wordCodeQ[codes[[c - 1]]],
+		keptAt[kept, c],
 	True,
-		kept[[c - 1]] + 1
+		keptAt[kept, c - 1] + 1
 ]
 
 wordCodeQ::usage = "wordCodeQ[code] is True for the code of a letter, a digit, $ or `."
