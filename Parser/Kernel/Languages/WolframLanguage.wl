@@ -2515,9 +2515,12 @@ grammarFailure[other_, _] := other
 
 $concreteGrammar := $concreteGrammar = concreteGrammar[]
 
+(* The tree of a source the reader reads whole is built from its tokens and program by fastConcrete
+	(WolframLanguageFast.wl), in one pass; the grammar reads any other source, and every source where
+	$fastConcreteReader is False, as the checks of the builder against the grammar do. *)
 WolframLanguageConcrete[s_String] := With[{spans = lineContinuations[s]},
 	If[ spans === {},
-		With[{r = parsed[$concreteGrammar, s]},
+		With[{r = If[TrueQ[$fastConcreteReader], Replace[fastConcrete[s], None :> parsed[$concreteGrammar, s]], parsed[$concreteGrammar, s]]},
 			If[FailureQ[r], r, reparsed[withSource[CodeParser`ContainerNode[String, r, <||>]], s]]
 		],
 		With[{r = parsed[$concreteGrammar, StringReplacePart[s, "", spans]], kept = keptOf[StringLength[s], spans]},
