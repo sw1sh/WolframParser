@@ -30,7 +30,9 @@ And these tables of the paclet, constant for a version of it:
 ## A whole source
 
 `WolframLanguageProgram[s]` gives the program of all of a plain source at once: one that reads
-whole, with no line continuation and no syntax warning. Any other source is `None`, and
+whole with no syntax warning. Its line continuations outside strings, comments and file names, each
+`\`, its newline and the blanks after it, are taken out first, as the reader reads it as though they
+were not there; the program's codes are those of the source without them. Any other source is `None`, and
 `WolframLanguageHeldNext` reads it. The program is `{codes, prog, parts}`, three packed arrays of
 integers:
 
