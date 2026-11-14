@@ -278,11 +278,13 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 				status = 0, done = 0, scanning = 0, m = 0, a = 0, len = 0, base = 0, start = 0, tick = 0, r = 0, e2 = 0, lnAt = 0, lnVal = 0, nest = 0, pk = 0,
 				spOpen = lexSpecial[[1]], spClose = lexSpecial[[2]], spGet = lexSpecial[[3]], spPut = lexSpecial[[4]], spPutAppend = lexSpecial[[5]],
 				spUnset = lexSpecial[[6]], spSet = lexSpecial[[7]], spSpace = lexSpecial[[8]], spComma = lexSpecial[[9]], spNewline = lexSpecial[[10]],
-				spReplaceAll = lexSpecial[[11]], spDivide = lexSpecial[[12]]
+				spReplaceAll = lexSpecial[[11]], spDivide = lexSpecial[[12]], cap = 0, grown = Native`UncheckedArray[0, 1], g = 0
 		},
-			(* the tokens' room starts at a quarter of the codes' worst case, a token a code, and grows
-				as it fills (fastGrow) *)
-			out = Native`UncheckedArray[0, Min[5 n + 7, 5 Quotient[n, 4] + 5127]];
+			(* the tokens' room, cap, starts at a quarter of the codes' worst case, a token a code, and
+				doubles as it fills: a copy of what is written, and zeros after it, as every slot is written *)
+			cap = If[5 n + 7 < 5 Quotient[n, 4] + 5127, 5 n + 7, 5 Quotient[n, 4] + 5127];
+			out = Native`UncheckedArray[0, cap];
+			out[[1]] = 0; out[[2]] = 0;
 			While[ done == 0,
 				(* whitespace, newlines and comments *)
 				nl = 0; scanning = 1;
@@ -308,7 +310,12 @@ $fastLexDeclaration = FunctionDeclaration[fastLex,
 						True, scanning = 0
 					]
 				];
-				k++; base = 2 + 5 (k - 1); If[base + 5 > Length[out], out = fastGrow[out, base + 5]];
+				k++; base = 2 + 5 (k - 1);
+				If[ base + 5 > cap,
+					grown = Native`UncheckedArray[0, 2 cap + 5120];
+					g = 1; While[g <= base - 1, grown[[g]] = out[[g]]; g++]; While[g <= 2 cap + 5120, grown[[g]] = 0; g++];
+					cap = 2 cap + 5120; out = grown
+				];
 				out[[base + 3]] = i; out[[base + 5]] = nl;
 				If[ status != 0 || i > n,
 					out[[base + 1]] = 0; out[[base + 2]] = 0; out[[base + 4]] = i; done = 1,
@@ -762,7 +769,7 @@ $lexBoxesDeclaration = FunctionDeclaration[lexBoxes,
 
 (* the typed functions the lexer calls, each after those it calls *)
 $fastLexHelpers := {$lexLongNameDeclaration, $lexQuotedDeclaration, $lexCommentDeclaration, $lexFileDeclaration, $lexNumberDeclaration, $lexSlotDeclaration,
-	$lexBlankDeclaration, $lexBoxesDeclaration, $fastGrowDeclaration
+	$lexBlankDeclaration, $lexBoxesDeclaration
 }
 
 (* a source's codes and three zeros after them, packed, as every typed function takes them: no
@@ -805,22 +812,6 @@ compiledDeclaration[declaration_, inlined_List] := With[{f = declarationFunction
 (* a typed declaration's Function, evaluated, the typed functions it calls their Functions *)
 evaluatedDeclaration[declaration_, helpers_List] :=
 	declarationFunction[declaration] /. Fold[Function[{done, h}, Append[done, h[[1]] -> (declarationFunction[h] /. done)]], {}, helpers]
-
-(* An array of integers grown to hold need of them, its own first and zeros after them: twice its
-	length, or need and some more where that is longer. Every slot is written, as the arrays of a
-	compiler of typed code hold what memory held before. *)
-$fastGrowDeclaration = FunctionDeclaration[fastGrow,
-	Typed[{"PackedArray"::["MachineInteger", 1], "MachineInteger"} -> "PackedArray"::["MachineInteger", 1]] @
-	Function[{grArray, grNeed},
-		Native`UncheckedBlock[Module[{m = Length[grArray], size = 0, grown, i = 1},
-			size = Max[2 m, grNeed + 1024];
-			grown = Native`UncheckedArray[0, size];
-			While[i <= m, grown[[i]] = grArray[[i]]; i++];
-			While[i <= size, grown[[i]] = 0; i++];
-			grown
-		]]
-	]
-]
 
 (* the lexer run here, fixed at its first use *)
 fastLexFunction := fastLexFunction = typedFunction[fastLex, $fastLexDeclaration, $fastLexHelpers]
@@ -964,14 +955,19 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 		Native`UncheckedBlock[Module[{n = pTok[[2]], out, fr, maxFrames, sp = 0, on = 0, t = 1, brackets = 0, status = 0, mode = 0,
 				pMin = 0, pRbp = 0, pPlain = 0, base = 0, k = 0, o = 0, i = 0, bp = 0, fx = 0, hd = 0, ky = 0, mn = 0, rb = 0, pl = 0,
 				ft = 0, cnt = 0, bt = 0, colons = 0, ok = 0, x = 0, lg = 0, e = 0, we = 0, c = 0, cl = 0, tt = 0, far = 0, stmt = 1, se = 0,
-				nls, ps = 0, ol = 0, pe = 0, nst = 0, q = 0, nf = 0, kk = 0, trail = 0, need = 0, wq = 0
+				nls, ps = 0, ol = 0, pe = 0, nst = 0, q = 0, nf = 0, kk = 0, trail = 0, need = 0, wq = 0,
+				ocap = 0, fcap = 0, ogrown = Native`UncheckedArray[0, 1], fgrown = Native`UncheckedArray[0, 1], g = 0
 		},
-			(* the program and the frames start small and grow as they fill (fastGrow): at most 8 n + 16
-				instructions and 4 n + 64 frames, a source's worst case, are far more than any source
-				needs, and a large source would hold their room for nothing *)
-			out = Native`UncheckedArray[0, 3 (Min[8 n + 16, n + 1024]) + 2];
+			(* the program and the frames start small, ocap and fcap, and double as they fill, a copy of
+				what is written and zeros after it: at most 8 n + 16 instructions and 4 n + 64 frames, a
+				source's worst case, are far more than any source needs, and a large source would hold
+				their room for nothing *)
+			ocap = 3 If[8 n + 16 < n + 1024, 8 n + 16, n + 1024] + 2;
+			out = Native`UncheckedArray[0, ocap];
+			out[[1]] = 0; out[[2]] = 0;
 			maxFrames = 4 n + 64;
-			fr = Native`UncheckedArray[0, 8 Min[maxFrames, 1024]];
+			fcap = 8 If[maxFrames < 1024, maxFrames, 1024];
+			fr = Native`UncheckedArray[0, fcap];
 			(* the line break before each token, a newline before it outside comments, but for one
 				right after a ;;, which a notebook reads as whitespace, unless another ;; comes after
 				it and the first has no operand before it: nothing, a line break outside brackets,
@@ -1005,7 +1001,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 					(* an expression's frame *)
 					mode == 1,
 						If[ sp >= maxFrames, status = 1; If[t > far, far = t]; mode = 99,
-							sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 1; fr[[base + 2]] = pMin; fr[[base + 3]] = pRbp; fr[[base + 4]] = pPlain;
+							sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 1; fr[[base + 2]] = pMin; fr[[base + 3]] = pRbp; fr[[base + 4]] = pPlain;
 							mode = 2
 						],
 					(* the operand of the expression at the top *)
@@ -1018,40 +1014,40 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 								notebook reads a . -b *)
 							k == 9 && pPrefix[[2 o + 1]] > 0 && (pPrefix[[2 o + 1]] > mn || mn == pSpecial[[17]]),
 								hd = pPrefix[[2 o + 2]]; pRbp = pPrefix[[2 o + 1]]; t++;
-								sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 2; fr[[base + 2]] = hd;
+								sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 2; fr[[base + 2]] = hd;
 								pMin = If[mn == pSpecial[[17]], 0, mn]; pPlain = pl; mode = 1,
 							k == 1,
-								on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 1; out[[3 on + 1]] = 1; out[[3 on + 2]] = t; t++;
+								on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 1; out[[3 on + 1]] = 1; out[[3 on + 2]] = t; t++;
 								If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && nls[[t]] == 1),
-									sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 7; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
+									sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 7; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
 									t++; pMin = pSpecial[[16]]; pRbp = 0; pPlain = 1; mode = 1,
 									mode = 3
 								],
 							(k >= 2 && k <= 7) || k == 20 || k == 21 || k == 22,
-								on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 1; out[[3 on + 1]] = If[k == 22, 100, k]; out[[3 on + 2]] = t; t++; mode = 3,
+								on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 1; out[[3 on + 1]] = If[k == 22, 100, k]; out[[3 on + 2]] = t; t++; mode = 3,
 							k == 10,
 								t++; brackets++;
-								sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 5;
+								sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 5;
 								pMin = 0; pRbp = 0; pPlain = 0; mode = 1,
 							k == 14 || k == 16,
 								t++; brackets++;
-								sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 6; fr[[base + 2]] = If[k == 14, 3, 4]; fr[[base + 3]] = If[k == 14, 15, 17];
+								sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 6; fr[[base + 2]] = If[k == 14, 3, 4]; fr[[base + 3]] = If[k == 14, 15, 17];
 								fr[[base + 4]] = 0; fr[[base + 5]] = 0; fr[[base + 6]] = 0;
 								mode = 6,
 							k == 9 && pGroups[[2 o + 1]] > 0,
 								t++; brackets++;
-								sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 6; fr[[base + 2]] = 5; fr[[base + 3]] = 9; fr[[base + 4]] = pGroups[[2 o + 1]];
+								sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 6; fr[[base + 2]] = 5; fr[[base + 3]] = 9; fr[[base + 4]] = pGroups[[2 o + 1]];
 								fr[[base + 5]] = 0; fr[[base + 6]] = pGroups[[2 o + 2]];
 								mode = 6,
 							k == 9 && o == pSpecial[[9]],
 								t++;
 								If[ pTok[[5 t - 2]] == 8,
-									on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 1; out[[3 on + 1]] = 8; out[[3 on + 2]] = t; t++;
-									on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 22; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 3,
+									on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 1; out[[3 on + 1]] = 8; out[[3 on + 2]] = t; t++;
+									on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 22; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 3,
 									mode = 5
 								],
 							k == 9 && o == pSpecial[[2]],
-								on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 13; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 10,
+								on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 13; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 10,
 							(* a query that does not begin its statement, as a notebook reads it: ? and the expression
 								after it, all that binds more tightly than =, a word of one token its text, and ?? and a
 								word of one token; frame 15 {??, first token, instructions} *)
@@ -1063,7 +1059,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 											pTok[[5 t - 7]] == 17 || pTok[[5 t - 7]] == 19)),
 								t++; lg = 0;
 								If[pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[14]] && pTok[[5 t]] == pTok[[5 t - 4]], lg = 1; t++];
-								sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 15; fr[[base + 2]] = lg; fr[[base + 3]] = t; fr[[base + 4]] = on;
+								sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 15; fr[[base + 2]] = lg; fr[[base + 3]] = t; fr[[base + 4]] = on;
 								pMin = pSpecial[[19]]; pRbp = 0; pPlain = 0; mode = 1,
 							(* ?words, ??words at the beginning of a statement: Information of the words, to the end of
 								their last token, or of a string, which a notebook answers itself *)
@@ -1074,8 +1070,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 								While[pCodes[[e]] == 32 || pCodes[[e]] == 9, e++];
 								If[ pCodes[[e]] == 34,
 									If[ pTok[[5 t - 2]] != 5 || pTok[[5 t]] != e, mode = 5,
-										on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 1; out[[3 on + 1]] = 5; out[[3 on + 2]] = t; t++;
-										on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; mode = 3
+										on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 1; out[[3 on + 1]] = 5; out[[3 on + 2]] = t; t++;
+										on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; mode = 3
 									],
 									(* words after a name's letter, to an operator; after anything else, as Wolfram 15's
 										kernel reads ?[a and ?@@%3, the rest of the line, its spaces at the end left out *)
@@ -1106,8 +1102,8 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 										While[pTok[[5 t - 2]] != 0 && pTok[[5 t]] < we, t++];
 										(* words that end inside a token, as ?a*=b: the token is split there, status 3 *)
 										If[ pTok[[5 t - 4]] != we, status = 3; far = we; mode = 99,
-											on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 28; out[[3 on + 1]] = e; out[[3 on + 2]] = we;
-											on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; wq = t; mode = 3
+											on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 28; out[[3 on + 1]] = e; out[[3 on + 2]] = we;
+											on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 29; out[[3 on + 1]] = lg; out[[3 on + 2]] = 0; wq = t; mode = 3
 										]
 									]
 								],
@@ -1116,7 +1112,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 							k == 9 && pIntegrals[[o + 1]] > 0,
 								x = pIntegrals[[o + 1]]; t++; cnt = 1;
 								While[pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == o, t++; cnt++];
-								sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 13; fr[[base + 2]] = x; fr[[base + 3]] = cnt;
+								sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 13; fr[[base + 2]] = x; fr[[base + 3]] = cnt;
 								pMin = pSpecial[[15]]; pRbp = 0; pPlain = 0; mode = 1,
 							True, mode = 5
 						],
@@ -1137,7 +1133,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 						];
 						If[ pl == 0 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[1]] && ! (brackets == 0 && nls[[t]] == 1) &&
 								((out[[3 on]] == 1 && out[[3 on + 1]] == 2 && pCodes[[pTok[[5 out[[3 on + 2]] + 1]] - 1]] != 46) || out[[3 on]] == 23),
-							t++; sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 3; fr[[base + 2]] = pHeads[[7]];
+							t++; sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 3; fr[[base + 2]] = pHeads[[7]];
 							pMin = mn; pRbp = pSpecial[[21]]; pPlain = 0; i = -1; mode = 1
 						];
 						If[brackets == 0 && nls[[t]] == 1 && i > 0, i = 0];
@@ -1150,58 +1146,58 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 									fx == 1 && pTok[[5 t - 1]] == pSpecial[[14]] && out[[3 on]] == 4 && out[[3 on + 1]] == hd, mode = 5,
 									fx == 1 || fx == 2,
 										t++;
-										sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 3; fr[[base + 2]] = hd;
+										sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 3; fr[[base + 2]] = hd;
 										pMin = mn; pRbp = If[fx == 2, bp - 1, bp]; pPlain = pl; mode = 1,
 									fx == 3 || fx == 15,
-										sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 4; fr[[base + 2]] = bp; fr[[base + 3]] = ky; fr[[base + 4]] = hd; fr[[base + 5]] = 1;
+										sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 4; fr[[base + 2]] = bp; fr[[base + 3]] = ky; fr[[base + 4]] = hd; fr[[base + 5]] = 1;
 										fr[[base + 6]] = If[ky == pKeys[[1]] && pTok[[5 t - 2]] == 9 && (pTok[[5 t - 1]] == pSpecial[[11]] || pTok[[5 t - 1]] == pSpecial[[12]]), 1, 0];
 										fr[[base + 7]] = mn; fr[[base + 8]] = pl;
-										If[ky == pKeys[[2]], on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 6; out[[3 on + 1]] = hd; out[[3 on + 2]] = 0];
+										If[ky == pKeys[[2]], on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 6; out[[3 on + 1]] = hd; out[[3 on + 2]] = 0];
 										If[fx == 3, t++];
 										pMin = mn; pRbp = bp; pPlain = pl; mode = 1,
-									fx == 4, t++; on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 3; out[[3 on + 1]] = hd; out[[3 on + 2]] = 0,
-									fx == 13, t += 2; on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 3; out[[3 on + 1]] = pHeads[[2]]; out[[3 on + 2]] = 0,
+									fx == 4, t++; on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 3; out[[3 on + 1]] = hd; out[[3 on + 2]] = 0,
+									fx == 13, t += 2; on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 3; out[[3 on + 1]] = pHeads[[2]]; out[[3 on + 2]] = 0,
 									fx == 5,
 										If[t < n && pTok[[5 t + 3]] == 12, t += 2; bt = 2, t++; bt = 1];
 										brackets++;
-										sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 6; fr[[base + 2]] = bt; fr[[base + 3]] = 13; fr[[base + 4]] = 0; fr[[base + 5]] = 0; fr[[base + 6]] = 0;
+										sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 6; fr[[base + 2]] = bt; fr[[base + 3]] = 13; fr[[base + 4]] = 0; fr[[base + 5]] = 0; fr[[base + 6]] = 0;
 										mode = 6,
 									fx == 14,
 										t++; brackets++;
-										sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 6; fr[[base + 2]] = 6; fr[[base + 3]] = 9; fr[[base + 4]] = pSpecial[[13]]; fr[[base + 5]] = 0; fr[[base + 6]] = 0;
+										sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 6; fr[[base + 2]] = 6; fr[[base + 3]] = 9; fr[[base + 4]] = pSpecial[[13]]; fr[[base + 5]] = 0; fr[[base + 6]] = 0;
 										mode = 6,
 									fx == 6,
-										on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 16; out[[3 on + 1]] = pTok[[5 t + 1]] - pTok[[5 t]]; out[[3 on + 2]] = 0; t++,
+										on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 16; out[[3 on + 1]] = pTok[[5 t + 1]] - pTok[[5 t]]; out[[3 on + 2]] = 0; t++,
 									fx == 7,
 										t++;
-										sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 11; fr[[base + 2]] = 1; fr[[base + 3]] = bp; fr[[base + 4]] = mn; fr[[base + 5]] = pl;
+										sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 11; fr[[base + 2]] = 1; fr[[base + 3]] = bp; fr[[base + 4]] = mn; fr[[base + 5]] = pl;
 										pMin = mn; pRbp = bp; pPlain = pl; mode = 1,
 									fx == 8,
 										colons = pTok[[5 t + 1]]; t++;
 										If[ pTok[[5 t - 2]] == 12 && pTok[[5 t]] == colons,
 											t++; brackets++;
-											sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 6; fr[[base + 2]] = 7; fr[[base + 3]] = 13; fr[[base + 4]] = 0; fr[[base + 5]] = 0; fr[[base + 6]] = 0;
+											sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 6; fr[[base + 2]] = 7; fr[[base + 3]] = 13; fr[[base + 4]] = 0; fr[[base + 5]] = 0; fr[[base + 6]] = 0;
 											mode = 6,
 											(* a message name, as a notebook reads it: after each ::, an operand, read with
 												no operator after it but a pattern's colon, a prefix operator of any
 												precedence beginning one; frame 14 {count, first token, instructions} *)
-											sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 14; fr[[base + 2]] = 1; fr[[base + 3]] = t; fr[[base + 4]] = on;
+											sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 14; fr[[base + 2]] = 1; fr[[base + 3]] = t; fr[[base + 4]] = on;
 											pMin = pSpecial[[17]]; pRbp = 100000; pPlain = 0; mode = 1
 										],
 									fx == 9, mode = 10,
 									fx == 10,
-										sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 10; fr[[base + 2]] = 1; mode = 13,
+										sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 10; fr[[base + 2]] = 1; mode = 13,
 									fx == 11,
 										t++;
-										sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 12; fr[[base + 2]] = 1;
+										sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 12; fr[[base + 2]] = 1;
 										pMin = pSpecial[[19]]; pRbp = 0; pPlain = 0; mode = 1,
 									(* >> or >>> and a file, else, as a notebook reads it, the expression after it *)
 									fx == 12,
 										t++;
 										If[ pTok[[5 t - 2]] == 8,
-											on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 1; out[[3 on + 1]] = 8; out[[3 on + 2]] = t; t++;
-											on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 21; out[[3 on + 1]] = hd; out[[3 on + 2]] = 0,
-											sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 3; fr[[base + 2]] = hd;
+											on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 1; out[[3 on + 1]] = 8; out[[3 on + 2]] = t; t++;
+											on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 21; out[[3 on + 1]] = hd; out[[3 on + 2]] = 0,
+											sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 3; fr[[base + 2]] = hd;
 											pMin = mn; pRbp = bp; pPlain = pl; mode = 1
 										],
 									True, mode = 5
@@ -1213,27 +1209,27 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 					mode == 4,
 						sp--;
 						If[ sp == 0,
-							on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 25; out[[3 on + 1]] = stmt; out[[3 on + 2]] = t; mode = 0,
+							on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 25; out[[3 on + 1]] = stmt; out[[3 on + 2]] = t; mode = 0,
 							base = 8 (sp - 1); ft = fr[[base + 1]];
 							Which[
 								ft == 2,
-									on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]];
+									on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown];
 									If[fr[[base + 2]] == pHeads[[6]], out[[3 on]] = 27; out[[3 on + 1]] = 0, out[[3 on]] = 2; out[[3 on + 1]] = fr[[base + 2]]];
 									out[[3 on + 2]] = 0; sp--; mode = 3,
 								ft == 3,
-									on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 4; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3,
+									on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 4; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3,
 								ft == 4,
-									If[fr[[base + 6]] == 1, on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 2; out[[3 on + 1]] = pHeads[[1]]; out[[3 on + 2]] = 0];
+									If[fr[[base + 6]] == 1, on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 2; out[[3 on + 1]] = pHeads[[1]]; out[[3 on + 2]] = 0];
 									fr[[base + 5]] = fr[[base + 5]] + 1;
 									i = pLed[[t]];
 									If[se == t && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]], i = pSpecial[[22]]];
 									If[brackets == 0 && nls[[t]] == 1, i = 0];
 									If[ i > 0 && pSpecs[[4 i - 3]] == fr[[base + 2]] && (pSpecs[[4 i - 2]] == 3 || pSpecs[[4 i - 2]] == 15) && pSpecs[[4 i]] == fr[[base + 3]],
 										fr[[base + 6]] = If[fr[[base + 3]] == pKeys[[1]] && pTok[[5 t - 2]] == 9 && (pTok[[5 t - 1]] == pSpecial[[11]] || pTok[[5 t - 1]] == pSpecial[[12]]), 1, 0];
-										If[fr[[base + 3]] == pKeys[[2]], on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 6; out[[3 on + 1]] = pSpecs[[4 i - 1]]; out[[3 on + 2]] = 0];
+										If[fr[[base + 3]] == pKeys[[2]], on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 6; out[[3 on + 1]] = pSpecs[[4 i - 1]]; out[[3 on + 2]] = 0];
 										If[pSpecs[[4 i - 2]] == 3, t++];
 										pMin = fr[[base + 7]]; pRbp = fr[[base + 2]]; pPlain = fr[[base + 8]]; mode = 1,
-										on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]];
+										on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown];
 										Which[
 											fr[[base + 3]] == pKeys[[2]],
 												out[[3 on]] = 7; out[[3 on + 1]] = fr[[base + 5]]; out[[3 on + 2]] = 0,
@@ -1246,11 +1242,11 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 									],
 								ft == 5,
 									If[ pTok[[5 t - 2]] == 11,
-										t++; brackets--; on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 9; out[[3 on + 1]] = pHeads[[3]]; out[[3 on + 2]] = 1; sp--; mode = 3,
+										t++; brackets--; on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 9; out[[3 on + 1]] = pHeads[[3]]; out[[3 on + 2]] = 1; sp--; mode = 3,
 										mode = 5
 									],
 								ft == 6, fr[[base + 5]] = fr[[base + 5]] + 1; mode = 8,
-								ft == 7, on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 23; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; sp--; mode = 3,
+								ft == 7, on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 23; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; sp--; mode = 3,
 								ft == 8,
 									sp--; base = 8 (sp - 1);
 									If[fr[[base + 1]] == 9, mode = 12, fr[[base + 2]] = fr[[base + 2]] + 1; mode = 13],
@@ -1277,7 +1273,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 												];
 												If[tt > far, far = tt]; mode = 5
 										],
-										on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 17; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; sp--; mode = 3
+										on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 17; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; sp--; mode = 3
 									],
 								ft == 12,
 									If[ fr[[base + 2]] == 1,
@@ -1285,17 +1281,17 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 											(brackets == 0 && nls[[t]] == 1) || pTok[[5 t - 2]] != 9,
 												mode = 5,
 											pTok[[5 t - 1]] == pSpecial[[5]] && t < n && pTok[[5 t + 3]] == 9 && pTok[[5 t + 4]] == pSpecial[[7]],
-												t += 2; on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 20; out[[3 on + 1]] = 3; out[[3 on + 2]] = 0; sp--; mode = 3,
+												t += 2; on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 20; out[[3 on + 1]] = 3; out[[3 on + 2]] = 0; sp--; mode = 3,
 											pTok[[5 t - 1]] == pSpecial[[10]],
 												t++; fr[[base + 2]] = 2; pMin = pSpecial[[20]]; pRbp = 0; pPlain = 0; mode = 1,
 											pTok[[5 t - 1]] == pSpecial[[5]],
 												t++; fr[[base + 2]] = 3; pMin = pSpecial[[20]]; pRbp = 0; pPlain = 0; mode = 1,
 											pTok[[5 t - 1]] == pSpecial[[6]],
-												t++; on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 20; out[[3 on + 1]] = 3; out[[3 on + 2]] = 0; sp--; mode = 3,
+												t++; on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 20; out[[3 on + 1]] = 3; out[[3 on + 2]] = 0; sp--; mode = 3,
 											True,
 												mode = 5
 										],
-										on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 20; out[[3 on + 1]] = If[fr[[base + 2]] == 2, 1, 2]; out[[3 on + 2]] = 0; sp--; mode = 3
+										on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 20; out[[3 on + 1]] = If[fr[[base + 2]] == 2, 1, 2]; out[[3 on + 2]] = 0; sp--; mode = 3
 									],
 								(* an integral's operand, as a notebook reads it: its factors, a parenthesis round them
 									all as none, end in as many differentials as the integral has signs, and no other
@@ -1345,14 +1341,14 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 										True, ok = 0
 									];
 									If[ ok == 0, If[t > far, far = t]; mode = 5,
-										on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 24; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = fr[[base + 3]]; sp--; mode = 3
+										on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 24; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = fr[[base + 3]]; sp--; mode = 3
 									],
 								(* a query's expression: a word of one token its text, and after ?? nothing else *)
 								ft == 15,
 									x = If[on == fr[[base + 4]] + 1 && t == fr[[base + 3]] + 1 && out[[3 on]] == 1, 1, 0];
 									If[x == 1 && (out[[3 on + 1]] <= 4 || out[[3 on + 1]] == 6 || out[[3 on + 1]] == 7), out[[3 on + 1]] = 100];
 									If[ fr[[base + 2]] == 1 && x == 0, mode = 5,
-										on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 29; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3
+										on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 29; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3
 									],
 								(* a message name's operand: a word of one token, a name, a number, a blank, a slot
 									or a %, its text; another :: after it, another operand *)
@@ -1367,7 +1363,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 										If[fr[[base + 3]] > far, far = fr[[base + 3]]]; mode = 5,
 										If[ pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[4]] && ! (brackets == 0 && nls[[t]] == 1),
 											t++; fr[[base + 3]] = t; fr[[base + 4]] = on; pMin = pSpecial[[17]]; pRbp = 100000; pPlain = 0; mode = 1,
-											on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 14; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3
+											on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 14; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3
 										]
 									],
 								True, mode = 5
@@ -1386,11 +1382,11 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 								sp--; base = 8 (sp - 1);
 								Which[
 									fr[[base + 1]] == 9 && fr[[base + 2]] == 2,
-										t--; se = t; on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; mode = 3,
+										t--; se = t; on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; mode = 3,
 									fr[[base + 1]] == 9,
-										on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 12; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 12,
+										on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 12; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 12,
 									True,
-										on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; fr[[base + 2]] = fr[[base + 2]] + 1; mode = 13
+										on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; fr[[base + 2]] = fr[[base + 2]] + 1; mode = 13
 								]
 							]
 						],
@@ -1402,7 +1398,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 					mode == 7,
 						base = 8 (sp - 1);
 						If[ pTok[[5 t - 2]] == 18 || (pTok[[5 t - 2]] == fr[[base + 3]] && (fr[[base + 3]] != 9 || pTok[[5 t - 1]] == fr[[base + 4]])),
-							on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 11; out[[3 on + 1]] = 1; out[[3 on + 2]] = 0; fr[[base + 5]] = fr[[base + 5]] + 1; mode = 8,
+							on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 11; out[[3 on + 1]] = 1; out[[3 on + 2]] = 0; fr[[base + 5]] = fr[[base + 5]] + 1; mode = 8,
 							pMin = 0; pRbp = 0; pPlain = 0; mode = 1
 						],
 					(* after an item: a comma and the next, else the closer *)
@@ -1420,7 +1416,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 								ok = 0
 						];
 						If[ ok == 0, mode = 5,
-							brackets--; on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]];
+							brackets--; on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown];
 							Which[
 								bt == 1,
 									out[[3 on]] = 8; out[[3 on + 1]] = cnt; out[[3 on + 2]] = 0,
@@ -1440,7 +1436,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 					(* a ;; and the span's frame *)
 					mode == 10,
 						t++;
-						sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 9; fr[[base + 2]] = 1; fr[[base + 3]] = 1;
+						sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 9; fr[[base + 2]] = 1; fr[[base + 3]] = 1;
 						mode = 11,
 					(* a span's operand, All where the first is left out; where the second is, the span ends
 						before its ;;, which begins a span of its own. A prefix operator, a << or an integral begins
@@ -1451,19 +1447,19 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 							pTok[[5 t - 2]] == 9 && (pPrefix[[2 o + 1]] > 0 || o == pSpecial[[9]] || pIntegrals[[o + 1]] > 0) && ! (brackets == 0 && nls[[t]] == 1),
 								pMin = pSpecial[[17]]; pRbp = 0; pPlain = 0; mode = 1,
 							! ((pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]]) || (brackets == 0 && nls[[t]] == 1) || pTok[[5 t - 2]] == 0),
-								sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
+								sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
 								pMin = pSpecial[[17]]; pRbp = 0; pPlain = 0; mode = 1,
 							fr[[base + 2]] == 2,
-								t--; se = t; on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; mode = 3,
+								t--; se = t; on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; mode = 3,
 							True,
-								on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 12; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 12
+								on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 12; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0; mode = 12
 						],
 					(* after a span's operand: a second ;; and its operand, else the span *)
 					mode == 12,
 						base = 8 (sp - 1); fr[[base + 3]] = fr[[base + 3]] + 1;
 						If[ fr[[base + 2]] == 1 && pTok[[5 t - 2]] == 9 && pTok[[5 t - 1]] == pSpecial[[2]] && ! (brackets == 0 && nls[[t]] == 1),
 							t++; fr[[base + 2]] = 2; mode = 11,
-							on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; se = t; mode = 3
+							on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 18; out[[3 on + 1]] = fr[[base + 3]]; out[[3 on + 2]] = 0; sp--; se = t; mode = 3
 						],
 					(* a ; and its operand, Null where it is left out, but for one a prefix operator, a << or
 						an integral begins, else the compound *)
@@ -1474,16 +1470,16 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 								(* Null at the end of a line, of the source, and before a ? or a ;;, a pattern test or a
 									span of the compound, as a notebook reads a; ?b and a; ;; *)
 								(brackets == 0 && nls[[t]] == 1) || pTok[[5 t - 2]] == 0 || (pTok[[5 t - 2]] == 9 && (o == pSpecial[[14]] || o == pSpecial[[2]])),
-									on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0;
+									on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 11; out[[3 on + 1]] = 0; out[[3 on + 2]] = 0;
 									base = 8 (sp - 1); fr[[base + 2]] = fr[[base + 2]] + 1,
 								pTok[[5 t - 2]] == 9 && (pPrefix[[2 o + 1]] > 0 || o == pSpecial[[9]] || pIntegrals[[o + 1]] > 0),
 									pMin = pSpecial[[18]]; pRbp = 0; pPlain = 0; mode = 1,
 								True,
-									sp++; base = 8 (sp - 1); If[8 sp > Length[fr], fr = fastGrow[fr, 8 sp]]; fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
+									sp++; base = 8 (sp - 1); If[8 sp > fcap, fgrown = Native`UncheckedArray[0, 2 fcap + 8192]; g = 1; While[g <= base, fgrown[[g]] = fr[[g]]; g++]; While[g <= 2 fcap + 8192, fgrown[[g]] = 0; g++]; fcap = 2 fcap + 8192; fr = fgrown]; fr[[base + 1]] = 8; fr[[base + 2]] = t; fr[[base + 3]] = on; fr[[base + 4]] = brackets;
 									pMin = pSpecial[[18]]; pRbp = 0; pPlain = 0; mode = 1
 							],
 							base = 8 (sp - 1);
-							on++; If[3 on + 2 > Length[out], out = fastGrow[out, 3 on + 2]]; out[[3 on]] = 19; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3
+							on++; If[3 on + 2 > ocap, ogrown = Native`UncheckedArray[0, 2 ocap + 3072]; g = 1; While[g <= 3 on - 1, ogrown[[g]] = out[[g]]; g++]; While[g <= 2 ocap + 3072, ogrown[[g]] = 0; g++]; ocap = 2 ocap + 3072; out = ogrown]; out[[3 on]] = 19; out[[3 on + 1]] = fr[[base + 2]]; out[[3 on + 2]] = 0; sp--; mode = 3
 						],
 					True, status = 1; If[t > far, far = t]; mode = 99
 				]
@@ -1496,7 +1492,7 @@ $fastParseDeclaration = FunctionDeclaration[fastParse,
 ]
 
 (* the parser run here, fixed at its first use *)
-fastParseFunction := fastParseFunction = typedFunction[fastParse, $fastParseDeclaration, {$fastGrowDeclaration}]
+fastParseFunction := fastParseFunction = typedFunction[fastParse, $fastParseDeclaration]
 
 (* ::Section:: *)
 (*The typed lines*)
