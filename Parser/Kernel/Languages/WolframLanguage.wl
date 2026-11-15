@@ -1685,7 +1685,7 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 	binary, prefix, postfix, optionalColon, chain, flat, dotOperator, implicitTimes, inequality, plus, times, specs, table,
 	expression, gap, patternRight, spanOperand, compoundOperand, tagLeft, tagRight, tildeOperand, spanStartCell,
 	longOp, longPrefix, longPostfix, longBinary, longSpecs, longGroups, longCalls, groupOf, callOf, commaOperator, commaAhead,
-	closerAhead, differentialAhead, integralItem, integrandOperand, implicitTimesFirst, prefixAhead, prefixedTable, postfixItem
+	closerAhead, differentialAhead, integralItem, integrandOperand, implicitTimesFirst, prefixAhead, prefixedTable, postfixSpellingItem
 	},
 
 	patternRight = RecCell[]; spanOperand = RecCell[]; compoundOperand = RecCell[]; tagLeft = RecCell[]; tagRight = RecCell[];
@@ -1923,8 +1923,8 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 	prefix[s_String, head_] := ParseAction[op[s], Function[o, Function[x, concreteNode[CodeParser`PrefixNode, head, kids[o], x]]]];
 	(* a postfix operator in its own spelling alone, as the held grammar reads it: a long name that
 		shares the spelling is another operator's, \[Not] a Not and never a Factorial *)
-	postfixItem[s_String] := ParseAction[longest[s, $concreteSpellings] ~~ ws, item[tokenLeaf[#1], #2] &];
-	postfix[s_String, head_] := ParseAction[postfixItem[s], Function[o, Function[x, concreteNode[CodeParser`PostfixNode, head, kids[x], o]]]];
+	postfixSpellingItem[s_String] := ParseAction[longest[s, $concreteSpellings] ~~ ws, item[tokenLeaf[#1], #2] &];
+	postfix[s_String, head_] := ParseAction[postfixSpellingItem[s], Function[o, Function[x, concreteNode[CodeParser`PostfixNode, head, kids[x], o]]]];
 	longBinary[name_String, head_] := ParseAction[longOp[name, wsAll], Function[o, Function[{l, r}, stepsItem[CodeParser`BinaryNode, head, l, {step[{}, kids[o], r]}]]]];
 	longPrefix[name_String, head_] := ParseAction[longOp[name, wsAll], Function[o, Function[x, concreteNode[CodeParser`PrefixNode, head, kids[o], x]]]];
 	longPostfix[name_String, head_] := ParseAction[longOp[name, ws], Function[o, Function[x, concreteNode[CodeParser`PostfixNode, head, kids[x], o]]]];
