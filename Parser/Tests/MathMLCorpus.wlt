@@ -18,7 +18,7 @@ mathmlParity[corpus_String, field_String, read_] := With[{cases = Select[$mathml
 ]
 
 VerificationTest[mathmlParity["presentation", "XMLElement", MathMLImport[#, "XMLElement"] &], {1257, 1257}, TestID -> "mathml parity: presentation, XMLElement"]
-VerificationTest[mathmlParity["presentation", "Boxes", MathMLBoxes], {1225, 1257}, TestID -> "mathml parity: presentation, boxes"]
+VerificationTest[mathmlParity["presentation", "Boxes", MathMLBoxes], {1226, 1257}, TestID -> "mathml parity: presentation, boxes"]
 VerificationTest[mathmlParity["presentation", "Held", MathMLHeld], {1189, 1257}, TestID -> "mathml parity: presentation, held expressions"]
 VerificationTest[mathmlParity["content", "XMLElement", MathMLImport[#, "XMLElement"] &], {838, 838}, TestID -> "mathml parity: content, XMLElement"]
 VerificationTest[mathmlParity["content", "Boxes", MathMLBoxes], {789, 838}, TestID -> "mathml parity: content, boxes"]
