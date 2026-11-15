@@ -103,8 +103,6 @@ $alphanumericCodes = AssociationThread[Join[Range[48, 57], Range[65, 90], Range[
 (* the characters of a file name but its \ *)
 $fileCharacterCodes = Join[$alphanumericCodes, AssociationThread[ToCharacterCode["$`_./~:!*?-"] -> True]]
 
-lineContinuations::usage = "lineContinuations[s] gives the spans of the line continuations of s, {} for none."
-lineContinuations[s_String] := If[StringContainsQ[s, "\\\n" | "\\\r"], continuationSpans[s], {}]
 
 (* The positions in s of the characters read, n of them, as runs: for each run of characters left
 	out, where the characters after it begin in the text read and how many characters were left out
@@ -244,9 +242,8 @@ characterEscapes::usage = "characterEscapes[s] gives the character escapes of s 
 characterEscapes[s_String] := If[StringContainsQ[s, "\\:" | "\\." | "\\|" | ("\\" ~~ DigitCharacter)], escapeSpans[s], {}]
 
 
-(* s as the readers read it, without its line continuations and with each character escape its
-	character, and the keptRuns of the positions in s of its characters, None where they are all of s's *)
-readSource[s_String] := With[{spans = lineContinuations[s], escapes = characterEscapes[s]},
+continuedSource::usage = "continuedSource[s] gives readSource[s] of a source with a \\ in it."
+continuedSource[s_String] := With[{spans = lineContinuations[s], escapes = characterEscapes[s]},
 	If[ spans === {} && escapes === {}, {s, None},
 		With[{edits = SortBy[Join[Thread[{spans, ""}], escapes], #[[1, 1]] &]},
 			{StringReplacePart[s, edits[[All, 2]], edits[[All, 1]]],
@@ -306,27 +303,6 @@ continuedLeaf[(head : CodeParser`LeafNode | CodeParser`ErrorNode)[k_, t_String, 
 		head[k, t, m],
 		head[k, StringTake[s, {from, last}], Append[m, continuedBy -> first - from]]
 	]
-
-(* ::Section:: *)
-(*The fast reader's places of the characters read*)
-
-
-sourcePosition[kept_keptRuns, _Integer, c_Integer] := keptAt[kept, c]
-
-packedKept[keptRuns[runs_List, _]] := Developer`ToPackedArray[runs]
-
-keptRunCount[keptRuns[runs_List, _]] := Quotient[Length[runs], 2]
-
-sourcePlace[{codes_List, kept_keptRuns, _Integer}, c_Integer] := Which[
-	c === 1,
-		1,
-	c > keptCount[kept] || wordCodeQ[codes[[c - 1]]],
-		keptAt[kept, c],
-	True,
-		keptAt[kept, c - 1] + 1
-]
-
-$continuationsLoaded = True
 
 End[]
 

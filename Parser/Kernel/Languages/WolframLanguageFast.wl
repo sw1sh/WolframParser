@@ -2699,6 +2699,7 @@ sourcePosition::usage = "sourcePosition[state, c] gives the position in the stat
 line continuations."
 sourcePosition[state_Association, c_Integer] := sourcePosition[state["Kept"], StringLength[state["Source"]], c]
 sourcePosition[None, _Integer, c_Integer] := c
+sourcePosition[kept_keptRuns, _Integer, c_Integer] := keptAt[kept, c]
 
 (* a failure of the source read from its character from on, without its line continuations, at the
 	character of the source it is at *)
@@ -2806,9 +2807,11 @@ segmentRows[state_Association, from_Integer, reading_Association, segment_Associ
 
 packedKept::usage = "packedKept[kept] gives the runs of the keptRuns kept as fastLines takes them, packed, {0} for None."
 packedKept[None] := $fastNoKept
+packedKept[keptRuns[runs_List, _]] := Developer`ToPackedArray[runs]
 
 keptRunCount::usage = "keptRunCount[kept] gives the number of runs of the keptRuns kept, 0 for None."
 keptRunCount[None] := 0
+keptRunCount[keptRuns[runs_List, _]] := Quotient[Length[runs], 2]
 
 readingEnd::usage = "readingEnd[reading] gives where the statements of the reading end: the first token of the line reading stops in, \
 or past its codes."
@@ -3359,6 +3362,14 @@ $fastAssignments := $fastAssignments = fastOp /@ {"=", ":=", "=."}
 sourcePlace::usage = "sourcePlace[place, c] gives the position in the source of the character at c of it read without its line \
 continuations."
 sourcePlace[{_List, None, _Integer}, c_Integer] := c
+sourcePlace[{codes_List, kept_keptRuns, _Integer}, c_Integer] := Which[
+	c === 1,
+		1,
+	c > keptCount[kept] || wordCodeQ[codes[[c - 1]]],
+		keptAt[kept, c],
+	True,
+		keptAt[kept, c - 1] + 1
+]
 
 wordCodeQ::usage = "wordCodeQ[code] is True for the code of a letter, a digit, $ or `."
 wordCodeQ[code_Integer] := LetterQ[FromCharacterCode[code]] || DigitQ[FromCharacterCode[code]] || code === 36 || code === 96

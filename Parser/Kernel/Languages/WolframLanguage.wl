@@ -2096,16 +2096,15 @@ continuationsLoaded[] := (
 	]
 )
 
+(* s as the readers read it, without its line continuations and with each character escape its
+	character, and the keptRuns of the positions in s of its characters, None where they are all of s's *)
 readSource::usage = "readSource[s] gives {s read without its line continuations and with each character escape its character, the \
 keptRuns of the positions in s of its characters}, {s, None} for a source of neither."
 readSource[s_String] /; !StringContainsQ[s, "\\"] := {s, None}
-readSource[s_String] /; !TrueQ[$continuationsLoaded] := (continuationsLoaded[]; If[TrueQ[$continuationsLoaded], readSource[s], {s, None}])
+readSource[s_String] := (continuationsLoaded[]; continuedSource[s])
 
 lineContinuations::usage = "lineContinuations[s] gives the spans of the line continuations of s, {} for none."
-lineContinuations[s_String] /; !TrueQ[$continuationsLoaded] := If[StringContainsQ[s, "\\\n" | "\\\r"],
-	continuationsLoaded[]; If[TrueQ[$continuationsLoaded], lineContinuations[s], {}],
-	{}
-]
+lineContinuations[s_String] := If[StringContainsQ[s, "\\\n" | "\\\r"], continuationsLoaded[]; continuationSpans[s], {}]
 
 (* ::Section:: *)
 (*What CodeParser reads again*)
