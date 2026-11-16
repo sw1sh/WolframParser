@@ -442,8 +442,4 @@ containerChildren[items_List] := Module[{pos = 1, last = 0, out = {}},
 	Flatten[{out, triviaLeaves[pos, Length[$cCodes] + 1]}]
 ]
 
-(* The mark that this file is read: languageFileRead (WolframLanguage.wl) loads the file only
-	where it is not set. *)
-$concreteTreeRead = True
-
 End[]

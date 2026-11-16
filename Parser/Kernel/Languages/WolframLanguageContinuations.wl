@@ -114,47 +114,38 @@ keptRuns::usage = "keptRuns[runs, n] stands for the positions in a source of the
 run left out, where the characters after it begin in the text read and how many were left out up to its end."
 
 keptOf::usage = "keptOf[length, spans] gives the keptRuns of a source of that length read without the spans {first, last} of it."
-keptOf[length_Integer, spans_List] := With[{runs = mergedSpans[SortBy[spans, First]]},
-	With[{out = Accumulate[runs[[All, 2]] - runs[[All, 1]] + 1]},
-		keptRuns[Developer`ToPackedArray[Flatten[Transpose[{runs[[All, 1]] - Prepend[Most[out], 0], out}]]], length - Last[out]]
+(* the spans sorted by their first position, those that overlap made one (a span begins a new one where
+	it begins past the reach of all those before it), then each run's place and the characters left out
+	up to its end *)
+keptOf[length_Integer, spans_List] := With[{sorted = SortBy[spans, First]},
+	With[{firsts = sorted[[All, 1]], reach = FoldList[Max, sorted[[All, 2]]]},
+		With[{starts = Flatten[Position[Prepend[UnitStep[Rest[firsts] - Most[reach] - 1], 1], 1]]},
+			With[{runs = Transpose[{firsts[[starts]], reach[[Append[Rest[starts] - 1, Length[firsts]]]]}]},
+				With[{out = Accumulate[runs[[All, 2]] - runs[[All, 1]] + 1]},
+					keptRuns[Developer`ToPackedArray[Flatten[Transpose[{runs[[All, 1]] - Prepend[Most[out], 0], out}]]], length - Last[out]]
+				]
+			]
+		]
 	]
 ]
 
-(* spans sorted by their first position, those that overlap made one: a span begins a new one where it
-	begins past the reach of all those before it *)
-mergedSpans::usage = "mergedSpans[spans] gives the spans, sorted by their first position, those that overlap made one."
-mergedSpans[spans_List] := With[{firsts = spans[[All, 1]], reach = FoldList[Max, spans[[All, 2]]]},
-	With[{starts = Flatten[Position[Prepend[UnitStep[Rest[firsts] - Most[reach] - 1], 1], 1]]},
-		Transpose[{firsts[[starts]], reach[[Append[Rest[starts] - 1, Length[firsts]]]]}]
-	]
-]
-
-keptCount::usage = "keptCount[kept] gives how many characters were read."
-keptCount[keptRuns[_List, n_Integer]] := n
-
-keptAt::usage = "keptAt[kept, c] gives the position in the source of the character at c of the text read, or the positions of the \
-characters at the positions cs."
-keptAt[keptRuns[runs_List, _], c_Integer] := c + leftOut[runs, c]
-keptAt[keptRuns[runs_List, _], cs_List] := cs + leftOutAll[runs, cs]
-
-(* the characters left out before the character at c of the text read: those up to the last run at
-	or before c, found by halving *)
-leftOut::usage = "leftOut[runs, c] gives how many characters were left out before the character at c of the text read."
-leftOut[runs_List, c_Integer] := Module[{lo = 0, hi = Quotient[Length[runs], 2], mid},
-	While[ lo < hi,
-		mid = Quotient[lo + hi + 1, 2];
-		If[runs[[2 mid - 1]] <= c, lo = mid, hi = mid - 1]
-	];
-	If[lo === 0, 0, runs[[2 lo]]]
-]
-
-(* the same at each of the positions cs, from one ordering of the runs' places with them: the runs at
-	or before a position are those ordered before it, a run's place 2 at and a position's 2 c + 1 *)
-leftOutAll::usage = "leftOutAll[runs, cs] gives how many characters were left out before each character at the positions cs of the \
-text read."
-leftOutAll[runs_List, cs_List] := With[{count = Quotient[Length[runs], 2]},
-	With[{order = Ordering[Join[2 runs[[1 ;; ;; 2]], 2 cs + 1]]},
-		Prepend[runs[[2 ;; ;; 2]], 0][[Accumulate[UnitStep[count - order]][[Ordering[order][[count + 1 ;;]]]] + 1]]
+(* The position in the source of the character at c of the text read: c and the characters left out up
+	to the last run at or before c, found by halving. At each of the positions cs, from one ordering of
+	the runs' places with them: the runs at or before a position are those ordered before it, a run's
+	place 2 at and a position's 2 c + 1. How many characters were read is Last[kept]. *)
+keptAt::usage = "keptAt[kept, c] gives the position in the source of the character at c of the text read, or the positions of the characters at the positions cs."
+keptAt[keptRuns[runs_List, _], c_] := If[ IntegerQ[c],
+	Module[{lo = 0, hi = Quotient[Length[runs], 2], mid},
+		While[ lo < hi,
+			mid = Quotient[lo + hi + 1, 2];
+			If[runs[[2 mid - 1]] <= c, lo = mid, hi = mid - 1]
+		];
+		c + If[lo === 0, 0, runs[[2 lo]]]
+	],
+	With[{count = Quotient[Length[runs], 2]},
+		With[{order = Ordering[Join[2 runs[[1 ;; ;; 2]], 2 c + 1]]},
+			c + Prepend[runs[[2 ;; ;; 2]], 0][[Accumulate[UnitStep[count - order]][[Ordering[order][[count + 1 ;;]]]] + 1]]
+		]
 	]
 ]
 
@@ -243,17 +234,6 @@ characterEscapes::usage = "characterEscapes[s] gives the character escapes of s 
 characterEscapes[s_String] := If[StringContainsQ[s, "\\:" | "\\." | "\\|" | ("\\" ~~ DigitCharacter)], escapeSpans[s], {}]
 
 
-continuedSource::usage = "continuedSource[s] gives readSource[s] of a source with a \\ in it."
-continuedSource[s_String] := With[{spans = lineContinuations[s], escapes = characterEscapes[s]},
-	If[ spans === {} && escapes === {}, {s, None},
-		With[{edits = SortBy[Join[Thread[{spans, ""}], escapes], #[[1, 1]] &]},
-			{StringReplacePart[s, edits[[All, 2]], edits[[All, 1]]],
-			keptOf[StringLength[s], Join[spans, Map[{#[[1]] + 1, #[[2]]} &, escapes[[All, 1]]]]]
-			}
-		]
-	]
-]
-
 (* offsets into the source read without its line continuations made
 	offsets into the source: a node begins where the continuations before
 	its first character do, and ends past its last character *)
@@ -265,7 +245,7 @@ continuedOffsets[tree_, kept_keptRuns] := With[{at = Function[o, If[o === 1, 1, 
 	continuations, placed at that character of the source *)
 continuedFailure[f_Failure, kept_keptRuns, s_String] := With[{at = f["Position"]},
 	If[ IntegerQ[at],
-		With[{p = If[at <= keptCount[kept], keptAt[kept, at], StringLength[s] + 1]},
+		With[{p = If[at <= Last[kept], keptAt[kept, at], StringLength[s] + 1]},
 			Failure[f[[1]], Join[f[[2]], <|"Position" -> p, "MessageParameters" -> Append[Lookup[f[[2]], "MessageParameters", <||>], "Position" -> p]|>]]
 		],
 		f
@@ -304,9 +284,5 @@ continuedLeaf[(head : CodeParser`LeafNode | CodeParser`ErrorNode)[k_, t_String, 
 		head[k, t, m],
 		head[k, StringTake[s, {from, last}], Append[m, continuedBy -> first - from]]
 	]
-
-(* The mark that this file is read: languageFileRead (WolframLanguage.wl) loads the file only
-	without it, so a program that has the file built in loads nothing. *)
-$continuationsRead = True
 
 End[]

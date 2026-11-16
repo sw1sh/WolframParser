@@ -3361,7 +3361,7 @@ sourcePlace[{_List, None, _Integer}, c_Integer] := c
 sourcePlace[{codes_List, kept_keptRuns, _Integer}, c_Integer] := Which[
 	c === 1,
 		1,
-	c > keptCount[kept] || wordCodeQ[codes[[c - 1]]],
+	c > Last[kept] || wordCodeQ[codes[[c - 1]]],
 		keptAt[kept, c],
 	True,
 		keptAt[kept, c - 1] + 1

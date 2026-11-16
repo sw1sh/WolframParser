@@ -2088,36 +2088,30 @@ tokenMarks[_, _String] := {}
 
 (* A source with a \ in it, which may hold a line continuation or a character escape, is read by
 	WolframLanguageContinuations.wl: it takes the line continuations out, makes each character escape
-	its character and keeps the positions in the source of the characters read. That file loads at
-	the first such source, so a source of none, as most are, loads nothing of it. A program that
-	has read the file already, as a kernel that builds its reader of these files has, has its
-	mark, $continuationsRead, and nothing is loaded. The paclet's loader, Parser.wl, reads it with the
-	reader's other files, as a kernel does at its first read, where it is one compiled unit; a program
-	that loads the reader's files alone loads it here. *)
+	its character and keeps the positions in the source of the characters read. The paclet's loaders
+	read that file with the reader's other files, as a kernel makes its unit with the reader's at its
+	first read. *)
 readSource::usage = "readSource[s] gives {s read without its line continuations and with each character escape its character, the \
 keptRuns of the positions in s of its characters}, {s, None} for a source of neither."
 readSource[s_String] /; !StringContainsQ[s, "\\"] := {s, None}
-readSource[s_String] := (languageFileRead["WolframLanguageContinuations.wl", $continuationsRead]; continuedSource[s])
-
-(* A file of the reader's that loads at its first use, once: its mark set where the file is read
-	already, as a program that has read it has, and nothing is loaded. *)
-SetAttributes[languageFileRead, HoldRest];
-languageFileRead[file_String, mark_] := If[!TrueQ[mark],
-	Block[{$ContextPath = {"Wolfram`Parser`Languages`WolframLanguage`", "Wolfram`Parser`", "System`"}, $Context = "Global`"},
-		Get[FileNameJoin[{$languagesDirectory, file}]]
+readSource[s_String] := With[{spans = lineContinuations[s], escapes = characterEscapes[s]},
+	If[ spans === {} && escapes === {}, {s, None},
+		With[{edits = SortBy[Join[Thread[{spans, ""}], escapes], #[[1, 1]] &]},
+			{StringReplacePart[s, edits[[All, 2]], edits[[All, 1]]], keptOf[StringLength[s], Join[spans, Map[{#[[1]] + 1, #[[2]]} &, escapes[[All, 1]]]]]}
+		]
 	]
 ]
 
 (* The concrete tree of a source without line continuations is built from the reader's tokens and
-	program by WolframLanguageConcreteTree.wl, which loads at the first concrete tree asked for: a
-	program that only reads loads none of it, and one that has read the file has its mark,
-	$concreteTreeRead. A concrete tree the readers make in the middle of a read, of linear syntax for
-	one, never loads it, since a file cannot be read while a read goes on: it is built by the grammar
-	where the file is not read yet. $concreteByGrammar True has the grammar read every source, as the
-	checks of the builder against the grammar do. *)
+	program by WolframLanguageConcreteTree.wl, which loads at the first concrete tree asked for, where
+	fastConcrete has no definitions yet: a program that only reads loads none of it. A concrete tree
+	the readers make in the middle of a read, of linear syntax for one, never loads it, since a file
+	cannot be read while a read goes on: it is built by the grammar where the file is not read yet.
+	$concreteByGrammar True has the grammar read every source, as the checks of the builder against
+	the grammar do. *)
 
 lineContinuations::usage = "lineContinuations[s] gives the spans of the line continuations of s, {} for none."
-lineContinuations[s_String] := If[StringContainsQ[s, "\\\n" | "\\\r"], languageFileRead["WolframLanguageContinuations.wl", $continuationsRead]; continuationSpans[s], {}]
+lineContinuations[s_String] := If[StringContainsQ[s, "\\\n" | "\\\r"], continuationSpans[s], {}]
 
 (* ::Section:: *)
 (*What CodeParser reads again*)
@@ -2267,8 +2261,13 @@ $concreteGrammar := $concreteGrammar = concreteGrammar[]
 	$concreteByGrammar is True, as the checks of the builder against the grammar do. *)
 WolframLanguageConcrete[s_String] := With[{spans = lineContinuations[s]},
 	If[ spans === {},
-		With[{r = If[ !TrueQ[$concreteByGrammar] && (TrueQ[$concreteTreeRead] || $concreteTreeLoads =!= False),
-				languageFileRead["WolframLanguageConcreteTree.wl", $concreteTreeRead]; Replace[fastConcrete[s], None :> parsed[$concreteGrammar, s]],
+		With[{r = If[ !TrueQ[$concreteByGrammar] && (DownValues[fastConcrete] =!= {} || $concreteTreeLoads =!= False),
+				If[ DownValues[fastConcrete] === {},
+					Block[{$ContextPath = {"Wolfram`Parser`Languages`WolframLanguage`", "Wolfram`Parser`", "System`"}, $Context = "Global`"},
+						Get[FileNameJoin[{$languagesDirectory, "WolframLanguageConcreteTree.wl"}]]
+					]
+				];
+				Replace[fastConcrete[s], None :> parsed[$concreteGrammar, s]],
 				parsed[$concreteGrammar, s]]},
 			If[FailureQ[r], r, reparsed[withSource[CodeParser`ContainerNode[String, r, <||>]], s]]
 		],
