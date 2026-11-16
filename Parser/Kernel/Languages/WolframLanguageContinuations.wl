@@ -305,7 +305,7 @@ continuedLeaf[(head : CodeParser`LeafNode | CodeParser`ErrorNode)[k_, t_String, 
 		head[k, StringTake[s, {from, last}], Append[m, continuedBy -> first - from]]
 	]
 
-(* The mark that this file is read: continuationsLoaded (WolframLanguage.wl) loads the file only
+(* The mark that this file is read: languageFileRead (WolframLanguage.wl) loads the file only
 	without it, so a program that has the file built in loads nothing. *)
 $continuationsRead = True
 

@@ -2797,7 +2797,7 @@ segmentRows[state_Association, from_Integer, reading_Association, segment_Associ
 				from - 1,
 				StringLength[state["Source"]],
 				0,
-				keptRunCount[state["Kept"]]
+				Replace[state["Kept"], {keptRuns[runs_List, _] :> Quotient[Length[runs], 2], _ -> 0}]
 			}]
 		],
 		2
@@ -2808,10 +2808,6 @@ segmentRows[state_Association, from_Integer, reading_Association, segment_Associ
 packedKept::usage = "packedKept[kept] gives the runs of the keptRuns kept as fastLines takes them, packed, {0} for None."
 packedKept[None] := $fastNoKept
 packedKept[keptRuns[runs_List, _]] := Developer`ToPackedArray[runs]
-
-keptRunCount::usage = "keptRunCount[kept] gives the number of runs of the keptRuns kept, 0 for None."
-keptRunCount[None] := 0
-keptRunCount[keptRuns[runs_List, _]] := Quotient[Length[runs], 2]
 
 readingEnd::usage = "readingEnd[reading] gives where the statements of the reading end: the first token of the line reading stops in, \
 or past its codes."

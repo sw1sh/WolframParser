@@ -581,7 +581,7 @@ VerificationTest[
 (* === a long name that shares a postfix operator's spelling === *)
 VerificationTest[
     Map[
-        Function[s, With[{grammar = Block[{$fastConcreteReader = False}, noSource[WolframLanguageConcrete[s]]], fast = noSource[WolframLanguageConcrete[s]]},
+        Function[s, With[{grammar = Block[{$concreteByGrammar = True}, noSource[WolframLanguageConcrete[s]]], fast = noSource[WolframLanguageConcrete[s]]},
             {grammar === fast, Cases[grammar, CodeParser`PrefixNode[Not, ___], Infinity] =!= {}, FreeQ[grammar, Factorial]}]],
         {"a \\[Not] b", "a " <> FromCharacterCode[172] <> " b"}
     ],
@@ -589,6 +589,6 @@ VerificationTest[
     TestID -> "concrete: a \\[Not] b is a times Not[b], as Wolfram 15.0 reads it, in the grammar as in the fast reader"]
 
 VerificationTest[
-    Block[{$fastConcreteReader = False}, Cases[noSource[WolframLanguageConcrete["a! b"]], CodeParser`PostfixNode[h_, ___] :> h, Infinity]],
+    Block[{$concreteByGrammar = True}, Cases[noSource[WolframLanguageConcrete["a! b"]], CodeParser`PostfixNode[h_, ___] :> h, Infinity]],
     {Factorial},
     TestID -> "concrete: a! is still a factorial"]

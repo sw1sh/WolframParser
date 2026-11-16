@@ -1211,7 +1211,7 @@ linearPlain[{{"Box", boxes_}}] := boxes
 linearPlain[ts_List] := With[{keys = MapIndexed[linearKey, ts]},
 	{boxes = Association[Cases[Transpose[{keys, ts}], {key_String, {"Box", b_}} :> key -> b]]},
 	linearItems @ DeleteCases[
-		linearCST[#, boxes] & /@ Replace[WolframLanguageConcrete[StringJoin[MapThread[linearText, {keys, ts}]]], CodeParser`ContainerNode[_, children_, _] :> children],
+		linearCST[#, boxes] & /@ Replace[Block[{$concreteTreeLoads = False}, WolframLanguageConcrete[StringJoin[MapThread[linearText, {keys, ts}]]]], CodeParser`ContainerNode[_, children_, _] :> children],
 		Nothing
 	]
 ]
@@ -2091,45 +2091,33 @@ tokenMarks[_, _String] := {}
 	its character and keeps the positions in the source of the characters read. That file loads at
 	the first such source, so a source of none, as most are, loads nothing of it. A program that
 	has read the file already, as a kernel that builds its reader of these files has, has its
-	mark, $continuationsRead, and nothing is loaded. *)
-continuationsLoaded::usage = "continuationsLoaded[] loads WolframLanguageContinuations.wl, the reading of line continuations and \
-character escapes, once."
-continuationsLoaded[] := (
-	continuationsLoaded[] = Null;
-	If[!TrueQ[$continuationsRead],
-		Block[{$ContextPath = {"Wolfram`Parser`Languages`WolframLanguage`", "Wolfram`Parser`", "System`"}, $Context = "Global`"},
-			Get[FileNameJoin[{$languagesDirectory, "WolframLanguageContinuations.wl"}]]
-		]
-	]
-)
-
-(* s as the readers read it, without its line continuations and with each character escape its
-	character, and the keptRuns of the positions in s of its characters, None where they are all of s's *)
+	mark, $continuationsRead, and nothing is loaded. Only a line continuation or a character escape
+	(\\:, \\., \\| or \\ and three octal digits) needs it: a source with other backslashes, the escapes
+	in strings that the lexer reads, is read as it is, and its reading loads nothing. *)
 readSource::usage = "readSource[s] gives {s read without its line continuations and with each character escape its character, the \
 keptRuns of the positions in s of its characters}, {s, None} for a source of neither."
-readSource[s_String] /; !StringContainsQ[s, "\\"] := {s, None}
-readSource[s_String] := (continuationsLoaded[]; continuedSource[s])
+readSource[s_String] /; !StringContainsQ[s, "\\\n" | "\\\r" | "\\:" | "\\." | "\\|" | ("\\" ~~ DigitCharacter)] := {s, None}
+readSource[s_String] := (languageFileRead["WolframLanguageContinuations.wl", $continuationsRead]; continuedSource[s])
+
+(* A file of the reader's that loads at its first use, once: its mark set where the file is read
+	already, as a program that has read it has, and nothing is loaded. *)
+SetAttributes[languageFileRead, HoldRest];
+languageFileRead[file_String, mark_] := If[!TrueQ[mark],
+	Block[{$ContextPath = {"Wolfram`Parser`Languages`WolframLanguage`", "Wolfram`Parser`", "System`"}, $Context = "Global`"},
+		Get[FileNameJoin[{$languagesDirectory, file}]]
+	]
+]
 
 (* The concrete tree of a source without line continuations is built from the reader's tokens and
 	program by WolframLanguageConcreteTree.wl, which loads at the first concrete tree asked for: a
 	program that only reads loads none of it, and one that has read the file has its mark,
-	$concreteTreeRead. $fastConcreteReader False has the grammar read every source, as the checks of
-	the builder against the grammar do. *)
-$fastConcreteReader = True
-
-concreteTreeLoaded::usage = "concreteTreeLoaded[] loads WolframLanguageConcreteTree.wl, the concrete tree built from the reader's \
-tokens and program, once."
-concreteTreeLoaded[] := (
-	concreteTreeLoaded[] = Null;
-	If[!TrueQ[$concreteTreeRead],
-		Block[{$ContextPath = {"Wolfram`Parser`Languages`WolframLanguage`", "Wolfram`Parser`", "System`"}, $Context = "Global`"},
-			Get[FileNameJoin[{$languagesDirectory, "WolframLanguageConcreteTree.wl"}]]
-		]
-	]
-)
+	$concreteTreeRead. A concrete tree the readers make in the middle of a read, of linear syntax for
+	one, never loads it, since a file cannot be read while a read goes on: it is built by the grammar
+	where the file is not read yet. $concreteByGrammar True has the grammar read every source, as the
+	checks of the builder against the grammar do. *)
 
 lineContinuations::usage = "lineContinuations[s] gives the spans of the line continuations of s, {} for none."
-lineContinuations[s_String] := If[StringContainsQ[s, "\\\n" | "\\\r"], continuationsLoaded[]; continuationSpans[s], {}]
+lineContinuations[s_String] := If[StringContainsQ[s, "\\\n" | "\\\r"], languageFileRead["WolframLanguageContinuations.wl", $continuationsRead]; continuationSpans[s], {}]
 
 (* ::Section:: *)
 (*What CodeParser reads again*)
@@ -2275,11 +2263,13 @@ grammarFailure[other_, _] := other
 $concreteGrammar := $concreteGrammar = concreteGrammar[]
 
 (* The tree of a source the reader reads whole is built from its tokens and program by fastConcrete
-	(WolframLanguageFast.wl), in one pass; the grammar reads any other source, and every source where
-	$fastConcreteReader is False, as the checks of the builder against the grammar do. *)
+	(WolframLanguageConcreteTree.wl), in one pass; the grammar reads any other source, and every source where
+	$concreteByGrammar is True, as the checks of the builder against the grammar do. *)
 WolframLanguageConcrete[s_String] := With[{spans = lineContinuations[s]},
 	If[ spans === {},
-		With[{r = If[TrueQ[$fastConcreteReader], concreteTreeLoaded[]; Replace[fastConcrete[s], None :> parsed[$concreteGrammar, s]], parsed[$concreteGrammar, s]]},
+		With[{r = If[ !TrueQ[$concreteByGrammar] && (TrueQ[$concreteTreeRead] || $concreteTreeLoads =!= False),
+				languageFileRead["WolframLanguageConcreteTree.wl", $concreteTreeRead]; Replace[fastConcrete[s], None :> parsed[$concreteGrammar, s]],
+				parsed[$concreteGrammar, s]]},
 			If[FailureQ[r], r, reparsed[withSource[CodeParser`ContainerNode[String, r, <||>]], s]]
 		],
 		With[{r = parsed[$concreteGrammar, StringReplacePart[s, "", spans]], kept = keptOf[StringLength[s], spans]},
@@ -2356,7 +2346,7 @@ activeLinearSpans[s_String] := Module[{depth = 0, start = 0, spans = {}},
 ]
 
 frontEndSourceItems::usage = "frontEndSourceItems[s, top] gives the front end's boxes of the top-level items of the source s, in order, or the failure of its concrete syntax tree; top is False for the text of a comment."
-frontEndSourceItems[s_String, top_ : True] := With[{tree = WolframLanguageConcrete[s]},
+frontEndSourceItems[s_String, top_ : True] := With[{tree = Block[{$concreteTreeLoads = False}, WolframLanguageConcrete[s]]},
 	Which[
 		FailureQ[tree], tree,
 		(* a string that stands alone the front end keeps as it is typed, its long names spelled out *)
@@ -2431,7 +2421,7 @@ frontEndComment[t_String] := With[{closed = StringEndsQ[t, "*)"] && StringLength
 frontEndCommentItems::usage = "frontEndCommentItems[body] gives the front end's boxes of the text of a comment, as items."
 frontEndCommentItems[body_String] := Replace[
 	If[ StringContainsQ[body, "\n"],
-		Replace[WolframLanguageConcrete["(" <> body <> ")"], {
+		Replace[Block[{$concreteTreeLoads = False}, WolframLanguageConcrete["(" <> body <> ")"]], {
 			CodeParser`ContainerNode[_, {CodeParser`GroupNode[CodeParser`GroupParen, {_, inner___, _}, _]}, _] :> Join @@ (frontEndItems /@ {inner}),
 			_ :> frontEndSourceItems[body, False]
 		}],
