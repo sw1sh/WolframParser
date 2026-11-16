@@ -2093,10 +2093,12 @@ tokenMarks[_, _String] := {}
 	has read the file already, as a kernel that builds its reader of these files has, has its
 	mark, $continuationsRead, and nothing is loaded. Only a line continuation or a character escape
 	(\\:, \\., \\| or \\ and three octal digits) needs it: a source with other backslashes, the escapes
-	in strings that the lexer reads, is read as it is, and its reading loads nothing. *)
+	in strings that the lexer reads, is read as it is, and its reading loads nothing. The test is a
+	search for each of those few strings: a string pattern costs a kernel's reader far more. *)
 readSource::usage = "readSource[s] gives {s read without its line continuations and with each character escape its character, the \
 keptRuns of the positions in s of its characters}, {s, None} for a source of neither."
-readSource[s_String] /; !StringContainsQ[s, "\\\n" | "\\\r" | "\\:" | "\\." | "\\|" | ("\\" ~~ DigitCharacter)] := {s, None}
+readSource[s_String] /; !StringContainsQ[s, "\\"] := {s, None}
+readSource[s_String] /; NoneTrue[{"\\\n", "\\\r", "\\:", "\\.", "\\|", "\\0", "\\1", "\\2", "\\3", "\\4", "\\5", "\\6", "\\7"}, StringContainsQ[s, #] &] := {s, None}
 readSource[s_String] := (languageFileRead["WolframLanguageContinuations.wl", $continuationsRead]; continuedSource[s])
 
 (* A file of the reader's that loads at its first use, once: its mark set where the file is read
