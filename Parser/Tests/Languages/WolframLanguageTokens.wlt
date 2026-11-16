@@ -247,7 +247,7 @@ wlSourceSame[s_String] := With[{read = wlPrivate["readSource"][s], mine = wlPriv
     ToCharacterCode[First[read]] === Normal[First[mine]] && wlKeptPositions[read[[2]]] === Replace[mine[[2]], kept_List :> Normal[kept]]
 ]
 wlKeptPositions[None] := None
-wlKeptPositions[kept_] := Normal[wlPrivate["keptAt"][kept, Range[wlPrivate["keptCount"][kept]]]]
+wlKeptPositions[kept_] := Normal[wlPrivate["keptAt"][kept, Range[Last[kept]]]]
 
 VerificationTest[
     Select[Join[ByteArrayToString[ReadByteArray[#], "UTF-8"] & /@ Select[wlCorpus, StringEndsQ[#, ".wl"] &],
