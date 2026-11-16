@@ -11,9 +11,10 @@
 	keeps the positions in the source of the characters read as runs, and gives the
 	nodes and failures read their places in the source. *)
 
-BeginPackage["Wolfram`Parser`Languages`WolframLanguage`", {"Wolfram`Parser`"}]
-
-Begin["`Private`"]
+(* The file begins its private context alone and names no package to need: it loads where the
+	contexts it uses are loaded already, in a kernel under that kernel's own names, where a package
+	needed by name cannot be loaded as one. *)
+Begin["Wolfram`Parser`Languages`WolframLanguage`Private`"]
 
 (* ::Section:: *)
 (*Line continuations*)
@@ -309,5 +310,3 @@ continuedLeaf[(head : CodeParser`LeafNode | CodeParser`ErrorNode)[k_, t_String, 
 $continuationsRead = True
 
 End[]
-
-EndPackage[]
