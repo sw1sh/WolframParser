@@ -1282,8 +1282,9 @@ $longOperatorHeads = Association[Apply[Rule, $syntax["longhead"], {1}]]
 $longOperatorForms = Association[Apply[Rule, $syntax["longform"], {1}]]
 
 (* the head the kernel gives a long-name operator: the one the syntax
-	declares, else a relation's name and another's tag's *)
-heldLongHead[row_List] := Lookup[$longOperatorHeads, row[[1]], If[row[[3]] === CodeParser`InfixInequality, row[[1]], SymbolName[row[[3]]]]]
+	declares, else a relation's name and another's tag's, a tag Wolfram 15 has no symbol for being
+	its name already *)
+heldLongHead[row_List] := Lookup[$longOperatorHeads, row[[1]], Which[row[[3]] === CodeParser`InfixInequality, row[[1]], StringQ[row[[3]]], row[[3]], True, SymbolName[row[[3]]]]]
 
 (* how the held grammar and the typed parser read a long-name infix operator
 	of CodeParser's table: {precedence, fixity, head}, and the key of the chain
@@ -1977,15 +1978,15 @@ concreteParser[ws_, wsAll_, nested_] := Module[
 		above, at their precedences *)
 	longSpecs = Join[
 		Map[{#[[4]], If[#[[2]] === "InfixNode",
-				flat[longOp[#[[1]], wsAll], chain[#[[3]]]],
-				{If[#[[5]] === "Right", "InfixR", "InfixL"], longBinary[#[[1]], #[[3]]]}
+				flat[longOp[#[[1]], wsAll], chain[Replace[#[[3]], t_String :> Symbol["System`" <> t]]]],
+				{If[#[[5]] === "Right", "InfixR", "InfixL"], longBinary[#[[1]], Replace[#[[3]], t_String :> Symbol["System`" <> t]]]}
 		]} &,
 			Select[$longNameTable["Infix"], ! KeyExistsQ[$asciiLongNames, #[[1]]] && #[[3]] =!= CodeParser`Comma &]
 		],
-		Map[{#[[4]], {"Prefix", longPrefix[#[[1]], #[[3]]]}} &,
+		Map[{#[[4]], {"Prefix", longPrefix[#[[1]], Replace[#[[3]], t_String :> Symbol["System`" <> t]]]}} &,
 			Select[$longNameTable["Prefix"], ! KeyExistsQ[$asciiLongNames, #[[1]]] && ! MemberQ[$longNameTable["Integrals"][[All, 1]], #[[1]]] &]
 		],
-		Map[{#[[4]], {"Postfix", longPostfix[#[[1]], #[[3]]]}} &, $longNameTable["Postfix"]],
+		Map[{#[[4]], {"Postfix", longPostfix[#[[1]], Replace[#[[3]], t_String :> Symbol["System`" <> t]]]}} &, $longNameTable["Postfix"]],
 		longCalls
 	];
 	specs = Join[specs, longSpecs];

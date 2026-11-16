@@ -234,17 +234,17 @@ $concreteInfixForms := $concreteInfixForms = Join[
 		Select[$syntaxOperators, MemberQ[{"InfixN", "InfixL", "InfixR", "Optional"}, #["Form"]] && #["Spelling"] =!= "" &]
 	],
 	Association @ Catenate @ Map[
-		Function[r, Map[# -> {Symbol["CodeParser`" <> r[[2]]], r[[3]]} &, longNameSpellings[r[[1]]]]],
+		Function[r, Map[# -> {Symbol["CodeParser`" <> r[[2]]], Replace[r[[3]], t_String :> Symbol["System`" <> t]]} &, longNameSpellings[r[[1]]]]],
 		Select[$longNameTable["Infix"], ! KeyExistsQ[$asciiLongNames, #[[1]]] && #[[3]] =!= CodeParser`Comma &]
 	]
 ]
 $concretePrefixTags := $concretePrefixTags = Join[
 	Association @ Catenate @ Map[Function[row, Map[# -> concreteHead[row] &, spellings[row["Spelling"]]]], Select[$syntaxOperators, #["Form"] === "Prefix" &]],
-	Association @ Catenate @ Map[Function[r, Map[# -> r[[3]] &, longNameSpellings[r[[1]]]]], Select[$longNameTable["Prefix"], ! KeyExistsQ[$asciiLongNames, #[[1]]] &]]
+	Association @ Catenate @ Map[Function[r, Map[# -> Replace[r[[3]], t_String :> Symbol["System`" <> t]] &, longNameSpellings[r[[1]]]]], Select[$longNameTable["Prefix"], ! KeyExistsQ[$asciiLongNames, #[[1]]] &]]
 ]
 $concretePostfixTags := $concretePostfixTags = Join[
 	Association @ Catenate @ Map[Function[row, Map[# -> concreteHead[row] &, spellings[row["Spelling"]]]], Select[$syntaxOperators, #["Form"] === "Postfix" &]],
-	Association @ Catenate @ Map[Function[r, Map[# -> r[[3]] &, longNameSpellings[r[[1]]]]], $longNameTable["Postfix"]]
+	Association @ Catenate @ Map[Function[r, Map[# -> Replace[r[[3]], t_String :> Symbol["System`" <> t]] &, longNameSpellings[r[[1]]]]], $longNameTable["Postfix"]]
 ]
 
 $concreteTagPattern = RegularExpression["[A-Za-z$`][A-Za-z0-9$`]*|\"(?:[^\"\\\\]|\\\\.)*\""]

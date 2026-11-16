@@ -10,6 +10,8 @@
    operator beside operators whose precedence is known. *)
 
 $ProgressReporting = False;
+(* the names System` has before CodeParser makes its own there *)
+freshSystem = Association[Thread[Names["System`*"] -> True]];
 Needs["CodeParser`"];
 
 root = ParentDirectory[DirectoryName[$InputFileName]];
@@ -79,7 +81,11 @@ Scan[Function[n, If[ First[infixPrecedences[n]] === {82, 84},
         Prepend[Rest[classOf[v]], v]]]], infixNames];
 Scan[Function[n, If[ ! IntegerQ[First[infixPrecedences[n]]], Print["unresolved precedence: ", n, " ", infixPrecedences[n]]; Exit[1]]], infixNames];
 
-record[n_, f_, p_] := {n, SymbolName[f[[1]]], f[[2]], p[[1]], p[[2]]};
+(* a tag Wolfram 15 has no symbol for, as InvisiblePrefixScriptBase, by its name, so that reading the
+   table makes no name in System` *)
+tagOf[t_Symbol] /; Context[t] === "System`" && ! KeyExistsQ[freshSystem, SymbolName[t]] := SymbolName[t];
+tagOf[t_] := t;
+record[n_, f_, p_] := {n, SymbolName[f[[1]]], tagOf[f[[2]]], p[[1]], p[[2]]};
 operators = <|
     "Infix" -> Map[record[#, infixForms[#], infixPrecedences[#]] &, infixNames],
     "Prefix" -> Cases[names, n_ /; MatchQ[prefixForms[n], {CodeParser`PrefixNode, _}] :> record[n, prefixForms[n],
@@ -121,7 +127,9 @@ text = StringJoin[
     "(* How Wolfram 15's CodeParser reads each long name of the Wolfram Language that is not a letter,\n",
     "   recorded by dev/freeze-longnames.wls. \"Infix\", \"Prefix\", \"Postfix\": {name, the node, its tag,\n",
     "   the precedence, its associativity}; \"Groups\", \"Calls\": {opener, closer, tag}; \"Integrals\":\n",
-    "   {name, the prefix tag, the tag with a \\[DifferentialD]}; \"Characters\": the character of each name. *)\n\n",
+    "   {name, the prefix tag, the tag with a \\[DifferentialD]}; \"Characters\": the character of each name.\n",
+    "   A tag Wolfram 15 has no symbol for is its name, a string, so that reading the table makes no\n",
+    "   name in System`; the reader makes the symbol where it makes a node of it. *)\n\n",
     "<|\n", StringRiffle[KeyValueMap["    " <> shown[#1] <> " -> " <> entriesText[#2] &, table], ",\n"], "\n|>\n"];
 With[{stream = OpenWrite[outFile, CharacterEncoding -> "UTF-8"]}, WriteString[stream, text]; Close[stream]];
 Print[Length[operators["Infix"]], " infix, ", Length[operators["Prefix"]], " prefix, ", Length[operators["Postfix"]], " postfix, ",

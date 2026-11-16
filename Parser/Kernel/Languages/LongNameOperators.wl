@@ -1,7 +1,9 @@
 (* How Wolfram 15's CodeParser reads each long name of the Wolfram Language that is not a letter,
    recorded by dev/freeze-longnames.wls. "Infix", "Prefix", "Postfix": {name, the node, its tag,
    the precedence, its associativity}; "Groups", "Calls": {opener, closer, tag}; "Integrals":
-   {name, the prefix tag, the tag with a \[DifferentialD]}; "Characters": the character of each name. *)
+   {name, the prefix tag, the tag with a \[DifferentialD]}; "Characters": the character of each name.
+   A tag Wolfram 15 has no symbol for is its name, a string, so that reading the table makes no
+   name in System`; the reader makes the symbol where it makes a node of it. *)
 
 <|
     "Infix" -> {
@@ -274,7 +276,7 @@
         {"CounterClockwiseContourIntegral", "PrefixNode", System`CounterClockwiseContourIntegral, 92, "NonRight"},
         {"CircleTimes", "PrefixNode", System`CircleTimes, 124, "NonRight"},
         {"Piecewise", "PrefixNode", System`Piecewise, 142, "NonRight"},
-        {"InvisiblePrefixScriptBase", "PrefixNode", System`InvisiblePrefixScriptBase, 186, "NonRight"},
+        {"InvisiblePrefixScriptBase", "PrefixNode", "InvisiblePrefixScriptBase", 186, "NonRight"},
         {"ContinuedFractionK", "PrefixNode", System`ContinuedFractionK, 104, "NonRight"},
         {"ProbabilityPr", "PrefixNode", System`ProbabilityPr, 92, "NonRight"},
         {"ExpectationE", "PrefixNode", System`ExpectationE, 92, "NonRight"},
@@ -283,11 +285,11 @@
         {"DifferentialD", "PrefixNode", System`DifferentialD, 144, "NonRight"}
     },
     "Postfix" -> {
-        {"InvisiblePostfixScriptBase", "PostfixNode", System`InvisiblePostfixScriptBase, 186, "NonRight"},
+        {"InvisiblePostfixScriptBase", "PostfixNode", "InvisiblePostfixScriptBase", 186, "NonRight"},
         {"Transpose", "PostfixNode", System`Transpose, 156, "NonRight"},
         {"Conjugate", "PostfixNode", System`Conjugate, 156, "NonRight"},
         {"ConjugateTranspose", "PostfixNode", System`ConjugateTranspose, 156, "NonRight"},
-        {"HermitianConjugate", "PostfixNode", System`HermitianConjugate, 156, "NonRight"}
+        {"HermitianConjugate", "PostfixNode", "HermitianConjugate", 156, "NonRight"}
     },
     "Groups" -> {
         {"OpenCurlyQuote", "CloseCurlyQuote", System`CurlyQuote},
