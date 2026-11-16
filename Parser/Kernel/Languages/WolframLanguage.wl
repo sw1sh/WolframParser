@@ -2086,13 +2086,17 @@ tokenMarks[_, _String] := {}
 (* A source with a \ in it, which may hold a line continuation or a character escape, is read by
 	WolframLanguageContinuations.wl: it takes the line continuations out, makes each character escape
 	its character and keeps the positions in the source of the characters read. That file loads at
-	the first such source, so a source of none, as most are, loads nothing of it. *)
+	the first such source, so a source of none, as most are, loads nothing of it. A program that
+	has read the file already, as a kernel that builds its reader of these files has, has its
+	mark, $continuationsRead, and nothing is loaded. *)
 continuationsLoaded::usage = "continuationsLoaded[] loads WolframLanguageContinuations.wl, the reading of line continuations and \
 character escapes, once."
 continuationsLoaded[] := (
 	continuationsLoaded[] = Null;
-	Block[{$ContextPath = {"Wolfram`Parser`Languages`WolframLanguage`", "Wolfram`Parser`", "System`"}, $Context = "Global`"},
-		Get[FileNameJoin[{$languagesDirectory, "WolframLanguageContinuations.wl"}]]
+	If[!TrueQ[$continuationsRead],
+		Block[{$ContextPath = {"Wolfram`Parser`Languages`WolframLanguage`", "Wolfram`Parser`", "System`"}, $Context = "Global`"},
+			Get[FileNameJoin[{$languagesDirectory, "WolframLanguageContinuations.wl"}]]
+		]
 	]
 )
 
