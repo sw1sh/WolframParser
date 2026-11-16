@@ -2110,6 +2110,24 @@ keptRuns of the positions in s of its characters}, {s, None} for a source of nei
 readSource[s_String] /; !StringContainsQ[s, "\\"] := {s, None}
 readSource[s_String] := (continuationsLoaded[]; continuedSource[s])
 
+(* The concrete tree of a source without line continuations is built from the reader's tokens and
+	program by WolframLanguageConcreteTree.wl, which loads at the first concrete tree asked for: a
+	program that only reads loads none of it, and one that has read the file has its mark,
+	$concreteTreeRead. $fastConcreteReader False has the grammar read every source, as the checks of
+	the builder against the grammar do. *)
+$fastConcreteReader = True
+
+concreteTreeLoaded::usage = "concreteTreeLoaded[] loads WolframLanguageConcreteTree.wl, the concrete tree built from the reader's \
+tokens and program, once."
+concreteTreeLoaded[] := (
+	concreteTreeLoaded[] = Null;
+	If[!TrueQ[$concreteTreeRead],
+		Block[{$ContextPath = {"Wolfram`Parser`Languages`WolframLanguage`", "Wolfram`Parser`", "System`"}, $Context = "Global`"},
+			Get[FileNameJoin[{$languagesDirectory, "WolframLanguageConcreteTree.wl"}]]
+		]
+	]
+)
+
 lineContinuations::usage = "lineContinuations[s] gives the spans of the line continuations of s, {} for none."
 lineContinuations[s_String] := If[StringContainsQ[s, "\\\n" | "\\\r"], continuationsLoaded[]; continuationSpans[s], {}]
 
@@ -2261,7 +2279,7 @@ $concreteGrammar := $concreteGrammar = concreteGrammar[]
 	$fastConcreteReader is False, as the checks of the builder against the grammar do. *)
 WolframLanguageConcrete[s_String] := With[{spans = lineContinuations[s]},
 	If[ spans === {},
-		With[{r = If[TrueQ[$fastConcreteReader], Replace[fastConcrete[s], None :> parsed[$concreteGrammar, s]], parsed[$concreteGrammar, s]]},
+		With[{r = If[TrueQ[$fastConcreteReader], concreteTreeLoaded[]; Replace[fastConcrete[s], None :> parsed[$concreteGrammar, s]], parsed[$concreteGrammar, s]]},
 			If[FailureQ[r], r, reparsed[withSource[CodeParser`ContainerNode[String, r, <||>]], s]]
 		],
 		With[{r = parsed[$concreteGrammar, StringReplacePart[s, "", spans]], kept = keptOf[StringLength[s], spans]},
