@@ -2087,11 +2087,9 @@ tokenMarks[_, _String] := {}
 (*Line continuations and character escapes*)
 
 
-(* A source with a \ in it, which may hold a line continuation or a character escape, is read by
-	WolframLanguageContinuations.wl: it takes the line continuations out, makes each character escape
-	its character and keeps the positions in the source of the characters read. The paclet's loaders
-	read that file with the reader's other files, as a kernel makes its unit with the reader's at its
-	first read. *)
+(* A source with a \ in it, which may hold a line continuation or a character escape, is read by the
+	reader's own reading of them, in WolframLanguageFast.wl: it takes the line continuations out, makes
+	each character escape its character and keeps the positions in the source of the characters read. *)
 readSource::usage = "readSource[s] gives {s read without its line continuations and with each character escape its character, the \
 keptRuns of the positions in s of its characters}, {s, None} for a source of neither."
 readSource[s_String] /; !StringContainsQ[s, "\\"] := {s, None}
