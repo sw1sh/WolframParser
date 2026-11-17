@@ -51,8 +51,13 @@ concreteBuilt[codes_List, lexed_List, instructions_List] := Block[
 	$cStarts = Take[lexed[[5 ;; ;; 5]], $cCount];
 	$cEnds = Take[lexed[[6 ;; ;; 5]], $cCount];
 	$cDepth = Most[Accumulate[Prepend[Replace[$cKinds, {10 | 12 | 14 | 16 -> 1, 11 | 13 | 15 | 17 -> -1, _ -> 0}, {1}], 0]]];
-	(* the trivia between each token and the next, all read at once *)
-	$cGaps = gapsLeaves[FromCharacterCode[Table[$cCodes[[$cEnds[[k]] ;; $cStarts[[k + 1]] - 1]], {k, $cCount - 1}]]];
+	(* the trivia between each token and the next, all read at once: the codes cut in one pass into
+		what comes before the first token, then each token and what follows it, as a span at a time
+		costs as much as the source on some kernels *)
+	$cGaps = gapsLeaves[FromCharacterCode[With[
+		{pieces = TakeList[$cCodes, Prepend[Riffle[Most[$cEnds] - Most[$cStarts], Rest[$cStarts] - Most[$cEnds]], First[$cStarts] - 1]]},
+		pieces[[Range[3, Length[pieces], 2]]]
+	]]];
 	Scan[
 		Function[step, With[{code = step[[1]], a = step[[2]], b = step[[3]]},
 			Switch[code,
