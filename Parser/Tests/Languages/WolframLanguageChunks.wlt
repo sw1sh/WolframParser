@@ -15,13 +15,16 @@ Block[{$ContextPath = {"Wolfram`Parser`Languages`WolframLanguage`", "Wolfram`Par
     Get[FileNameJoin[{chunksPrivate["$languagesDirectory"], "WolframLanguageChunks.wl"}]]
 ];
 
-(* the widths, in codes and in tokens, at which the windows of s give what the whole gives, or {} *)
+(* the widths, in codes and in tokens, at which the windows of s give what the whole gives, or {}:
+   the program only of tokens the lexer reads to the end, as the reader parses no others *)
 chunksSame[s_String] := With[{padded = chunksPrivate["paddedCodes"][ToCharacterCode[s]]},
     With[{lexed = chunksPrivate["windowLexed"][padded]},
-        With[{program = chunksPrivate["windowProgram"][lexed, padded]},
-            Join[
-                Select[{8, 23, 64}, chunksPrivate["chunkedLexed"][padded, #] =!= lexed &],
-                Select[{2, 5, 17}, chunksPrivate["chunkedProgram"][lexed, padded, #] =!= program &]
+        Join[
+            Select[{8, 23, 64}, chunksPrivate["chunkedLexed"][padded, #] =!= lexed &],
+            If[ First[lexed] =!= 0, {},
+                With[{program = chunksPrivate["windowProgram"][lexed, padded]},
+                    Select[{2, 5, 17}, chunksPrivate["chunkedProgram"][lexed, padded, #] =!= program &]
+                ]
             ]
         ]
     ]
