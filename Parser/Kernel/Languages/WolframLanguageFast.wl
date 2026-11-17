@@ -2501,12 +2501,25 @@ splitCode[program_List] := program[[2]]
 programInstructions::usage = "programInstructions[program] gives the instructions of a program of status 0, three integers each."
 programInstructions[program_List] := Take[program, {3, 3 program[[2]] + 2}]
 
+(* A source of more than 2^20 codes is lexed and parsed a window at a time by WolframLanguageChunks.wl,
+	loaded here at the first one, so that the room the typed lexer and parser take is a window's, not
+	the whole source's; what they give is the same. *)
 lexedCodes::usage = "lexedCodes[padded] gives the lexer's tokens of the codes padded."
-lexedCodes[padded_List] := fastLexFunction[padded, $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial]
+lexedCodes[padded_List] := If[
+	Length[padded] > 1048579 && (DownValues[chunkedLexed] =!= {} ||
+		(Block[{$ContextPath = {"Wolfram`Parser`Languages`WolframLanguage`", "Wolfram`Parser`", "System`"}, $Context = "Global`"},
+			Get[FileNameJoin[{$languagesDirectory, "WolframLanguageChunks.wl"}]]
+		]; DownValues[chunkedLexed] =!= {})),
+	chunkedLexed[padded],
+	fastLexFunction[padded, $fastClasses, $fastOp1, $fastOp2Flat, $fastOp3Table, $fastLongOpTable, $fastSpecial]
+]
 
 fastParseTokens::usage = "fastParseTokens[lexed, padded] gives the parser's program of the lexer's tokens lexed of the codes padded."
-fastParseTokens[lexed_List, padded_List] := fastParseFunction[lexed, fastLedIndices[lexed], $fastSpecTable, $fastPrefixArray, $fastGroupArray,
-	$fastIntegralArray, $fastSpecialArray, $fastHeadCodeArray, $fastKeyCodeArray, padded, $fastClasses
+fastParseTokens[lexed_List, padded_List] := If[ Length[padded] > 1048579 && DownValues[chunkedProgram] =!= {},
+	chunkedProgram[lexed, padded],
+	fastParseFunction[lexed, fastLedIndices[lexed], $fastSpecTable, $fastPrefixArray, $fastGroupArray,
+		$fastIntegralArray, $fastSpecialArray, $fastHeadCodeArray, $fastKeyCodeArray, padded, $fastClasses
+	]
 ]
 
 (* The reading of the codes of a source, or of a segment of one: the codes, padded, the lexer's
@@ -3188,10 +3201,10 @@ flatProgram::usage = "flatProgram[s] gives the program of the source s in one pa
 parts, then the source's codes}, or None."
 flatProgram[s_String] := flatOf[fastProgramTextFunction, s]
 
-flatOf::usage = "flatOf[f, s] gives the program of the source s by the typed program f, or by the typed stages where f is None or leaves \
-the source to them."
+flatOf::usage = "flatOf[f, s] gives the program of the source s by the typed program f, or by the typed stages where f is None, leaves \
+the source to them, or the source has more than 2^20 codes, which the stages read a window at a time."
 flatOf[None, s_String] := stagesProgram[s]
-flatOf[f_, s_String] := typedFlat[f[s, Sequence @@ $fastProgramTables], s]
+flatOf[f_, s_String] := If[StringLength[s] > 1048576, stagesProgram[s], typedFlat[f[s, Sequence @@ $fastProgramTables], s]]
 
 typedFlat::usage = "typedFlat[flat, s] gives the typed program's array flat of the source s: itself, None for {1}, and the stages' \
 program for {2} or for no array."
