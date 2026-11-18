@@ -593,6 +593,16 @@ heldCall[HoldComplete[h_], args_List] :=
 	kernel with a primitive that interns a name gives it here instead. *)
 heldName[name_String] := ToExpression[name, InputForm, HoldComplete]
 
+(* a symbol leaf: the letterlike characters that are other symbols' names, Infinity, Pi, Degree, E
+	and I, read as those symbols, as Wolfram 15 reads a name standing alone, which a kernel whose
+	ToExpression is this reader would read as symbols of their own; the head of a blank and the name
+	of a pattern keep the name *)
+heldLeafName[name_String] := Replace[name, {
+	"\[Infinity]" -> HoldComplete[Infinity], "\[Pi]" -> HoldComplete[Pi], "\[Degree]" -> HoldComplete[Degree],
+	"\[ExponentialE]" -> HoldComplete[E], "\[ImaginaryI]" -> HoldComplete[I], "\[ImaginaryJ]" -> HoldComplete[I],
+	other_ :> heldName[other]
+}]
+
 heldSymbol[name_String] := heldSymbol[name] = heldName["System`" <> name]
 
 symbolCall[name_String, args_List] := heldCall[heldSymbol[name], args]
@@ -861,7 +871,7 @@ longNameCharacters[] := longNameCharacters[] = Map[FromCharacterCode, Get[FileNa
 (* a leaf's expression, held *)
 heldLeafValue["Integer" | "Real", s_String] := HoldComplete @@ {numberValue[s]}
 heldLeafValue["String", s_String] := HoldComplete @@ {stringValue[s]}
-heldLeafValue["Symbol", s_String] := heldName[s]
+heldLeafValue["Symbol", s_String] := heldLeafName[s]
 heldLeafValue["Blank", s_String] := blankExpression[s]
 heldLeafValue["Slot", s_String] := slotExpression[s]
 heldLeafValue["Out", s_String] := outExpression[s]

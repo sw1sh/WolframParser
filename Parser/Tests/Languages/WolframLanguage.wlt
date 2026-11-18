@@ -1559,3 +1559,11 @@ VerificationTest[
         {HoldComplete[a Information["s", LongForm -> True]]}},
     TestID -> "wl held: ?? has its words wherever it stands, as at the beginning of a statement"
 ]
+
+VerificationTest[
+    With[{s = "{1 + \[Pi], f[\[Infinity]], 90 \[Degree], \[ExponentialE]^x, 2 \[ImaginaryI], \[ImaginaryJ], a\[Pi], \[Pi]2, \[DoubledPi], \[Alpha], x_\[Pi], _\[Pi]}"},
+        Wolfram`Parser`Languages`WolframLanguage`WolframLanguageHeld[s] === {ToExpression[s, InputForm, HoldComplete]}
+    ],
+    True,
+    TestID -> "held: the letterlike names of other symbols, Infinity, Pi, Degree, E and I, read as those symbols inside an expression, as Wolfram 15 reads them; names that only hold one, and the head of a blank, stay names"
+]

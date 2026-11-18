@@ -2322,7 +2322,7 @@ tokenTexts[codes_List, starts_List, ends_List] /; Length[starts] === 1 || Min[Re
 tokenTexts[codes_List, starts_List, ends_List] := FromCharacterCode[Take[codes, #] & /@ Transpose[{starts, ends - 1}]]
 
 (* a leaf's value by the lexer's kind of it *)
-fastLeafValue[1, s_String] := heldName[s]
+fastLeafValue[1, s_String] := heldLeafName[s]
 fastLeafValue[2, s_String] := blankExpression[s]
 fastLeafValue[3 | 4, s_String] := HoldComplete @@ {numberValue[s]}
 fastLeafValue[5, s_String] := HoldComplete @@ {stringValue[s]}
