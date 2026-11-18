@@ -2182,7 +2182,12 @@ keptPositions[s_String, spans_List] := Complement[Range[StringLength[s]], Catena
 	file, an operator, a bracket. The spans {first, last} of them in s, each with its character. The
 	scan's state is continuationSpans's, its found the escapes. *)
 escapeSpans::usage = "escapeSpans[s] gives {{first, last}, character} for each character escape of s outside its strings and comments."
-escapeSpans[s_String] := Reverse @ linkedItems @ Last @ NestWhile[escapeStep, {ToCharacterCode[s], 1, 0, {}}, scanOnQ]
+escapeSpans[s_String] := With[{typed = typedEscapeSpans[s]}, If[ListQ[typed], typed, scannedEscapeSpans[s]]]
+
+(* the same, a character at a time: the scan WolframLanguageFast.wl's typed scan, typedEscapeSpans,
+	reads as it is, for a kernel without it *)
+scannedEscapeSpans::usage = "scannedEscapeSpans[s] gives escapeSpans[s] by a scan a character at a time."
+scannedEscapeSpans[s_String] := Reverse @ linkedItems @ Last @ NestWhile[escapeStep, {ToCharacterCode[s], 1, 0, {}}, scanOnQ]
 
 escapeStep::usage = "escapeStep[{codes, at, mode, escapes}] gives the scan's state after the character, or the escape, at at."
 escapeStep[{codes_List, at_Integer, -1, escapes_List}] := Which[
