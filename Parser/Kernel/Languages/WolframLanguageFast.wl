@@ -3616,8 +3616,99 @@ keptAt[keptRuns[runs_List, _], c_] := If[ IntegerQ[c],
 	digits name, as Wolfram 15's reader reads it before it reads tokens: a letter of a name or of a
 	file, an operator, a bracket. The spans {first, last} of them in s, each with its character. The
 	scan's state is continuationSpans's, its found the escapes. *)
+(* The character escapes of a source, as escapeSpans reads them, typed code over its codes:
+	{m, first1, last1, code1, ..., firstm, lastm, codem} for its m escapes \:hhhh, \.hh and \|hhhhhh
+	whose hexadecimal digits name a character, and \ooo of three octal digits, outside its strings
+	and comments, each its first and last code and the code of its character. In a string a \ escapes the character after it; in a
+	comment (* and *) nest and \( escapes its parenthesis; in code a \ that begins no such escape
+	escapes the character after it. A first pass counts the escapes and a second writes them. *)
+$fastCharacterEscapesDeclaration = FunctionDeclaration[fastCharacterEscapes,
+	Typed[{"PackedArray"::["MachineInteger", 1]} -> "PackedArray"::["MachineInteger", 1]] @
+	Function[{ceCodes},
+		Native`UncheckedBlock[Module[{n = Length[ceCodes], pass = 1, count = 0, at = 1, mode = 0, c = 0, width = 0, k = 0, d = 0, code = 0, octal = 0, out = Native`UncheckedArray[0, 1]},
+			out[[1]] = 0;
+			While[ pass <= 2,
+				at = 1; mode = 0; count = 0;
+				While[ at <= n,
+					c = ceCodes[[at]];
+					Which[
+						mode > 0,
+							Which[
+								c == 40 && at < n && ceCodes[[at + 1]] == 42, mode++; at += 2,
+								c == 42 && at < n && ceCodes[[at + 1]] == 41, mode--; at += 2,
+								c == 92 && at < n && ceCodes[[at + 1]] == 40, at += 2,
+								True, at++
+							],
+						mode < 0,
+							Which[
+								c == 92, at += 2,
+								c == 34, mode = 0; at++,
+								True, at++
+							],
+						True,
+							width = 0;
+							If[ c == 92 && at < n,
+								width = Which[ceCodes[[at + 1]] == 58, 4, ceCodes[[at + 1]] == 46, 2, ceCodes[[at + 1]] == 124, 6, True, 0];
+								If[ width > 0 && at + 1 + width > n, width = 0];
+								code = 0; k = 1;
+								While[ width > 0 && k <= width,
+									d = ceCodes[[at + 1 + k]];
+									Which[
+										d >= 48 && d <= 57, code = 16 code + d - 48,
+										d >= 65 && d <= 70, code = 16 code + d - 55,
+										d >= 97 && d <= 102, code = 16 code + d - 87,
+										True, width = 0
+									];
+									k++
+								];
+								If[ code > 1114111, width = 0]
+							];
+							octal = 0;
+							If[ c == 92 && width == 0 && at + 3 <= n && ceCodes[[at + 1]] >= 48 && ceCodes[[at + 1]] <= 55 &&
+									ceCodes[[at + 2]] >= 48 && ceCodes[[at + 2]] <= 55 && ceCodes[[at + 3]] >= 48 && ceCodes[[at + 3]] <= 55,
+								octal = 1;
+								code = 64 (ceCodes[[at + 1]] - 48) + 8 (ceCodes[[at + 2]] - 48) + ceCodes[[at + 3]] - 48
+							];
+							Which[
+								c == 34, mode = -1; at++,
+								c == 40 && at < n && ceCodes[[at + 1]] == 42, mode = 1; at += 2,
+								width > 0,
+									count++;
+									If[pass == 2, out[[3 count - 1]] = at; out[[3 count]] = at + 1 + width; out[[3 count + 1]] = code];
+									at += 2 + width,
+								octal == 1,
+									count++;
+									If[pass == 2, out[[3 count - 1]] = at; out[[3 count]] = at + 3; out[[3 count + 1]] = code];
+									at += 4,
+								c == 92, at += 2,
+								True, at++
+							]
+					]
+				];
+				If[ pass == 1, out = Native`UncheckedArray[0, 3 count + 1]; out[[1]] = count];
+				pass++
+			];
+			out
+		]]
+	]
+]
+
+(* the typed character escape scan run here, fixed at its first use *)
+fastCharacterEscapesFunction := fastCharacterEscapesFunction = typedFunction[fastCharacterEscapes, $fastCharacterEscapesDeclaration]
+
+(* escapeSpans of s by the typed scan *)
+typedEscapeSpans::usage = "typedEscapeSpans[s] gives the character escapes of s by the typed scan."
+typedEscapeSpans[s_String] := With[{found = fastCharacterEscapesFunction[Developer`ToPackedArray[ToCharacterCode[s]]]},
+	Map[{{#[[1]], #[[2]]}, FromCharacterCode[#[[3]]]} &, Partition[Rest[found], 3]]
+]
+
 escapeSpans::usage = "escapeSpans[s] gives {{first, last}, character} for each character escape of s outside its strings and comments."
-escapeSpans[s_String] := Reverse @ linkedItems @ Last @ NestWhile[escapeStep, {ToCharacterCode[s], 1, 0, {}}, scanOnQ]
+escapeSpans[s_String] := With[{typed = typedEscapeSpans[s]}, If[ListQ[typed], typed, scannedEscapeSpans[s]]]
+
+(* the same, a character at a time: the scan the typed scan, typedEscapeSpans, reads as it is, for a
+	kernel without it *)
+scannedEscapeSpans::usage = "scannedEscapeSpans[s] gives escapeSpans[s] by a scan a character at a time."
+scannedEscapeSpans[s_String] := Reverse @ linkedItems @ Last @ NestWhile[escapeStep, {ToCharacterCode[s], 1, 0, {}}, scanOnQ]
 
 escapeStep::usage = "escapeStep[{codes, at, mode, escapes}] gives the scan's state after the character, or the escape, at at."
 escapeStep[{codes_List, at_Integer, -1, escapes_List}] := Which[
