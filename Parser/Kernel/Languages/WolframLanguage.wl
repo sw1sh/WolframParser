@@ -631,7 +631,14 @@ namedBlank[name_String, count_Integer, head_String] := heldCall[heldSymbol["Patt
 
 headBlank::usage = "headBlank[count, head] gives the blank of count underscores and the head, \"\" for none, held."
 headBlank[count_Integer, ""] := $heldBlanks[[count]]
-headBlank[count_Integer, head_String] := heldCall[heldSymbol[$blankNames[[count]]], {heldName[head]}]
+headBlank[count_Integer, head_String] := heldCall[heldSymbol[$blankNames[[count]]], {
+	(* a blank's head of a letterlike name is the symbol of that name, as Wolfram 15 reads _\[Pi], where
+		the name alone would read as Pi: the name read with the context it is made in *)
+	If[ MemberQ[{"\[Infinity]", "\[Pi]", "\[Degree]", "\[ExponentialE]", "\[ImaginaryI]", "\[ImaginaryJ]"}, head],
+		ToExpression[$Context <> head, InputForm, HoldComplete],
+		heldName[head]
+	]
+}]
 
 $blankNames = {"Blank", "BlankSequence", "BlankNullSequence"}
 $heldBlanks := $heldBlanks = symbolCall[#, {}] & /@ $blankNames
