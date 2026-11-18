@@ -30,6 +30,18 @@ chunksSame[s_String] := With[{padded = chunksPrivate["paddedCodes"][ToCharacterC
     ]
 ]
 
+VerificationTest[
+    With[{tokens = Developer`ToPackedArray[Range[35]], instructions = Developer`ToPackedArray[{1, 4, 9, 25, 2, 5, 7, 3, 3, 1, 0, 1}]},
+        {
+            chunksPrivate["shiftedTokens"][tokens, 10] === Flatten[MapAt[# + 10 &, Partition[Range[35], 5], {All, 3 ;; 4}]],
+            Developer`PackedArrayQ[chunksPrivate["shiftedTokens"][tokens, 10]],
+            chunksPrivate["shiftedInstructions"][instructions, 10],
+            chunksPrivate["shiftedTokens"][{}, 3], chunksPrivate["shiftedInstructions"][{}, 3]
+        }
+    ],
+    {True, True, {1, 4, 19, 25, 12, 15, 7, 3, 3, 1, 0, 11}, {}, {}},
+    TestID -> "chunks: a window's tokens have their codes shifted and its instructions the tokens a leaf and a statement's end name, nothing else"]
+
 (* a token that reads the one before it or after it, across a line: a message name, a slot, a
    number and a dot, ?, <<, a string and a comment over lines, returns, brackets and operators open at
    a line's end, ; and ;; *)

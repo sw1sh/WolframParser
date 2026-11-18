@@ -53,11 +53,13 @@ chunkedLexed[padded_List, width_Integer] := Module[{n = Length[padded] - 3, from
 	With[{tokens = Join @@ First[pieces]}, Developer`ToPackedArray[Join[{0, Length[tokens] / 5}, tokens]]]
 ]
 
-(* tokens of a window whose first code is at shift + 1 of the source, their codes placed in it *)
+(* tokens of a window whose first code is at shift + 1 of the source, their codes placed in it: a sum
+	of packed arrays, the shift at the third and fourth integer of each token, which takes a time in
+	proportion to the tokens in the kernel as in Wolfram 15 *)
 shiftedTokens::usage = "shiftedTokens[tokens, shift] gives the tokens, five integers each, with their first code and the code after their \
 last shifted by shift."
-shiftedTokens[tokens_List, shift_Integer] := With[{rows = Partition[tokens, 5]},
-	Developer`ToPackedArray[Flatten[MapAt[# + shift &, rows, {All, 3 ;; 4}]]]
+shiftedTokens[tokens_List, shift_Integer] := Developer`ToPackedArray[
+	tokens + shift Developer`ToPackedArray[Flatten[ConstantArray[{0, 0, 1, 1, 0}, Quotient[Length[tokens], 5]]]]
 ]
 
 windowLexed::usage = "windowLexed[padded] gives the typed lexer's tokens of the codes padded, read at once."
@@ -72,7 +74,10 @@ windowLexed[padded_List] := fastLexFunction[padded, $fastClasses, $fastOp1, $fas
 	the next one's line, and the next window begins at the last one. Its instructions are the whole
 	source's, but for the tokens a leaf and a statement's end name, which are shifted to the source's:
 	no other instruction names a token or an instruction, and the codes it names are the source's
-	already. A window that stops, or holds one statement, doubles; the last holds the end, and where
+	already. A window that ends inside a statement, as a line of a definition over many lines begins
+	one, stops in that statement, and is read again up to its first token: the statements before it
+	end where they end in the source. A window that stops in its first statement, or holds one
+	statement, doubles; the last holds the end, and where
 	it stops the whole source is parsed at once, so the program of a source that does not read is the
 	parser's own. *)
 chunkedProgram::usage = "chunkedProgram[lexed, padded] gives the parser's program of the tokens lexed of the codes padded, as \
@@ -89,6 +94,9 @@ chunkedProgram[lexed_List, padded_List, width_Integer] := Module[
 				upto = SelectFirst[Range[from + w, from + 1, -1], newlineBefore[lexed, #] === 1 &, None];
 				If[ upto === None, w = 2 w,
 					program = windowProgram[windowTokens[lexed, from, upto], padded];
+					If[ parseStatus[program] === 1 && statementToken[program] > 1,
+						program = windowProgram[windowTokens[lexed, from, from + statementToken[program] - 1], padded]
+					];
 					instructions = If[parseStatus[program] === 0, Partition[programInstructions[program], 3], {}];
 					ends = Flatten[Position[instructions[[All, 1]], 25]];
 					If[ Length[ends] < 2, w = 2 w,
@@ -111,13 +119,15 @@ windowTokens[lexed_List, from_Integer, upto_Integer] := Developer`ToPackedArray 
 	{$tkEnd, 0, tokenStart[lexed, upto], tokenStart[lexed, upto], newlineBefore[lexed, upto]}
 ]
 
-(* a leaf's token and a statement's first token and the next one's, shifted by shift tokens *)
+(* a leaf's token and a statement's first token and the next one's, shifted by shift tokens: a sum of
+	packed arrays, the shift where the operation is a leaf's (1) or a statement's end (25) *)
 shiftedInstructions::usage = "shiftedInstructions[instructions, shift] gives the instructions, three integers each, with the tokens a leaf \
 and a statement's end name shifted by shift."
-shiftedInstructions[instructions_List, shift_Integer] := Developer`ToPackedArray @ Flatten @ Replace[Partition[instructions, 3], {
-	{1, kind_, t_} :> {1, kind, t + shift},
-	{25, first_, next_} :> {25, first + shift, next + shift}
-}, {1}]
+shiftedInstructions[instructions_List, shift_Integer] := With[{ops = Developer`ToPackedArray[instructions[[1 ;; -1 ;; 3]]]},
+	With[{leaf = 1 - Unitize[ops - 1], end = 1 - Unitize[ops - 25]},
+		Developer`ToPackedArray[instructions + shift Developer`ToPackedArray[Flatten[Transpose[{0 ops, end, leaf + end}]]]]
+	]
+]
 
 windowProgram::usage = "windowProgram[lexed, padded] gives the typed parser's program of the tokens lexed of the codes padded, read at once."
 windowProgram[lexed_List, padded_List] := fastParseFunction[lexed, fastLedIndices[lexed], $fastSpecTable, $fastPrefixArray, $fastGroupArray,
